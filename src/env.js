@@ -14,9 +14,9 @@ export const env = createEnv({
     // Google Workspace SSO. The provider is only mounted when both are set.
     AUTH_GOOGLE_ID: z.string().optional(),
     AUTH_GOOGLE_SECRET: z.string().optional(),
-    // SMTP for magic links, e.g. smtp://user:pass@smtp.host.com:587
-    // Without these, development prints the link to the server console.
-    EMAIL_SERVER: z.string().optional(),
+    // Resend API key for magic-link delivery. Without it, development
+    // prints the link to the server console instead of mailing it.
+    AUTH_RESEND_KEY: z.string().optional(),
     EMAIL_FROM: z.string().optional(),
     DATABASE_URL: z.string().url(),
     NODE_ENV: z
@@ -41,7 +41,7 @@ export const env = createEnv({
     AUTH_SECRET: process.env.AUTH_SECRET,
     AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID,
     AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
-    EMAIL_SERVER: process.env.EMAIL_SERVER,
+    AUTH_RESEND_KEY: process.env.AUTH_RESEND_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,

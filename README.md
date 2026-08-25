@@ -25,13 +25,20 @@ Two methods, both at `/signin`:
   `AUTH_GOOGLE_SECRET`; the button only appears when both are present. Create
   the credentials in the [Google Cloud console](https://console.cloud.google.com/apis/credentials)
   with redirect URI `http://localhost:3000/api/auth/callback/google`.
-- **Email magic link** — for partners outside the Workspace tenant. Set
-  `EMAIL_SERVER` (e.g. `smtp://user:pass@smtp.host.com:587`) and `EMAIL_FROM`.
+- **Email magic link** — for partners outside the Workspace tenant. Delivered
+  through [Resend](https://resend.com): set `AUTH_RESEND_KEY` and `EMAIL_FROM`.
   Links are single-use and expire after 15 minutes.
 
-**In development without SMTP**, the magic link is printed to the server console
-instead of being mailed — look for `[auth] Magic link for …` in the terminal and
-open the URL on the next line. No mail setup needed to work locally.
+  `EMAIL_FROM` must sit on a domain verified in Resend. Use
+  `onboarding@resend.dev` to test before `welodge.net` is verified — note that
+  it only delivers to the address that owns the Resend account.
+
+  The email itself is branded in `src/server/auth/magic-link-email.ts`.
+
+**In development without a Resend key**, the magic link is printed to the server
+console instead of being mailed — look for `[auth] Magic link for …` in the
+terminal and open the URL on the next line. No mail setup needed to work
+locally.
 
 Sessions are database-backed via the Prisma adapter. Sign-in, check-email and
 sign-out screens are all branded (`src/app/signin/`, `src/app/signout/`).

@@ -1,9 +1,10 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import NodemailerProvider from "next-auth/providers/nodemailer";
+import ResendProvider from "next-auth/providers/resend";
 
 import { env } from "~/env";
+import { magicLinkEmail } from "~/server/auth/magic-link-email";
 import { db } from "~/server/db";
 
 /**
@@ -29,42 +30,56 @@ declare module "next-auth" {
 
 const isDev = env.NODE_ENV === "development";
 const hasGoogle = Boolean(env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET);
-const hasSmtp = Boolean(env.EMAIL_SERVER && env.EMAIL_FROM);
+const hasResend = Boolean(env.AUTH_RESEND_KEY);
+
+const emailFrom = env.EMAIL_FROM ?? "We Lodge OS <onboarding@resend.dev>";
 
 /**
- * Email magic link. With SMTP configured the link is mailed; in local
- * development without SMTP it is printed to the server console instead, so
- * sign-in works before mail delivery is set up.
+ * Email magic link, delivered through Resend's HTTP API.
  *
- * Built lazily — the provider validates `server` as soon as it is constructed.
+ * With no API key — the default locally — the link is printed to the server
+ * console instead, so sign-in works before mail delivery is set up.
  */
-const emailProvider = () =>
-  NodemailerProvider({
-    // The placeholder is never contacted: without SMTP we override
-    // sendVerificationRequest and no transport is ever opened.
-    server: env.EMAIL_SERVER ?? "smtp://localhost:1025",
-    from: env.EMAIL_FROM ?? "We Lodge OS <no-reply@welodge.net>",
-    // Links are single-use; a short life keeps a forwarded mail from being a key.
-    maxAge: 15 * 60,
-    ...(hasSmtp
-      ? {}
-      : {
-          sendVerificationRequest: ({
-            identifier,
-            url,
-          }: {
-            identifier: string;
-            url: string;
-          }) => {
-            console.log(`\n[auth] Magic link for ${identifier}\n[auth] ${url}\n`);
-          },
-        }),
-  });
+const emailProvider = ResendProvider({
+  apiKey: env.AUTH_RESEND_KEY ?? "",
+  from: emailFrom,
+  // Links are single-use; a short life keeps a forwarded mail from being a key.
+  maxAge: 15 * 60,
+  sendVerificationRequest: async ({
+    identifier,
+    url,
+  }: {
+    identifier: string;
+    url: string;
+  }) => {
+    if (!hasResend) {
+      console.log(`\n[auth] Magic link for ${identifier}\n[auth] ${url}\n`);
+      return;
+    }
+
+    const { html, text, subject } = magicLinkEmail({ url, email: identifier });
+
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.AUTH_RESEND_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from: emailFrom, to: identifier, subject, html, text }),
+    });
+
+    if (!response.ok) {
+      // Surfaced on /signin as an error; the detail goes to the server log.
+      console.error("[auth] Resend rejected the send:", await response.text());
+      throw new Error("Could not send the sign-in email.");
+    }
+  },
+});
 
 /** Which sign-in methods are configured, for the sign-in page to render. */
 export const providers = {
   google: hasGoogle,
-  email: hasSmtp || isDev,
+  email: hasResend || isDev,
 };
 
 /**
@@ -77,7 +92,7 @@ export const authConfig = {
     // Google Workspace is the primary sign-in for We Lodge staff.
     ...(hasGoogle ? [GoogleProvider] : []),
     // Magic link covers partners and anyone outside the Workspace tenant.
-    ...(hasSmtp || isDev ? [emailProvider()] : []),
+    ...(hasResend || isDev ? [emailProvider] : []),
   ],
   adapter: PrismaAdapter(db),
   pages: {

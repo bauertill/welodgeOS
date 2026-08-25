@@ -25,7 +25,7 @@ export function MagicLinkForm({ callbackUrl }: { callbackUrl: string }) {
       onSubmit={(event) => {
         event.preventDefault();
         setPending(true);
-        void signIn("nodemailer", { email, callbackUrl });
+        void signIn("resend", { email, callbackUrl });
       }}
       className="flex flex-col gap-3"
     >
