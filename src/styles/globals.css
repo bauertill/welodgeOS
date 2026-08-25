@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/*
+ * We Lodge corporate identity.
+ * Tokens sampled from welodge.net — brand purple, logo gradient
+ * (indigo → purple), charcoal chrome and Poppins as the type family.
+ */
+@theme {
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  /* Brand purple — buttons, links, active state */
+  --color-brand-50: #f6f0fd;
+  --color-brand-100: #ece0fa;
+  --color-brand-200: #dbc5f5;
+  --color-brand-300: #c69eee;
+  --color-brand-400: #ab6ce2;
+  --color-brand-500: #9a6fdb;
+  --color-brand-600: #845dd5;
+  --color-brand-700: #614fc9;
+  --color-brand-800: #4c3ea1;
+  --color-brand-900: #3a3079;
+
+  /* Charcoal — header bar and body copy */
+  --color-ink-50: #f2f2f2;
+  --color-ink-200: #d0d0d0;
+  --color-ink-500: #3e3e3e;
+  --color-ink-700: #292929;
+  --color-ink-900: #1b1b1b;
+
+  /* Status accents lifted from the site palette */
+  --color-success: #12b878;
+  --color-danger: #db4b68;
+  --color-warning: #e0a02a;
+}
+
+@layer base {
+  body {
+    @apply bg-ink-50 text-ink-700 antialiased;
+  }
+}
+
+@utility brand-gradient {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-brand-700) 0%,
+    var(--color-brand-400) 100%
+  );
+}
