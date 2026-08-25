@@ -1,0 +1,698 @@
+# We Lodge OS — Product Scope: Inventory Management
+
+**Status:** Draft for review · **Date:** 2026-08-25 · **Audience:** product + engineering, pre-implementation
+
+This document defines the **core business logic** of the We Lodge inventory tool. It is
+deliberately implementation-free: no API shapes, no screens, no framework decisions. It
+describes the entities, the states, the rules that must always hold, and the questions the
+system has to be able to answer.
+
+---
+
+## 1. The business in one paragraph
+
+We Lodge buys accommodation from suppliers (hotels, apartment operators) and sells it to
+B2B clients (federations, broadcasters, sponsors, event teams). We are a **market maker in
+room-nights**. The commercial risk is positional: we can be *short* (sold to a client
+before securing it from a supplier) or *long* (bought stock nobody has taken). Ideally we
+sit on stock for as little time as possible. Everything in this tool exists to make the
+current position visible, per room, per night.
+
+Three delivery phases:
+
+| Phase | Question it answers |
+| --- | --- |
+| **1. Scouting** | What could we contract? |
+| **2. Acquisition & Sales** | What do we hold, what have we promised, and where are we exposed? |
+| **3. Operations** | Will the rooming lists we received actually work against what we hold? |
+
+---
+
+## 2. Foundational decisions
+
+These were settled up front because everything else follows from them.
+
+### 2.1 The atomic unit is a **room-night on a room slot**
+
+The system's unit of record is a single **room-night**: one *room slot* on one *calendar
+date*. A **room slot** is an internal, stable identity — `property + room category + slot
+number` (`Hotel Carmel / King Room / #5`). It is *not* the hotel's real room number; it is
+our own numbering, allocated 1..N within a category, so that supply and demand can be
+matched to the same countable thing.
+
+The legacy add-on already reached this conclusion: it keys everything on
+`roomId = supplier::category::roomNumber`, and its internal model is literally a
+`RoomNight { roomId, night, buy?, sale? }`. The hotel's real room number lives separately —
+it appears as *Actual unit number* on the operations sheet, and only matters at
+rooming-list time.
+
+Everything the user sees as a "row" — `Hotel Carmel, King Room, #5, 11-Jul → 05-Aug,
+blocked` — is a **derived stay row**: a run of contiguous nights on one slot sharing the
+same state tuple. See §5.4.
+
+**Why:** partial changes are the norm, not the exception. A client drops three nights, a
+supplier confirms half the range, a team arrives a week late. On a night grain these are
+edits; on a range grain they are row splits, which is exactly the operation that makes the
+current spreadsheet fragile.
+
+**Night convention (invariant):** a stay from check-in `10-Jul` to check-out `31-Jul`
+occupies the nights `10-Jul … 30-Jul` — **21 nights**. A night is identified by the date it
+*begins*. Check-out day is never a night. All dates are local calendar dates at the
+property; no timestamps, no time zones.
+
+### 2.2 Supply and demand are **two independent axes**
+
+Every room-night carries two states at once:
+
+- an **acquisition state** — our relationship with the supplier;
+- a **sales state** — our relationship with the client.
+
+They move independently. The "ideal flow" (`Requested → In Progress → Option → Blocked →
+Sold → Bought`) is a **diagonal walk across a 2-D grid**, not a single status field.
+
+**Why:** the single most commercially important situation — *sold to the client while still
+only an option (or worse, still in negotiation) with the supplier* — is unrepresentable in
+a one-field model. The existing icon legend already encodes the grid; this makes it
+first-class and alertable.
+
+### 2.3 Inventory hangs off an **Event**
+
+`Event → Property → Category → Slot → Room-night`. A property is scouted once and can be
+reused across events; its *inventory* always belongs to exactly one event.
+
+### 2.4 Deadlines alert, they never auto-change state
+
+An expired option or block is **flagged**, never silently downgraded or released. The
+system does not know what the supplier believes; a human decides to extend, convert or
+release. Expiry drives urgency and dashboards, not mutations.
+
+---
+
+## 3. Phase 1 — Scouting
+
+A scouting list is the long list of properties that *could* be contracted for an event.
+It is research, not inventory: nothing here implies a commercial position.
+
+### 3.1 Property
+
+Common to both types:
+
+| Field | Notes |
+| --- | --- |
+| `name` | |
+| `type` | `HOTEL` \| `APARTMENT` |
+| `address`, `city`, `country` | |
+| `latitude`, `longitude` | Optional. Present ⇒ pin on the map view. |
+| `distanceToVenue` | Derived from coordinates + the event's venue, when both exist. |
+| `stars` | Hotels; optional. |
+| `amenities` | Many-to-many against a controlled vocabulary (§3.4). |
+| `contacts` | Name, role, email, phone. Zero or more. |
+| `notes` | Free text. |
+| `scoutingStatus` | `PROSPECT` → `CONTACTED` → `SHORTLISTED` → `REJECTED` \| `CONTRACTED` |
+| `scoutedBy`, `scoutedAt` | |
+
+**Map:** the list is the source of truth; the map is a *view* over whatever has
+coordinates. Import from Google My Maps (KML/CSV) is the expected ingestion path for the
+first load. A property with no coordinates is valid and simply absent from the map.
+
+### 3.2 Hotel specifics
+
+A hotel has one or more **room categories**:
+
+| Field | Notes |
+| --- | --- |
+| `name` | "King Room", "Twin", "1 Bedroom" |
+| `roomCount` | Total rooms in that category at the property |
+| `capacity` | Standard occupancy (pax) |
+| `bedConfiguration` | e.g. 1×King, 2×Twin — drives Operations checks (§6.4) |
+| `indicativePriceCents` + `currency` | Price per night at scouting time — indicative only, not a contracted rate |
+
+`Property.totalRooms` = Σ `roomCount` across categories, and must be recorded even where
+categories are not yet broken out.
+
+### 3.3 Apartment specifics
+
+An apartment is modelled as a category whose units are whole flats:
+
+| Field | Notes |
+| --- | --- |
+| `bedrooms` | Required |
+| `bathrooms` | Required; allow halves (`1.5`) |
+| `unitCount` | How many identical units |
+| `capacity` | Sleeps N |
+| `indicativePriceCents` + `currency` | |
+
+**Simplification:** an apartment unit behaves exactly like a hotel room slot — an
+indivisible, sellable, occupiable thing. Bedrooms/bathrooms are attributes of the unit, not
+sub-inventory. We never sell a bedroom inside an apartment separately. *(If we ever do,
+this decision has to be revisited; it is the one place where the model would need a level.)*
+
+### 3.4 Amenities
+
+A single controlled list shared by both property types (`WiFi`, `Breakfast included`,
+`Parking`, `Air conditioning`, `Gym`, `Pool`, `Kitchen`, `Washing machine`, `Lift`,
+`Accessible`, `Pets allowed`, `24h reception`, `Airport shuttle`, …). Free-text amenities
+are rejected; the list is admin-editable so it stays a filter rather than a tag soup.
+
+### 3.5 Scouting → inventory
+
+Converting a shortlisted property into inventory is an explicit act: pick the event, the
+category, a slot range (`#1..#30`) and a date range, and the system materialises those
+room-nights at acquisition state `NONE`. Nothing is contracted by this act. This is the
+only bridge between Phase 1 and Phase 2.
+
+---
+
+## 4. Phase 2 — Acquisition & Sales
+
+### 4.1 The acquisition axis (supply)
+
+```mermaid
+stateDiagram-v2
+    [*] --> NONE
+    NONE --> IN_PROGRESS: start negotiation
+    IN_PROGRESS --> OPTION: option secured (expiry required)
+    IN_PROGRESS --> BOUGHT: purchased directly
+    IN_PROGRESS --> NONE: abandoned
+    OPTION --> BOUGHT: option exercised
+    OPTION --> IN_PROGRESS: option lapsed, still talking
+    OPTION --> NONE: option released
+    BOUGHT --> RELEASED: returned to supplier
+```
+
+| State | Meaning |
+| --- | --- |
+| `NONE` | Known inventory, no supplier relationship on this night |
+| `IN_PROGRESS` | Actively negotiating — yet to be acquired |
+| `OPTION` | We hold the right to purchase until `optionExpiry` |
+| `BOUGHT` | Acquired under an agreement — this is We Lodge stock |
+| `RELEASED` | Previously bought, handed back (kept for audit, counts as not held) |
+
+Required attributes: `supplierRef`, `optionExpiry` (mandatory in `OPTION`),
+`buyPriceCents`, `currency`, `owner` (the We Lodge rep), `notes`.
+
+### 4.2 The sales axis (demand)
+
+```mermaid
+stateDiagram-v2
+    [*] --> NONE
+    NONE --> REQUESTED: client expresses interest
+    REQUESTED --> BLOCKED: client blocks (expiry required)
+    REQUESTED --> SOLD: client commits directly
+    REQUESTED --> NONE: request withdrawn
+    BLOCKED --> SOLD: client signs
+    BLOCKED --> REQUESTED: block lapsed, still interested
+    BLOCKED --> NONE: block released
+    SOLD --> CANCELLED: sale cancelled
+```
+
+| State | Meaning |
+| --- | --- |
+| `NONE` | No client interest on this night |
+| `REQUESTED` | A client would like these room-nights — **soft, non-exclusive** |
+| `BLOCKED` | The client holds the right to purchase until `blockExpiry` — **exclusive** |
+| `SOLD` | The client has bought these room-nights — **exclusive** |
+| `CANCELLED` | Previously sold, cancelled (kept for audit, counts as not sold) |
+
+Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`),
+`sellPriceCents`, `currency`, `owner`, `notes`, `dueDate` (payment/decision deadline).
+
+> **Change from the sheet.** Today a block may carry no expiry — the stock sheet renders it
+> as *"blocked indefinitely"*. An indefinite block is inventory frozen for free and, worse,
+> invisible to every deadline report. `blockExpiry` becomes mandatory; a genuinely
+> open-ended block must be recorded as an explicit and reportable exception.
+
+### 4.3 Exclusivity and contention — an important rule
+
+- A room-night has **at most one hard hold**: exactly one client may be `BLOCKED` or
+  `SOLD` on it. Attempting a second is a hard error.
+- A room-night may carry **many soft requests**: `REQUESTED` is a *set* of client claims,
+  not a state that locks the slot.
+
+**Why:** two clients routinely want the same hotel before either commits. A single-valued
+sales field forces us to either lose that information or fake a hold we do not have.
+Modelling requests as a set makes **contention** — "three clients want 40 King Rooms at
+Hotel Carmel on 12-Jul and we hold 30" — a directly measurable number, which is what
+drives the acquisition push.
+
+The *displayed* sales state of a room-night is the hard hold if one exists, otherwise
+`REQUESTED` if any request touches it, otherwise `NONE`.
+
+### 4.4 The position grid
+
+The pair `(acquisition, sales)` yields the position — this is the stock sheet's icon
+legend, made computable:
+
+| acq ↓ / sale → | NONE | REQUESTED | BLOCKED | SOLD |
+| --- | --- | --- | --- | --- |
+| **IN_PROGRESS** | ⚙️ in progress | ⚙️ in progress | ⚠️ blocked by client, in progress with supplier | 🚀 **red** — sold, urgent supplier action |
+| **OPTION** | 🕐 option held | 🕐 option held | 🚀 amber — client holds, we only hold an option | 🚀 amber — sold, option not yet exercised |
+| **BOUGHT** | 🏠 We Lodge stock | 🏠 We Lodge stock | 🏠 stock, client blocking | ✅ bought and sold — all good |
+| **NONE** | — free | ❗ demand with no supply line | ⚠️ hard hold, no supply | 🚨 **critical** — sold, nothing started |
+
+**Severity** is a derived integer, used for sorting, colour and alerting:
+
+| Severity | Condition |
+| --- | --- |
+| 4 · critical | `SOLD` and acquisition is `NONE`; or `SOLD` + `OPTION` where the option expires within the urgency window (§4.6) |
+| 3 · urgent | `SOLD` + `IN_PROGRESS` |
+| 2 · warning | `BLOCKED` + (`IN_PROGRESS` \| `NONE`); or `SOLD` + `OPTION` outside the urgency window |
+| 1 · watch | `BOUGHT` with no hard hold (idle stock); any expiry inside the reminder window |
+| 0 · clear | `BOUGHT` + `SOLD`; or `NONE`/`NONE` |
+
+This grid is the legacy `getStockTextFromRoomNight` / `getStockColorFromRoomNight` pair
+turned into data instead of two parallel `if` ladders. Two behaviours worth keeping from the
+old renderer: every cell names the **client** and the **binding deadline** ("Blocked by
+CNOSF until 12-Jul; we hold an option until 09-Jul"), because that is what a rep needs in
+order to act; and `REQUESTED` renders distinctly (🙋) rather than being folded into "nothing
+is happening here".
+
+### 4.5 Invariants
+
+These must hold at all times; violating one is a blocked operation or a flagged record,
+never a silent write.
+
+1. **Single hard hold.** At most one `BLOCKED`-or-`SOLD` client per room-night.
+2. **Slot uniqueness.** `(property, category, slotNumber, date)` is unique. One room-night
+   record, one truth.
+3. **Slot bound.** Slot numbers within a category may not exceed the category's
+   `roomCount` unless the category's count is explicitly raised.
+4. **Expiry required.** `OPTION` without `optionExpiry`, or `BLOCKED` without
+   `blockExpiry`, is invalid.
+5. **Deadline coherence.** `optionExpiry ≥ blockExpiry` on the same night. If a client's
+   block outlives our option to supply it, we are promising something we may not be able
+   to deliver — flag at severity ≥ 2.
+6. **Exposure is legal but never invisible.** Selling before buying is allowed — it is the
+   business — but every such night appears on the exposure report with a value attached.
+7. **Dates are closed-open.** `checkIn < checkOut`; nights are `[checkIn, checkOut)`.
+8. **State changes are append-only.** Every transition writes a ledger entry (§4.7).
+9. **Currency consistency.** Buy and sell on the same night may differ in currency, but
+   aggregation always states its currency; no implicit conversion.
+
+### 4.6 Deadlines
+
+Two clocks per night: `optionExpiry` (supplier side) and `blockExpiry` (client side), plus
+`dueDate` for payment/decision.
+
+- **Reminder window** — configurable, default 7 days out: severity ≥ 1, appears on the
+  deadline dashboard.
+- **Urgency window** — configurable, default 48 hours: severity escalates (amber → red).
+- **Expired** — the state is unchanged and the record is flagged `expired`. It stays in the
+  user's face until someone extends, converts or releases it.
+
+The **deadline dashboard** is a first-class screen: everything expiring, soonest first,
+grouped by property and client, with the value at stake.
+
+**Calendar reminders (carried over).** The add-on's most-used feature is a scheduled job
+that writes option expiries into a shared Google Calendar. Keep it, with its aggregation
+rule intact: **one all-day event per supplier per expiry date**, whose body carries the
+number of rooms, the number of room-nights and the responsible rep — not one event per row.
+Events are keyed `supplier::date` and reconciled on each run, so re-running never
+duplicates them, and expiries already in the past are skipped.
+
+Sales-side (block) reminders exist in the legacy code but are commented out — a direct
+consequence of blocks being allowed to have no expiry. With `blockExpiry` now mandatory
+(§4.2), block reminders ship on the same mechanism, keyed `supplier::date::client`.
+
+### 4.7 Ledger and ownership
+
+Every room-night change appends an immutable entry: `timestamp`, `actor` (the We Lodge
+rep), `axis`, `from`, `to`, `affected nights`, `reason/note`. This gives the "We Lodge Rep"
+and "Inserted Date" columns of the spreadsheet a real home, and makes "who promised this
+and when" answerable.
+
+Every room-night also has an `owner` per axis — the rep accountable for chasing the
+supplier and the rep accountable for the client.
+
+### 4.8 Bulk operations are the primary interaction
+
+Because the grain is a night, **no meaningful action is single-record**. The core mutation
+is: *apply a state transition to a rectangle* — a set of slots × a date range — with the
+state's required attributes, atomically. It either applies wholly or fails wholly, with a
+per-night explanation of any invariant that blocked it.
+
+Required bulk actions: acquire/option/buy, request/block/sell, extend a deadline, release,
+re-price, reassign owner, shift dates (§6.5), and split/merge a hold across slots.
+
+---
+
+## 5. Reporting and derived views
+
+### 5.1 Position per property/category/night
+
+For any `(property, category, date)`: counts by acquisition state, counts by hard-hold
+sales state, request pressure (distinct clients requesting, total rooms requested), and
+net position:
+
+```
+held      = count(BOUGHT)
+committed = count(SOLD)
+short     = count(SOLD)   - count(SOLD AND BOUGHT)      // sold but not owned
+long      = count(BOUGHT) - count(BOUGHT AND hard hold) // owned but unsold
+```
+
+### 5.2 Exposure report
+
+Every night where the sales position is stronger than the acquisition position, valued:
+
+- **Short exposure** — `SOLD` (or `BLOCKED`) without `BOUGHT`. Value = expected buy cost we
+  have not secured, plus the sale price we would fail to deliver.
+- **Long exposure** — `BOUGHT` with no hard hold. Value = committed cost sitting on the
+  book. *(Not selected as a blocking Operations validation, but it is the direct
+  financial consequence of sitting on stock, so it belongs in this report.)*
+- **Deadline exposure** — value of everything whose option or block expires inside the
+  reminder window.
+
+### 5.3 Availability — what we can still offer
+
+Distinct from *position*, and the thing a rep needs when a client asks "what have you got?".
+The legacy definition — computed by the supplier summary and written back into the Supplier
+sheet — is deliberately strict and worth keeping as the default:
+
+> Availability for a `(property, category)` over an **event period** is the number of
+> **whole slots** free on **every night** of that period. A slot is free on a night if the
+> night falls outside the period, or if we hold it (`BOUGHT` or `OPTION`) and it is not
+> `SOLD`.
+
+Three consequences, all intentional, two worth confirming (§9):
+
+- **All-or-nothing per slot.** A slot free for 19 of 21 nights contributes zero. We sell
+  whole stays, not fragments, so a partially free room is not offerable as-is.
+- **Only `SOLD` consumes availability.** Blocks and requests do not reduce it — an
+  optimistic reading that assumes blocks lapse. This should be reported alongside a second,
+  conservative figure — *availability net of hard holds* — so a rep sees both what is
+  theoretically free and what is genuinely free.
+- **Only held stock counts.** `IN_PROGRESS` and unacquired nights are *not* available,
+  which is correct: we cannot offer what we have not secured.
+
+The event period is per `(property, category)`, not global — a hotel may be relevant for
+only part of an event.
+
+### 5.4 The stock sheet (derived stay rows)
+
+The familiar spreadsheet view is generated, never stored. Collapse adjacent nights on the
+same slot into a row while this tuple is unchanged:
+
+```
+(slot, acquisitionState, salesState, client, supplierRef,
+ optionExpiry, blockExpiry, owner, buyPrice, sellPrice)
+```
+
+A row's `checkIn` is the first night's date; `checkOut` is the last night's date **+ 1
+day**. Rows are grouped by property → category → slot number, matching today's layout, and
+each row carries the icon/severity from §4.4. Editing a row edits the nights beneath it.
+
+---
+
+## 6. Phase 3 — Operations
+
+Operations begins when a client sends a rooming list. The job is to prove that what we
+hold can actually accommodate what they are sending, and to keep proving it as the plan
+moves.
+
+### 6.1 Entities
+
+**Party** — a travelling group inside a client (a team, a delegation, a crew). Fields:
+`client`, `name`, `nominalArrival`, `nominalDeparture`, `pax`, `earliestArrival`,
+`latestDeparture`, `categoryPreference`, `propertyPreference`, `notes`.
+
+`earliestArrival` / `latestDeparture` are the **flexibility window**: the pre-authorised
+range within which this party may move without renegotiation. "Team 1 might arrive 3
+nights earlier, Team 2 arrives 7 days later" is exactly this field. A shift inside the
+window is an operational change; a shift outside it is a commercial change and must go back
+through Sales.
+
+**Guest** — a named person: `firstName`, `lastName`, `party`, `arrival`, `departure`,
+`sharingWith`, `accessibilityNeeds`, `notes`. A guest's dates default to the party's and
+may be individually overridden.
+
+**Assignment** — the link between guests and inventory: `slot` + date range + the guests
+occupying it. An assignment consumes room-nights we hold. An assignment also carries the
+**actual unit number** — the hotel's own room number, which we only learn at allocation
+time and which is what the guest and the front desk actually use. Our slot number and the
+hotel's room number are different things and both must be visible on operational exports.
+
+**Planned vs actual dates.** The legacy Overview sheet carries two check-in columns: the
+contracted date and the operationally confirmed one. Keep both. `plannedArrival` is what was
+sold; `confirmedArrival` is what operations expects to happen. Divergence between them is
+precisely the flexibility this phase exists to absorb, and it is what drives the arrival
+reminders below.
+
+### 6.2 Rooming list intake
+
+A rooming list arrives as a spreadsheet per client per party. Intake must: accept an
+upload, map columns, validate rows, and produce a diff against the previously loaded
+version (added guests, removed guests, changed dates, changed sharing) rather than
+overwriting. Versions are retained — "which rooming list were we working from" is an
+operational question that gets asked after the fact.
+
+### 6.3 Validation — coverage
+
+For every guest-night implied by the rooming list, there must be a corresponding room-night
+that is **`BOUGHT` and `SOLD` to that client**.
+
+Failure modes, each reported per night with counts:
+
+- **Uncovered night** — no assignment exists for a guest on that night.
+- **Not owned** — assigned to a night whose acquisition state is not `BOUGHT` (this is
+  short exposure landing in operations; severity inherits from §4.4).
+- **Wrong client** — assigned to a night sold to a different client.
+- **Over-assignment** — more guests assigned to a slot-night than its capacity.
+- **Category mismatch** — assigned to a category the party did not buy.
+
+### 6.4 Validation — capacity and occupancy
+
+- `pax` on a slot-night ≤ category `capacity`.
+- Bed configuration vs sharing: two unrelated guests sharing a King is a flag, not an
+  error; three guests in a twin is an error.
+- Apartment units: total guests ≤ unit `capacity`; report `bedrooms` vs party size so the
+  operator can judge.
+- Accessibility needs must land in a property carrying the `Accessible` amenity.
+- Unassigned guests and unoccupied sold nights are both reported.
+
+### 6.5 Date-shift what-ifs
+
+A **simulation**, never a commit. Input: one or more proposed shifts (`Party X: −3
+nights`, `Party Y: +7 days`). Output, without touching stored state:
+
+- the new coverage picture, with every check from §6.3 and §6.4 re-run;
+- **what breaks** — the specific nights that become uncovered or not-owned;
+- **what frees up** — nights that become idle and could be resold;
+- whether each shift sits inside or outside the party's flexibility window;
+- the financial delta (nights to buy, nights now unsold).
+
+A simulation can be **applied**, which turns it into a bulk operation (§4.8) with a single
+ledger entry describing the shift. Simulations are saved so two options can be compared.
+
+### 6.6 Arrival reminders
+
+Carried over from the add-on and worth keeping as-is in behaviour: an all-day calendar
+event per **client per property per check-in date**, titled with the head count
+(`CNOSF (24 PAX) check-in @ Hotel Carmel`). The reconciliation rule matters more than the
+format — on each run the job diffs desired reminders against existing ones and **updates
+the head count when it changes**, deletes reminders whose check-in has disappeared, and
+removes duplicates. Rooming lists change constantly; a reminder showing a stale PAX count is
+worse than none.
+
+### 6.7 Re-validation
+
+Validation is continuous, not a one-off gate. Any change to a rooming list, an assignment,
+or the underlying inventory re-runs the checks for the affected event and updates the
+issue list. The operational dashboard is "open issues, by severity, by party".
+
+---
+
+## 7. Financials
+
+Money is carried on the room-night, on both axes, in **minor units** (integer cents) with
+an explicit currency. This is the finest grain at which a rate can genuinely differ, and
+every aggregate is a sum over nights.
+
+| Field | Axis | Meaning |
+| --- | --- | --- |
+| `buyPriceCents`, `buyCurrency` | acquisition | What we pay the supplier for that night |
+| `sellPriceCents`, `sellCurrency` | sales | What the client pays us for that night |
+
+Derived:
+
+- **Margin per night** = `sellPrice − buyPrice` (only meaningful where both are set).
+- **Committed cost** = Σ `buyPrice` over `BOUGHT` nights.
+- **Contracted revenue** = Σ `sellPrice` over `SOLD` nights.
+- **Realised margin** = over nights that are both `BOUGHT` and `SOLD`.
+- **Pipeline margin** = over nights not yet in both states, reported *separately* and
+  never added to realised margin.
+- **Cost at risk** = Σ estimated `buyPrice` over `SOLD`-not-`BOUGHT` nights, using the
+  category's indicative price where no negotiated price exists. This is the number that
+  makes short exposure concrete.
+- **Idle cost** = Σ `buyPrice` over `BOUGHT` nights with no hard hold.
+
+Aggregations must be available by event, property, category, client, party and date range.
+
+**Out of scope for v1:** invoicing, payment tracking, FX conversion (aggregates are
+reported per currency), taxes and tourist levies, commission splits, deposit schedules.
+`dueDate` is captured as a deadline only, with no payment state behind it.
+
+---
+
+## 8. Non-goals for v1
+
+- Channel-manager or GDS integration; all supplier communication stays human.
+- Guest-facing anything — no booking engine, no confirmations to guests.
+- Automatic release of stock on expiry (§2.4).
+- Selling sub-units of an apartment (§3.3).
+- Yield management, dynamic pricing or demand forecasting.
+- Multi-currency consolidation.
+
+---
+
+## 9. Open questions
+
+1. **Release deadlines on bought stock.** Do supplier agreements carry a cancellation
+   window where bought nights can still be handed back? If so `RELEASED` needs its own
+   deadline clock alongside options and blocks.
+2. **`dueDate` semantics.** On the sales sheet this reads as a payment due date — is it
+   payment, or the client's decision deadline? They imply different escalation paths.
+3. **Slot stability across suppliers.** If a client's rooms move from Aloft to Courtyard,
+   does the sale follow the client (re-point the hold to new slots) or is it cancelled and
+   re-sold? This determines whether a hold is an object in its own right or purely a
+   property of nights.
+4. **Contracted vs indicative price.** Should a negotiated rate live on the category
+   (a rate card per event) with the night-level price as an override, rather than being
+   entered per night?
+5. **Roles and permissions.** Is the "We Lodge Rep" an accountability label only, or does
+   it gate who may sell/buy/release?
+6. **Overbooking policy.** Do we ever deliberately sell more than we hold at a category
+   level, and if so should the system allow a configured tolerance rather than flagging
+   every night?
+7. **Apartment slot numbering.** Do apartment units carry a real unit identifier from the
+   operator, or is our internal slot number sufficient?
+8. **Availability semantics (§5.3).** Should blocks reduce availability by default? And is
+   whole-period, all-or-nothing availability still right, or should partial availability be
+   offerable when a client's own stay is shorter than the event window?
+9. **Indefinite blocks (§4.2).** Are there clients whose blocks genuinely have no deadline,
+   and if so what is the review cadence that replaces an expiry date?
+10. **Event period per property.** The legacy Supplier sheet sets a start/end per
+    `(property, category)`. Is that a commercial fact (the window the hotel will contract
+    for) or just a reporting filter? If the former it belongs on the contract, not the view.
+
+---
+
+## 10. Glossary
+
+| Term | Meaning |
+| --- | --- |
+| **Room-night** | One room slot on one calendar date. The atomic record. |
+| **Room slot** | `property + category + slot number`. Our internal identity for a countable room. |
+| **Stay row** | A derived run of contiguous nights on one slot sharing a state tuple. |
+| **Hard hold** | `BLOCKED` or `SOLD` — exclusive; at most one per room-night. |
+| **Soft request** | `REQUESTED` — non-exclusive; many clients may request the same night. |
+| **Short** | Sold (or blocked) without being bought. |
+| **Long / idle stock** | Bought with no hard hold against it. |
+| **Exposure** | Any night where the sales position is stronger than the acquisition position. |
+| **Flexibility window** | A party's pre-authorised `earliestArrival` → `latestDeparture` range. |
+| **Position grid** | The `(acquisition, sales)` matrix that yields icon and severity. |
+
+---
+
+## 11. Appendix — inherited business logic (`duvet` Apps Script)
+
+Rules that exist only in the legacy add-on's code, recorded so they are inherited
+deliberately rather than lost or re-discovered. Source: `~/duvet` (`src/inventory/*`,
+`src/reminders/*`, `src/tests/*`).
+
+### 11.1 What the add-on actually does
+
+Three sheets in, two sheets out. `Inventory` (`Supplier, Room Category, Room Number,
+Check-in, Check-out, Status, Option expires, We Lodge Rep`) and `Sales` (same plus
+`Reservation expires, Client`) are read as stay rows and **exploded into a room-night
+matrix**; that matrix is written back as the `Stock` sheet — one row per slot, one column
+per night, coloured and captioned — and an availability figure is written back into the
+`Supplier` sheet. A master spreadsheet holds a `URLs` tab listing one workbook per event,
+which the scheduled reminder job iterates.
+
+**This confirms both foundational decisions (§2).** The night grain and the two-axis model
+are not new: they are what the add-on computes internally at every run. What it lacks is
+the ability to *store* them — the sheets remain range-shaped, so the explosion is redone
+from scratch each time and cannot be edited at the grain the business actually operates at.
+
+### 11.2 Validation rules to carry over
+
+Enforced today on stay rows, per `roomId`, per axis:
+
+| Rule | Legacy behaviour |
+| --- | --- |
+| At least one night | `checkIn >= checkOut` is invalid — a zero-night row is rejected |
+| Option needs a deadline | Status `option` without `Option expires` is invalid |
+| No overlaps | Two non-cancelled rows on the same slot and axis may not overlap |
+| Fail loud | Any invalid row aborts the entire run; offending rows are highlighted red |
+| Header contract | Column headers are checked by name and position before anything is read |
+
+Two notes. First, the overlap check has a **known gap**: it detects an overlapping row that
+starts or ends inside another, but not one that fully *contains* another, so a wholly
+enclosing duplicate slips through. Second, and more importantly, **storing room-nights
+makes overlap structurally impossible** — uniqueness on `(slot, date)` replaces the check
+entirely, along with its bug. Zero-night and missing-deadline validation still apply, at
+input time.
+
+The "fail the whole run" behaviour should *not* be carried over verbatim. Refuse the
+invalid operation, not the entire dataset; the equivalent of red-highlighting is a per-night
+explanation attached to the rejected bulk operation (§4.8).
+
+### 11.3 Cancellation is an overlay, not a state
+
+The single least obvious rule in the codebase. A row with status `cancelled` **subtracts**
+from any overlapping non-cancelled row for exactly the nights it covers:
+
+```
+bought      31-Dec → 05-Jan
+cancelled   31-Dec → 01-Jan
+cancelled   04-Jan → 05-Jan
+⇒ held on 01, 02, 03 Jan only
+```
+
+It is a workaround for range-shaped storage: it punches holes in a stay without splitting
+the row, and preserves the fact that something *was* held. On a night grain the subtraction
+disappears — you simply set those nights — but the intent must survive: **releasing or
+cancelling must never erase history.** That is what `RELEASED` / `CANCELLED` plus the ledger
+(§4.7) are for. Cancelled rows are also exempt from validation today, and the ledger makes
+that exemption unnecessary.
+
+### 11.4 Rendering rules embedded in the stock sheet
+
+The cell text is richer than the printed legend and encodes real judgement:
+
+| Position | Legacy cell |
+| --- | --- |
+| bought + sold | `✅ {client}` |
+| bought + blocked | `⚠️ Blocked by {client} until {date}. We have it on stock` |
+| bought + requested | `🙋 Requested by {client}. We have it on stock` |
+| bought only | `🏠 Stock` (green) |
+| option + sold | `🚀 Acquire for {client}. We have option until {date}` (yellow) |
+| option + blocked/requested | `⚠️`/`🙋` + `We have option until {date}` |
+| option only | `🕙 Option until {date}` |
+| in progress + sold | `🚀 Acquire for {client}. We are in progress` (yellow) |
+| in progress only | `⚙️ In progress` |
+| nothing + sold | `🚀 Acquire for {client} urgently.` (red) |
+| nothing + blocked | `⚠️ Blocked by {client} until {date}.` (yellow) |
+
+The pattern: **the cell states the action and the deadline, not just the state.** Red is
+reserved for sold-with-nothing-secured; yellow for sold-against-an-option or
+blocked-against-nothing. That is the severity scale of §4.4, and it should be computed from
+one table rather than re-derived per surface.
+
+### 11.5 Odds and ends
+
+- **Dates** are parsed and stored as UTC midnight from a `1-Jan-24` string. Calendar dates
+  with no time component is the right model (§2.1); the string format is a spreadsheet
+  artefact and should not survive.
+- **Room-nights per row** = `checkOut − checkIn` in whole days, confirming the closed-open
+  night convention.
+- **The matrix spans** the earliest check-in to the latest check-out across *all* rows —
+  the stock view has no fixed calendar of its own.
+- **Naming drift.** Reminder bodies still say "Khaya rep"; test fixtures use
+  `till@khaya.global` and a two-part `roomId`. Cosmetic, but a reminder that a
+  string-keyed identity drifts. The new system should use real foreign keys, not
+  `supplier::category::number` strings.
+- **Operations sheet columns** worth mining when Phase 3 is specified: `Status`, `#`,
+  `# per property`, `Property`, `Client`, `Unit Type`, `Actual unit number`, `Check In`,
+  `Check out`, `Total RN`, `Check In` (confirmed).
