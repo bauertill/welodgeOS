@@ -113,6 +113,12 @@ export function InventoryBoard({
           hint="One row per run of nights that share the same story. Editing a row means changing the nights underneath it."
         />
 
+        <SeverityCounts
+          counts={rows.data?.severityCounts}
+          minSeverity={minSeverity}
+          onPick={setMinSeverity}
+        />
+
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Select
             value={propertyId}
@@ -155,17 +161,17 @@ export function InventoryBoard({
           <span className="text-ink-500 ml-auto text-[13px] font-light">
             {rows.isLoading
               ? "Loading…"
-              : `${rows.data?.length ?? 0} ${rows.data?.length === 1 ? "row" : "rows"}`}
+              : `${rows.data?.rows.length ?? 0} ${rows.data?.rows.length === 1 ? "row" : "rows"}`}
           </span>
         </div>
 
-        {rows.data && rows.data.length === 0 && !rows.isLoading ? (
+        {rows.data && rows.data.rows.length === 0 && !rows.isLoading ? (
           <EmptyState
             title="Nothing here yet"
             description="Bring rooms into inventory above, then record what happens with the supplier and the client."
           />
         ) : (
-          <StockSheet rows={rows.data ?? []} />
+          <StockSheet rows={rows.data?.rows ?? []} />
         )}
       </div>
 
@@ -220,6 +226,62 @@ export function InventoryBoard({
           </Card>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Matches the dropdown's own tiers, so a chip and its filter option agree. */
+const severityChipLabels: Record<number, string> = {
+  1: "need a look",
+  2: "warnings",
+  3: "urgent",
+  4: "critical",
+};
+
+/**
+ * What to look out for, before anyone scrolls the stock sheet — otherwise the
+ * only way to know whether a 60-row sheet is quiet or on fire is to read it
+ * end to end.
+ */
+function SeverityCounts({
+  counts,
+  minSeverity,
+  onPick,
+}: {
+  counts?: Record<number, number>;
+  minSeverity: string;
+  onPick: (value: string) => void;
+}) {
+  if (!counts) return null;
+
+  const issues = ([4, 3, 2, 1] as const).filter((sev) => counts[sev]! > 0);
+
+  if (issues.length === 0) {
+    return (
+      <p className="text-ink-500 mb-4 text-[13px] font-light">
+        Nothing to look out for — every row is clear.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <span className="text-ink-500 text-[13px] font-light">Look out for:</span>
+      {issues.map((sev) => {
+        const active = minSeverity === String(sev);
+        return (
+          <button
+            key={sev}
+            type="button"
+            onClick={() => onPick(active ? "" : String(sev))}
+            className={active ? "ring-brand-400 rounded-full ring-2" : ""}
+          >
+            <SeverityBadge severity={sev}>
+              {counts[sev]} {severityChipLabels[sev]}
+            </SeverityBadge>
+          </button>
+        );
+      })}
     </div>
   );
 }

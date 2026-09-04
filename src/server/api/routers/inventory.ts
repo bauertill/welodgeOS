@@ -297,9 +297,19 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       const rows = toStayRows(nights.map(flatten));
-      return input.minSeverity === undefined
-        ? rows
-        : rows.filter((row) => row.position.severity >= input.minSeverity!);
+
+      // Counted before the severity filter, so a rep can see what a stricter
+      // filter would surface without having to apply it first.
+      const severityCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+      for (const row of rows) severityCounts[row.position.severity]!++;
+
+      return {
+        rows:
+          input.minSeverity === undefined
+            ? rows
+            : rows.filter((row) => row.position.severity >= input.minSeverity!),
+        severityCounts,
+      };
     }),
 
   /**
