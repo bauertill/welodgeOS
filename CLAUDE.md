@@ -78,11 +78,11 @@ conversation.
 | Command | What it does |
 | --- | --- |
 | `./start-database.sh` | Local Postgres in Docker |
-| `npm run db:push` | Apply `prisma/schema.prisma` to the database |
-| `npm run db:seed` | Reset demo data and load the amenity vocabulary |
-| `npm run dev` | Development server on :3000 |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run build` | Production build — run before claiming something works |
+| `pnpm run db:push` | Apply `prisma/schema.prisma` to the database |
+| `pnpm run db:seed` | Reset demo data and load the amenity vocabulary |
+| `pnpm run dev` | Development server on :3000 |
+| `pnpm run typecheck` | `tsc --noEmit` |
+| `pnpm run build` | Production build — run before claiming something works |
 
-`npm run db:seed` deletes and rebuilds the demo event and properties. The
+`pnpm run db:seed` deletes and rebuilds the demo event and properties. The
 amenity list is upserted, never wiped, because properties point at those rows.

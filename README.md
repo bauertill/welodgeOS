@@ -7,11 +7,11 @@ v4, tRPC, Prisma and NextAuth.
 ## Getting started
 
 ```bash
-npm install
-./start-database.sh   # local Postgres in Docker
-npm run db:push       # create the schema
-npm run db:seed       # load demo events, properties, guests and bookings
-npm run dev
+pnpm install
+./start-database.sh    # local Postgres in Docker
+pnpm run db:push       # create the schema
+pnpm run db:seed       # load demo events, properties, guests and bookings
+pnpm run dev
 ```
 
 The app runs on <http://localhost:3000> (Next.js falls back to 3001 if the port
@@ -110,12 +110,12 @@ scouting list is the source of truth; the map renders whatever has coordinates.
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Dev server (Turbopack) |
-| `npm run build` | Production build |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run db:push` | Push the schema without a migration |
-| `npm run db:seed` | Reset and reseed the demo data |
-| `npm run db:studio` | Prisma Studio |
+| `pnpm run dev` | Dev server (Turbopack) |
+| `pnpm run build` | Production build |
+| `pnpm run typecheck` | `tsc --noEmit` |
+| `pnpm run db:push` | Push the schema without a migration |
+| `pnpm run db:seed` | Reset and reseed the demo data |
+| `pnpm run db:studio` | Prisma Studio |
 
 ## Not yet built
 
