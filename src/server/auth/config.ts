@@ -80,6 +80,14 @@ const emailProvider = ResendProvider({
 export const providers = {
   google: hasGoogle,
   email: hasResend || isDev,
+  /** The development bypass — see src/app/api/dev-login/route.ts. */
+  devLogin: isDev,
+  /**
+   * True when the magic-link form will print the link to the server console
+   * rather than emailing it. The sign-in page says so instead of telling
+   * someone to check an inbox nothing was sent to.
+   */
+  emailGoesToConsole: !hasResend && isDev,
 };
 
 /**

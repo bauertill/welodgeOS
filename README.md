@@ -19,29 +19,31 @@ is taken).
 
 ### Signing in
 
-Two methods, both at `/signin`:
+Three routes, in the order you are likely to want them:
 
-- **Google** — for We Lodge staff on Google Workspace. Set `AUTH_GOOGLE_ID` and
-  `AUTH_GOOGLE_SECRET`; the button only appears when both are present. Create
-  the credentials in the [Google Cloud console](https://console.cloud.google.com/apis/credentials)
-  with redirect URI `http://localhost:3000/api/auth/callback/google`.
-- **Email magic link** — for partners outside the Workspace tenant. Delivered
-  through [Resend](https://resend.com): set `AUTH_RESEND_KEY` and `EMAIL_FROM`.
-  Links are single-use and expire after 15 minutes.
+**Development sign-in.** The sign-in page shows a *Log in as till@welodge.net*
+button whenever `NODE_ENV === "development"`. It creates that user, mints a
+database session and sets the cookie — no password, no email. It is a real
+authentication bypass, fenced two ways: `/api/dev-login` returns 404 outside
+development, and the button is not rendered. Both are verified against a
+production build.
 
-  `EMAIL_FROM` must sit on a domain verified in Resend. Use
-  `onboarding@resend.dev` to test before `welodge.net` is verified — note that
-  it only delivers to the address that owns the Resend account.
+**Google Workspace SSO.** Set `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`; the
+provider is only mounted when both are present. Redirect URI for local work is
+`http://localhost:3000/api/auth/callback/google`.
 
-  The email itself is branded in `src/server/auth/magic-link-email.ts`.
+**Magic link via Resend.** Set `AUTH_RESEND_KEY` and an `EMAIL_FROM` on a
+domain verified at [resend.com/domains](https://resend.com/domains). Verifying a
+domain is what allows sending to *any* recipient — the shared
+`onboarding@resend.dev` sender delivers only to the address that owns the Resend
+account and returns 403 for everyone else.
 
-**In development without a Resend key**, the magic link is printed to the server
-console instead of being mailed — look for `[auth] Magic link for …` in the
-terminal and open the URL on the next line. No mail setup needed to work
-locally.
+With no Resend key, the magic-link form still works but **prints the link to the
+server console instead of emailing it**. The sign-in page says so rather than
+sending you to an inbox nothing was sent to.
 
-Sessions are database-backed via the Prisma adapter. Sign-in, check-email and
-sign-out screens are all branded (`src/app/signin/`, `src/app/signout/`).
+> Deployed with neither Google nor Resend configured, the app has no sign-in
+> providers at all and nobody can get in. Configure one before deploying.
 
 ## Corporate identity
 

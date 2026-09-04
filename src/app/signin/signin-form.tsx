@@ -16,6 +16,55 @@ export function GoogleButton({ callbackUrl }: { callbackUrl: string }) {
   );
 }
 
+/**
+ * Development only — the page renders this solely when NODE_ENV is
+ * development, and the route behind it 404s otherwise.
+ */
+export function DevLoginButton({
+  email,
+  callbackUrl,
+}: {
+  email: string;
+  callbackUrl: string;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          setPending(true);
+          setError(null);
+          fetch("/api/dev-login", { method: "POST" })
+            .then((response) => {
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              // A full load rather than a router push, so every server
+              // component re-reads the new session cookie.
+              window.location.href = callbackUrl;
+            })
+            .catch(() => {
+              setError("Development sign-in failed. Is the database running?");
+              setPending(false);
+            });
+        }}
+        className="border-ink-200 text-ink-700 hover:border-brand-400 hover:bg-brand-50/50 w-full rounded-full border border-dashed bg-white px-7 py-3.5 text-[13px] font-light transition-colors disabled:opacity-60"
+      >
+        {pending ? "Signing in…" : `Log in as ${email}`}
+      </button>
+      <p className="text-ink-500 text-center text-[11px] font-light">
+        Development only — no password, no email. Not available in a production
+        build.
+      </p>
+      {error && (
+        <p className="text-center text-[11px] text-[#c03654]">{error}</p>
+      )}
+    </div>
+  );
+}
+
 export function MagicLinkForm({ callbackUrl }: { callbackUrl: string }) {
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);

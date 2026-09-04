@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
 
-import { GoogleButton, MagicLinkForm } from "~/app/signin/signin-form";
+import {
+  DevLoginButton,
+  GoogleButton,
+  MagicLinkForm,
+} from "~/app/signin/signin-form";
+import { DEV_USER } from "~/server/auth/dev-user";
 import { auth, providers } from "~/server/auth";
 
 export const metadata = { title: "Sign in" };
@@ -53,10 +58,34 @@ export default async function SignInPage({
 
         {providers.email && <MagicLinkForm callbackUrl={callbackUrl} />}
 
-        {!providers.google && !providers.email && (
+        {providers.emailGoesToConsole && (
+          <p className="border-ink-200 text-ink-500 rounded-xl border border-dashed px-4 py-3 text-[11px] font-light">
+            <code>AUTH_RESEND_KEY</code> is not set, so no email is sent — the
+            sign-in link is printed in the terminal running{" "}
+            <code>npm run dev</code>.
+          </p>
+        )}
+
+        {providers.devLogin && (
+          <>
+            <div className="flex items-center gap-3">
+              <span className="bg-ink-200 h-px flex-1" />
+              <span className="text-ink-500 text-[11px] tracking-wider uppercase">
+                Development
+              </span>
+              <span className="bg-ink-200 h-px flex-1" />
+            </div>
+            <DevLoginButton
+              email={DEV_USER.email}
+              callbackUrl={callbackUrl}
+            />
+          </>
+        )}
+
+        {!providers.google && !providers.email && !providers.devLogin && (
           <p className="text-ink-500 text-sm font-light">
             No sign-in method is configured. Set <code>AUTH_GOOGLE_ID</code> and{" "}
-            <code>AUTH_GOOGLE_SECRET</code>, or <code>EMAIL_SERVER</code> and{" "}
+            <code>AUTH_GOOGLE_SECRET</code>, or <code>AUTH_RESEND_KEY</code> and{" "}
             <code>EMAIL_FROM</code>.
           </p>
         )}
