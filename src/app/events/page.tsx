@@ -75,12 +75,20 @@ export default async function EventsPage() {
                 <Td>{event._count.scoutingEntries}</Td>
                 <Td>{event._count.roomNights || "—"}</Td>
                 <Td>
-                  <Link
-                    href={`/events/${event.id}/inventory`}
-                    className="text-brand-700 hover:text-brand-400 text-[13px] whitespace-nowrap"
-                  >
-                    Inventory →
-                  </Link>
+                  <div className="flex items-center gap-3 whitespace-nowrap">
+                    <Link
+                      href={`/events/${event.id}/edit`}
+                      className="text-ink-500 hover:text-brand-700 text-[13px]"
+                    >
+                      Edit
+                    </Link>
+                    <Link
+                      href={`/events/${event.id}/inventory`}
+                      className="text-brand-700 hover:text-brand-400 text-[13px]"
+                    >
+                      Inventory →
+                    </Link>
+                  </div>
                 </Td>
               </tr>
             ))}

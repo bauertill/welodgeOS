@@ -13,34 +13,65 @@ import {
 } from "~/app/_components/form";
 import { api } from "~/trpc/react";
 
+export type EventFormValues = {
+  id?: string;
+  name: string;
+  city: string;
+  country: string;
+  startDate: string;
+  endDate: string;
+  status: "PLANNING" | "ACTIVE" | "CLOSED";
+  venueName: string;
+  venueLatitude: string;
+  venueLongitude: string;
+};
+
+export const emptyEvent: EventFormValues = {
+  name: "",
+  city: "",
+  country: "",
+  startDate: "",
+  endDate: "",
+  status: "PLANNING",
+  venueName: "",
+  venueLatitude: "",
+  venueLongitude: "",
+};
+
 /**
  * An event is the container everything else hangs off (doc §2.3). The venue
  * coordinates are optional but worth having — distance-to-venue is derived
  * from them.
  */
-export function EventForm({ onDone }: { onDone?: () => void }) {
+export function EventForm({
+  initial = emptyEvent,
+  onDone,
+}: {
+  initial?: EventFormValues;
+  onDone?: () => void;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [values, setValues] = useState({
-    name: "",
-    city: "",
-    country: "",
-    startDate: "",
-    endDate: "",
-    status: "PLANNING" as "PLANNING" | "ACTIVE" | "CLOSED",
-    venueName: "",
-    venueLatitude: "",
-    venueLongitude: "",
-  });
+  const [values, setValues] = useState(initial);
+
+  const isEdit = Boolean(initial.id);
+
+  const onSaved = (event: { id: string }) => {
+    onDone?.();
+    router.push(`/events/${event.id}`);
+    router.refresh();
+  };
 
   const create = api.event.create.useMutation({
-    onSuccess: (event) => {
-      onDone?.();
-      router.push(`/events/${event.id}`);
-      router.refresh();
-    },
+    onSuccess: onSaved,
     onError: (e) => setError(e.message),
   });
+  const update = api.event.update.useMutation({
+    onSuccess: onSaved,
+    onError: (e) => setError(e.message),
+  });
+
+  const saving = create.isPending || update.isPending;
 
   const set = (key: keyof typeof values, value: string) =>
     setValues((current) => ({ ...current, [key]: value }));
@@ -61,7 +92,7 @@ export function EventForm({ onDone }: { onDone?: () => void }) {
     if (endDate < startDate)
       return setError("The event cannot end before it starts.");
 
-    create.mutate({
+    const payload = {
       name: values.name.trim(),
       city: values.city,
       country: values.country,
@@ -71,14 +102,17 @@ export function EventForm({ onDone }: { onDone?: () => void }) {
       venueName: values.venueName,
       venueLatitude: num(values.venueLatitude),
       venueLongitude: num(values.venueLongitude),
-    });
+    };
+
+    if (initial.id) update.mutate({ ...payload, id: initial.id });
+    else create.mutate(payload);
   };
 
   return (
     <form onSubmit={submit} className="max-w-2xl space-y-4">
       <FormError message={error} />
 
-      <Fieldset title="New event">
+      <Fieldset title={isEdit ? "Edit event" : "New event"}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" className="sm:col-span-2">
             <Input
@@ -161,14 +195,17 @@ export function EventForm({ onDone }: { onDone?: () => void }) {
       </Fieldset>
 
       <div className="flex gap-3">
-        <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? "Creating…" : "Create event"}
+        <Button type="submit" disabled={saving}>
+          {saving ? "Saving…" : isEdit ? "Save changes" : "Create event"}
         </Button>
-        {onDone && (
-          <Button type="button" variant="ghost" onClick={onDone}>
-            Cancel
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onDone ?? (() => router.back())}
+          disabled={saving}
+        >
+          Cancel
+        </Button>
       </div>
     </form>
   );

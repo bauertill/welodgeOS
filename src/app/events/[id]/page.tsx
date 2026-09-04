@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AddToList } from "~/app/_components/add-to-list";
@@ -44,7 +45,17 @@ export default async function EventScoutingPage({
         subtitle={`Scouting list · ${formatRange(event.startDate, event.endDate)}${
           event.city ? ` · ${event.city}` : ""
         }`}
-        action={<AddToList eventId={event.id} />}
+        action={
+          <div className="flex items-start gap-2">
+            <Link
+              href={`/events/${event.id}/edit`}
+              className="border-ink-200 text-ink-700 hover:bg-ink-50 inline-flex rounded-full border bg-white px-5 py-2.5 text-[13px] font-light transition-colors"
+            >
+              Edit
+            </Link>
+            <AddToList eventId={event.id} />
+          </div>
+        }
       />
 
       <EventTabs eventId={event.id} />
