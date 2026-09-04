@@ -259,7 +259,40 @@ export const propertyRouter = createTRPCRouter({
 
   remove: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.property.delete({ where: { id: input.id } }),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      // Deleting the property here removes it from the shared library for
+      // every event, not just one — so it is refused while anything still
+      // depends on it, rather than silently taking those events' lists and
+      // inventory down with it.
+      const [scoutingCount, categories] = await Promise.all([
+        ctx.db.scoutingEntry.count({ where: { propertyId: input.id } }),
+        ctx.db.roomCategory.findMany({
+          where: { propertyId: input.id },
+          include: { slots: { include: { _count: { select: { roomNights: true } } } } },
+        }),
+      ]);
+
+      if (scoutingCount > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `This property is still on ${scoutingCount === 1 ? "an event's" : `${scoutingCount} events'`} scouting list. Remove it from every list first.`,
+        });
+      }
+
+      const nights = categories.reduce(
+        (sum, category) =>
+          sum +
+          category.slots.reduce((s, slot) => s + slot._count.roomNights, 0),
+        0,
+      );
+      if (nights > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "This property carries booked inventory and cannot be deleted.",
+        });
+      }
+
+      return ctx.db.property.delete({ where: { id: input.id } });
+    }),
 });

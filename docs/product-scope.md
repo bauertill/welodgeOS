@@ -128,6 +128,11 @@ different capitalisation. The scouting form checks this as the name is typed and
 saving on a match; the same check runs again on the server, since the form's check alone
 cannot be trusted.
 
+**Deleting a property** is separate from removing a scouting entry (§3.5): it takes the
+property out of the shared library for good, so it is refused while the property is still on
+any event's scouting list, or carries booked inventory. Take it off every list first — the
+property page states this rather than silently doing nothing.
+
 **Map:** the list is the source of truth; the map is a *view* over whatever has
 coordinates. Import from Google My Maps (KML/CSV) is the expected ingestion path for the
 first load. A property with no coordinates is valid and simply absent from the map.

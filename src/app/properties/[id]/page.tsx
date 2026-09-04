@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { DeleteProperty } from "~/app/_components/delete-property";
 import {
   Card,
   PageHeader,
@@ -43,12 +44,15 @@ export default async function PropertyPage({
           .filter(Boolean)
           .join(" · ")}
         action={
-          <Link
-            href={`/properties/${property.id}/edit`}
-            className="border-ink-200 text-ink-700 hover:bg-ink-50 inline-flex rounded-full border bg-white px-5 py-2.5 text-[13px] font-light transition-colors"
-          >
-            Edit
-          </Link>
+          <div className="flex items-start gap-2">
+            <Link
+              href={`/properties/${property.id}/edit`}
+              className="border-ink-200 text-ink-700 hover:bg-ink-50 inline-flex rounded-full border bg-white px-5 py-2.5 text-[13px] font-light transition-colors"
+            >
+              Edit
+            </Link>
+            <DeleteProperty id={property.id} name={property.name} />
+          </div>
         }
       />
 
