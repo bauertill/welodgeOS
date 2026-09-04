@@ -207,7 +207,7 @@ export function BulkAction({
 
   return (
     <Fieldset
-      title="Change a block of rooms"
+      title="Update rooms and nights"
       description="Every change applies to a set of rooms across a range of nights, all at once. If any night would break a rule, nothing is changed and you are told which."
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
