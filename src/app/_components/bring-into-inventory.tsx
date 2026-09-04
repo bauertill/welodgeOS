@@ -149,7 +149,13 @@ export function BringIntoInventory({
           />
         </Field>
 
-        <div className="flex items-end">
+        <div className="flex flex-col">
+          <span
+            aria-hidden="true"
+            className="text-ink-700 mb-1.5 block text-[13px] font-medium"
+          >
+            &nbsp;
+          </span>
           <Button
             type="button"
             disabled={!categoryId || materialise.isPending}
