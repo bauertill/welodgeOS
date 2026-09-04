@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ScoutingStatus } from "generated/prisma";
 
+import { formatMoney } from "~/lib/format";
+import { severityLabels, severityStyles, type Severity } from "~/lib/position";
 import { scoutingStatusLabels } from "~/lib/scouting";
 
 export function PageHeader({
@@ -140,5 +142,74 @@ export function Td({ children }: { children: React.ReactNode }) {
     <td className="border-ink-200/40 border-b px-5 py-3.5 align-top">
       {children}
     </td>
+  );
+}
+
+// --- Phase 2 -----------------------------------------------------------------
+
+/**
+ * Severity is computed in one place (doc §4.4) and rendered the same way
+ * everywhere: the stock sheet, the deadline dashboard and the exposure report
+ * all agree about how bad a night is.
+ */
+export function SeverityBadge({
+  severity,
+  children,
+}: {
+  severity: Severity;
+  children?: React.ReactNode;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap ${severityStyles[severity]}`}
+    >
+      {children ?? severityLabels[severity]}
+    </span>
+  );
+}
+
+/**
+ * A total, per currency. Buy and sell may differ in currency on the same night,
+ * and nothing is ever converted — so a total that spans two currencies says so
+ * rather than inventing a rate (invariant §4.5.9).
+ */
+export function MoneyTotal({
+  amounts,
+  empty = "—",
+}: {
+  amounts: { currency: string; cents: number }[];
+  empty?: string;
+}) {
+  if (amounts.length === 0) return <span className="text-ink-500">{empty}</span>;
+  return (
+    <span className="whitespace-nowrap">
+      {amounts.map((amount, index) => (
+        <span key={amount.currency}>
+          {index > 0 && <span className="text-ink-500"> · </span>}
+          {formatMoney(amount.cents, amount.currency)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** A heading above a block of rows, used where a table is grouped. */
+export function SectionHeading({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+      <div>
+        <h2 className="text-ink-900 text-lg font-semibold">{title}</h2>
+        {hint && <p className="text-ink-500 mt-0.5 text-xs font-light">{hint}</p>}
+      </div>
+      {action}
+    </div>
   );
 }

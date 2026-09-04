@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -8,6 +9,9 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
  * they are the countable, sellable thing (doc §3.2, §3.3).
  */
 const categoryInput = z.object({
+  /** Present when the category already exists. Room slots hang off this id, so
+   * an edit must keep it rather than replacing the row (doc §2.1). */
+  id: z.string().optional(),
   name: z.string().min(1, "Give the category a name"),
   unitCount: z.number().int().min(0),
   capacity: z.number().int().min(1),
@@ -114,7 +118,7 @@ export const propertyRouter = createTRPCRouter({
           scoutedById: ctx.session.user.id,
           amenities: { connect: amenityIds.map((id) => ({ id })) },
           categories: {
-            create: categories.map((category, index) => ({
+            create: categories.map(({ id: _unused, ...category }, index) => ({
               ...category,
               sortOrder: index,
             })),
@@ -134,13 +138,70 @@ export const propertyRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, amenityIds, categories, contacts, ...property } = input;
 
-      // Categories and contacts are replaced wholesale rather than diffed. At
-      // scouting scale a property has a handful of each, and nothing downstream
-      // references them yet — once Phase 2 hangs room slots off a category this
-      // has to become a real diff.
+      // Room slots — and every room-night on them — hang off a category, so a
+      // category is edited in place, never replaced. Removing one that already
+      // carries inventory would take the inventory with it, which is why it is
+      // refused rather than done quietly.
+      const existing = await ctx.db.roomCategory.findMany({
+        where: { propertyId: id },
+        include: {
+          slots: {
+            orderBy: { slotNumber: "desc" },
+            include: { _count: { select: { roomNights: true } } },
+          },
+        },
+      });
+
+      const keeping = new Set(
+        categories.map((category) => category.id).filter(Boolean),
+      );
+
+      for (const category of existing) {
+        const nights = category.slots.reduce(
+          (sum, slot) => sum + slot._count.roomNights,
+          0,
+        );
+        const highestSlot = category.slots[0]?.slotNumber ?? 0;
+
+        if (!keeping.has(category.id) && nights > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `"${category.name}" cannot be removed: ${nights} room-nights of inventory are booked against it. Release them first, or leave the category in place.`,
+          });
+        }
+
+        // Invariant §4.5.3 — slot numbers may not exceed the category's count.
+        const incoming = categories.find((c) => c.id === category.id);
+        if (incoming && incoming.unitCount < highestSlot) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `"${category.name}" already has inventory numbered up to #${highestSlot}, so it cannot be reduced to ${incoming.unitCount} rooms.`,
+          });
+        }
+      }
+
+      const removing = existing
+        .filter((category) => !keeping.has(category.id))
+        .map((category) => category.id);
+
+      // Contacts carry nothing downstream, so they stay a wholesale replace.
       return ctx.db.$transaction(async (tx) => {
-        await tx.roomCategory.deleteMany({ where: { propertyId: id } });
+        await tx.roomCategory.deleteMany({ where: { id: { in: removing } } });
         await tx.propertyContact.deleteMany({ where: { propertyId: id } });
+
+        for (const [index, category] of categories.entries()) {
+          const { id: categoryId, ...data } = category;
+          if (categoryId) {
+            await tx.roomCategory.update({
+              where: { id: categoryId },
+              data: { ...data, sortOrder: index },
+            });
+          } else {
+            await tx.roomCategory.create({
+              data: { ...data, sortOrder: index, propertyId: id },
+            });
+          }
+        }
 
         return tx.property.update({
           where: { id },
@@ -153,12 +214,6 @@ export const propertyRouter = createTRPCRouter({
             phone: blank(property.phone),
             notes: blank(property.notes),
             amenities: { set: amenityIds.map((amenityId) => ({ id: amenityId })) },
-            categories: {
-              create: categories.map((category, index) => ({
-                ...category,
-                sortOrder: index,
-              })),
-            },
             contacts: {
               create: contacts.map((contact) => ({
                 ...contact,

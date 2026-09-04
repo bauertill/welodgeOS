@@ -18,7 +18,9 @@ export const eventRouter = createTRPCRouter({
   list: protectedProcedure.query(({ ctx }) =>
     ctx.db.event.findMany({
       orderBy: { startDate: "asc" },
-      include: { _count: { select: { scoutingEntries: true } } },
+      include: {
+        _count: { select: { scoutingEntries: true, roomNights: true } },
+      },
     }),
   ),
 

@@ -52,6 +52,7 @@ export default async function EditPropertyPage({
           notes: property.notes ?? "",
           amenityIds: property.amenities.map((amenity) => amenity.id),
           categories: property.categories.map((category) => ({
+            id: category.id,
             name: category.name,
             unitCount: str(category.unitCount),
             capacity: str(category.capacity),

@@ -25,7 +25,7 @@ export default async function EventsPage() {
     <>
       <PageHeader
         title="Events"
-        subtitle="Every championship, congress or tour we are finding accommodation for. Each one has its own scouting list."
+        subtitle="Every championship, congress or tour we are finding accommodation for. Each one carries its own scouting list and its own inventory."
         action={<NewEventPanel />}
       />
 
@@ -43,6 +43,8 @@ export default async function EventsPage() {
               <Th>When</Th>
               <Th>Status</Th>
               <Th>Scouted</Th>
+              <Th>Room-nights</Th>
+              <Th>{""}</Th>
             </tr>
           </thead>
           <tbody>
@@ -71,6 +73,15 @@ export default async function EventsPage() {
                 </Td>
                 <Td>{statusLabels[event.status]}</Td>
                 <Td>{event._count.scoutingEntries}</Td>
+                <Td>{event._count.roomNights || "—"}</Td>
+                <Td>
+                  <Link
+                    href={`/events/${event.id}/inventory`}
+                    className="text-brand-700 hover:text-brand-400 text-[13px] whitespace-nowrap"
+                  >
+                    Inventory →
+                  </Link>
+                </Td>
               </tr>
             ))}
           </tbody>

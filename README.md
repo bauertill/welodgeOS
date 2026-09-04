@@ -10,7 +10,7 @@ v4, tRPC, Prisma and NextAuth.
 pnpm install
 ./start-database.sh    # local Postgres in Docker
 pnpm run db:push       # create the schema
-pnpm run db:seed       # load demo events, properties, guests and bookings
+pnpm run db:seed       # load demo event, properties, clients and inventory
 pnpm run dev
 ```
 
@@ -64,7 +64,8 @@ fully rounded pill shape with light (300) weight. The logo lives at
 
 ## Data model
 
-`prisma/schema.prisma` covers **Phase 1 (Scouting)** and stops there:
+`prisma/schema.prisma` covers **Phase 1 (Scouting)** and **Phase 2 (Acquisition
+& Sales)**, and stops before Phase 3:
 
 - **Event** — the championship, congress or tour we are housing. Everything hangs
   off it. Optionally carries a venue and its coordinates, which is what
@@ -82,12 +83,32 @@ fully rounded pill shape with light (300) weight. The logo lives at
   here, not on the property: a hotel can be shortlisted for one event and
   rejected for another.
 
-Money is stored in minor units (`indicativePriceCents`) with an explicit
-currency. Dates that describe a calendar day are `@db.Date`, not timestamps.
+Phase 2 adds the commercial position, at the grain the business works at:
 
-There are deliberately **no room slots, room-nights, acquisition or sales
-states** yet — those are Phase 2, and they land with their section of the scope
-document, not before it.
+- **Client** — a federation, broadcaster, sponsor or event team we sell to.
+  Global, not per-event: the same buyer comes back for the next Games.
+- **RoomSlot** — our own numbering of a countable room, `property + category +
+  room number`. Not the hotel's room number, which is only learned at allocation
+  time in Phase 3.
+- **RoomNight** — one slot on one calendar date. The unit of record. It carries
+  two independent states: what we have agreed with the **supplier** (nothing
+  started → in progress → option → bought → released) and what we have promised
+  the **client** (nothing → blocked → sold → cancelled). `(slot, date)` is
+  unique, which is what makes overlapping stays impossible rather than merely
+  checked for.
+- **RoomNightRequest** — a soft, non-exclusive claim by one client on one night.
+  A night has at most one client *hold* but any number of requests, and that
+  contention is what tells us to go and acquire more.
+- **LedgerEntry** — an immutable record of every change: who, what, how many
+  nights, and why. One entry per bulk operation, linked to every night it
+  touched.
+
+Money is stored in minor units (`indicativePriceCents`, `buyPriceCents`,
+`sellPriceCents`) with an explicit currency, and is never converted between
+currencies. Dates that describe a calendar day are `@db.Date`, not timestamps.
+
+There are deliberately **no parties, guests or assignments** yet — those are
+Phase 3, and they land with their section of the scope document, not before it.
 
 ## Structure
 
@@ -95,16 +116,29 @@ document, not before it.
 docs/product-scope.md   the business logic — the source of truth
 src/
   app/
-    _components/   app shell, forms, scouting list and map
-    events/        events and their scouting lists
+    _components/   app shell, forms, scouting list and map, stock sheet,
+                   bulk actions, deadline and position reports
+    events/        an event's scouting list, inventory, deadlines and position
     properties/    the property library, scouting form and detail
-  lib/format.ts    date and currency formatting (en-CH)
-  lib/scouting.ts  business vocabulary, distance and price helpers
-  server/api/routers/   event, property, scouting, amenity
+    clients/       the buyers we sell room-nights to
+  lib/dates.ts      calendar-date arithmetic (nights, ranges, deadlines)
+  lib/format.ts     date and currency formatting (en-CH, dates in UTC)
+  lib/scouting.ts   Phase 1 vocabulary, distance and price helpers
+  lib/inventory.ts  Phase 2 vocabulary: states, actions, allowed transitions
+  lib/position.ts   the position grid — icon, sentence and severity per night
+  lib/stay-rows.ts  collapsing room-nights into the stock sheet's rows
+  lib/reporting.ts  exposure, availability, deadlines and the money
+  server/api/routers/   event, property, scouting, amenity, client, inventory,
+                        reporting, user
 ```
 
 The map is Leaflet over OpenStreetMap tiles, loaded browser-side only. The
 scouting list is the source of truth; the map renders whatever has coordinates.
+
+Every screen that says something about a room-night — the stock sheet, the
+deadline dashboard, the exposure report — asks `lib/position.ts` what to say, so
+none of them can disagree with each other. Every reported figure is computed on
+read from the room-nights; nothing derived is stored.
 
 ## Scripts
 
@@ -119,12 +153,22 @@ scouting list is the source of truth; the map renders whatever has coordinates.
 
 ## Not yet built
 
-Phase 1 (Scouting) is built. Phase 2 (Acquisition & Sales) and Phase 3
-(Operations) are fully specified in `docs/product-scope.md` and not implemented
-— see §12 of that document for the line-by-line status.
+Phase 1 (Scouting) and Phase 2 (Acquisition & Sales) are built. Phase 3
+(Operations) — rooming lists, guests, assignments and the date-shift what-ifs —
+is fully specified in `docs/product-scope.md` and not implemented. See §12 of
+that document for the line-by-line status.
 
-Known gaps inside Phase 1: importing coordinates from Google My Maps, and an
-admin screen for the amenity list (it is seeded today).
+Known gaps inside what is built:
+
+- **Calendar reminders.** The option and block expiries do not reach anyone's
+  Google Calendar; they need credentials and a scheduled job. The Deadlines tab
+  carries the same information in the meantime.
+- **Shift dates, and splitting a hold across rooms in one act.** The first
+  belongs with the Phase 3 simulation; the second waits on open question 3.
+  Splitting is already possible in two operations.
+- **Configurable deadline windows.** Seven days and 48 hours are constants.
+- Importing coordinates from Google My Maps, and an admin screen for the amenity
+  list (it is seeded today).
 
 ## Keeping the document honest
 

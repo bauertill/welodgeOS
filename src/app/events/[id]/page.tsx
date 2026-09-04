@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { AddToList } from "~/app/_components/add-to-list";
+import { EventTabs } from "~/app/_components/event-tabs";
 import {
   ScoutingList,
   ScoutingStatusKey,
@@ -45,6 +46,8 @@ export default async function EventScoutingPage({
         }`}
         action={<AddToList eventId={event.id} />}
       />
+
+      <EventTabs eventId={event.id} />
 
       <ScoutingList eventId={event.id} venue={venue} amenities={amenities} />
 

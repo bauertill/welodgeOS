@@ -47,10 +47,16 @@ async function main() {
     return { id: amenity.id };
   };
 
-  // Demo data below. Idempotent: cleared and rebuilt on every run.
+  // Demo data below. Idempotent: cleared and rebuilt on every run. Phase 2
+  // rows go first — a client cannot be deleted while a room-night points at it.
+  await db.ledgerEntry.deleteMany();
+  await db.roomNightRequest.deleteMany();
+  await db.roomNight.deleteMany();
+  await db.roomSlot.deleteMany();
   await db.scoutingEntry.deleteMany();
   await db.property.deleteMany();
   await db.event.deleteMany();
+  await db.client.deleteMany();
 
   const event = await db.event.create({
     data: {
@@ -202,14 +208,159 @@ async function main() {
 
   await db.scoutingEntry.createMany({
     data: [
-      { eventId: event.id, propertyId: carmel.id, status: "SHORTLISTED" },
+      // Contracted, so Phase 2 can turn it into inventory (doc §3.6).
+      { eventId: event.id, propertyId: carmel.id, status: "CONTRACTED" },
       { eventId: event.id, propertyId: courtyard.id, status: "CONTACTED" },
       { eventId: event.id, propertyId: marinaFlats.id, status: "PROSPECT" },
     ],
   });
 
+  // -------------------------------------------------------------------------
+  // Phase 2 — a small, honest commercial position at Hotel Carmel.
+  //
+  // The point of the demo is that the four situations a rep actually worries
+  // about are all visible at once: bought and sold, sold against an option that
+  // is running out, bought with nobody on it, and blocked with nothing secured.
+  // -------------------------------------------------------------------------
+
+  const cnosf = await db.client.create({
+    data: {
+      name: "Comité National Olympique et Sportif Français",
+      shortName: "CNOSF",
+      notes: "Federation. Books early, pays on time, moves teams around a lot.",
+    },
+  });
+
+  const obs = await db.client.create({
+    data: {
+      name: "Olympic Broadcasting Services",
+      shortName: "OBS",
+      notes: "Broadcaster. Long stays, crews arriving in waves.",
+    },
+  });
+
+  const kingRoom = await db.roomCategory.findFirstOrThrow({
+    where: { propertyId: carmel.id, name: "King Room" },
+  });
+
+  const stayFrom = new Date("2028-07-10T00:00:00Z");
+  const stayTo = new Date("2028-07-31T00:00:00Z"); // 21 nights; check-out is not a night.
+  const nights: Date[] = [];
+  for (
+    let day = stayFrom.getTime();
+    day < stayTo.getTime();
+    day += 86_400_000
+  ) {
+    nights.push(new Date(day));
+  }
+
+  // Deadlines are relative to today, so the deadline dashboard has something to
+  // say whenever the demo is rebuilt.
+  const inDays = (days: number) => {
+    const now = new Date();
+    return new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + days),
+    );
+  };
+
+  const slots = await Promise.all(
+    Array.from({ length: 30 }, (_, i) => i + 1).map((slotNumber) =>
+      db.roomSlot.create({
+        data: { categoryId: kingRoom.id, slotNumber },
+      }),
+    ),
+  );
+
+  const slotIds = (from: number, to: number) =>
+    slots.filter((s) => s.slotNumber >= from && s.slotNumber <= to).map((s) => s.id);
+
+  await db.roomNight.createMany({
+    data: slots.flatMap((slot) =>
+      nights.map((date) => ({ slotId: slot.id, eventId: event.id, date })),
+    ),
+  });
+
+  const setNights = (from: number, to: number, data: object) =>
+    db.roomNight.updateMany({
+      where: { eventId: event.id, slotId: { in: slotIds(from, to) } },
+      data,
+    });
+
+  // #1–#10: bought and sold. The position everyone wants.
+  await setNights(1, 10, {
+    acquisitionState: "BOUGHT",
+    supplierRef: "CARMEL-2028-A",
+    buyPriceCents: 29_000,
+    buyCurrency: "USD",
+    salesState: "SOLD",
+    clientId: cnosf.id,
+    clientRef: "CNOSF-LA28-001",
+    sellPriceCents: 42_000,
+    sellCurrency: "USD",
+    dueDate: inDays(21),
+  });
+
+  // #11–#18: sold to the client, but we only hold an option — and it runs out
+  // this week. This is the row that should be shouting.
+  await setNights(11, 18, {
+    acquisitionState: "OPTION",
+    supplierRef: "CARMEL-2028-B",
+    optionExpiry: inDays(3),
+    buyPriceCents: 31_000,
+    buyCurrency: "USD",
+    salesState: "SOLD",
+    clientId: cnosf.id,
+    clientRef: "CNOSF-LA28-002",
+    sellPriceCents: 44_000,
+    sellCurrency: "USD",
+  });
+
+  // #19–#24: bought, nobody on it. Long — money sitting on the book.
+  await setNights(19, 24, {
+    acquisitionState: "BOUGHT",
+    supplierRef: "CARMEL-2028-A",
+    buyPriceCents: 29_000,
+    buyCurrency: "USD",
+  });
+
+  // #25–#30: a client is holding rooms we have not started to acquire.
+  await setNights(25, 30, {
+    salesState: "BLOCKED",
+    clientId: obs.id,
+    blockExpiry: inDays(9),
+    sellPriceCents: 46_000,
+    sellCurrency: "USD",
+  });
+
+  // Soft requests: a second client wants the rooms CNOSF already holds. Nothing
+  // is locked by this — it is the contention that drives the acquisition push.
+  const contested = await db.roomNight.findMany({
+    where: { eventId: event.id, slotId: { in: slotIds(1, 10) } },
+    select: { id: true },
+  });
+  await db.roomNightRequest.createMany({
+    data: contested.map((night) => ({
+      roomNightId: night.id,
+      clientId: obs.id,
+      sellPriceCents: 45_000,
+      sellCurrency: "USD",
+      notes: "Would take the whole block if CNOSF releases.",
+    })),
+  });
+
+  await db.ledgerEntry.create({
+    data: {
+      eventId: event.id,
+      axis: "INVENTORY",
+      toState: "Nothing started",
+      nightCount: slots.length * nights.length,
+      summary: `Brought Hotel Carmel King Room #1–#30 into inventory for 10 Jul – 31 Jul 2028 (${slots.length * nights.length} room-nights, nothing contracted).`,
+      reason: "Seeded demo data.",
+    },
+  });
+
   console.log(
-    `Seeded ${amenities.length} amenities, 1 event and 3 scouted properties.`,
+    `Seeded ${amenities.length} amenities, 1 event, 3 scouted properties, 2 clients and ${slots.length * nights.length} room-nights.`,
   );
 }
 

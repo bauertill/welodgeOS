@@ -39,7 +39,7 @@ export default async function DashboardPage() {
     <>
       <PageHeader
         title={`Welcome back, ${firstName}`}
-        subtitle="Scouting — the long list of hotels and apartments we could contract."
+        subtitle="What we could contract, what we hold, and what we have promised."
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -123,10 +123,11 @@ export default async function DashboardPage() {
       <Card className="mt-8">
         <p className="text-ink-900 font-medium">What comes next</p>
         <p className="text-ink-500 mt-1 text-sm font-light">
-          Scouting is Phase 1 of three. Phase 2 turns shortlisted properties into
-          room-nights we buy and sell; Phase 3 checks the rooming lists against
-          what we hold. Both are specified in{" "}
-          <span className="text-ink-700">docs/product-scope.md</span> and are not
+          Scouting and Acquisition &amp; Sales are built: an event&apos;s
+          Inventory tab holds the room-nights we buy and sell, its Deadlines tab
+          shows what runs out, and its Position tab shows where that leaves us.
+          Phase 3 — checking rooming lists against what we hold — is specified in{" "}
+          <span className="text-ink-700">docs/product-scope.md</span> and is not
           built yet.
         </p>
       </Card>

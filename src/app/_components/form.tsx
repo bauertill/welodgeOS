@@ -33,10 +33,22 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 
 export function Field({
   label,
+  hint,
   children,
   className = "",
 }: {
   label: string;
+  /**
+   * An explanation the user needs in order to answer correctly — a rule, not a
+   * format tip ("A block with no deadline is inventory frozen for free").
+   *
+   * It sits *below* the field, deliberately. Helper text between the label and
+   * the input makes one label two lines tall, which pushes that input out of
+   * line with its neighbours in the same row; putting it underneath keeps every
+   * label a single line, so the inputs across a row still align. Anything that
+   * is only a hint at the expected format belongs in the placeholder instead.
+   */
+  hint?: string;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -44,6 +56,11 @@ export function Field({
     <label className={`block ${className}`}>
       <Label>{label}</Label>
       {children}
+      {hint && (
+        <span className="text-ink-500 mt-1 block text-xs font-light">
+          {hint}
+        </span>
+      )}
     </label>
   );
 }

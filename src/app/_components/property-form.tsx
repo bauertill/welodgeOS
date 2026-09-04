@@ -17,6 +17,8 @@ import {
 import { api } from "~/trpc/react";
 
 type CategoryDraft = {
+  /** Carried through an edit so room slots stay attached to their category. */
+  id?: string;
   name: string;
   unitCount: string;
   capacity: string;
@@ -168,6 +170,7 @@ export function PropertyForm({
     const categories = values.categories
       .filter((category) => category.name.trim())
       .map((category) => ({
+        id: category.id,
         name: category.name.trim(),
         unitCount: num(category.unitCount) ?? 0,
         capacity: num(category.capacity) ?? 2,

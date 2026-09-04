@@ -64,14 +64,23 @@ conversation.
 ## Conventions
 
 - **Language the user speaks.** UI copy and labels live in `src/lib/scouting.ts`
-  and the components, in plain business English. No enum names on screen.
+  (Phase 1) and `src/lib/inventory.ts` (Phase 2), and in the components, in plain
+  business English. No enum names on screen.
+- **One place decides what a room-night means.** `src/lib/position.ts` turns the
+  `(acquisition, sales)` pair into an icon, a sentence and a severity. Every
+  screen asks it; nothing re-derives that judgement locally.
 - **Money** is stored in minor units (`indicativePriceCents`) with an explicit
   currency. Never a float, never an implicit currency.
 - **Dates** that describe a calendar day are `@db.Date`, not timestamps. A night
   is identified by the date it begins; check-out day is never a night.
-- **Build only the phase that is documented.** Phase 2 and 3 models do not
-  belong in the schema until their behaviour is agreed. An unused table implies
-  a decision nobody made.
+- **Build only the phase that is documented.** Phase 3 models do not belong in
+  the schema until their behaviour is agreed. An unused table implies a decision
+  nobody made.
+- **Nothing derived is stored.** The stock sheet, exposure, availability and
+  every total are computed from the room-nights on read, so a report cannot
+  drift from the position it describes.
+- **No change to a room-night happens without a ledger entry**, and no state
+  changes on its own — an expired option or block is flagged, never released.
 
 ## Commands
 

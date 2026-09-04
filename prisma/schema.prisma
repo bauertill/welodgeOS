@@ -1,9 +1,9 @@
-// We Lodge OS — Phase 1 (Scouting).
+// We Lodge OS — Phases 1 and 2.
 //
-// This schema implements §3 of docs/product-scope.md. It deliberately stops at
-// the scouting list: no room slots, no room-nights, no acquisition or sales
-// state. Those arrive with Phase 2 and must be added alongside the document,
-// not ahead of it.
+// This schema implements §3 (Scouting) and §4 (Acquisition & Sales) of
+// docs/product-scope.md. It deliberately stops before Phase 3: no parties, no
+// guests, no assignments. Those arrive with §6 and must be added alongside the
+// document, not ahead of it.
 
 generator client {
   provider = "prisma-client-js"
@@ -58,6 +58,8 @@ model Event {
   updatedAt DateTime @updatedAt
 
   scoutingEntries ScoutingEntry[]
+  roomNights      RoomNight[]
+  ledger          LedgerEntry[]
 
   @@index([startDate])
 }
@@ -130,6 +132,9 @@ model RoomCategory {
 
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   propertyId String
+
+  /// Phase 2 room slots numbered 1..N within this category (doc §2.1).
+  slots RoomSlot[]
 
   @@index([propertyId])
 }
@@ -227,6 +232,11 @@ model User {
 
   scoutedProperties Property[]
   scoutingEntries   ScoutingEntry[]
+
+  acquisitionNights RoomNight[]        @relation("AcquisitionOwner")
+  salesNights       RoomNight[]        @relation("SalesOwner")
+  requests          RoomNightRequest[] @relation("RequestOwner")
+  ledgerEntries     LedgerEntry[]
 }
 
 model VerificationToken {
@@ -235,4 +245,216 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Acquisition & Sales (doc §4)
+//
+// The atomic record is a room-night: one room slot on one calendar date. Every
+// room-night carries two independent states — one describing our relationship
+// with the supplier, one describing our relationship with the client (doc §2.2).
+// ---------------------------------------------------------------------------
+
+/// Our relationship with the *supplier* on one room-night (doc §4.1).
+enum AcquisitionState {
+  /// Known inventory, no supplier relationship on this night.
+  NONE
+  /// Actively negotiating — yet to be acquired.
+  IN_PROGRESS
+  /// We hold the right to purchase until `optionExpiry`.
+  OPTION
+  /// Acquired under an agreement — this is We Lodge stock.
+  BOUGHT
+  /// Previously bought, handed back. Kept for audit; counts as not held.
+  RELEASED
+}
+
+/// Our relationship with the *client* on one room-night (doc §4.2).
+///
+/// Only `NONE`, `BLOCKED`, `SOLD` and `CANCELLED` are ever stored on a
+/// room-night: those are the *hard hold*, and a night has at most one
+/// (invariant §4.5.1). `REQUESTED` is never written here — a request is a soft,
+/// non-exclusive claim and lives in `RoomNightRequest`, of which a night may
+/// have many. `REQUESTED` appears in this enum because it is a value the
+/// *displayed* sales state can take (doc §4.3).
+enum SalesState {
+  NONE
+  REQUESTED
+  BLOCKED
+  SOLD
+  CANCELLED
+}
+
+/// Which side of the business a ledger entry describes (doc §4.7).
+enum LedgerAxis {
+  /// Room-nights were brought into existence (doc §3.6).
+  INVENTORY
+  /// The supplier side.
+  ACQUISITION
+  /// The client side — a hard hold.
+  SALES
+  /// The client side — a soft request.
+  REQUEST
+}
+
+/// A B2B buyer: a federation, broadcaster, sponsor or event team. Clients are
+/// global, not per-event — the same federation comes back for the next Games.
+model Client {
+  id        String  @id @default(cuid())
+  name      String
+  /// Short form used on the stock sheet where space is tight ("CNOSF").
+  shortName String?
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roomNights RoomNight[]
+  requests   RoomNightRequest[]
+
+  @@unique([name])
+}
+
+/// Our own numbering of a countable room: `property + category + slot number`
+/// (doc §2.1). It is *not* the hotel's room number — that is learned at
+/// allocation time in Phase 3. A slot is a stable identity across events; the
+/// room-nights hanging off it each belong to exactly one event.
+model RoomSlot {
+  id         String @id @default(cuid())
+  slotNumber Int
+
+  category   RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String
+
+  roomNights RoomNight[]
+
+  @@unique([categoryId, slotNumber])
+  @@index([categoryId])
+}
+
+/// One room slot on one calendar date — the unit of record for the whole
+/// system. The `(slot, date)` uniqueness constraint is invariant §4.5.2, and it
+/// is what makes the legacy overlap check unnecessary (doc §11.2).
+model RoomNight {
+  id String @id @default(cuid())
+
+  /// The night is identified by the date it *begins*. Check-out day is never a
+  /// night (doc §2.1).
+  date DateTime @db.Date
+
+  slot   RoomSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slotId String
+
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+
+  // --- Acquisition axis: the supplier (doc §4.1) ---------------------------
+
+  acquisitionState AcquisitionState @default(NONE)
+  /// The supplier's own reference for this booking — their contract or PO.
+  supplierRef      String?
+  /// Mandatory while the state is OPTION (invariant §4.5.4).
+  optionExpiry     DateTime?        @db.Date
+  buyPriceCents    Int?
+  buyCurrency      String?
+  acquisitionNotes String?
+
+  /// The rep accountable for chasing the supplier (doc §4.7).
+  acquisitionOwner   User?   @relation("AcquisitionOwner", fields: [acquisitionOwnerId], references: [id], onDelete: SetNull)
+  acquisitionOwnerId String?
+
+  // --- Sales axis: the client's hard hold (doc §4.2, §4.3) -----------------
+
+  /// Never `REQUESTED` — see the note on SalesState.
+  salesState     SalesState @default(NONE)
+  client         Client?    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId       String?
+  /// The client's own reference for this booking.
+  clientRef      String?
+  /// Mandatory while the state is BLOCKED (invariant §4.5.4).
+  blockExpiry    DateTime?  @db.Date
+  /// Payment or decision deadline (doc §9, question 2, is still open on which).
+  dueDate        DateTime?  @db.Date
+  sellPriceCents Int?
+  sellCurrency   String?
+  salesNotes     String?
+
+  /// The rep accountable for the client (doc §4.7).
+  salesOwner   User?   @relation("SalesOwner", fields: [salesOwnerId], references: [id], onDelete: SetNull)
+  salesOwnerId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requests RoomNightRequest[]
+  ledger   LedgerEntry[]      @relation("LedgerNights")
+
+  @@unique([slotId, date])
+  @@index([eventId, date])
+  @@index([eventId, acquisitionState])
+  @@index([eventId, salesState])
+  @@index([eventId, optionExpiry])
+  @@index([eventId, blockExpiry])
+  @@index([clientId])
+}
+
+/// A soft, non-exclusive claim by one client on one room-night (doc §4.3).
+/// Many clients may request the same night; that contention is the number that
+/// drives the acquisition push. A request never locks the slot.
+model RoomNightRequest {
+  id String @id @default(cuid())
+
+  roomNight   RoomNight @relation(fields: [roomNightId], references: [id], onDelete: Cascade)
+  roomNightId String
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  clientRef      String?
+  sellPriceCents Int?
+  sellCurrency   String?
+  notes          String?
+
+  owner   User?   @relation("RequestOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+
+  createdAt DateTime @default(now())
+
+  /// One request per client per night — asking twice is the same claim.
+  @@unique([roomNightId, clientId])
+  @@index([clientId])
+}
+
+/// An immutable record of one change, written by every mutation that touches a
+/// room-night (invariant §4.5.8). One entry per bulk operation, linked to every
+/// night it touched, so "who promised this night, and when" is answerable from
+/// either end.
+model LedgerEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  axis LedgerAxis
+
+  /// The distinct states these nights were in beforehand, joined for reading
+  /// ("NONE, IN_PROGRESS"). A bulk operation rarely starts from one state.
+  fromState String?
+  /// The state applied. Null where the change was to attributes only — a
+  /// re-price, a deadline extension, an owner reassignment.
+  toState   String?
+
+  /// A sentence a non-technical reader can follow, written at write time.
+  summary    String
+  /// Why, in the actor's words. Optional but asked for on every action.
+  reason     String?
+  nightCount Int
+
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId String?
+
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+
+  nights RoomNight[] @relation("LedgerNights")
+
+  @@index([eventId, createdAt])
 }

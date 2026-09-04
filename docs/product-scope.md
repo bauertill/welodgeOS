@@ -1,6 +1,6 @@
 # We Lodge OS — Product Scope: Inventory Management
 
-**Status:** Phase 1 built, Phases 2–3 specified · **Date:** 2026-08-25 ·
+**Status:** Phases 1–2 built, Phase 3 specified · **Date:** 2026-09-04 ·
 **Audience:** product + engineering
 
 See §12 for exactly what is implemented today. This document and the code move
@@ -193,7 +193,10 @@ category, a slot range (`#1..#30`) and a date range, and the system materialises
 room-nights at acquisition state `NONE`. Nothing is contracted by this act. This is the
 only bridge between Phase 1 and Phase 2.
 
-**Not built** — it is the first thing Phase 2 needs.
+The `CONTRACTED` status is enforced, not advisory: materialising a property that is only
+shortlisted or contacted is refused, and says so. Re-running the same conversion over an
+overlapping range is safe — it adds the missing nights and leaves the existing ones, and
+their commercial position, untouched.
 
 ---
 
@@ -251,6 +254,14 @@ stateDiagram-v2
 Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`),
 `sellPriceCents`, `currency`, `owner`, `notes`, `dueDate` (payment/decision deadline).
 
+Only `NONE`, `BLOCKED`, `SOLD` and `CANCELLED` are ever *stored* on a room-night: those are
+the hard hold, and a night has at most one. `REQUESTED` is never stored there — a request
+is a soft claim and lives in its own record, of which a night may have many (§4.3). It
+appears in the list above because it is a value the *displayed* state can take.
+
+A client is a global record, not a per-event one: the same federation comes back for the
+next Games, and "what have we sold this buyer, ever" is worth being able to answer.
+
 > **Change from the sheet.** Today a block may carry no expiry — the stock sheet renders it
 > as *"blocked indefinitely"*. An indefinite block is inventory frozen for free and, worse,
 > invisible to every deadline report. `blockExpiry` becomes mandatory; a genuinely
@@ -293,6 +304,31 @@ legend, made computable:
 | 2 · warning | `BLOCKED` + (`IN_PROGRESS` \| `NONE`); or `SOLD` + `OPTION` outside the urgency window |
 | 1 · watch | `BOUGHT` with no hard hold (idle stock); any expiry inside the reminder window |
 | 0 · clear | `BOUGHT` + `SOLD`; or `NONE`/`NONE` |
+
+**Cells the severity table does not name.** The grid has sixteen cells; the table above
+covers nine conditions. The rest were settled while building, reading the grid's own colours
+as the intent:
+
+| Position | Severity | Why |
+| --- | --- | --- |
+| `BOUGHT` + `BLOCKED` | 0 · clear | A block *is* a hard hold, so this is not idle stock |
+| `BOUGHT` + `REQUESTED` | 1 · watch | A request holds nothing, so this is still idle stock — but somebody is asking, which is the cue to convert it |
+| `OPTION` + `BLOCKED` | 2 · warning | The grid renders it amber, the same as `SOLD` + `OPTION` outside the urgency window |
+| `OPTION`/`IN_PROGRESS`/`NONE` + `REQUESTED` | 1 · watch | Demand with no hold on either side. Worth seeing, not yet a problem |
+| `OPTION` + `NONE`, `IN_PROGRESS` + `NONE` | 0 · clear | Normal progress with nobody waiting |
+
+**How a deadline escalates.** §4.6 says the urgency window escalates severity without saying
+to what. Concretely, and applied on top of the grid — a deadline can only make a position
+worse, never better:
+
+- inside the reminder window ⇒ at least **1**;
+- inside the urgency window, **or already expired** ⇒ at least **2**;
+- the grid's own rule still applies over that, so `SOLD` + `OPTION` inside the urgency
+  window is **4** rather than 2.
+
+**Only binding deadlines are read.** An option expiry stops mattering the moment the night
+is bought, and a block expiry the moment the block is lifted. A stale date on a state that
+has moved on never colours a row or reaches the deadline dashboard.
 
 This grid is the legacy `getStockTextFromRoomNight` / `getStockColorFromRoomNight` pair
 turned into data instead of two parallel `if` ladders. Two behaviours worth keeping from the
@@ -348,6 +384,13 @@ Sales-side (block) reminders exist in the legacy code but are commented out — 
 consequence of blocks being allowed to have no expiry. With `blockExpiry` now mandatory
 (§4.2), block reminders ship on the same mechanism, keyed `supplier::date::client`.
 
+**Not built.** The calendar sync itself needs Google credentials and a scheduled job, and
+neither exists in this system yet. The deadline dashboard is built and carries the same
+aggregation — one row per property per client per expiry date, with rooms, room-nights and
+the value at stake — so nothing is invisible in the meantime; it just does not reach anyone's
+calendar. The windows are 7 days and 48 hours as specified, but as constants in the code:
+there is no screen for changing them yet.
+
 ### 4.7 Ledger and ownership
 
 Every room-night change appends an immutable entry: `timestamp`, `actor` (the We Lodge
@@ -367,6 +410,16 @@ per-night explanation of any invariant that blocked it.
 
 Required bulk actions: acquire/option/buy, request/block/sell, extend a deadline, release,
 re-price, reassign owner, shift dates (§6.5), and split/merge a hold across slots.
+
+All of these are built except **shift dates**, which belongs with the Phase 3 simulation it
+references, and **split/merge a hold**, which waits on open question 3 — whether a hold is
+an object in its own right. Splitting a hold is nonetheless already possible through the
+same primitive: release the client's hold on some rooms and sell on others, in two
+operations. What is missing is doing it as one act with one ledger entry.
+
+A refusal names the rooms, not each night separately: twenty-one identical lines for one
+room is a wall rather than an explanation, so consecutive nights failing for the same reason
+collapse into one line naming the range.
 
 ---
 
@@ -420,7 +473,10 @@ Three consequences, all intentional, two worth confirming (§9):
   which is correct: we cannot offer what we have not secured.
 
 The event period is per `(property, category)`, not global — a hotel may be relevant for
-only part of an event.
+only part of an event. Until open question 10 is settled, the period is **derived from the
+inventory that exists** for that `(property, category)` — its first night to its last — and
+can be overridden per report. That is a reporting choice, not a commercial fact: if the
+window a hotel will contract for is a real term of the deal, it belongs on the contract.
 
 ### 5.4 The stock sheet (derived stay rows)
 
@@ -590,6 +646,8 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
    does the sale follow the client (re-point the hold to new slots) or is it cancelled and
    re-sold? This determines whether a hold is an object in its own right or purely a
    property of nights.
+   *Still open, and now blocking: a hold is currently a property of nights, which is why
+   split/merge is not a single operation (§4.8).*
 4. **Contracted vs indicative price.** Should a negotiated rate live on the category
    (a rate card per event) with the night-level price as an override, rather than being
    entered per night?
@@ -603,11 +661,15 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
 8. **Availability semantics (§5.3).** Should blocks reduce availability by default? And is
    whole-period, all-or-nothing availability still right, or should partial availability be
    offerable when a client's own stay is shorter than the event window?
+   *Still open. Both figures are reported side by side in the meantime, so the answer can be
+   read off real data rather than guessed at.*
 9. **Indefinite blocks (§4.2).** Are there clients whose blocks genuinely have no deadline,
    and if so what is the review cadence that replaces an expiry date?
 10. **Event period per property.** The legacy Supplier sheet sets a start/end per
     `(property, category)`. Is that a commercial fact (the window the hotel will contract
     for) or just a reporting filter? If the former it belongs on the contract, not the view.
+    *Still open. Availability currently derives the window from the inventory on record,
+    which is the reporting reading (§5.3).*
 
 ---
 
@@ -748,11 +810,23 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.5 Scouting list | **Built** | Per-event entries, status, filters by status, type and amenity |
 | Map view | **Built** | Leaflet over OpenStreetMap, list-first as specified; venue pin and derived distance-to-venue |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now |
-| §3.6 Scouting → inventory | **Not built** | The bridge into Phase 2 |
-| §4 Acquisition & Sales | **Not built** | No room slots, no room-nights, no states — nothing in §4 exists in the schema |
-| §5 Reporting | **Not built** | Depends on §4 |
-| §6 Operations | **Not built** | Depends on §4 |
-| §7 Financials | **Partly built** | Only the indicative scouting price. No buy price, sell price or margin |
+| §3.6 Scouting → inventory | **Built** | Contracted property → category → room range → date range. `CONTRACTED` is enforced; re-running is safe |
+| §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
+| §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |
+| §4.3 Exclusivity and contention | **Built** | One hard hold per night, enforced; requests are a set, and contention is counted on the stock sheet and per night |
+| §4.4 Position grid and severity | **Built** | One table, used by every screen. Cells the spec left unscored are recorded in §4.4 |
+| §4.5 Invariants | **Built** | 1–4 and 7–9 are enforced on write; 5 is a flag, as specified; 6 is the exposure report |
+| §4.6 Deadline dashboard | **Built** | Everything expiring, soonest first, grouped by property and client, with value at stake |
+| §4.6 Calendar reminders | **Not built** | Needs Google credentials and a scheduled job. The dashboard carries the same aggregation |
+| §4.7 Ledger and ownership | **Built** | One entry per bulk operation, linked to every night it touched; an owner per axis |
+| §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
+| §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
+| §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
+| §5.3 Availability | **Built** | Both the optimistic and the conservative figure, side by side |
+| §5.4 Stock sheet | **Built** | Derived stay rows, grouped property → category → room |
+| §6 Operations | **Not built** | Phase 3 |
+| §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
+| Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 
 ### Deliberate departures from the specification above
 
@@ -764,6 +838,24 @@ Recorded here rather than silently: each is a place where building it changed ou
 2. **Amenities are seeded, not managed in the app.** §3.4 calls the list admin-editable.
    Until there is an admin screen, it is edited in `prisma/seed.ts` — which is honest for
    Phase 1 but is a gap, not a decision.
-3. **Categories are replaced wholesale on save**, rather than diffed. Nothing references a
-   category yet, so identity does not matter. The moment Phase 2 hangs room slots off a
-   category, this has to become a real diff or slots will be orphaned on every edit.
+3. ~~**Categories are replaced wholesale on save**, rather than diffed.~~ **Resolved in
+   Phase 2.** Room slots now hang off a category, so categories are edited in place. A
+   category that already carries inventory cannot be removed, and its room count cannot be
+   reduced below the highest room number in use — both are refused with an explanation
+   rather than quietly taking the inventory with them.
+4. **A soft request is never stored as a night's state** (§4.2, §4.3). The night stores the
+   hard hold; requests are separate records. This is what makes "one hard hold per night" a
+   fact of the database rather than a rule somebody has to remember to check.
+5. **A room slot is a stable identity across events; the room-night carries the event**
+   (§2.1, §2.3). `(slot, date)` is unique, which is what makes the legacy overlap check —
+   and its known bug — unnecessary rather than reimplemented.
+6. **`RELEASED` and `CANCELLED` collapse to "nothing" for every count and every position**,
+   because that is what §4.1 and §4.2 say they mean. They keep their own wording on screen,
+   because "we handed this back" and "nothing ever happened here" are different facts and a
+   rep needs to tell them apart.
+7. **Calendar dates are formatted in UTC.** They are stored as calendar days at the property
+   (§2.1); rendering them in the reader's own time zone showed 09-Jul to a reader in Los
+   Angeles for a night that begins on the 10th. This was a latent Phase 1 defect that Phase 2
+   made unmissable.
+8. **Margin is left out where buy and sell are in different currencies**, and the count of
+   such nights is reported. Inventing a rate would be the one thing invariant 9 forbids.
