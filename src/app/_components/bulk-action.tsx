@@ -433,7 +433,7 @@ export function BulkAction({
         )}
 
         {shows("acquisitionOwner") && (
-          <Field label="Our rep, with the supplier">
+          <Field label="Accommodation Manager">
             <Select
               value={acquisitionOwnerId}
               onChange={(e) => setAcquisitionOwnerId(e.target.value)}
@@ -449,7 +449,7 @@ export function BulkAction({
         )}
 
         {shows("salesOwner") && (
-          <Field label="Our rep, with the client">
+          <Field label="Sales Manager">
             <Select
               value={salesOwnerId}
               onChange={(e) => setSalesOwnerId(e.target.value)}
