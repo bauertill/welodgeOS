@@ -2,154 +2,215 @@ import { PrismaClient } from "../generated/prisma";
 
 const db = new PrismaClient();
 
-/** Days from a fixed anchor, so the seed is reproducible run to run. */
-const anchor = new Date("2026-09-01T00:00:00Z");
-const day = (offset: number) =>
-  new Date(anchor.getTime() + offset * 86_400_000);
+/**
+ * Seeds the amenity vocabulary (which the app depends on) and a small, honest
+ * scouting example: one event with a venue, three properties around it.
+ */
+
+const AMENITIES = [
+  "WiFi",
+  "Breakfast included",
+  "Parking",
+  "Air conditioning",
+  "Gym",
+  "Pool",
+  "Kitchen",
+  "Washing machine",
+  "Lift",
+  "Accessible",
+  "Pets allowed",
+  "24h reception",
+  "Airport shuttle",
+  "Restaurant",
+  "Meeting rooms",
+  "Laundry service",
+];
+
+const key = (label: string) => label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
 async function main() {
-  // Idempotent: wipe the demo domain, leave auth tables alone.
-  await db.booking.deleteMany();
-  await db.room.deleteMany();
-  await db.property.deleteMany();
-  await db.event.deleteMany();
-  await db.guest.deleteMany();
-  await db.client.deleteMany();
-
-  const worlds = await db.event.create({
-    data: {
-      name: "World Championships 2026",
-      city: "Zurich",
-      country: "Switzerland",
-      startDate: day(0),
-      endDate: day(12),
-      status: "ACTIVE",
-    },
-  });
-
-  const congress = await db.event.create({
-    data: {
-      name: "European Congress 2027",
-      city: "Vienna",
-      country: "Austria",
-      startDate: day(210),
-      endDate: day(215),
-      status: "PLANNING",
-    },
-  });
-
-  const marriott = await db.property.create({
-    data: {
-      name: "Marriott Zurich",
-      city: "Zurich",
-      country: "Switzerland",
-      stars: 5,
-      roomCount: 120,
-      eventId: worlds.id,
-      rooms: {
-        create: [
-          { name: "Standard Double", capacity: 2, rateCents: 32000, allotment: 40 },
-          { name: "Executive Suite", capacity: 2, rateCents: 58000, allotment: 10 },
-        ],
-      },
-    },
-    include: { rooms: true },
-  });
-
-  const parkInn = await db.property.create({
-    data: {
-      name: "Park Inn Oerlikon",
-      city: "Zurich",
-      country: "Switzerland",
-      stars: 4,
-      roomCount: 80,
-      eventId: worlds.id,
-      rooms: {
-        create: [
-          { name: "Twin Room", capacity: 2, rateCents: 21000, allotment: 55 },
-          { name: "Single Room", capacity: 1, rateCents: 17500, allotment: 25 },
-        ],
-      },
-    },
-    include: { rooms: true },
-  });
-
-  await db.property.create({
-    data: {
-      name: "Hotel Sacher Vienna",
-      city: "Vienna",
-      country: "Austria",
-      stars: 5,
-      roomCount: 60,
-      eventId: congress.id,
-      rooms: {
-        create: [
-          { name: "Deluxe Double", capacity: 2, rateCents: 42000, currency: "EUR", allotment: 30 },
-        ],
-      },
-    },
-  });
-
-  const federation = await db.client.create({
-    data: {
-      name: "International Federation",
-      contactName: "Marta Keller",
-      contactEmail: "m.keller@federation.example",
-    },
-  });
-
-  const broadcaster = await db.client.create({
-    data: {
-      name: "Global Sports Media",
-      contactName: "Tom Rossi",
-      contactEmail: "t.rossi@gsm.example",
-    },
-  });
-
-  const guestSeeds = [
-    ["Anna", "Berger", "a.berger@federation.example"],
-    ["Luca", "Moretti", "l.moretti@gsm.example"],
-    ["Sophie", "Dubois", "s.dubois@federation.example"],
-    ["Jonas", "Weber", "j.weber@gsm.example"],
-    ["Elena", "Petrova", "e.petrova@federation.example"],
-    ["Marc", "Lambert", "m.lambert@gsm.example"],
-  ] as const;
-
-  const guests = await Promise.all(
-    guestSeeds.map(([firstName, lastName, email]) =>
-      db.guest.create({ data: { firstName, lastName, email } }),
-    ),
-  );
-
-  const bookingSeeds = [
-    { guest: 0, client: federation.id, room: marriott.rooms[0]!, property: marriott.id, status: "CONFIRMED", from: -1, to: 13 },
-    { guest: 1, client: broadcaster.id, room: parkInn.rooms[0]!, property: parkInn.id, status: "CHECKED_IN", from: -3, to: 12 },
-    { guest: 2, client: federation.id, room: marriott.rooms[1]!, property: marriott.id, status: "CONFIRMED", from: 0, to: 12 },
-    { guest: 3, client: broadcaster.id, room: parkInn.rooms[1]!, property: parkInn.id, status: "OPTIONED", from: 2, to: 9 },
-    { guest: 4, client: federation.id, room: marriott.rooms[0]!, property: marriott.id, status: "INQUIRY", from: 1, to: 6 },
-    { guest: 5, client: broadcaster.id, room: parkInn.rooms[0]!, property: parkInn.id, status: "CANCELLED", from: 3, to: 8 },
-  ] as const;
-
-  await Promise.all(
-    bookingSeeds.map((seed, index) =>
-      db.booking.create({
-        data: {
-          reference: `WL-2026-${String(index + 1).padStart(4, "0")}`,
-          status: seed.status,
-          checkIn: day(seed.from),
-          checkOut: day(seed.to),
-          guests: seed.room.capacity,
-          guestId: guests[seed.guest]!.id,
-          clientId: seed.client,
-          eventId: worlds.id,
-          propertyId: seed.property,
-          roomId: seed.room.id,
-        },
+  // The amenity list is a controlled vocabulary, so it is upserted rather than
+  // wiped — properties point at these rows.
+  const amenities = await Promise.all(
+    AMENITIES.map((label, sortOrder) =>
+      db.amenity.upsert({
+        where: { key: key(label) },
+        update: { label, sortOrder },
+        create: { key: key(label), label, sortOrder },
       }),
     ),
   );
 
-  console.log("Seeded 2 events, 3 properties, 6 guests, 6 bookings.");
+  const byKey = (label: string) => {
+    const amenity = amenities.find((a) => a.key === key(label));
+    if (!amenity) throw new Error(`Unknown amenity: ${label}`);
+    return { id: amenity.id };
+  };
+
+  // Demo data below. Idempotent: cleared and rebuilt on every run.
+  await db.scoutingEntry.deleteMany();
+  await db.property.deleteMany();
+  await db.event.deleteMany();
+
+  const event = await db.event.create({
+    data: {
+      name: "LA28 Olympic Games",
+      city: "Los Angeles",
+      country: "United States",
+      startDate: new Date("2028-07-10T00:00:00Z"),
+      endDate: new Date("2028-08-05T00:00:00Z"),
+      status: "PLANNING",
+      venueName: "SoFi Stadium",
+      venueLatitude: 33.9535,
+      venueLongitude: -118.3392,
+    },
+  });
+
+  const carmel = await db.property.create({
+    data: {
+      name: "Hotel Carmel",
+      type: "HOTEL",
+      address: "201 Broadway",
+      city: "Santa Monica",
+      country: "United States",
+      latitude: 34.0154,
+      longitude: -118.4954,
+      stars: 3,
+      phone: "+1 310 555 0142",
+      notes:
+        "Walkable to the pier. Manager is open to a full buy-out for the Games fortnight.",
+      amenities: {
+        connect: [
+          byKey("WiFi"),
+          byKey("Breakfast included"),
+          byKey("24h reception"),
+          byKey("Lift"),
+        ],
+      },
+      categories: {
+        create: [
+          {
+            name: "King Room",
+            unitCount: 60,
+            capacity: 2,
+            bedConfiguration: "1 King",
+            indicativePriceCents: 32_000,
+            currency: "USD",
+            sortOrder: 0,
+          },
+          {
+            name: "Twin Room",
+            unitCount: 42,
+            capacity: 2,
+            bedConfiguration: "2 Twin",
+            indicativePriceCents: 30_500,
+            currency: "USD",
+            sortOrder: 1,
+          },
+        ],
+      },
+      contacts: {
+        create: [
+          {
+            name: "Dana Reyes",
+            role: "Director of Sales",
+            email: "dana.reyes@example.com",
+          },
+        ],
+      },
+    },
+  });
+
+  const courtyard = await db.property.create({
+    data: {
+      name: "Courtyard Culver City",
+      type: "HOTEL",
+      city: "Culver City",
+      country: "United States",
+      latitude: 34.0219,
+      longitude: -118.3965,
+      stars: 4,
+      amenities: {
+        connect: [
+          byKey("WiFi"),
+          byKey("Parking"),
+          byKey("Gym"),
+          byKey("Pool"),
+          byKey("Air conditioning"),
+          byKey("Restaurant"),
+        ],
+      },
+      categories: {
+        create: [
+          {
+            name: "King Room",
+            unitCount: 120,
+            capacity: 2,
+            bedConfiguration: "1 King",
+            indicativePriceCents: 41_000,
+            currency: "USD",
+            sortOrder: 0,
+          },
+        ],
+      },
+    },
+  });
+
+  const marinaFlats = await db.property.create({
+    data: {
+      name: "Marina Del Rey Residences",
+      type: "APARTMENT",
+      city: "Marina del Rey",
+      country: "United States",
+      latitude: 33.9802,
+      longitude: -118.4517,
+      amenities: {
+        connect: [
+          byKey("WiFi"),
+          byKey("Kitchen"),
+          byKey("Washing machine"),
+          byKey("Parking"),
+          byKey("Accessible"),
+        ],
+      },
+      categories: {
+        create: [
+          {
+            name: "1 Bedroom",
+            unitCount: 24,
+            capacity: 2,
+            bedrooms: 1,
+            bathrooms: 1,
+            indicativePriceCents: 38_000,
+            currency: "USD",
+            sortOrder: 0,
+          },
+          {
+            name: "2 Bedroom",
+            unitCount: 16,
+            capacity: 4,
+            bedrooms: 2,
+            bathrooms: 1.5,
+            indicativePriceCents: 56_000,
+            currency: "USD",
+            sortOrder: 1,
+          },
+        ],
+      },
+    },
+  });
+
+  await db.scoutingEntry.createMany({
+    data: [
+      { eventId: event.id, propertyId: carmel.id, status: "SHORTLISTED" },
+      { eventId: event.id, propertyId: courtyard.id, status: "CONTACTED" },
+      { eventId: event.id, propertyId: marinaFlats.id, status: "PROSPECT" },
+    ],
+  });
+
+  console.log(
+    `Seeded ${amenities.length} amenities, 1 event and 3 scouted properties.`,
+  );
 }
 
 main()

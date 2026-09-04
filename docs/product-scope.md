@@ -1,6 +1,10 @@
 # We Lodge OS — Product Scope: Inventory Management
 
-**Status:** Draft for review · **Date:** 2026-08-25 · **Audience:** product + engineering, pre-implementation
+**Status:** Phase 1 built, Phases 2–3 specified · **Date:** 2026-08-25 ·
+**Audience:** product + engineering
+
+See §12 for exactly what is implemented today. This document and the code move
+together — if they disagree, that is a defect in one of them.
 
 This document defines the **core business logic** of the We Lodge inventory tool. It is
 deliberately implementation-free: no API shapes, no screens, no framework decisions. It
@@ -108,8 +112,11 @@ Common to both types:
 | `amenities` | Many-to-many against a controlled vocabulary (§3.4). |
 | `contacts` | Name, role, email, phone. Zero or more. |
 | `notes` | Free text. |
-| `scoutingStatus` | `PROSPECT` → `CONTACTED` → `SHORTLISTED` → `REJECTED` \| `CONTRACTED` |
 | `scoutedBy`, `scoutedAt` | |
+
+Note what is *not* here: **scouting status is not a property attribute**. The same hotel can
+be shortlisted for one event and rejected for another, so status lives on the scouting entry
+(§3.5), not on the property.
 
 **Map:** the list is the source of truth; the map is a *view* over whatever has
 coordinates. Import from Google My Maps (KML/CSV) is the expected ingestion path for the
@@ -154,12 +161,39 @@ A single controlled list shared by both property types (`WiFi`, `Breakfast inclu
 `Accessible`, `Pets allowed`, `24h reception`, `Airport shuttle`, …). Free-text amenities
 are rejected; the list is admin-editable so it stays a filter rather than a tag soup.
 
-### 3.5 Scouting → inventory
+### 3.5 The scouting list
 
-Converting a shortlisted property into inventory is an explicit act: pick the event, the
+A **scouting entry** puts one property on one event's list. It is the event-specific view of
+a property that otherwise exists once, globally:
+
+| Field | Notes |
+| --- | --- |
+| `event`, `property` | Unique together — a property appears at most once per event |
+| `status` | `PROSPECT` → `CONTACTED` → `SHORTLISTED` → `REJECTED` \| `CONTRACTED` |
+| `notes` | Event-specific: what this hotel said about *this* event |
+| `addedBy`, `createdAt` | |
+
+Status meanings, which the interface states rather than assumes:
+
+| Status | Meaning |
+| --- | --- |
+| `PROSPECT` | On the long list. Nobody has spoken to them yet. |
+| `CONTACTED` | We have reached out and are waiting to hear back. |
+| `SHORTLISTED` | A serious candidate — worth taking to a client. |
+| `REJECTED` | Ruled out for this event. Kept so we do not re-scout it. |
+| `CONTRACTED` | Moved through to acquisition; Phase 2 owns it from here. |
+
+Removing an entry takes the property off that event's list only. The property stays in the
+library for other events — which is the point of scouting once.
+
+### 3.6 Scouting → inventory
+
+Converting a `CONTRACTED` property into inventory is an explicit act: pick the event, the
 category, a slot range (`#1..#30`) and a date range, and the system materialises those
 room-nights at acquisition state `NONE`. Nothing is contracted by this act. This is the
 only bridge between Phase 1 and Phase 2.
+
+**Not built** — it is the first thing Phase 2 needs.
 
 ---
 
@@ -696,3 +730,40 @@ one table rather than re-derived per surface.
 - **Operations sheet columns** worth mining when Phase 3 is specified: `Status`, `#`,
   `# per property`, `Property`, `Client`, `Unit Type`, `Actual unit number`, `Check In`,
   `Check out`, `Total RN`, `Check In` (confirmed).
+
+---
+
+## 12. Implementation status
+
+What is actually built, as of the last commit that touched this file. **This table is part
+of the contract**: anything marked *Built* can be relied on; anything else is a description
+of intent, not of software. Keep it accurate in the same commit as the code.
+
+| Section | Status | Notes |
+| --- | --- | --- |
+| §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
+| §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price |
+| §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
+| §3.4 Amenities | **Built** | Controlled list, seeded; edited in `prisma/seed.ts`, not in the app |
+| §3.5 Scouting list | **Built** | Per-event entries, status, filters by status, type and amenity |
+| Map view | **Built** | Leaflet over OpenStreetMap, list-first as specified; venue pin and derived distance-to-venue |
+| Google My Maps import | **Not built** | Coordinates are typed in by hand for now |
+| §3.6 Scouting → inventory | **Not built** | The bridge into Phase 2 |
+| §4 Acquisition & Sales | **Not built** | No room slots, no room-nights, no states — nothing in §4 exists in the schema |
+| §5 Reporting | **Not built** | Depends on §4 |
+| §6 Operations | **Not built** | Depends on §4 |
+| §7 Financials | **Partly built** | Only the indicative scouting price. No buy price, sell price or margin |
+
+### Deliberate departures from the specification above
+
+Recorded here rather than silently: each is a place where building it changed our mind.
+
+1. **Scouting status moved from the property to the scouting entry** (§3.1, §3.5). A hotel
+   can be shortlisted for one event and rejected for another; a single status per property
+   cannot express that. The specification was updated to match.
+2. **Amenities are seeded, not managed in the app.** §3.4 calls the list admin-editable.
+   Until there is an admin screen, it is edited in `prisma/seed.ts` — which is honest for
+   Phase 1 but is a gap, not a decision.
+3. **Categories are replaced wholesale on save**, rather than diffed. Nothing references a
+   category yet, so identity does not matter. The moment Phase 2 hangs room slots off a
+   category, this has to become a real diff or slots will be orphaned on every edit.

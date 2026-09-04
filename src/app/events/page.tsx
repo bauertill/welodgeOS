@@ -1,17 +1,19 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import {
-  EmptyState,
-  PageHeader,
-  Table,
-  Td,
-  Th,
-} from "~/app/_components/ui";
+import { NewEventPanel } from "~/app/_components/event-form";
+import { EmptyState, PageHeader, Table, Td, Th } from "~/app/_components/ui";
 import { formatRange } from "~/lib/format";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
 export const metadata = { title: "Events" };
+
+const statusLabels = {
+  PLANNING: "Planning",
+  ACTIVE: "Active",
+  CLOSED: "Closed",
+} as const;
 
 export default async function EventsPage() {
   const session = await auth();
@@ -23,31 +25,41 @@ export default async function EventsPage() {
     <>
       <PageHeader
         title="Events"
-        subtitle="Championships, congresses and tours we are accommodating."
+        subtitle="Every championship, congress or tour we are finding accommodation for. Each one has its own scouting list."
+        action={<NewEventPanel />}
       />
 
       {events.length === 0 ? (
         <EmptyState
           title="No events yet"
-          description="Create an event to start attaching properties, room allotments and bookings to it."
+          description="An event is the container everything else hangs off. Create one, then start building its scouting list."
         />
       ) : (
         <Table>
           <thead>
             <tr>
               <Th>Event</Th>
-              <Th>Location</Th>
-              <Th>Dates</Th>
-              <Th>Properties</Th>
-              <Th>Bookings</Th>
+              <Th>Where</Th>
+              <Th>When</Th>
               <Th>Status</Th>
+              <Th>Scouted</Th>
             </tr>
           </thead>
           <tbody>
             {events.map((event) => (
               <tr key={event.id}>
                 <Td>
-                  <span className="font-medium">{event.name}</span>
+                  <Link
+                    href={`/events/${event.id}`}
+                    className="hover:text-brand-700 font-medium"
+                  >
+                    {event.name}
+                  </Link>
+                  {event.venueName && (
+                    <span className="text-ink-500 block text-xs font-light">
+                      {event.venueName}
+                    </span>
+                  )}
                 </Td>
                 <Td>
                   {[event.city, event.country].filter(Boolean).join(", ") || "—"}
@@ -57,13 +69,8 @@ export default async function EventsPage() {
                     {formatRange(event.startDate, event.endDate)}
                   </span>
                 </Td>
-                <Td>{event._count.properties}</Td>
-                <Td>{event._count.bookings}</Td>
-                <Td>
-                  <span className="bg-brand-50 text-brand-700 inline-flex rounded-full px-3 py-1 text-[11px] font-medium capitalize">
-                    {event.status.toLowerCase()}
-                  </span>
-                </Td>
+                <Td>{statusLabels[event.status]}</Td>
+                <Td>{event._count.scoutingEntries}</Td>
               </tr>
             ))}
           </tbody>

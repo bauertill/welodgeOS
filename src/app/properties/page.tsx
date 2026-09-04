@@ -1,13 +1,20 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
   EmptyState,
   PageHeader,
+  Pill,
   Table,
   Td,
   Th,
 } from "~/app/_components/ui";
 import { formatMoney } from "~/lib/format";
+import {
+  cheapestCategory,
+  propertyTypeLabels,
+  totalUnits,
+} from "~/lib/scouting";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
@@ -23,13 +30,29 @@ export default async function PropertiesPage() {
     <>
       <PageHeader
         title="Properties"
-        subtitle="Hotels and apartment inventory held across our events."
+        subtitle="Every hotel and apartment we have scouted. A property is recorded once and can appear on any number of events' lists."
+        action={
+          <Link
+            href="/properties/new"
+            className="bg-brand-400 hover:bg-brand-500 inline-flex rounded-full px-5 py-2.5 text-[13px] font-light text-white transition-colors"
+          >
+            Scout a property
+          </Link>
+        }
       />
 
       {properties.length === 0 ? (
         <EmptyState
-          title="No properties yet"
-          description="Add hotels and apartment blocks, then hold room allotments against them for an event."
+          title="Nothing scouted yet"
+          description="Add the hotels and apartments that could be contracted. Price, room counts and amenities now save a phone call later."
+          action={
+            <Link
+              href="/properties/new"
+              className="bg-brand-400 hover:bg-brand-500 inline-flex rounded-full px-6 py-2.5 text-[13px] font-light text-white"
+            >
+              Scout a property
+            </Link>
+          }
         />
       ) : (
         <Table>
@@ -37,51 +60,64 @@ export default async function PropertiesPage() {
             <tr>
               <Th>Property</Th>
               <Th>Location</Th>
-              <Th>Event</Th>
-              <Th>Room types</Th>
-              <Th>Allotment</Th>
+              <Th>Rooms</Th>
               <Th>From</Th>
-              <Th>Bookings</Th>
+              <Th>Amenities</Th>
+              <Th>On lists</Th>
+              <Th>Map</Th>
             </tr>
           </thead>
           <tbody>
             {properties.map((property) => {
-              const allotment = property.rooms.reduce(
-                (sum, room) => sum + room.allotment,
-                0,
-              );
-              const cheapest = property.rooms.reduce<
-                (typeof property.rooms)[number] | undefined
-              >(
-                (min, room) =>
-                  !min || room.rateCents < min.rateCents ? room : min,
-                undefined,
-              );
+              const cheapest = cheapestCategory(property.categories);
+              const units =
+                totalUnits(property.categories) || property.totalRooms || 0;
 
               return (
                 <tr key={property.id}>
                   <Td>
-                    <span className="font-medium">{property.name}</span>
-                    {property.stars && (
-                      <span className="text-ink-500 block text-xs font-light">
-                        {property.stars}-star
-                      </span>
-                    )}
+                    <Link
+                      href={`/properties/${property.id}`}
+                      className="hover:text-brand-700 font-medium"
+                    >
+                      {property.name}
+                    </Link>
+                    <span className="text-ink-500 block text-xs font-light">
+                      {propertyTypeLabels[property.type]}
+                      {property.stars ? ` · ${property.stars}-star` : ""}
+                    </span>
                   </Td>
                   <Td>
                     {[property.city, property.country]
                       .filter(Boolean)
                       .join(", ") || "—"}
                   </Td>
-                  <Td>{property.event?.name ?? "—"}</Td>
-                  <Td>{property.rooms.length}</Td>
-                  <Td>{allotment}</Td>
+                  <Td>{units || "—"}</Td>
                   <Td>
-                    {cheapest
-                      ? formatMoney(cheapest.rateCents, cheapest.currency)
+                    {cheapest?.indicativePriceCents
+                      ? formatMoney(
+                          cheapest.indicativePriceCents,
+                          cheapest.currency,
+                        )
                       : "—"}
                   </Td>
-                  <Td>{property._count.bookings}</Td>
+                  <Td>
+                    <div className="flex max-w-56 flex-wrap gap-1">
+                      {property.amenities.slice(0, 3).map((amenity) => (
+                        <Pill key={amenity.id}>{amenity.label}</Pill>
+                      ))}
+                      {property.amenities.length > 3 && (
+                        <Pill>+{property.amenities.length - 3}</Pill>
+                      )}
+                      {property.amenities.length === 0 && "—"}
+                    </div>
+                  </Td>
+                  <Td>{property._count.scoutingEntries}</Td>
+                  <Td>
+                    {property.latitude !== null && property.longitude !== null
+                      ? "Pinned"
+                      : "—"}
+                  </Td>
                 </tr>
               );
             })}

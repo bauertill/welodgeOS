@@ -5,10 +5,8 @@ import { usePathname } from "next/navigation";
 
 export const navItems = [
   { href: "/", label: "Dashboard" },
-  { href: "/bookings", label: "Bookings" },
   { href: "/events", label: "Events" },
   { href: "/properties", label: "Properties" },
-  { href: "/guests", label: "Guests" },
 ] as const;
 
 /** Sign-in lives inside the shell but without its navigation. */

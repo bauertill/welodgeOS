@@ -1,29 +1,26 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import {
   Card,
   EmptyState,
   PageHeader,
   StatCard,
-  StatusBadge,
   Table,
   Td,
   Th,
 } from "~/app/_components/ui";
+import { formatRange } from "~/lib/format";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
-import { formatRange } from "~/lib/format";
 
 export default async function DashboardPage() {
   const session = await auth();
+  if (!session?.user) return <SignedOut />;
 
-  if (!session?.user) {
-    return <SignedOut />;
-  }
-
-  const [summary, upcoming] = await Promise.all([
-    api.booking.summary(),
-    api.booking.list({ limit: 8 }),
+  const [events, properties] = await Promise.all([
+    api.event.list(),
+    api.property.list(),
   ]);
 
   const firstName =
@@ -31,83 +28,108 @@ export default async function DashboardPage() {
     session.user.email?.split("@")[0] ??
     "there";
 
+  const onAList = properties.filter(
+    (property) => property._count.scoutingEntries > 0,
+  ).length;
+  const pinned = properties.filter(
+    (property) => property.latitude !== null && property.longitude !== null,
+  ).length;
+
   return (
     <>
       <PageHeader
         title={`Welcome back, ${firstName}`}
-        subtitle="Today at a glance across all We Lodge events."
+        subtitle="Scouting — the long list of hotels and apartments we could contract."
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total bookings" value={summary.total} />
+        <StatCard label="Events" value={events.length} />
         <StatCard
-          label="Confirmed"
-          value={summary.byStatus.CONFIRMED ?? 0}
-          hint="Ready for arrival"
+          label="Properties scouted"
+          value={properties.length}
+          hint="Across every event"
         />
         <StatCard
-          label="Open inquiries"
-          value={
-            (summary.byStatus.INQUIRY ?? 0) + (summary.byStatus.OPTIONED ?? 0)
-          }
-          hint="Awaiting confirmation"
+          label="On a scouting list"
+          value={onAList}
+          hint="The rest are in the library only"
         />
-        <StatCard label="Guests on file" value={summary.guests} />
+        <StatCard
+          label="On the map"
+          value={pinned}
+          hint="Have coordinates recorded"
+        />
       </div>
 
       <div className="mb-4 flex items-baseline justify-between">
-        <h2 className="text-ink-900 text-lg font-semibold">Next arrivals</h2>
+        <h2 className="text-ink-900 text-lg font-semibold">Events</h2>
         <Link
-          href="/bookings"
+          href="/events"
           className="text-brand-700 hover:text-brand-400 text-[13px]"
         >
-          All bookings →
+          All events →
         </Link>
       </div>
 
-      {upcoming.length === 0 ? (
+      {events.length === 0 ? (
         <EmptyState
-          title="No bookings yet"
-          description="Once bookings land in the system, the next arrivals will show up here."
+          title="No events yet"
+          description="Everything hangs off an event. Create one, then build its scouting list."
+          action={
+            <Link
+              href="/events"
+              className="bg-brand-400 hover:bg-brand-500 inline-flex rounded-full px-6 py-2.5 text-[13px] font-light text-white"
+            >
+              Go to events
+            </Link>
+          }
         />
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>Reference</Th>
-              <Th>Guest</Th>
-              <Th>Property</Th>
-              <Th>Stay</Th>
-              <Th>Status</Th>
+              <Th>Event</Th>
+              <Th>Where</Th>
+              <Th>When</Th>
+              <Th>Properties scouted</Th>
             </tr>
           </thead>
           <tbody>
-            {upcoming.map((booking) => (
-              <tr key={booking.id}>
+            {events.map((event) => (
+              <tr key={event.id}>
                 <Td>
-                  <span className="font-medium whitespace-nowrap">
-                    {booking.reference}
-                  </span>
+                  <Link
+                    href={`/events/${event.id}`}
+                    className="hover:text-brand-700 font-medium"
+                  >
+                    {event.name}
+                  </Link>
                 </Td>
                 <Td>
-                  {booking.guest
-                    ? `${booking.guest.firstName} ${booking.guest.lastName}`
-                    : "—"}
+                  {[event.city, event.country].filter(Boolean).join(", ") || "—"}
                 </Td>
-                <Td>{booking.property?.name ?? "—"}</Td>
                 <Td>
                   <span className="whitespace-nowrap">
-                    {formatRange(booking.checkIn, booking.checkOut)}
+                    {formatRange(event.startDate, event.endDate)}
                   </span>
                 </Td>
-                <Td>
-                  <StatusBadge status={booking.status} />
-                </Td>
+                <Td>{event._count.scoutingEntries}</Td>
               </tr>
             ))}
           </tbody>
         </Table>
       )}
+
+      <Card className="mt-8">
+        <p className="text-ink-900 font-medium">What comes next</p>
+        <p className="text-ink-500 mt-1 text-sm font-light">
+          Scouting is Phase 1 of three. Phase 2 turns shortlisted properties into
+          room-nights we buy and sell; Phase 3 checks the rooming lists against
+          what we hold. Both are specified in{" "}
+          <span className="text-ink-700">docs/product-scope.md</span> and are not
+          built yet.
+        </p>
+      </Card>
     </>
   );
 }
@@ -117,11 +139,11 @@ function SignedOut() {
     <div className="mx-auto max-w-2xl py-16 text-center">
       <p className="text-brand-400 text-xl font-semibold">We Lodge OS</p>
       <h1 className="text-ink-900 mt-3 text-4xl font-bold">
-        Booking management for We Lodge AG
+        Accommodation inventory for We Lodge AG
       </h1>
       <p className="text-ink-500 mx-auto mt-4 max-w-lg font-light">
-        Events, properties, room allotments and guest bookings — managed in one
-        place across all five offices.
+        Scout the properties worth contracting, hold what we buy and sell, and
+        prove the rooming lists will work — in one place.
       </p>
       <Link
         href="/signin"
@@ -132,9 +154,9 @@ function SignedOut() {
 
       <div className="mt-14 grid gap-4 text-left sm:grid-cols-3">
         {[
-          ["Accommodation", "Inventory and allotments per event."],
-          ["Guest relations", "Every guest, stay and special request."],
-          ["Event teams", "Federations, media, sponsors and crews."],
+          ["Scouting", "The long list of hotels and apartments, on a map."],
+          ["Acquisition & sales", "What we hold, what we promised, where we are exposed."],
+          ["Operations", "Rooming lists checked against what we actually own."],
         ].map(([title, copy]) => (
           <Card key={title}>
             <p className="text-ink-900 font-medium">{title}</p>

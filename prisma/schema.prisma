@@ -1,5 +1,9 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// We Lodge OS — Phase 1 (Scouting).
+//
+// This schema implements §3 of docs/product-scope.md. It deliberately stops at
+// the scouting list: no room slots, no room-nights, no acquisition or sales
+// state. Those arrive with Phase 2 and must be added alongside the document,
+// not ahead of it.
 
 generator client {
   provider = "prisma-client-js"
@@ -8,20 +12,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
-  // Further reading:
-  // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
-  // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
   url      = env("DATABASE_URL")
-}
-
-enum BookingStatus {
-  INQUIRY
-  OPTIONED
-  CONFIRMED
-  CHECKED_IN
-  CHECKED_OUT
-  CANCELLED
 }
 
 enum EventStatus {
@@ -30,144 +21,186 @@ enum EventStatus {
   CLOSED
 }
 
-/// A sports federation, media outlet, sponsor or event team we house.
-model Client {
-  id           String   @id @default(cuid())
-  name         String
-  contactName  String?
-  contactEmail String?
-  contactPhone String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  bookings Booking[]
-
-  @@index([name])
+enum PropertyType {
+  HOTEL
+  APARTMENT
 }
 
-/// An event we are providing accommodation for (e.g. a championship).
+/// Where a property has got to in *this* event's scouting list. The same
+/// property can be shortlisted for one event and rejected for another, which is
+/// why this lives on the entry rather than on the property (doc §3.5).
+enum ScoutingStatus {
+  PROSPECT
+  CONTACTED
+  SHORTLISTED
+  REJECTED
+  CONTRACTED
+}
+
+/// An event we are providing accommodation for. The container everything else
+/// hangs off (doc §2.3).
 model Event {
   id        String      @id @default(cuid())
   name      String
   city      String?
   country   String?
-  startDate DateTime
-  endDate   DateTime
+  startDate DateTime    @db.Date
+  endDate   DateTime    @db.Date
   status    EventStatus @default(PLANNING)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
 
-  properties Property[]
-  bookings   Booking[]
+  /// The venue guests need to be near. Distance-to-venue is derived from this
+  /// and the property's own coordinates.
+  venueName      String?
+  venueLatitude  Float?
+  venueLongitude Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scoutingEntries ScoutingEntry[]
 
   @@index([startDate])
 }
 
-/// A hotel or apartment block in our inventory for an event.
+/// A hotel or apartment building we could contract. Scouted once, reusable
+/// across events — an event-specific view of it is a ScoutingEntry.
 model Property {
-  id        String   @id @default(cuid())
-  name      String
-  address   String?
-  city      String?
-  country   String?
-  stars     Int?
-  roomCount Int      @default(0)
+  id      String       @id @default(cuid())
+  name    String
+  type    PropertyType
+  address String?
+  city    String?
+  country String?
+
+  /// Optional. Present ⇒ the property appears on the map view.
+  latitude  Float?
+  longitude Float?
+
+  /// Hotels only, and only when we know it.
+  stars Int?
+
+  /// Stated total, for properties whose categories are not broken out yet. The
+  /// UI prefers the sum of the categories when there are any.
+  totalRooms Int?
+
+  website String?
+  phone   String?
+  notes   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  eventId String?
+  categories      RoomCategory[]
+  contacts        PropertyContact[]
+  amenities       Amenity[]         @relation("PropertyAmenities")
+  scoutingEntries ScoutingEntry[]
 
-  rooms    Room[]
-  bookings Booking[]
+  scoutedBy   User?   @relation(fields: [scoutedById], references: [id], onDelete: SetNull)
+  scoutedById String?
 
   @@index([name])
-  @@index([eventId])
+  @@index([city])
 }
 
-/// A room category held at a property, with its nightly rate and allotment.
-model Room {
-  id        String   @id @default(cuid())
-  name      String
-  capacity  Int      @default(2)
-  /// Nightly rate in minor units (e.g. cents) to avoid float drift.
-  rateCents Int      @default(0)
-  currency  String   @default("CHF")
-  allotment Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+/// A room type at a hotel, or a unit type in an apartment building. Both are
+/// "a countable, sellable, occupiable thing" — the distinction is which fields
+/// are filled in (doc §3.2, §3.3).
+model RoomCategory {
+  id   String @id @default(cuid())
+  name String
+
+  /// How many rooms/units of this type the property has in total.
+  unitCount Int @default(0)
+
+  /// Standard occupancy, in people.
+  capacity Int @default(2)
+
+  /// Hotels: "1 King", "2 Twin". Drives the Phase 3 occupancy checks.
+  bedConfiguration String?
+
+  /// Apartments: halves are allowed for bathrooms (1.5).
+  bedrooms  Int?
+  bathrooms Float?
+
+  /// Indicative nightly price at scouting time — not a contracted rate.
+  indicativePriceCents Int?
+  currency             String @default("CHF")
+
+  sortOrder Int @default(0)
 
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   propertyId String
 
-  bookings Booking[]
+  @@index([propertyId])
+}
+
+/// A controlled vocabulary, shared by both property types, so amenities stay a
+/// filter rather than a tag soup (doc §3.4).
+model Amenity {
+  id        String @id @default(cuid())
+  key       String @unique
+  label     String
+  sortOrder Int    @default(0)
+
+  properties Property[] @relation("PropertyAmenities")
+
+  @@index([sortOrder])
+}
+
+/// Someone at the property we talk to.
+model PropertyContact {
+  id    String  @id @default(cuid())
+  name  String
+  role  String?
+  email String?
+  phone String?
+
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
 
   @@index([propertyId])
 }
 
-/// A guest we are accommodating.
-model Guest {
-  id        String   @id @default(cuid())
-  firstName String
-  lastName  String
-  email     String?
-  phone     String?
+/// A property on one event's scouting list. Nothing here implies a commercial
+/// position — that starts in Phase 2.
+model ScoutingEntry {
+  id     String         @id @default(cuid())
+  status ScoutingStatus @default(PROSPECT)
+  notes  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bookings Booking[]
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
 
-  @@index([lastName])
-}
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
 
-/// The core record: a guest in a room for a date range.
-model Booking {
-  id        String        @id @default(cuid())
-  reference String        @unique
-  status    BookingStatus @default(INQUIRY)
-  checkIn   DateTime
-  checkOut  DateTime
-  guests    Int           @default(1)
-  notes     String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  addedBy   User?   @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  addedById String?
 
-  guest   Guest?  @relation(fields: [guestId], references: [id], onDelete: SetNull)
-  guestId String?
-
-  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  clientId String?
-
-  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  eventId String?
-
-  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  propertyId String?
-
-  room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  roomId String?
-
-  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdById String?
-
-  @@index([status])
-  @@index([checkIn])
+  @@unique([eventId, propertyId])
   @@index([eventId])
+  @@index([status])
 }
 
-// Necessary for Next auth
+// ---------------------------------------------------------------------------
+// NextAuth
+// ---------------------------------------------------------------------------
+
 model Account {
   id                       String  @id @default(cuid())
   userId                   String
   type                     String
   provider                 String
   providerAccountId        String
-  refresh_token            String? // @db.Text
-  access_token             String? // @db.Text
+  refresh_token            String?
+  access_token             String?
   expires_at               Int?
   token_type               String?
   scope                    String?
-  id_token                 String? // @db.Text
+  id_token                 String?
   session_state            String?
   user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   refresh_token_expires_in Int?
@@ -191,7 +224,9 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
-  bookings      Booking[]
+
+  scoutedProperties Property[]
+  scoutingEntries   ScoutingEntry[]
 }
 
 model VerificationToken {
