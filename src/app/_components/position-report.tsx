@@ -5,9 +5,9 @@ import { useState } from "react";
 import { Select } from "~/app/_components/form";
 import {
   Card,
+  Collapsible,
   EmptyState,
   MoneyTotal,
-  SectionHeading,
   SeverityBadge,
   StatCard,
   Table,
@@ -75,12 +75,64 @@ export function PositionReport({ eventId }: { eventId: string }) {
         </Select>
       )}
 
+      {/* --- §5.3 availability ---------------------------------------------- */}
+      <Collapsible
+        title="What we can still offer"
+        hint="Whole rooms free on every night of the window — a room free for 19 nights of 21 counts for nothing, because we sell whole stays."
+      >
+        <Table>
+          <thead>
+            <tr>
+              <Th>Property</Th>
+              <Th>Room type</Th>
+              <Th>Window</Th>
+              <Th>In inventory</Th>
+              <Th>Offerable</Th>
+              <Th>Genuinely free</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {(availability.data ?? []).map((row) => (
+              <tr key={row.categoryId}>
+                <Td>{row.propertyName}</Td>
+                <Td>{row.categoryName}</Td>
+                <Td>
+                  <span className="whitespace-nowrap">
+                    {formatRange(row.from, row.to)}
+                  </span>
+                  <span className="text-ink-500 block text-xs font-light">
+                    {row.nights} nights
+                  </span>
+                </Td>
+                <Td>{row.slots}</Td>
+                <Td>
+                  <span className="font-medium">{row.offerable}</span>
+                  <span className="text-ink-500 block text-xs font-light">
+                    Assumes blocks lapse
+                  </span>
+                </Td>
+                <Td>
+                  <span className="font-medium">{row.genuinelyFree}</span>
+                  <span className="text-ink-500 block text-xs font-light">
+                    Blocks counted as taken
+                  </span>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+        <p className="text-ink-500 mt-2 text-xs font-light">
+          Only rooms we have secured count — a night still in negotiation is not
+          something we can offer. The two figures differ by exactly the blocks
+          that are holding rooms without having bought them.
+        </p>
+      </Collapsible>
+
       {/* --- §5.2 exposure -------------------------------------------------- */}
-      <div>
-        <SectionHeading
-          title="Exposure"
-          hint="Every night where what we promised the client is stronger than what we secured from the supplier — and the other way round."
-        />
+      <Collapsible
+        title="Exposure"
+        hint="Every night where what we promised the client is stronger than what we secured from the supplier — and the other way round."
+      >
         <div className="grid gap-4 lg:grid-cols-3">
           <Card>
             <p className="text-ink-500 text-[11px] font-medium tracking-wider uppercase">
@@ -161,14 +213,13 @@ export function PositionReport({ eventId }: { eventId: string }) {
             </dl>
           </Card>
         </div>
-      </div>
+      </Collapsible>
 
       {/* --- §7 money ------------------------------------------------------- */}
-      <div>
-        <SectionHeading
-          title="Money"
-          hint="Summed over room-nights, per currency. Nothing is converted."
-        />
+      <Collapsible
+        title="Money"
+        hint="Summed over room-nights, per currency. Nothing is converted."
+      >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <MoneyCard
             label="Committed cost"
@@ -208,68 +259,13 @@ export function PositionReport({ eventId }: { eventId: string }) {
             converted at a rate nobody agreed.
           </p>
         )}
-      </div>
-
-      {/* --- §5.3 availability ---------------------------------------------- */}
-      <div>
-        <SectionHeading
-          title="What we can still offer"
-          hint="Whole rooms free on every night of the window — a room free for 19 nights of 21 counts for nothing, because we sell whole stays."
-        />
-        <Table>
-          <thead>
-            <tr>
-              <Th>Property</Th>
-              <Th>Room type</Th>
-              <Th>Window</Th>
-              <Th>In inventory</Th>
-              <Th>Offerable</Th>
-              <Th>Genuinely free</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {(availability.data ?? []).map((row) => (
-              <tr key={row.categoryId}>
-                <Td>{row.propertyName}</Td>
-                <Td>{row.categoryName}</Td>
-                <Td>
-                  <span className="whitespace-nowrap">
-                    {formatRange(row.from, row.to)}
-                  </span>
-                  <span className="text-ink-500 block text-xs font-light">
-                    {row.nights} nights
-                  </span>
-                </Td>
-                <Td>{row.slots}</Td>
-                <Td>
-                  <span className="font-medium">{row.offerable}</span>
-                  <span className="text-ink-500 block text-xs font-light">
-                    Assumes blocks lapse
-                  </span>
-                </Td>
-                <Td>
-                  <span className="font-medium">{row.genuinelyFree}</span>
-                  <span className="text-ink-500 block text-xs font-light">
-                    Blocks counted as taken
-                  </span>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-        <p className="text-ink-500 mt-2 text-xs font-light">
-          Only rooms we have secured count — a night still in negotiation is not
-          something we can offer. The two figures differ by exactly the blocks
-          that are holding rooms without having bought them.
-        </p>
-      </div>
+      </Collapsible>
 
       {/* --- §5.1 position per night ---------------------------------------- */}
-      <div>
-        <SectionHeading
-          title="Night by night"
-          hint="What we hold, what we promised and who else is asking, for every night of the event."
-        />
+      <Collapsible
+        title="Night by night"
+        hint="What we hold, what we promised and who else is asking, for every night of the event."
+      >
         <Table>
           <thead>
             <tr>
@@ -329,7 +325,7 @@ export function PositionReport({ eventId }: { eventId: string }) {
           requests, which lock nothing — several clients may want the same night,
           and that pressure is what drives the push to acquire.
         </p>
-      </div>
+      </Collapsible>
     </div>
   );
 }

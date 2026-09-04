@@ -213,3 +213,47 @@ export function SectionHeading({
     </div>
   );
 }
+
+/**
+ * A `SectionHeading` a reader can fold away — for a page built from several
+ * long, independent reports, so getting to the one you need does not mean
+ * scrolling past the others. Opens by default; the browser remembers nothing
+ * between visits, so nobody has to hunt for a section that "went missing".
+ */
+export function Collapsible({
+  title,
+  hint,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={defaultOpen}>
+      <summary className="mb-3 flex cursor-pointer list-none items-baseline gap-2 marker:content-none [&::-webkit-details-marker]:hidden">
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          aria-hidden="true"
+          className="text-ink-400 mt-1.5 h-3 w-3 shrink-0 -rotate-90 transition-transform [details[open]_&]:rotate-0"
+        >
+          <path
+            d="M5 7.5L10 12.5L15 7.5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <div>
+          <h2 className="text-ink-900 inline text-lg font-semibold">{title}</h2>
+          {hint && <p className="text-ink-500 mt-0.5 text-xs font-light">{hint}</p>}
+        </div>
+      </summary>
+      {children}
+    </details>
+  );
+}
