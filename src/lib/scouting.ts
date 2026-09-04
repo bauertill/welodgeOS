@@ -37,6 +37,15 @@ export const propertyTypeLabels: Record<PropertyType, string> = {
 };
 
 /**
+ * A property is the same property regardless of case or stray whitespace —
+ * "Hotel Carmel", "hotel carmel" and " Hotel Carmel " all name one place.
+ * Used to catch a duplicate before it is ever saved (doc §3.1).
+ */
+export function normalizePropertyName(name: string) {
+  return name.trim().toLowerCase();
+}
+
+/**
  * Great-circle distance in kilometres. Used for distance-to-venue, which is
  * derived from coordinates rather than stored (doc §3.1).
  */

@@ -59,6 +59,11 @@ const detail = {
 const blank = (value: string | undefined) => (value?.trim() ? value.trim() : null);
 
 export const propertyRouter = createTRPCRouter({
+  /** Just names, for duplicate detection — a property list is too heavy to fetch on every keystroke. */
+  listNames: protectedProcedure.query(({ ctx }) =>
+    ctx.db.property.findMany({ select: { id: true, name: true } }),
+  ),
+
   list: protectedProcedure
     .input(
       z
@@ -106,6 +111,18 @@ export const propertyRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { amenityIds, categories, contacts, ...property } = input;
 
+      const duplicate = await ctx.db.property.findFirst({
+        where: { name: { equals: property.name.trim(), mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Cannot add duplicate property — a property with this name already exists.",
+        });
+      }
+
       return ctx.db.property.create({
         data: {
           ...property,
@@ -137,6 +154,21 @@ export const propertyRouter = createTRPCRouter({
     .input(propertyInput.extend({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { id, amenityIds, categories, contacts, ...property } = input;
+
+      const duplicate = await ctx.db.property.findFirst({
+        where: {
+          id: { not: id },
+          name: { equals: property.name.trim(), mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Cannot add duplicate property — a property with this name already exists.",
+        });
+      }
 
       // Room slots — and every room-night on them — hang off a category, so a
       // category is edited in place, never replaced. Removing one that already

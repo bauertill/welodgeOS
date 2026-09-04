@@ -118,6 +118,16 @@ Note what is *not* here: **scouting status is not a property attribute**. The sa
 be shortlisted for one event and rejected for another, so status lives on the scouting entry
 (§3.5), not on the property.
 
+**A property's name is unique, globally** — not just within one event's scouting list.
+Properties are shared across events (§3.5), so the same hotel scouted for two Games must be
+the *same* record, added to both scouting lists, rather than two records that split its
+contacts, amenities and history. `name` is compared case-insensitively with surrounding
+whitespace trimmed — "Hotel Carmel", "hotel carmel" and " Hotel Carmel " all name one place —
+so a rep cannot accidentally re-create a property that already exists under slightly
+different capitalisation. The scouting form checks this as the name is typed and blocks
+saving on a match; the same check runs again on the server, since the form's check alone
+cannot be trusted.
+
 **Map:** the list is the source of truth; the map is a *view* over whatever has
 coordinates. Import from Google My Maps (KML/CSV) is the expected ingestion path for the
 first load. A property with no coordinates is valid and simply absent from the map.

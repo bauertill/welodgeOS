@@ -19,8 +19,9 @@ export default async function NewPropertyPage({
   if (!session?.user) redirect("/signin");
 
   const { event: eventId } = await searchParams;
-  const [amenities, event] = await Promise.all([
+  const [amenities, existingNames, event] = await Promise.all([
     api.amenity.list(),
+    api.property.listNames(),
     eventId ? api.event.byId({ id: eventId }) : Promise.resolve(null),
   ]);
 
@@ -43,6 +44,7 @@ export default async function NewPropertyPage({
       <PropertyForm
         initial={emptyProperty}
         amenities={amenities}
+        existingNames={existingNames}
         addToEventId={event?.id}
       />
     </>

@@ -20,9 +20,10 @@ export default async function EditPropertyPage({
   if (!session?.user) redirect("/signin");
 
   const { id } = await params;
-  const [property, amenities] = await Promise.all([
+  const [property, amenities, existingNames] = await Promise.all([
     api.property.byId({ id }),
     api.amenity.list(),
+    api.property.listNames(),
   ]);
 
   if (!property) notFound();
@@ -36,6 +37,7 @@ export default async function EditPropertyPage({
 
       <PropertyForm
         amenities={amenities}
+        existingNames={existingNames}
         initial={{
           id: property.id,
           name: property.name,

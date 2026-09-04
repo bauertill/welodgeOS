@@ -11,23 +11,41 @@ export function Label({ children }: { children: React.ReactNode }) {
 }
 
 const fieldStyles =
-  "border-ink-200 focus:border-brand-400 focus:ring-brand-400/20 w-full rounded-lg border bg-white px-3 py-2 text-sm font-light outline-none transition-colors focus:ring-4 disabled:opacity-50";
+  "w-full rounded-lg border bg-white px-3 py-2 text-sm font-light outline-none transition-colors focus:ring-4 disabled:opacity-50";
+const fieldValidStyles =
+  "border-ink-200 focus:border-brand-400 focus:ring-brand-400/20";
+const fieldInvalidStyles =
+  "border-[#db4b68] focus:border-[#db4b68] focus:ring-[#db4b68]/20";
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${fieldStyles} ${props.className ?? ""}`} />;
+export function Input({
+  invalid,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) {
+  return (
+    <input
+      {...props}
+      className={`${fieldStyles} ${invalid ? fieldInvalidStyles : fieldValidStyles} ${props.className ?? ""}`}
+    />
+  );
 }
 
 export function Textarea(
   props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
 ) {
   return (
-    <textarea {...props} className={`${fieldStyles} ${props.className ?? ""}`} />
+    <textarea
+      {...props}
+      className={`${fieldStyles} ${fieldValidStyles} ${props.className ?? ""}`}
+    />
   );
 }
 
 export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select {...props} className={`${fieldStyles} ${props.className ?? ""}`} />
+    <select
+      {...props}
+      className={`${fieldStyles} ${fieldValidStyles} ${props.className ?? ""}`}
+    />
   );
 }
 

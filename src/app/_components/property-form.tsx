@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { PropertyType } from "generated/prisma";
 
 import {
@@ -14,6 +14,7 @@ import {
   Select,
   Textarea,
 } from "~/app/_components/form";
+import { normalizePropertyName } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
 type CategoryDraft = {
@@ -97,11 +98,14 @@ const text = (value: string) => value.trim() || undefined;
 export function PropertyForm({
   initial,
   amenities,
+  existingNames,
   /** When set, the new property is added straight to this event's list. */
   addToEventId,
 }: {
   initial: PropertyFormValues;
   amenities: { id: string; label: string }[];
+  /** Every property's name, for real-time duplicate detection (doc §3.1). */
+  existingNames: { id: string; name: string }[];
   addToEventId?: string;
 }) {
   const router = useRouter();
@@ -110,6 +114,21 @@ export function PropertyForm({
 
   const isEdit = Boolean(initial.id);
   const isHotel = values.type === "HOTEL";
+
+  // A set, not a list scan, so this stays instant with thousands of properties.
+  const otherPropertyNames = useMemo(
+    () =>
+      new Set(
+        existingNames
+          .filter((property) => property.id !== initial.id)
+          .map((property) => normalizePropertyName(property.name)),
+      ),
+    [existingNames, initial.id],
+  );
+
+  const isDuplicateProperty =
+    values.name.trim().length > 0 &&
+    otherPropertyNames.has(normalizePropertyName(values.name));
 
   const addToList = api.scouting.add.useMutation();
 
@@ -213,6 +232,12 @@ export function PropertyForm({
       setError("A property needs a name.");
       return;
     }
+    if (isDuplicateProperty) {
+      setError(
+        "Cannot add duplicate property — a property with this name already exists.",
+      );
+      return;
+    }
     if ((payload.latitude === undefined) !== (payload.longitude === undefined)) {
       setError(
         "Give both a latitude and a longitude, or neither — one on its own cannot be put on the map.",
@@ -234,12 +259,38 @@ export function PropertyForm({
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" className="sm:col-span-2">
-            <Input
-              value={values.name}
-              onChange={(e) => set("name", e.target.value)}
-              placeholder="Hotel Carmel"
-              required
-            />
+            <div className="relative">
+              <Input
+                value={values.name}
+                onChange={(e) => set("name", e.target.value)}
+                placeholder="Hotel Carmel"
+                required
+                invalid={isDuplicateProperty}
+                className={isDuplicateProperty ? "pr-9" : undefined}
+                aria-invalid={isDuplicateProperty}
+                aria-describedby={
+                  isDuplicateProperty ? "property-name-error" : undefined
+                }
+              />
+              {isDuplicateProperty && (
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-[#db4b68]"
+                >
+                  <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.5" />
+                  <line x1="10" y1="6" x2="10" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="10" cy="13.5" r="1" fill="currentColor" />
+                </svg>
+              )}
+            </div>
+            {isDuplicateProperty && (
+              <p id="property-name-error" className="mt-1.5 text-xs text-[#c03654]">
+                Cannot add duplicate property — a property with this name
+                already exists.
+              </p>
+            )}
           </Field>
 
           <Field label="Type">
@@ -599,7 +650,7 @@ export function PropertyForm({
       </Fieldset>
 
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={saving}>
+        <Button type="submit" disabled={saving || isDuplicateProperty}>
           {saving
             ? "Saving…"
             : isEdit
