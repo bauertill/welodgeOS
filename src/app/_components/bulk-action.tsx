@@ -94,6 +94,27 @@ const FIELDS: Record<InventoryAction, string[]> = {
 
 const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
+/** "31, 33–40" — so a run of missing room numbers reads as ranges, not a list. */
+function formatRoomNumbers(numbers: number[]): string {
+  if (numbers.length === 0) return "";
+  const sorted = [...numbers].sort((a, b) => a - b);
+  const ranges: string[] = [];
+  let start = sorted[0]!;
+  let prev = sorted[0]!;
+  for (let i = 1; i < sorted.length; i++) {
+    const n = sorted[i]!;
+    if (n === prev + 1) {
+      prev = n;
+      continue;
+    }
+    ranges.push(start === prev ? `#${start}` : `#${start}–${prev}`);
+    start = n;
+    prev = n;
+  }
+  ranges.push(start === prev ? `#${start}` : `#${start}–${prev}`);
+  return ranges.join(", ");
+}
+
 export function BulkAction({
   eventId,
   structure,
@@ -167,6 +188,19 @@ export function BulkAction({
           slot.slotNumber <= (Number(roomTo) || Infinity),
       );
 
+  // A typed range can ask for rooms that were never brought into inventory —
+  // the filter above just quietly drops them, so this is what tells the rep
+  // their "1 to 40" only matched 30 rooms, and which ones do not exist.
+  const existingSlotNumbers = new Set(slots.map((slot) => slot.slotNumber));
+  const from = Number(roomFrom) || 0;
+  const to = Number(roomTo) || 0;
+  const missingRoomNumbers =
+    !allRooms && roomFrom && roomTo && from <= to
+      ? Array.from({ length: to - from + 1 }, (_, i) => from + i).filter(
+          (n) => !existingSlotNumbers.has(n),
+        )
+      : [];
+
   const shows = (field: string) => FIELDS[action].includes(field);
   const cents = (value: string) =>
     value.trim() ? Math.round(Number(value) * 100) : undefined;
@@ -223,6 +257,7 @@ export function BulkAction({
                   min={1}
                   value={roomFrom}
                   onChange={(e) => setRoomFrom(e.target.value)}
+                  invalid={missingRoomNumbers.length > 0}
                 />
               </Field>
               <Field label="Last room number">
@@ -231,9 +266,18 @@ export function BulkAction({
                   min={1}
                   value={roomTo}
                   onChange={(e) => setRoomTo(e.target.value)}
+                  invalid={missingRoomNumbers.length > 0}
                 />
               </Field>
             </div>
+          )}
+          {missingRoomNumbers.length > 0 && (
+            <p className="mt-2 text-xs font-medium text-[#c03654]">
+              Room {formatRoomNumbers(missingRoomNumbers)}{" "}
+              {missingRoomNumbers.length === 1 ? "does" : "do"} not exist for
+              this room type — only {slots.length} in inventory. This will
+              apply to the {selectedSlots.length} that do.
+            </p>
           )}
         </div>
 
@@ -259,6 +303,8 @@ export function BulkAction({
             {selectedSlots.length
               ? `${selectedSlots.length} ${selectedSlots.length === 1 ? "room" : "rooms"} selected`
               : "No rooms selected"}
+            {missingRoomNumbers.length > 0 &&
+              ` (${missingRoomNumbers.length} requested ${missingRoomNumbers.length === 1 ? "room does" : "rooms do"} not exist)`}
           </p>
         </div>
 
