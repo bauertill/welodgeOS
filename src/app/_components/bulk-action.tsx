@@ -81,7 +81,7 @@ const FIELDS: Record<InventoryAction, string[]> = {
   REASSIGN_ACQUISITION_OWNER: ["acquisitionOwner"],
 
   BLOCK: ["client", "blockExpiry", "clientRef", "dueDate", "sellPrice", "salesOwner", "salesNotes"],
-  SELL: ["client", "clientRef", "dueDate", "sellPrice", "salesOwner", "salesNotes"],
+  SELL: ["client", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
   RELEASE_HOLD: ["salesNotes"],
   CANCEL_SALE: ["salesNotes"],
   EXTEND_BLOCK: ["blockExpiry"],

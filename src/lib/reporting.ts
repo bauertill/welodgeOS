@@ -474,7 +474,10 @@ export function deadlines(nights: NightRecord[], today = todayDay()): DeadlineGr
       }
     }
 
-    if (isHardHold(night.salesState) && night.dueDate) {
+    // The due date is the client's decision deadline while the hold is still
+    // open — SOLD means they already signed, so it stops being a clock once
+    // the sale closes (doc §4.2, §4.6).
+    if (night.salesState === "BLOCKED" && night.dueDate) {
       if (deadlineUrgency(night.dueDate, today) !== "none") {
         record(
           night,

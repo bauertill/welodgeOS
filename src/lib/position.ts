@@ -241,8 +241,10 @@ export function positionOf(
   // the block has been lifted (doc §4.6).
   const optionDeadline = acq === "OPTION" ? night.optionExpiry : null;
   const blockDeadline = sale === "BLOCKED" ? night.blockExpiry : null;
-  const dueDeadline =
-    sale === "BLOCKED" || sale === "SOLD" ? night.dueDate : null;
+  // The due date is the client's decision deadline while the hold is still
+  // open. SOLD means they already signed — nothing left to chase, so it stops
+  // counting as a clock the moment the sale closes (doc §4.2, §4.6).
+  const dueDeadline = sale === "BLOCKED" ? night.dueDate : null;
 
   const flags: string[] = [];
   const detail: string[] = [];

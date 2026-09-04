@@ -267,7 +267,12 @@ stateDiagram-v2
 | `CANCELLED` | Previously sold, cancelled (kept for audit, counts as not sold) |
 
 Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`),
-`sellPriceCents`, `currency`, `owner`, `notes`, `dueDate` (payment/decision deadline).
+`sellPriceCents`, `currency`, `owner`, `notes`, `dueDate`.
+
+**`dueDate` is the client's decision deadline while the hold is still open** — asked for
+only when blocking, never when selling. `SOLD` means the client has already signed; there is
+no further decision to chase, so the sale form does not ask for one. (Resolves the open
+question this used to be — §9.)
 
 Only `NONE`, `BLOCKED`, `SOLD` and `CANCELLED` are ever *stored* on a room-night: those are
 the hard hold, and a night has at most one. `REQUESTED` is never stored there — a request
@@ -377,7 +382,8 @@ never a silent write.
 ### 4.6 Deadlines
 
 Two clocks per night: `optionExpiry` (supplier side) and `blockExpiry` (client side), plus
-`dueDate` for payment/decision.
+`dueDate` — the client's decision deadline while `BLOCKED` (§4.2). It has nothing to chase
+once `SOLD`, so it is not asked for there.
 
 - **Reminder window** — configurable, default 7 days out: severity ≥ 1, appears on the
   deadline dashboard.
@@ -655,32 +661,30 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
 1. **Release deadlines on bought stock.** Do supplier agreements carry a cancellation
    window where bought nights can still be handed back? If so `RELEASED` needs its own
    deadline clock alongside options and blocks.
-2. **`dueDate` semantics.** On the sales sheet this reads as a payment due date — is it
-   payment, or the client's decision deadline? They imply different escalation paths.
-3. **Slot stability across suppliers.** If a client's rooms move from Aloft to Courtyard,
+2. **Slot stability across suppliers.** If a client's rooms move from Aloft to Courtyard,
    does the sale follow the client (re-point the hold to new slots) or is it cancelled and
    re-sold? This determines whether a hold is an object in its own right or purely a
    property of nights.
    *Still open, and now blocking: a hold is currently a property of nights, which is why
    split/merge is not a single operation (§4.8).*
-4. **Contracted vs indicative price.** Should a negotiated rate live on the category
+3. **Contracted vs indicative price.** Should a negotiated rate live on the category
    (a rate card per event) with the night-level price as an override, rather than being
    entered per night?
-5. **Roles and permissions.** Is the "We Lodge Rep" an accountability label only, or does
+4. **Roles and permissions.** Is the "We Lodge Rep" an accountability label only, or does
    it gate who may sell/buy/release?
-6. **Overbooking policy.** Do we ever deliberately sell more than we hold at a category
+5. **Overbooking policy.** Do we ever deliberately sell more than we hold at a category
    level, and if so should the system allow a configured tolerance rather than flagging
    every night?
-7. **Apartment slot numbering.** Do apartment units carry a real unit identifier from the
+6. **Apartment slot numbering.** Do apartment units carry a real unit identifier from the
    operator, or is our internal slot number sufficient?
-8. **Availability semantics (§5.3).** Should blocks reduce availability by default? And is
+7. **Availability semantics (§5.3).** Should blocks reduce availability by default? And is
    whole-period, all-or-nothing availability still right, or should partial availability be
    offerable when a client's own stay is shorter than the event window?
    *Still open. Both figures are reported side by side in the meantime, so the answer can be
    read off real data rather than guessed at.*
-9. **Indefinite blocks (§4.2).** Are there clients whose blocks genuinely have no deadline,
+8. **Indefinite blocks (§4.2).** Are there clients whose blocks genuinely have no deadline,
    and if so what is the review cadence that replaces an expiry date?
-10. **Event period per property.** The legacy Supplier sheet sets a start/end per
+9. **Event period per property.** The legacy Supplier sheet sets a start/end per
     `(property, category)`. Is that a commercial fact (the window the hotel will contract
     for) or just a reporting filter? If the former it belongs on the contract, not the view.
     *Still open. Availability currently derives the window from the inventory on record,
