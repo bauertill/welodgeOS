@@ -259,7 +259,7 @@ export function PropertyForm({
           </Field>
 
           {isHotel && (
-            <Field label="Stars" hint="Optional">
+            <Field label="Stars">
               <Select
                 value={values.stars}
                 onChange={(e) => set("stars", e.target.value)}
@@ -295,19 +295,21 @@ export function PropertyForm({
             />
           </Field>
 
-          <Field label="Latitude" hint="e.g. 34.0259">
+          <Field label="Latitude">
             <Input
               value={values.latitude}
               onChange={(e) => set("latitude", e.target.value)}
               inputMode="decimal"
+              placeholder="e.g. 34.0259"
             />
           </Field>
 
-          <Field label="Longitude" hint="e.g. -118.4790">
+          <Field label="Longitude">
             <Input
               value={values.longitude}
               onChange={(e) => set("longitude", e.target.value)}
               inputMode="decimal"
+              placeholder="e.g. -118.4790"
             />
           </Field>
 
@@ -326,14 +328,12 @@ export function PropertyForm({
             />
           </Field>
 
-          <Field
-            label={isHotel ? "Total rooms" : "Total units"}
-            hint="Only needed if you have not listed the categories below."
-          >
+          <Field label={isHotel ? "Total rooms" : "Total units"}>
             <Input
               value={values.totalRooms}
               onChange={(e) => set("totalRooms", e.target.value)}
               inputMode="numeric"
+              placeholder="Only if not listed below"
             />
           </Field>
         </div>
@@ -396,12 +396,13 @@ export function PropertyForm({
               </Field>
 
               {isHotel ? (
-                <Field label="Beds" hint="e.g. 1 King, 2 Twin">
+                <Field label="Beds">
                   <Input
                     value={category.bedConfiguration}
                     onChange={(e) =>
                       setCategory(index, { bedConfiguration: e.target.value })
                     }
+                    placeholder="e.g. 1 King, 2 Twin"
                   />
                 </Field>
               ) : (
@@ -415,19 +416,20 @@ export function PropertyForm({
                       inputMode="numeric"
                     />
                   </Field>
-                  <Field label="Bathrooms" hint="Halves allowed — 1.5">
+                  <Field label="Bathrooms">
                     <Input
                       value={category.bathrooms}
                       onChange={(e) =>
                         setCategory(index, { bathrooms: e.target.value })
                       }
                       inputMode="decimal"
+                      placeholder="e.g. 1.5"
                     />
                   </Field>
                 </>
               )}
 
-              <Field label="Price per night" hint="Indicative only">
+              <Field label="Price per night">
                 <Input
                   value={category.price}
                   onChange={(e) =>
@@ -584,13 +586,12 @@ export function PropertyForm({
       </Fieldset>
 
       <Fieldset title="Notes">
-        <Label hint="Anything a colleague would want to know before calling them.">
-          Notes
-        </Label>
+        <Label>Notes</Label>
         <Textarea
           value={values.notes}
           onChange={(e) => set("notes", e.target.value)}
           rows={4}
+          placeholder="Anything a colleague would want to know before calling them."
         />
       </Fieldset>
 

@@ -2,21 +2,10 @@
 
 /** Form primitives, so every form in the app looks and behaves the same. */
 
-export function Label({
-  children,
-  hint,
-}: {
-  children: React.ReactNode;
-  hint?: string;
-}) {
+export function Label({ children }: { children: React.ReactNode }) {
   return (
-    <span className="mb-1.5 block">
-      <span className="text-ink-700 block text-[13px] font-medium">
-        {children}
-      </span>
-      {hint && (
-        <span className="text-ink-500 block text-xs font-light">{hint}</span>
-      )}
+    <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">
+      {children}
     </span>
   );
 }
@@ -44,18 +33,16 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 
 export function Field({
   label,
-  hint,
   children,
   className = "",
 }: {
   label: string;
-  hint?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <label className={`block ${className}`}>
-      <Label hint={hint}>{label}</Label>
+      <Label>{label}</Label>
       {children}
     </label>
   );

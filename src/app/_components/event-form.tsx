@@ -134,11 +134,11 @@ export function EventForm({ onDone }: { onDone?: () => void }) {
             </Select>
           </Field>
 
-          <Field label="Venue" hint="Optional — what guests need to be near.">
+          <Field label="Venue">
             <Input
               value={values.venueName}
               onChange={(e) => set("venueName", e.target.value)}
-              placeholder="SoFi Stadium"
+              placeholder="e.g. SoFi Stadium"
             />
           </Field>
 
