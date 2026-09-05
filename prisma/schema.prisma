@@ -24,6 +24,9 @@ enum EventStatus {
 enum PropertyType {
   HOTEL
   APARTMENT
+  /// Self-contained apartment-style units — bedrooms and bathrooms, like an
+  /// apartment — but still star-rated and run like a hotel (doc §3.3).
+  APARTHOTEL
 }
 
 /// Where a property has got to in *this* event's scouting list. The same

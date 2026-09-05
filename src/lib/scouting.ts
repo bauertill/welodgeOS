@@ -34,6 +34,7 @@ export const scoutingStatusOrder: ScoutingStatus[] = [
 export const propertyTypeLabels: Record<PropertyType, string> = {
   HOTEL: "Hotel",
   APARTMENT: "Apartment",
+  APARTHOTEL: "Aparthotel",
 };
 
 /**

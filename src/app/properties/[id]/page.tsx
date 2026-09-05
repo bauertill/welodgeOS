@@ -28,7 +28,7 @@ export default async function PropertyPage({
   const property = await api.property.byId({ id });
   if (!property) notFound();
 
-  const isHotel = property.type === "HOTEL";
+  const hasBedConfiguration = property.type === "HOTEL";
   const units = totalUnits(property.categories) || property.totalRooms || 0;
 
   return (
@@ -60,7 +60,7 @@ export default async function PropertyPage({
         <div className="space-y-5 lg:col-span-2">
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              {isHotel ? "Room categories" : "Unit types"}
+              {hasBedConfiguration ? "Room categories" : "Unit types"}
             </h2>
 
             {property.categories.length === 0 ? (
@@ -75,9 +75,9 @@ export default async function PropertyPage({
                 <thead>
                   <tr>
                     <Th>Category</Th>
-                    <Th>{isHotel ? "Rooms" : "Units"}</Th>
+                    <Th>{hasBedConfiguration ? "Rooms" : "Units"}</Th>
                     <Th>Sleeps</Th>
-                    <Th>{isHotel ? "Beds" : "Bed / bath"}</Th>
+                    <Th>{hasBedConfiguration ? "Beds" : "Bed / bath"}</Th>
                     <Th>Price per night</Th>
                   </tr>
                 </thead>
@@ -90,7 +90,7 @@ export default async function PropertyPage({
                       <Td>{category.unitCount || "—"}</Td>
                       <Td>{category.capacity}</Td>
                       <Td>
-                        {isHotel
+                        {hasBedConfiguration
                           ? (category.bedConfiguration ?? "—")
                           : [
                               category.bedrooms !== null

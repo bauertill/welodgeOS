@@ -31,7 +31,7 @@ const contactInput = z.object({
 
 const propertyInput = z.object({
   name: z.string().min(1, "A property needs a name"),
-  type: z.enum(["HOTEL", "APARTMENT"]),
+  type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]),
   address: z.string().optional(),
   city: z.string().optional(),
   country: z.string().optional(),
@@ -64,12 +64,50 @@ export const propertyRouter = createTRPCRouter({
     ctx.db.property.findMany({ select: { id: true, name: true } }),
   ),
 
+  /**
+   * Looks an address up on OpenStreetMap so a rep does not have to hunt down
+   * coordinates by hand. Called from the server, not the browser, so the
+   * request carries the User-Agent Nominatim's usage policy requires — and so
+   * the endpoint it hits is not something the client has to know about.
+   */
+  geocode: protectedProcedure
+    .input(
+      z.object({
+        address: z.string().optional(),
+        city: z.string().optional(),
+        country: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const query = [input.address, input.city, input.country]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(", ");
+      if (!query) return null;
+
+      const url = new URL("https://nominatim.openstreetmap.org/search");
+      url.searchParams.set("q", query);
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("limit", "1");
+
+      const response = await fetch(url, {
+        headers: { "User-Agent": "WeLodgeOS (os@welodge.net)" },
+      });
+      if (!response.ok) return null;
+
+      const results = (await response.json()) as { lat: string; lon: string }[];
+      const first = results[0];
+      return first
+        ? { latitude: Number(first.lat), longitude: Number(first.lon) }
+        : null;
+    }),
+
   list: protectedProcedure
     .input(
       z
         .object({
           search: z.string().optional(),
-          type: z.enum(["HOTEL", "APARTMENT"]).optional(),
+          type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]).optional(),
         })
         .default({}),
     )

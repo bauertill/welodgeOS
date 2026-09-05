@@ -21,7 +21,7 @@ export const scoutingRouter = createTRPCRouter({
       z.object({
         eventId: z.string(),
         status: z.enum(SCOUTING_STATUSES).optional(),
-        type: z.enum(["HOTEL", "APARTMENT"]).optional(),
+        type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]).optional(),
         amenityIds: z.array(z.string()).default([]),
       }),
     )

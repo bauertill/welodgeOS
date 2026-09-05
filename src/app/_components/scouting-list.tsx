@@ -142,9 +142,10 @@ export function ScoutingList({
           onChange={(e) => setType(e.target.value as PropertyType | "")}
           className="w-auto"
         >
-          <option value="">Hotels and apartments</option>
+          <option value="">Every type</option>
           <option value="HOTEL">Hotels only</option>
           <option value="APARTMENT">Apartments only</option>
+          <option value="APARTHOTEL">Aparthotels only</option>
         </Select>
 
         <span className="text-ink-500 ml-auto text-[13px] font-light">

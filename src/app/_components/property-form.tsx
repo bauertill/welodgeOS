@@ -57,7 +57,7 @@ export type PropertyFormValues = {
 };
 
 const emptyCategory = (type: PropertyType): CategoryDraft => ({
-  name: type === "HOTEL" ? "" : "Apartment",
+  name: type === "APARTMENT" ? "Apartment" : "",
   unitCount: "",
   capacity: "2",
   bedConfiguration: "",
@@ -113,7 +113,11 @@ export function PropertyForm({
   const [error, setError] = useState<string | null>(null);
 
   const isEdit = Boolean(initial.id);
-  const isHotel = values.type === "HOTEL";
+  // Hotel rooms carry a free-text bed configuration; apartments and
+  // aparthotels are self-contained units, so they carry bedrooms/bathrooms
+  // instead. Stars apply to anything but a plain apartment (doc §3.3).
+  const hasBedConfiguration = values.type === "HOTEL";
+  const showsStars = values.type !== "APARTMENT";
 
   // A set, not a list scan, so this stays instant with thousands of properties.
   const otherPropertyNames = useMemo(
@@ -129,6 +133,25 @@ export function PropertyForm({
   const isDuplicateProperty =
     values.name.trim().length > 0 &&
     otherPropertyNames.has(normalizePropertyName(values.name));
+
+  const [geocodeError, setGeocodeError] = useState<string | null>(null);
+  const geocode = api.property.geocode.useMutation({
+    onSuccess: (result) => {
+      if (result) {
+        setGeocodeError(null);
+        set("latitude", String(result.latitude));
+        set("longitude", String(result.longitude));
+      } else {
+        setGeocodeError(
+          "Couldn't find coordinates for this address — enter them by hand.",
+        );
+      }
+    },
+    onError: () =>
+      setGeocodeError(
+        "Couldn't look up coordinates right now — enter them by hand.",
+      ),
+  });
 
   const addToList = api.scouting.add.useMutation();
 
@@ -193,9 +216,11 @@ export function PropertyForm({
         name: category.name.trim(),
         unitCount: num(category.unitCount) ?? 0,
         capacity: num(category.capacity) ?? 2,
-        bedConfiguration: isHotel ? text(category.bedConfiguration) : undefined,
-        bedrooms: isHotel ? undefined : num(category.bedrooms),
-        bathrooms: isHotel ? undefined : num(category.bathrooms),
+        bedConfiguration: hasBedConfiguration
+          ? text(category.bedConfiguration)
+          : undefined,
+        bedrooms: hasBedConfiguration ? undefined : num(category.bedrooms),
+        bathrooms: hasBedConfiguration ? undefined : num(category.bathrooms),
         // Prices are typed in whole currency units and stored in minor units.
         indicativePriceCents: category.price.trim()
           ? Math.round((num(category.price) ?? 0) * 100)
@@ -211,7 +236,7 @@ export function PropertyForm({
       country: text(values.country),
       latitude: num(values.latitude),
       longitude: num(values.longitude),
-      stars: isHotel ? num(values.stars) : undefined,
+      stars: showsStars ? num(values.stars) : undefined,
       totalRooms: num(values.totalRooms),
       website: text(values.website),
       phone: text(values.phone),
@@ -309,10 +334,11 @@ export function PropertyForm({
             >
               <option value="HOTEL">Hotel</option>
               <option value="APARTMENT">Apartment</option>
+              <option value="APARTHOTEL">Aparthotel</option>
             </Select>
           </Field>
 
-          {isHotel && (
+          {showsStars && (
             <Field label="Stars">
               <Select
                 value={values.stars}
@@ -349,6 +375,30 @@ export function PropertyForm({
             />
           </Field>
 
+          <div className="sm:col-span-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={
+                geocode.isPending ||
+                !(values.address || values.city || values.country)
+              }
+              onClick={() => {
+                setGeocodeError(null);
+                geocode.mutate({
+                  address: values.address,
+                  city: values.city,
+                  country: values.country,
+                });
+              }}
+            >
+              {geocode.isPending ? "Looking up…" : "Find coordinates from address"}
+            </Button>
+            {geocodeError && (
+              <p className="mt-1.5 text-xs text-[#c03654]">{geocodeError}</p>
+            )}
+          </div>
+
           <Field label="Latitude">
             <Input
               value={values.latitude}
@@ -382,7 +432,7 @@ export function PropertyForm({
             />
           </Field>
 
-          <Field label={isHotel ? "Total rooms" : "Total units"}>
+          <Field label={hasBedConfiguration ? "Total rooms" : "Total units"}>
             <Input
               value={values.totalRooms}
               onChange={(e) => set("totalRooms", e.target.value)}
@@ -394,9 +444,9 @@ export function PropertyForm({
       </Fieldset>
 
       <Fieldset
-        title={isHotel ? "Room categories" : "Unit types"}
+        title={hasBedConfiguration ? "Room categories" : "Unit types"}
         description={
-          isHotel
+          hasBedConfiguration
             ? "One row per room type, with how many the hotel has and what a night indicatively costs."
             : "One row per unit type, with its bedrooms and bathrooms."
         }
@@ -411,7 +461,7 @@ export function PropertyForm({
               ])
             }
           >
-            Add {isHotel ? "category" : "unit type"}
+            Add {hasBedConfiguration ? "category" : "unit type"}
           </Button>
         }
       >
@@ -425,11 +475,11 @@ export function PropertyForm({
                 <Input
                   value={category.name}
                   onChange={(e) => setCategory(index, { name: e.target.value })}
-                  placeholder={isHotel ? "King Room" : "2 Bedroom"}
+                  placeholder={hasBedConfiguration ? "King Room" : "2 Bedroom"}
                 />
               </Field>
 
-              <Field label={isHotel ? "Rooms" : "Units"}>
+              <Field label={hasBedConfiguration ? "Rooms" : "Units"}>
                 <Input
                   value={category.unitCount}
                   onChange={(e) =>
@@ -449,7 +499,7 @@ export function PropertyForm({
                 />
               </Field>
 
-              {isHotel ? (
+              {hasBedConfiguration ? (
                 <Field label="Beds">
                   <Input
                     value={category.bedConfiguration}

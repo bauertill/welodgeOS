@@ -99,16 +99,16 @@ It is research, not inventory: nothing here implies a commercial position.
 
 ### 3.1 Property
 
-Common to both types:
+Common to every type:
 
 | Field | Notes |
 | --- | --- |
 | `name` | |
-| `type` | `HOTEL` \| `APARTMENT` |
+| `type` | `HOTEL` \| `APARTMENT` \| `APARTHOTEL` |
 | `address`, `city`, `country` | |
 | `latitude`, `longitude` | Optional. Present ⇒ pin on the map view. |
 | `distanceToVenue` | Derived from coordinates + the event's venue, when both exist. |
-| `stars` | Hotels; optional. |
+| `stars` | Hotels and aparthotels; optional. Not asked of a plain apartment. |
 | `amenities` | Many-to-many against a controlled vocabulary (§3.4). |
 | `contacts` | Name, role, email, phone. Zero or more. |
 | `notes` | Free text. |
@@ -136,6 +136,11 @@ property page states this rather than silently doing nothing.
 **Map:** the list is the source of truth; the map is a *view* over whatever has
 coordinates. Import from Google My Maps (KML/CSV) is the expected ingestion path for the
 first load. A property with no coordinates is valid and simply absent from the map.
+
+**Finding coordinates:** the scouting form can look an address up on OpenStreetMap rather
+than making a rep hunt down latitude/longitude by hand. It is a convenience, not a source of
+truth — a rep can always override what comes back, and a miss just means entering the
+numbers manually, the same as today.
 
 ### 3.2 Hotel specifics
 
@@ -169,9 +174,15 @@ indivisible, sellable, occupiable thing. Bedrooms/bathrooms are attributes of th
 sub-inventory. We never sell a bedroom inside an apartment separately. *(If we ever do,
 this decision has to be revisited; it is the one place where the model would need a level.)*
 
+**Aparthotel** is a third type for self-contained, apartment-style units that are still
+star-rated and run like a hotel — the common real-world case of a serviced apartment
+building with reception and housekeeping. Its categories use these same
+bedrooms/bathrooms fields, not a hotel's `bedConfiguration`; the only thing it takes from
+the hotel side is `stars` (§3.1).
+
 ### 3.4 Amenities
 
-A single controlled list shared by both property types (`WiFi`, `Breakfast included`,
+A single controlled list shared by every property type (`WiFi`, `Breakfast included`,
 `Parking`, `Air conditioning`, `Gym`, `Pool`, `Kitchen`, `Washing machine`, `Lift`,
 `Accessible`, `Pets allowed`, `24h reception`, `Airport shuttle`, …). Free-text amenities
 are rejected; the list is admin-editable so it stays a filter rather than a tag soup.
