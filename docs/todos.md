@@ -6,69 +6,83 @@ build next and what to fix in what already exists. Update it as things get
 done or the plan changes. It is not meant to be exhaustive of every polish
 item, only what someone would need to know to decide what to work on next.
 
-Last reviewed: 2026-09-04.
+Last reviewed: 2026-09-06.
 
 ---
 
 ## 1. Ship to production
 
-Nothing about this app is deployed anywhere yet. Nobody outside a laptop
-running `pnpm run dev` can use it.
+**Live at https://welodge-os.vercel.app since 2026-09-06**, hosted on Vercel
+under the We Lodge team (`we-lodge`) — a Vercel account of its own, separate
+from any other work, so We Lodge owns the project and is billed for it
+directly. The database is a Neon Postgres instance provisioned through
+Vercel's marketplace.
 
-- [ ] **Pick a host.** Vercel is the natural fit for a T3-stack app (built by
-      the same team as Next.js) and needs the least setup, but any Node host
-      that can also run Postgres works. No decision has been made.
-- [ ] **Provision a production database.** Local Postgres runs in Docker via
-      `./start-database.sh`; production needs a managed instance (Vercel
-      Postgres, Supabase, Neon, RDS — pick one) and its own `DATABASE_URL`.
-- [ ] **Set every environment variable on the host**, from `.env.example`:
-  - `DATABASE_URL` — the production database
-  - `AUTH_SECRET` — generate a fresh one for production with `npx auth secret`;
-    never reuse the local `.env` value
-  - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — for Google Workspace sign-in
-  - `AUTH_RESEND_KEY` / `EMAIL_FROM` — for magic-link sign-in
-  - See §2 below — at least one sign-in method must actually be configured
-    before this goes live, or nobody can log in.
-- [ ] **Run migrations against production**, not `db:push`. Today the schema
-      reaches the database with `pnpm run db:push`, which has no history and
-      is a development convenience. Production wants
-      `prisma migrate deploy` (`pnpm run db:migrate`) against a real migration
-      history — which means starting to commit migrations, since none exist
-      yet (`prisma migrate dev` has never been run).
-- [ ] **Decide what "seeding production" means, if anything.**
-      `pnpm run db:seed` deletes and rebuilds a demo event and its properties —
-      it must never run against production. Real properties, clients and
-      events need to be entered through the app once it's live, or imported
-      separately.
-- [ ] **Confirm the dev sign-in bypass is actually inert in production.** The
-      README says `/api/dev-login` 404s and the button is hidden whenever
-      `NODE_ENV !== "development"`, and that this has been checked against a
-      production build — worth re-verifying against the real deployment once
-      it exists, since a misconfigured `NODE_ENV` would quietly reopen a
-      password-free login.
-- [ ] **Add CI.** There is no `.github/workflows` (or equivalent) yet — nothing
-      runs `pnpm run typecheck` or `pnpm run build` on a pull request. At minimum,
-      typecheck and build should run before anything merges to `master`.
-- [ ] **Decide on backups and monitoring** for the production database once it
-      exists — nothing has been set up.
+- [x] **Pick a host.** Vercel, We Lodge team. The GitHub repo is connected, so
+      every push to `master` deploys to the live site automatically; the Vercel
+      CLI is not needed for routine changes.
+- [x] **Provision a production database.** Neon Postgres, created through the
+      Vercel marketplace, which sets `DATABASE_URL` on the project itself. The
+      app connects through Neon's pooled endpoint, which is what serverless
+      functions need.
+- [x] **Set every environment variable on the host.** `DATABASE_URL` (from
+      Neon) and `AUTH_SECRET` (generated fresh for production — the local value
+      is not reused) are set. `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` are still
+      outstanding, which is what §2 is about. Resend is deliberately unset; see
+      the decision recorded there.
+- [ ] **Run migrations against production, not `db:push`.** *Still open, and
+      now more pressing than when it was written.* The production schema was
+      created on 2026-09-06 with `prisma db push` — the development convenience
+      this item warns against — because there is no migration history to deploy
+      instead. Production therefore has all 17 tables but no baseline to
+      migrate from. Before the schema changes again: run `prisma migrate dev`
+      locally to generate an initial migration, then baseline production
+      against it with `prisma migrate resolve --applied`. Doing this while the
+      database still holds no real data is far cheaper than doing it later.
+- [x] **Decide what "seeding production" means.** It means nothing: production
+      starts empty and stays that way. Real properties, clients and events are
+      entered through the app, so nobody ever has to wonder which rows are
+      invented. `pnpm run db:seed` must never be pointed at it.
+- [x] **Confirm the dev sign-in bypass is actually inert in production.**
+      Verified against the live deployment on 2026-09-06: `POST` to
+      `/api/dev-login` returns `404 Not found` and sets no session cookie.
+- [ ] **Add CI.** Unchanged — nothing runs `pnpm run typecheck` or
+      `pnpm run build` before a merge. This now matters more than it did: with
+      `master` wired to the live site, a broken merge reaches production
+      directly.
+- [ ] **Decide on backups and monitoring.** Now a real question rather than a
+      hypothetical one. Neon keeps its own point-in-time history, but nobody
+      has chosen a retention window, and nothing alerts anyone if the site
+      stops responding.
+- [ ] **Know the `.env.local` trap.** Several Vercel CLI commands (`link`, and
+      anything that provisions a marketplace database) write a `.env.local`
+      holding the *production* `DATABASE_URL`. Next.js reads `.env.local` in
+      preference to `.env`, so left in place it silently points local
+      development — `pnpm run dev`, and far worse `pnpm run db:seed` — at the
+      live database. Delete the file after any Vercel command that creates it.
 
 ## 2. Sign-in has to actually work for real users
 
-Right now the only working sign-in method for anyone outside development is
-whichever of Google SSO or magic-link email gets configured — neither is set
-up yet.
+**Decided on 2026-09-06: Google Workspace SSO is the sign-in method for
+launch.** Everyone who needs the system at launch has a `@welodge.net`
+account, so it is the shortest path to a working door.
 
-- [ ] **Google Workspace SSO**: register an OAuth client in Google Cloud
-      Console, set the authorized redirect URI to the production domain
-      (`https://<domain>/api/auth/callback/google`), and set
-      `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` on the host. This is the
-      better fit if everyone signing in has a `@welodge.net` account.
-- [ ] **Magic-link email via Resend**: verify a sending domain at
-      resend.com/domains (the shared `onboarding@resend.dev` sender only
-      delivers to the Resend account owner — useless for a team), then set
-      `AUTH_RESEND_KEY` and `EMAIL_FROM`.
-- [ ] At least one of the two has to be configured before launch — with
-      neither set, the sign-in page renders with no way in.
+- [ ] **Google Workspace SSO** — *the one remaining blocker to anybody using
+      the live site.* An OAuth client has to be registered in Google Cloud
+      Console with the consent screen set to **Internal**, which is the setting
+      that limits sign-in to `@welodge.net` accounts rather than to anyone with
+      a Google account. Authorized redirect URIs must be
+      `https://welodge-os.vercel.app/api/auth/callback/google` and
+      `http://localhost:3000/api/auth/callback/google`. Then set
+      `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` on the Vercel project. Until this
+      is done the live sign-in page reads "No sign-in method is configured" and
+      there is no way in for anyone.
+- [x] **Magic-link email via Resend — decided against for launch.** Verifying a
+      sending domain is real work serving nobody yet, since no launch user sits
+      outside the Workspace. The code still supports it untouched: set
+      `AUTH_RESEND_KEY` and `EMAIL_FROM` and the option reappears on the
+      sign-in page. Revisit the first time a supplier or client needs an
+      account.
 - [ ] **Roles and permissions are not built at all** (open question 5 in
       `product-scope.md` §9). Every signed-in user currently has full access
       to everything — there is no concept of a rep who can only touch their
@@ -151,6 +165,8 @@ document.
       reporting math (`src/lib/position.ts`, `src/lib/reporting.ts`) are the
       highest-value places to start.
 - [ ] **No Prisma migration history.** The schema has only ever been applied
-      with `prisma db push`, which doesn't produce migration files. This needs
-      to be resolved before a production database can be safely evolved with
-      `prisma migrate deploy` — see §1 above.
+      with `prisma db push`, which doesn't produce migration files — including
+      the push that created the live database on 2026-09-06. Production now
+      exists, so this is no longer theoretical: it has to be resolved before
+      the schema changes again, and it is cheapest to do now while no real
+      data is at stake. See §1 above for the steps.
