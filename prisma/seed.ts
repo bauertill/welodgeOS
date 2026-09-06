@@ -5,6 +5,10 @@ const db = new PrismaClient();
 /**
  * Seeds the amenity vocabulary (which the app depends on) and a small, honest
  * scouting example: one event with a venue, three properties around it.
+ *
+ * Run with `--amenities-only` (`pnpm run db:seed:amenities`) to write just the
+ * vocabulary and stop. That is the only form safe against a live database; the
+ * default run deletes and rebuilds every event, property and client it finds.
  */
 
 const AMENITIES = [
@@ -40,6 +44,16 @@ async function main() {
       }),
     ),
   );
+
+  // A live database needs the vocabulary above and nothing else. Without the
+  // amenity rows no property can be tagged and the scouting filters have
+  // nothing to filter by, but the demo data below would be an invention sitting
+  // among real suppliers. `--amenities-only` is the safe half, and it is the
+  // only part of this file that may ever be pointed at production.
+  if (process.argv.includes("--amenities-only")) {
+    console.log(`Seeded ${amenities.length} amenities. No demo data written.`);
+    return;
+  }
 
   const byKey = (label: string) => {
     const amenity = amenities.find((a) => a.key === key(label));

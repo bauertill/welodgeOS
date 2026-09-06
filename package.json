@@ -14,7 +14,8 @@
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:amenities": "tsx prisma/seed.ts --amenities-only"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",

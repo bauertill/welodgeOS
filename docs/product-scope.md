@@ -1,6 +1,6 @@
 # We Lodge OS — Product Scope: Inventory Management
 
-**Status:** Phases 1–2 built, Phase 3 specified · **Date:** 2026-09-04 ·
+**Status:** Phases 1–2 built and deployed, Phase 3 specified · **Date:** 2026-09-06 ·
 **Audience:** product + engineering
 
 See §12 for exactly what is implemented today. This document and the code move
@@ -89,6 +89,32 @@ reused across events; its *inventory* always belongs to exactly one event.
 An expired option or block is **flagged**, never silently downgraded or released. The
 system does not know what the supplier believes; a human decides to extend, convert or
 release. Expiry drives urgency and dashboards, not mutations.
+
+### 2.5 Who can get in, and where the system runs
+
+**Sign-in is Google Workspace, and only Google Workspace.** A person reaches We Lodge OS
+by signing in with their `@welodge.net` Google account; there is no password to set, no
+account to create and no invitation to send. Adding somebody to the Workspace is what
+grants access, and removing them is what withdraws it — the system holds no separate list
+of who is allowed in. Anyone without a Workspace account cannot get in at all, which today
+means every supplier and every client.
+
+Two consequences worth stating plainly, because neither is obvious from a screen:
+
+- **Everyone who signs in sees everything.** There are no roles yet. A rep can read and
+  change any event, any property and any client, not only their own. This is a known gap,
+  not a decision (§9, open question 5).
+- **A first sign-in creates the account silently.** Anyone in the Workspace who visits the
+  site becomes a user of it, with full access, the moment they sign in.
+
+The system is a website, not something anyone installs. It runs at
+**https://welodge-os.vercel.app**, hosted on Vercel, with its database (PostgreSQL, hosted
+by Neon) in Vercel's `we-lodge` account. Changes reach the live site by being pushed to the
+`master` branch, which builds and deploys on its own.
+
+Magic-link sign-in by email is built and deliberately switched off: at launch nobody
+outside the Workspace needs an account. It becomes available again by configuring an email
+sender, without any code change. See `docs/todos.md` §2.
 
 ---
 
@@ -186,6 +212,11 @@ A single controlled list shared by every property type (`WiFi`, `Breakfast inclu
 `Parking`, `Air conditioning`, `Gym`, `Pool`, `Kitchen`, `Washing machine`, `Lift`,
 `Accessible`, `Pets allowed`, `24h reception`, `Airport shuttle`, …). Free-text amenities
 are rejected; the list is admin-editable so it stays a filter rather than a tag soup.
+
+The list is not yet editable in the app — it is defined in `prisma/seed.ts` and loaded
+into a database with `pnpm run db:seed:amenities`, which writes the vocabulary and nothing
+else. A database without it cannot tag a property at all, so it is part of setting one up
+rather than an optional extra.
 
 ### 3.5 The scouting list
 
@@ -833,10 +864,14 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 
 | Section | Status | Notes |
 | --- | --- | --- |
+| §2.5 Google Workspace sign-in | **Built** | Live. A `@welodge.net` account is the only way in; first sign-in creates the user |
+| §2.5 Roles and permissions | **Not built** | Every signed-in user has full access to everything — see §9, open question 5 |
+| §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
+| §2.5 Deployed and reachable | **Built** | https://welodge-os.vercel.app, on Vercel with a Neon PostgreSQL database. `master` deploys automatically |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
-| §3.4 Amenities | **Built** | Controlled list, seeded; edited in `prisma/seed.ts`, not in the app |
+| §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
 | §3.5 Scouting list | **Built** | Per-event entries, status, filters by status, type and amenity |
 | Map view | **Built** | Leaflet over OpenStreetMap, list-first as specified; venue pin and derived distance-to-venue |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now |
@@ -867,7 +902,9 @@ Recorded here rather than silently: each is a place where building it changed ou
    cannot express that. The specification was updated to match.
 2. **Amenities are seeded, not managed in the app.** §3.4 calls the list admin-editable.
    Until there is an admin screen, it is edited in `prisma/seed.ts` — which is honest for
-   Phase 1 but is a gap, not a decision.
+   Phase 1 but is a gap, not a decision. The seed script now has an `--amenities-only`
+   mode, because the full run deletes and rebuilds every event, property and client it
+   finds, and a live database needs the vocabulary without any of that.
 3. ~~**Categories are replaced wholesale on save**, rather than diffed.~~ **Resolved in
    Phase 2.** Room slots now hang off a category, so categories are edited in place. A
    category that already carries inventory cannot be removed, and its room count cannot be

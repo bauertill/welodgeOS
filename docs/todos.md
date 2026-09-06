@@ -39,10 +39,15 @@ Vercel's marketplace.
       locally to generate an initial migration, then baseline production
       against it with `prisma migrate resolve --applied`. Doing this while the
       database still holds no real data is far cheaper than doing it later.
-- [x] **Decide what "seeding production" means.** It means nothing: production
-      starts empty and stays that way. Real properties, clients and events are
-      entered through the app, so nobody ever has to wonder which rows are
-      invented. `pnpm run db:seed` must never be pointed at it.
+- [x] **Decide what "seeding production" means.** It means the amenity
+      vocabulary and nothing else. Production holds no events, properties or
+      clients — those are entered through the app, so nobody ever has to wonder
+      which rows are invented. But the amenity list is a controlled vocabulary
+      the app depends on: without it no property can be tagged and the scouting
+      filters have nothing to filter by. `pnpm run db:seed` must never be
+      pointed at production, because it deletes and rebuilds demo data;
+      `pnpm run db:seed:amenities` was added for exactly this and writes the
+      vocabulary alone. Loaded into production on 2026-09-06.
 - [x] **Confirm the dev sign-in bypass is actually inert in production.**
       Verified against the live deployment on 2026-09-06: `POST` to
       `/api/dev-login` returns `404 Not found` and sets no session cookie.
@@ -63,20 +68,21 @@ Vercel's marketplace.
 
 ## 2. Sign-in has to actually work for real users
 
-**Decided on 2026-09-06: Google Workspace SSO is the sign-in method for
-launch.** Everyone who needs the system at launch has a `@welodge.net`
-account, so it is the shortest path to a working door.
+**Settled on 2026-09-06: Google Workspace SSO, and it works.** Everyone who
+needs the system at launch has a `@welodge.net` account, so it was the
+shortest path to a working door. Adding somebody to the Workspace is now what
+grants them access to We Lodge OS; removing them is what withdraws it. See
+`product-scope.md` §2.5.
 
-- [ ] **Google Workspace SSO** — *the one remaining blocker to anybody using
-      the live site.* An OAuth client has to be registered in Google Cloud
-      Console with the consent screen set to **Internal**, which is the setting
-      that limits sign-in to `@welodge.net` accounts rather than to anyone with
-      a Google account. Authorized redirect URIs must be
-      `https://welodge-os.vercel.app/api/auth/callback/google` and
-      `http://localhost:3000/api/auth/callback/google`. Then set
-      `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` on the Vercel project. Until this
-      is done the live sign-in page reads "No sign-in method is configured" and
-      there is no way in for anyone.
+- [x] **Google Workspace SSO — working on the live site since 2026-09-06.**
+      The OAuth client is registered with the consent screen set to
+      **Internal**, which is what limits sign-in to `@welodge.net` accounts
+      rather than to anyone with a Google account, and
+      `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` are set on the Vercel project for
+      **production only**. Preview deployments deliberately have no credentials:
+      they get throwaway web addresses that Google would refuse anyway, so
+      sign-in there fails rather than half-working. Verified end to end — a
+      `@welodge.net` account signs in and the user record is written.
 - [x] **Magic-link email via Resend — decided against for launch.** Verifying a
       sending domain is real work serving nobody yet, since no launch user sits
       outside the Workspace. The code still supports it untouched: set
@@ -86,8 +92,11 @@ account, so it is the shortest path to a working door.
 - [ ] **Roles and permissions are not built at all** (open question 5 in
       `product-scope.md` §9). Every signed-in user currently has full access
       to everything — there is no concept of a rep who can only touch their
-      own clients, or an admin-only screen. Worth deciding whether that's
-      acceptable for launch or blocking.
+      own clients, or an admin-only screen. Now that the site is live and
+      anyone in the Workspace can sign themselves in, this has stopped being
+      hypothetical: the first person to visit out of curiosity gets the same
+      powers as the person who built it. Worth deciding whether that's
+      acceptable or blocking.
 
 ## 3. Phase 3 — Operations
 

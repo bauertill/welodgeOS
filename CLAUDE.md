@@ -89,9 +89,15 @@ conversation.
 | `./start-database.sh` | Local Postgres in Docker |
 | `pnpm run db:push` | Apply `prisma/schema.prisma` to the database |
 | `pnpm run db:seed` | Reset demo data and load the amenity vocabulary |
+| `pnpm run db:seed:amenities` | Load the amenity vocabulary only — the sole form safe against the live database |
 | `pnpm run dev` | Development server on :3000 |
 | `pnpm run typecheck` | `tsc --noEmit` |
 | `pnpm run build` | Production build — run before claiming something works |
 
 `pnpm run db:seed` deletes and rebuilds the demo event and properties. The
 amenity list is upserted, never wiped, because properties point at those rows.
+Never point it at production; `pnpm run db:seed:amenities` writes the vocabulary
+and stops, and is what a live database gets.
+
+The live system is at https://welodge-os.vercel.app. Pushing to `master` deploys
+it, so a merge reaches real users without further ceremony.
