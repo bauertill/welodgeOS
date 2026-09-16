@@ -8,7 +8,7 @@ import type { PropertyType, ScoutingStatus } from "generated/prisma";
 
 export const scoutingStatusLabels: Record<ScoutingStatus, string> = {
   PROSPECT: "Prospect",
-  CONTACTED: "Contacted",
+  CONTACTED: "Reached out",
   SHORTLISTED: "Shortlisted",
   REJECTED: "Rejected",
   CONTRACTED: "Contracted",
@@ -77,7 +77,7 @@ export function totalUnits(categories: CategoryLike[]): number {
   return categories.reduce((sum, category) => sum + category.unitCount, 0);
 }
 
-/** The cheapest indicative price, which is what "from CHF x" means on a row. */
+/** The cheapest indicative price, which is what "from USD x" means on a row. */
 export function cheapestCategory<T extends CategoryLike>(
   categories: T[],
 ): T | undefined {

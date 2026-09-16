@@ -64,8 +64,10 @@ const emptyCategory = (type: PropertyType): CategoryDraft => ({
   bedrooms: "",
   bathrooms: "",
   price: "",
-  currency: "CHF",
+  currency: "USD",
 });
+
+const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
 export const emptyProperty: PropertyFormValues = {
   name: "",
@@ -225,7 +227,7 @@ export function PropertyForm({
         indicativePriceCents: category.price.trim()
           ? Math.round((num(category.price) ?? 0) * 100)
           : undefined,
-        currency: category.currency.trim().toUpperCase() || "CHF",
+        currency: category.currency.trim().toUpperCase() || "USD",
       }));
 
     const payload = {
@@ -450,20 +452,6 @@ export function PropertyForm({
             ? "One row per room type, with how many the hotel has and what a night indicatively costs."
             : "One row per unit type, with its bedrooms and bathrooms."
         }
-        action={
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() =>
-              set("categories", [
-                ...values.categories,
-                emptyCategory(values.type),
-              ])
-            }
-          >
-            Add {hasBedConfiguration ? "category" : "unit type"}
-          </Button>
-        }
       >
         <div className="space-y-3">
           {values.categories.map((category, index) => (
@@ -479,7 +467,14 @@ export function PropertyForm({
                 />
               </Field>
 
-              <Field label={hasBedConfiguration ? "Rooms" : "Units"}>
+              <Field
+                label={hasBedConfiguration ? "Rooms" : "Units"}
+                hint={
+                  hasBedConfiguration
+                    ? "# of rooms of this type at the property"
+                    : "# of units of this type at the property"
+                }
+              >
                 <Input
                   value={category.unitCount}
                   onChange={(e) =>
@@ -545,13 +540,21 @@ export function PropertyForm({
               </Field>
 
               <Field label="Currency">
-                <Input
+                <Select
                   value={category.currency}
                   onChange={(e) =>
                     setCategory(index, { currency: e.target.value })
                   }
-                  maxLength={3}
-                />
+                >
+                  {(CURRENCIES.includes(category.currency)
+                    ? CURRENCIES
+                    : [category.currency, ...CURRENCIES]
+                  ).map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency}
+                    </option>
+                  ))}
+                </Select>
               </Field>
 
               <div className="flex items-end sm:col-span-1">
@@ -577,6 +580,19 @@ export function PropertyForm({
               know the headline number.
             </p>
           )}
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              set("categories", [
+                ...values.categories,
+                emptyCategory(values.type),
+              ])
+            }
+          >
+            Add {hasBedConfiguration ? "category" : "unit type"}
+          </Button>
         </div>
       </Fieldset>
 
@@ -699,7 +715,7 @@ export function PropertyForm({
         />
       </Fieldset>
 
-      <div className="flex items-center gap-3">
+      <div className="border-ink-200/60 sticky bottom-0 -mx-1 flex items-center gap-3 border-t bg-white/95 px-1 py-3 backdrop-blur">
         <Button type="submit" disabled={saving || isDuplicateProperty}>
           {saving
             ? "Saving…"

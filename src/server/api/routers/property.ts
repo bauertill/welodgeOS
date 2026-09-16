@@ -19,7 +19,7 @@ const categoryInput = z.object({
   bedrooms: z.number().int().min(0).optional(),
   bathrooms: z.number().min(0).optional(),
   indicativePriceCents: z.number().int().min(0).optional(),
-  currency: z.string().length(3).default("CHF"),
+  currency: z.string().length(3).default("USD"),
 });
 
 const contactInput = z.object({

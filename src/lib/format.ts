@@ -37,7 +37,8 @@ export function formatMoney(cents: number, currency: string) {
   return new Intl.NumberFormat("en-CH", {
     style: "currency",
     currency,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(cents / 100);
 }
 
