@@ -15,11 +15,20 @@ import {
   Td,
   Th,
 } from "~/app/_components/ui";
+import type { AcquisitionState } from "generated/prisma";
+
 import { formatDay, formatMoney, formatRange } from "~/lib/format";
-import { acquisitionLabels, salesLabels } from "~/lib/inventory";
+import {
+  acquisitionLabels,
+  acquisitionOrder,
+  holdOrder,
+  salesLabels,
+} from "~/lib/inventory";
 import { severityLabels, type Severity } from "~/lib/position";
 import type { StayRow } from "~/lib/stay-rows";
 import { api } from "~/trpc/react";
+
+type HoldState = "NONE" | "BLOCKED" | "SOLD" | "CANCELLED";
 
 /**
  * The stock sheet (doc §5.4) and the two ways it is changed: bringing rooms
@@ -41,7 +50,12 @@ export function InventoryBoard({
 }) {
   const utils = api.useUtils();
   const [propertyId, setPropertyId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
   const [clientId, setClientId] = useState("");
+  const [acquisitionState, setAcquisitionState] = useState<AcquisitionState | "">("");
+  // Narrower than `SalesState` on purpose — `REQUESTED` is never stored on a
+  // night, so it is not a value `stockSheet` accepts as a filter (doc §4.3).
+  const [salesState, setSalesState] = useState<HoldState | "">("");
   const [minSeverity, setMinSeverity] = useState("");
 
   const structure = api.inventory.structure.useQuery({ eventId });
@@ -50,7 +64,10 @@ export function InventoryBoard({
   const rows = api.inventory.stockSheet.useQuery({
     eventId,
     propertyId: propertyId || undefined,
+    categoryId: categoryId || undefined,
     clientId: clientId || undefined,
+    acquisitionState: acquisitionState || undefined,
+    salesState: salesState || undefined,
     minSeverity: minSeverity ? Number(minSeverity) : undefined,
   });
   const ledger = api.inventory.ledger.useQuery({ eventId, limit: 25 });
@@ -62,6 +79,17 @@ export function InventoryBoard({
 
   const properties = structure.data ?? [];
   const stats = summary.data;
+
+  // Only the categories the current property filter allows, so the dropdown
+  // never offers a room type that would return nothing (doc §4).
+  const categoryOptions = properties
+    .filter((property) => !propertyId || property.id === propertyId)
+    .flatMap((property) =>
+      property.categories.map((category) => ({
+        id: category.id,
+        label: propertyId ? category.name : `${property.name} — ${category.name}`,
+      })),
+    );
 
   return (
     <div className="space-y-8">
@@ -122,13 +150,29 @@ export function InventoryBoard({
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Select
             value={propertyId}
-            onChange={(e) => setPropertyId(e.target.value)}
+            onChange={(e) => {
+              setPropertyId(e.target.value);
+              setCategoryId("");
+            }}
             className="w-auto"
           >
             <option value="">Every property</option>
             {properties.map((property) => (
               <option key={property.id} value={property.id}>
                 {property.name}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="w-auto"
+          >
+            <option value="">Every room type</option>
+            {categoryOptions.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.label}
               </option>
             ))}
           </Select>
@@ -142,6 +186,34 @@ export function InventoryBoard({
             {(clients.data ?? []).map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            value={acquisitionState}
+            onChange={(e) =>
+              setAcquisitionState(e.target.value as AcquisitionState | "")
+            }
+            className="w-auto"
+          >
+            <option value="">Any supplier status</option>
+            {acquisitionOrder.map((state) => (
+              <option key={state} value={state}>
+                {acquisitionLabels[state]}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            value={salesState}
+            onChange={(e) => setSalesState(e.target.value as HoldState | "")}
+            className="w-auto"
+          >
+            <option value="">Any client status</option>
+            {holdOrder.map((state) => (
+              <option key={state} value={state}>
+                {salesLabels[state]}
               </option>
             ))}
           </Select>

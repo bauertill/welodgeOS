@@ -137,9 +137,18 @@ export function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function Td({ children }: { children: React.ReactNode }) {
+export function Td({
+  children,
+  colSpan,
+}: {
+  children: React.ReactNode;
+  colSpan?: number;
+}) {
   return (
-    <td className="border-ink-200/40 border-b px-5 py-3.5 align-top">
+    <td
+      colSpan={colSpan}
+      className="border-ink-200/40 border-b px-5 py-3.5 align-top"
+    >
       {children}
     </td>
   );

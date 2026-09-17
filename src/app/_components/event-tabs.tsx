@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+
+import { setLastEventPath } from "~/lib/last-event";
 
 /**
  * An event is read in four ways, matching the phases of the business: what we
@@ -18,6 +21,10 @@ const tabs = [
 export function EventTabs({ eventId }: { eventId: string }) {
   const pathname = usePathname();
   const base = `/events/${eventId}`;
+
+  useEffect(() => {
+    setLastEventPath(pathname);
+  }, [pathname]);
 
   return (
     <nav className="border-ink-200/60 mb-6 flex flex-wrap gap-1 border-b">

@@ -11,10 +11,12 @@ import {
   Select,
   Textarea,
 } from "~/app/_components/form";
-import { dayKey, parseDay } from "~/lib/dates";
+import { dayKey, nightsBetween, parseDay } from "~/lib/dates";
 import {
+  acquisitionTarget,
   actionHints,
   actionLabels,
+  salesTarget,
   type InventoryAction,
 } from "~/lib/inventory";
 import { api } from "~/trpc/react";
@@ -130,6 +132,7 @@ export function BulkAction({
 }) {
   const clients = api.clients.list.useQuery();
   const people = api.user.list.useQuery();
+  const utils = api.useUtils();
 
   const [categoryId, setCategoryId] = useState("");
   const [allRooms, setAllRooms] = useState(true);
@@ -501,14 +504,43 @@ export function BulkAction({
         <Button
           type="button"
           disabled={!selectedSlots.length || apply.isPending}
-          onClick={() => {
+          onClick={async () => {
             setError(null);
             setResult(null);
+
+            const slotIds = selectedSlots.map((slot) => slot.id);
+            const checkInDate = parseDay(checkIn);
+            const checkOutDate = parseDay(checkOut);
+
+            // A rectangle that already carries data on the axis this action
+            // touches is about to be overwritten silently — ask first (doc §4).
+            const acquisitionTo = acquisitionTarget[action];
+            const salesTo = salesTarget[action];
+            if (acquisitionTo ?? salesTo) {
+              const existing = await utils.inventory.existingActivity.fetch({
+                eventId,
+                slotIds,
+                checkIn: checkInDate,
+                checkOut: checkOutDate,
+              });
+              const activeCount = acquisitionTo
+                ? existing.acquisitionActive
+                : existing.salesActive;
+              if (
+                activeCount > 0 &&
+                !window.confirm(
+                  `${activeCount} of the ${slotIds.length * nightsBetween(checkInDate, checkOutDate)} room-nights you selected already have an entry for this period. Update ${activeCount === 1 ? "it" : "them"} anyway?`,
+                )
+              ) {
+                return;
+              }
+            }
+
             apply.mutate({
               eventId,
-              slotIds: selectedSlots.map((slot) => slot.id),
-              checkIn: parseDay(checkIn),
-              checkOut: parseDay(checkOut),
+              slotIds,
+              checkIn: checkInDate,
+              checkOut: checkOutDate,
               action,
               reason: reason.trim() || undefined,
               supplierRef: supplierRef.trim() || undefined,

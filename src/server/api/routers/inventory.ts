@@ -272,6 +272,13 @@ export const inventoryRouter = createTRPCRouter({
         propertyId: z.string().optional(),
         categoryId: z.string().optional(),
         clientId: z.string().optional(),
+        acquisitionState: z
+          .enum(["NONE", "IN_PROGRESS", "OPTION", "BOUGHT", "RELEASED"])
+          .optional(),
+        // `REQUESTED` is never stored on a night (doc §4.3) — a soft request
+        // lives on `RoomNightRequest`, not `salesState`, so it is not a valid
+        // filter value here.
+        salesState: z.enum(["NONE", "BLOCKED", "SOLD", "CANCELLED"]).optional(),
         minSeverity: z.number().int().min(0).max(4).optional(),
       }),
     )
@@ -283,6 +290,8 @@ export const inventoryRouter = createTRPCRouter({
             categoryId: input.categoryId,
             category: { propertyId: input.propertyId },
           },
+          acquisitionState: input.acquisitionState,
+          salesState: input.salesState,
           ...(input.clientId
             ? {
                 OR: [
@@ -413,6 +422,37 @@ export const inventoryRouter = createTRPCRouter({
           ),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
+    }),
+
+  /**
+   * Whether any night in a rectangle already carries acquisition- or
+   * sales-side data, so the form can ask "an entry already exists for this
+   * period — update it?" before a bulk action quietly overwrites it (doc §4).
+   */
+  existingActivity: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        slotIds: z.array(z.string()).min(1),
+        checkIn: z.date(),
+        checkOut: z.date(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const nights = await ctx.db.roomNight.findMany({
+        where: {
+          eventId: input.eventId,
+          slotId: { in: input.slotIds },
+          date: { gte: input.checkIn, lt: input.checkOut },
+        },
+        select: { acquisitionState: true, salesState: true },
+      });
+
+      return {
+        acquisitionActive: nights.filter((n) => n.acquisitionState !== "NONE")
+          .length,
+        salesActive: nights.filter((n) => n.salesState !== "NONE").length,
+      };
     }),
 
   /** Properties this event has contracted but not yet turned into inventory. */

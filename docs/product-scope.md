@@ -265,6 +265,7 @@ their commercial position, untouched.
 stateDiagram-v2
     [*] --> NONE
     NONE --> IN_PROGRESS: start negotiation
+    NONE --> BOUGHT: purchased directly, no negotiation
     IN_PROGRESS --> OPTION: option secured (expiry required)
     IN_PROGRESS --> BOUGHT: purchased directly
     IN_PROGRESS --> NONE: abandoned

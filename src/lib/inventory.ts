@@ -136,7 +136,7 @@ export const allowedAcquisitionMoves: Record<
   AcquisitionState,
   AcquisitionState[]
 > = {
-  NONE: ["IN_PROGRESS"],
+  NONE: ["IN_PROGRESS", "BOUGHT"],
   IN_PROGRESS: ["OPTION", "BOUGHT", "NONE"],
   OPTION: ["BOUGHT", "IN_PROGRESS", "NONE"],
   BOUGHT: ["RELEASED"],
