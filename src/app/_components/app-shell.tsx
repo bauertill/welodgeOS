@@ -16,15 +16,15 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="bg-ink-700 sticky top-0 hidden h-screen w-60 shrink-0 flex-col py-6 md:flex">
         {/* The brand mark sits on a white card, as it does on welodge.net. */}
-        <Link href="/" className="mb-8 block px-5">
-          <span className="inline-flex rounded-lg bg-white px-3 py-2.5">
+        <Link href="/" className="mb-8 block px-3">
+          <span className="flex rounded-xl bg-white px-5 py-4">
             <Image
               src="/welodge-logo.png"
               alt="We Lodge"
-              width={758}
-              height={304}
+              width={526}
+              height={104}
               priority
-              className="h-6 w-auto"
+              className="h-auto w-full"
             />
           </span>
         </Link>
@@ -45,8 +45,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
               <Image
                 src="/welodge-logo.png"
                 alt="We Lodge"
-                width={758}
-                height={304}
+                width={526}
+                height={104}
                 className="h-5 w-auto"
               />
             </span>
