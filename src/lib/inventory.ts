@@ -151,3 +151,59 @@ export const allowedSalesMoves: Record<SalesState, SalesState[]> = {
   SOLD: ["CANCELLED", "NONE"],
   CANCELLED: ["BLOCKED", "SOLD"],
 };
+
+/**
+ * Grouped the way a rep thinks: the supplier, the client, and who is asking.
+ * Drives both the side panel's two tabs and the action picker within each.
+ */
+export const actionGroups: { label: string; actions: InventoryAction[] }[] = [
+  {
+    label: "With the supplier",
+    actions: [
+      "START_NEGOTIATION",
+      "TAKE_OPTION",
+      "BUY",
+      "EXTEND_OPTION",
+      "REPRICE_BUY",
+      "REASSIGN_ACQUISITION_OWNER",
+      "ABANDON",
+      "RELEASE",
+    ],
+  },
+  {
+    label: "With the client",
+    actions: [
+      "BLOCK",
+      "SELL",
+      "EXTEND_BLOCK",
+      "REPRICE_SELL",
+      "REASSIGN_SALES_OWNER",
+      "RELEASE_HOLD",
+      "CANCEL_SALE",
+    ],
+  },
+  { label: "Requests", actions: ["REQUEST", "WITHDRAW_REQUEST"] },
+];
+
+/** Which fields each action asks for. Anything not listed is not shown. */
+export const actionFields: Record<InventoryAction, string[]> = {
+  START_NEGOTIATION: ["supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
+  TAKE_OPTION: ["supplierRef", "optionExpiry", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
+  BUY: ["supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
+  ABANDON: ["acquisitionNotes"],
+  RELEASE: ["acquisitionNotes"],
+  EXTEND_OPTION: ["optionExpiry"],
+  REPRICE_BUY: ["buyPrice"],
+  REASSIGN_ACQUISITION_OWNER: ["acquisitionOwner"],
+
+  BLOCK: ["client", "blockExpiry", "clientRef", "dueDate", "sellPrice", "salesOwner", "salesNotes"],
+  SELL: ["client", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
+  RELEASE_HOLD: ["salesNotes"],
+  CANCEL_SALE: ["salesNotes"],
+  EXTEND_BLOCK: ["blockExpiry"],
+  REPRICE_SELL: ["sellPrice"],
+  REASSIGN_SALES_OWNER: ["salesOwner"],
+
+  REQUEST: ["client", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
+  WITHDRAW_REQUEST: ["client"],
+};

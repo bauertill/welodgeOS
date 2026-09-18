@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { addDays, eachNight, nightsBetween } from "~/lib/dates";
+import { addDays, dayKey, eachNight, nightsBetween } from "~/lib/dates";
 import { formatDay } from "~/lib/format";
 import {
   acquisitionLabels,
@@ -13,7 +13,7 @@ import {
   salesTarget,
   type InventoryAction,
 } from "~/lib/inventory";
-import { toStayRows } from "~/lib/stay-rows";
+import { positionOf } from "~/lib/position";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { axisOf, describeRoom, flatten, nightInclude } from "~/server/inventory";
 
@@ -262,63 +262,6 @@ export const inventoryRouter = createTRPCRouter({
           nights: nights.length,
         };
       });
-    }),
-
-  /** What this event holds, as the derived stay rows of §5.4. */
-  stockSheet: protectedProcedure
-    .input(
-      z.object({
-        eventId: z.string(),
-        propertyId: z.string().optional(),
-        categoryId: z.string().optional(),
-        clientId: z.string().optional(),
-        acquisitionState: z
-          .enum(["NONE", "IN_PROGRESS", "OPTION", "BOUGHT", "RELEASED"])
-          .optional(),
-        // `REQUESTED` is never stored on a night (doc §4.3) — a soft request
-        // lives on `RoomNightRequest`, not `salesState`, so it is not a valid
-        // filter value here.
-        salesState: z.enum(["NONE", "BLOCKED", "SOLD", "CANCELLED"]).optional(),
-        minSeverity: z.number().int().min(0).max(4).optional(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      const nights = await ctx.db.roomNight.findMany({
-        where: {
-          eventId: input.eventId,
-          slot: {
-            categoryId: input.categoryId,
-            category: { propertyId: input.propertyId },
-          },
-          acquisitionState: input.acquisitionState,
-          salesState: input.salesState,
-          ...(input.clientId
-            ? {
-                OR: [
-                  { clientId: input.clientId },
-                  { requests: { some: { clientId: input.clientId } } },
-                ],
-              }
-            : {}),
-        },
-        include: nightInclude,
-        orderBy: [{ slotId: "asc" }, { date: "asc" }],
-      });
-
-      const rows = toStayRows(nights.map(flatten));
-
-      // Counted before the severity filter, so a rep can see what a stricter
-      // filter would surface without having to apply it first.
-      const severityCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
-      for (const row of rows) severityCounts[row.position.severity]!++;
-
-      return {
-        rows:
-          input.minSeverity === undefined
-            ? rows
-            : rows.filter((row) => row.position.severity >= input.minSeverity!),
-        severityCounts,
-      };
     }),
 
   /**
@@ -740,6 +683,239 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       return { nights: ids.length, rooms: slotIds.length };
+    }),
+
+  /**
+   * The date-grid: every matching room-night as a cell, keyed by slot and
+   * date, with its `position` already computed via `positionOf` — so there
+   * is exactly one place that decides what a room-night means (doc §4, the
+   * Inventory tab overhaul).
+   */
+  grid: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        propertyId: z.string().optional(),
+        categoryId: z.string().optional(),
+        clientId: z.string().optional(),
+        acquisitionState: z
+          .enum(["NONE", "IN_PROGRESS", "OPTION", "BOUGHT", "RELEASED"])
+          .optional(),
+        // `REQUESTED` is never stored on a night (doc §4.3) — see `stockSheet`.
+        salesState: z.enum(["NONE", "BLOCKED", "SOLD", "CANCELLED"]).optional(),
+        minStars: z.number().int().min(1).max(5).optional(),
+        checkIn: z.date(),
+        checkOut: z.date(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const nights = await ctx.db.roomNight.findMany({
+        where: {
+          eventId: input.eventId,
+          date: { gte: input.checkIn, lt: input.checkOut },
+          slot: {
+            categoryId: input.categoryId,
+            category: {
+              propertyId: input.propertyId,
+              property: input.minStars
+                ? { stars: { gte: input.minStars } }
+                : undefined,
+            },
+          },
+          acquisitionState: input.acquisitionState,
+          salesState: input.salesState,
+          ...(input.clientId
+            ? {
+                OR: [
+                  { clientId: input.clientId },
+                  { requests: { some: { clientId: input.clientId } } },
+                ],
+              }
+            : {}),
+        },
+        include: {
+          ...nightInclude,
+          slot: {
+            include: {
+              category: {
+                include: {
+                  property: { select: { id: true, name: true, stars: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ slotId: "asc" }, { date: "asc" }],
+      });
+
+      // Only the hotels, categories and rooms with a night that actually
+      // matches the filters above — "hide hotels with a status" falls out of
+      // the same filter rather than a second one.
+      const properties = new Map<
+        string,
+        {
+          id: string;
+          name: string;
+          stars: number | null;
+          categories: Map<
+            string,
+            {
+              id: string;
+              name: string;
+              slots: Map<string, { id: string; slotNumber: number }>;
+            }
+          >;
+        }
+      >();
+
+      for (const night of nights) {
+        const propertyRow = night.slot.category.property;
+        let property = properties.get(propertyRow.id);
+        if (!property) {
+          property = {
+            id: propertyRow.id,
+            name: propertyRow.name,
+            stars: propertyRow.stars,
+            categories: new Map(),
+          };
+          properties.set(propertyRow.id, property);
+        }
+        let category = property.categories.get(night.slot.categoryId);
+        if (!category) {
+          category = {
+            id: night.slot.categoryId,
+            name: night.slot.category.name,
+            slots: new Map(),
+          };
+          property.categories.set(night.slot.categoryId, category);
+        }
+        if (!category.slots.has(night.slotId)) {
+          category.slots.set(night.slotId, {
+            id: night.slotId,
+            slotNumber: night.slot.slotNumber,
+          });
+        }
+      }
+
+      const cells: Record<string, ReturnType<typeof flatten> & { position: ReturnType<typeof positionOf> }> = {};
+      for (const night of nights) {
+        const record = flatten(night);
+        cells[`${record.slotId}|${dayKey(night.date)}`] = {
+          ...record,
+          position: positionOf({
+            acquisitionState: record.acquisitionState,
+            optionExpiry: record.optionExpiry,
+            salesState: record.salesState,
+            blockExpiry: record.blockExpiry,
+            dueDate: record.dueDate,
+            clientName: record.clientName,
+            requestedBy: record.requestedBy.map((r) => r.name),
+          }),
+        };
+      }
+
+      return {
+        dates: eachNight(input.checkIn, input.checkOut),
+        properties: [...properties.values()]
+          .map((property) => ({
+            ...property,
+            categories: [...property.categories.values()]
+              .map((category) => ({
+                ...category,
+                slots: [...category.slots.values()].sort(
+                  (a, b) => a.slotNumber - b.slotNumber,
+                ),
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+        cells,
+      };
+    }),
+
+  /**
+   * Undoes a mistaken `materialise` — the only way a room-night ever leaves
+   * inventory. Refused unless every night in the rectangle is still
+   * completely untouched (`NONE`/`NONE`): once anything real has happened,
+   * the right move is to release or cancel it properly, which keeps the
+   * record rather than erasing it.
+   */
+  remove: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        slotIds: z.array(z.string()).min(1, "Pick at least one room"),
+        checkIn: z.date(),
+        checkOut: z.date(),
+        reason: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { eventId, slotIds, checkIn, checkOut, reason } = input;
+
+      const nightCount = nightsBetween(checkIn, checkOut);
+      if (nightCount === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Check-out must be after check-in. A stay from 10-Jul to 11-Jul is one night; check-out day is never a night.",
+        });
+      }
+
+      const nights = await ctx.db.roomNight.findMany({
+        where: {
+          eventId,
+          slotId: { in: slotIds },
+          date: { gte: checkIn, lt: checkOut },
+        },
+        include: nightInclude,
+        orderBy: [{ slotId: "asc" }, { date: "asc" }],
+      });
+
+      const expected = slotIds.length * nightCount;
+      if (nights.length !== expected) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Nothing was removed. ${expected - nights.length} of the ${expected} room-nights you selected are not in this event's inventory.`,
+        });
+      }
+
+      const problems: Problem[] = [];
+      for (const night of nights) {
+        if (night.acquisitionState !== "NONE" || night.salesState !== "NONE") {
+          problems.push({
+            room: describeRoom(night),
+            date: night.date,
+            reason: `already ${acquisitionLabels[night.acquisitionState].toLowerCase()} / ${salesLabels[night.salesState].toLowerCase()} — release or cancel it instead of removing it.`,
+          });
+        }
+      }
+      if (problems.length) refuse(problems);
+
+      const ids = nights.map((night) => night.id);
+      const period = `${formatDay(checkIn)} – ${formatDay(checkOut)}`;
+      const rooms = `${slotIds.length} ${slotIds.length === 1 ? "room" : "rooms"}`;
+
+      await ctx.db.$transaction(async (tx) => {
+        // Written before the delete, so the ledger's own summary/nightCount
+        // stay readable as history even once the join to these nights is gone.
+        await tx.ledgerEntry.create({
+          data: {
+            eventId,
+            actorId: ctx.session.user.id,
+            axis: "INVENTORY",
+            fromState: "Nothing started",
+            toState: null,
+            nightCount: ids.length,
+            summary: `Removed from inventory — ${rooms} × ${nightCount} ${nightCount === 1 ? "night" : "nights"}, ${period}. Never contracted; brought in by mistake.`,
+            reason: reason?.trim() || null,
+            nights: { connect: ids.map((id) => ({ id })) },
+          },
+        });
+        await tx.roomNight.deleteMany({ where: { id: { in: ids } } });
+      });
+
+      return { removed: ids.length, rooms: slotIds.length };
     }),
 });
 

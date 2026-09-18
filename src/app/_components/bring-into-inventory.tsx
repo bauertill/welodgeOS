@@ -128,7 +128,18 @@ export function BringIntoInventory({
           />
         </Field>
 
-        <div />
+        <div className="flex items-end">
+          {category && (
+            <p className="text-ink-500 pb-2 text-xs font-light">
+              {(() => {
+                const from = Number(slotFrom) || 1;
+                const to = Number(slotTo) || category.unitCount;
+                const count = Math.max(0, to - from + 1);
+                return `${count} ${count === 1 ? "room" : "rooms"} (from #${from} to #${to})`;
+              })()}
+            </p>
+          )}
+        </div>
 
         <Field label="Check-in">
           <Input

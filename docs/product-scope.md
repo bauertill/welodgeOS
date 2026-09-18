@@ -50,9 +50,9 @@ The legacy add-on already reached this conclusion: it keys everything on
 it appears as *Actual unit number* on the operations sheet, and only matters at
 rooming-list time.
 
-Everything the user sees as a "row" — `Hotel Carmel, King Room, #5, 11-Jul → 05-Aug,
-blocked` — is a **derived stay row**: a run of contiguous nights on one slot sharing the
-same state tuple. See §5.4.
+Everything the user sees — `Hotel Carmel, King Room, #5, 11-Jul → 05-Aug, blocked` — is
+**derived at read time**, never stored as a range: a run of contiguous nights on one slot
+sharing the same state simply looks identical, cell after cell. See §5.4.
 
 **Why:** partial changes are the norm, not the exception. A client drops three nights, a
 supplier confirms half the range, a team arrives a week late. On a night grain these are
@@ -254,6 +254,14 @@ The `CONTRACTED` status is enforced, not advisory: materialising a property that
 shortlisted or contacted is refused, and says so. Re-running the same conversion over an
 overlapping range is safe — it adds the missing nights and leaves the existing ones, and
 their commercial position, untouched.
+
+**Removing a mistake.** The reverse of materialising: a rectangle of room-nights can be
+taken back out of inventory entirely, but only while every one of them is still completely
+untouched — acquisition state `NONE` and sales state `NONE`. Anything that has had a
+supplier or client relationship recorded against it is refused, and told to release or
+cancel it properly instead, which keeps the record rather than erasing it. Removal still
+writes a ledger entry (what was removed, by whom), even though the room-nights themselves
+are then deleted — the ledger's own summary stays readable as history.
 
 ---
 
@@ -542,19 +550,20 @@ inventory that exists** for that `(property, category)` — its first night to i
 can be overridden per report. That is a reporting choice, not a commercial fact: if the
 window a hotel will contract for is a real term of the deal, it belongs on the contract.
 
-### 5.4 The stock sheet (derived stay rows)
+### 5.4 The stock sheet (the date-grid)
 
-The familiar spreadsheet view is generated, never stored. Collapse adjacent nights on the
-same slot into a row while this tuple is unchanged:
+The familiar spreadsheet view is generated, never stored: supplier / room category / room
+down the rows, one column per night, each cell carrying the icon and severity from §4.4 for
+that exact room-night. Rows are grouped property → category → slot number and can be
+collapsed at the hotel or category level; columns span whatever check-in/check-out window is
+currently in view, filtered by property, room type, client, star rating, and either axis's
+status.
 
-```
-(slot, acquisitionState, salesState, client, supplierRef,
- optionExpiry, blockExpiry, owner, buyPrice, sellPrice)
-```
-
-A row's `checkIn` is the first night's date; `checkOut` is the last night's date **+ 1
-day**. Rows are grouped by property → category → slot number, matching today's layout, and
-each row carries the icon/severity from §4.4. Editing a row edits the nights beneath it.
+Editing happens by highlighting a rectangle of cells — a set of rooms crossed with a
+contiguous range of nights — which opens a panel scoped to exactly that selection. The
+rectangle is the same unit §4.8's bulk operations already work on; nothing about *how* a
+change is validated or logged differs from selecting it by hand, only how the rectangle is
+chosen.
 
 ---
 
@@ -889,7 +898,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | Both the optimistic and the conservative figure, side by side |
-| §5.4 Stock sheet | **Built** | Derived stay rows, grouped property → category → room |
+| §5.4 Stock sheet | **Built** | A date-grid, one cell per room-night; edited by selecting a rectangle of cells |
 | §6 Operations | **Not built** | Phase 3 |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
