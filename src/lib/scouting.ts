@@ -1,4 +1,8 @@
-import type { PropertyType, ScoutingStatus } from "generated/prisma";
+import type {
+  CategoryContractStatus,
+  PropertyType,
+  ScoutingStatus,
+} from "generated/prisma";
 
 /**
  * The semantic vocabulary the app speaks. Every label a non-technical user
@@ -23,11 +27,38 @@ export const scoutingStatusHints: Record<ScoutingStatus, string> = {
   CONTRACTED: "Moved through to acquisition. Phase 2 owns it from here.",
 };
 
-export const scoutingStatusOrder: ScoutingStatus[] = [
+/**
+ * `CONTRACTED` is deliberately excluded — a property has no single contract
+ * status of its own any more, that fact lives per room category on
+ * `CategoryContract` (doc §3.5, §3.6). The label and hint above stay defined
+ * for `CONTRACTED` regardless, so any historical row still reads correctly
+ * wherever it is displayed.
+ */
+export type SelectableScoutingStatus = Exclude<ScoutingStatus, "CONTRACTED">;
+
+/** Selectable from the UI, in funnel order. */
+export const scoutingStatusOrder: SelectableScoutingStatus[] = [
   "PROSPECT",
   "CONTACTED",
   "SHORTLISTED",
   "REJECTED",
+];
+
+export const categoryContractStatusLabels: Record<CategoryContractStatus, string> = {
+  IN_NEGOTIATION: "In negotiation",
+  IN_CONTRACTING: "In contracting",
+  CONTRACTED: "Contracted",
+};
+
+export const categoryContractStatusHints: Record<CategoryContractStatus, string> = {
+  IN_NEGOTIATION: "Talking terms with the supplier. Not yet in Inventory.",
+  IN_CONTRACTING: "Terms agreed, paperwork in progress. Not yet in Inventory.",
+  CONTRACTED: "Signed. This is what becomes Inventory.",
+};
+
+export const categoryContractStatusOrder: CategoryContractStatus[] = [
+  "IN_NEGOTIATION",
+  "IN_CONTRACTING",
   "CONTRACTED",
 ];
 
@@ -66,24 +97,29 @@ export function distanceKm(
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-type CategoryLike = {
-  unitCount: number;
-  indicativePriceCents: number | null;
-  currency: string;
-};
-
 /** Total rooms/units across a property's categories. */
-export function totalUnits(categories: CategoryLike[]): number {
+export function totalUnits(categories: { unitCount: number }[]): number {
   return categories.reduce((sum, category) => sum + category.unitCount, 0);
 }
 
-/** The cheapest indicative price, which is what "from USD x" means on a row. */
-export function cheapestCategory<T extends CategoryLike>(
+type PricedCategory = {
+  indicativePriceMinCents: number | null;
+  indicativePriceMaxCents: number | null;
+  currency: string;
+};
+
+/**
+ * The category with the lowest indicative starting price, which is what
+ * "from USD x" means on a row — the low end of its range, since the range
+ * itself is indicative only (doc §3.2, §3.3).
+ */
+export function cheapestCategory<T extends PricedCategory>(
   categories: T[],
 ): T | undefined {
   return categories
-    .filter((category) => category.indicativePriceCents !== null)
+    .filter((category) => category.indicativePriceMinCents !== null)
     .sort(
-      (a, b) => (a.indicativePriceCents ?? 0) - (b.indicativePriceCents ?? 0),
+      (a, b) =>
+        (a.indicativePriceMinCents ?? 0) - (b.indicativePriceMinCents ?? 0),
     )[0];
 }

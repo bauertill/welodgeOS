@@ -178,7 +178,7 @@ A hotel has one or more **room categories**:
 | `roomCount` | Total rooms in that category at the property |
 | `capacity` | Standard occupancy (pax) |
 | `bedConfiguration` | e.g. 1×King, 2×Twin — drives Operations checks (§6.4) |
-| `indicativePriceCents` + `currency` | Price per night at scouting time — indicative only, not a contracted rate |
+| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | A price *range* per night at scouting time — indicative only, not a contracted rate. Either bound may be entered alone |
 
 `Property.totalRooms` = Σ `roomCount` across categories, and must be recorded even where
 categories are not yet broken out.
@@ -193,7 +193,7 @@ An apartment is modelled as a category whose units are whole flats:
 | `bathrooms` | Required; allow halves (`1.5`) |
 | `unitCount` | How many identical units |
 | `capacity` | Sleeps N |
-| `indicativePriceCents` + `currency` | |
+| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | Same indicative range as §3.2 |
 
 **Simplification:** an apartment unit behaves exactly like a hotel room slot — an
 indivisible, sellable, occupiable thing. Bedrooms/bathrooms are attributes of the unit, not
@@ -226,7 +226,7 @@ a property that otherwise exists once, globally:
 | Field | Notes |
 | --- | --- |
 | `event`, `property` | Unique together — a property appears at most once per event |
-| `status` | `PROSPECT` → `CONTACTED` → `SHORTLISTED` → `REJECTED` \| `CONTRACTED` |
+| `status` | `PROSPECT` → `CONTACTED` → `SHORTLISTED` \| `REJECTED` — the pursuit funnel only |
 | `notes` | Event-specific: what this hotel said about *this* event |
 | `addedBy`, `createdAt` | |
 
@@ -238,22 +238,36 @@ Status meanings, which the interface states rather than assumes:
 | `CONTACTED` | We have reached out and are waiting to hear back. |
 | `SHORTLISTED` | A serious candidate — worth taking to a client. |
 | `REJECTED` | Ruled out for this event. Kept so we do not re-scout it. |
-| `CONTRACTED` | Moved through to acquisition; Phase 2 owns it from here. |
+
+A property carries no contract status of its own. `CONTRACTED` remains a valid database
+value only so a historical row stays readable — it is no longer reachable from the UI, and
+the fact it used to represent now lives per room category (below). A hotel is routinely
+mid-contract on some categories and not others, which one property-wide status could never
+say.
+
+**Per-category contract status.** A `CategoryContract` row records one room category's own
+supplier-contract status on one event's list — `IN_NEGOTIATION` → `IN_CONTRACTING` →
+`CONTRACTED` — independent of its property's pursuit status and of every other category at
+the same property. A category with no row yet reads as `IN_NEGOTIATION`: adding a property
+to a list never has to pre-create one of these per category. The property's own screen
+shows a rolled-up summary — one line per category, e.g. "ROH · 30 rooms · Contracted" —
+rather than a single word for the whole property.
 
 Removing an entry takes the property off that event's list only. The property stays in the
 library for other events — which is the point of scouting once.
 
 ### 3.6 Scouting → inventory
 
-Converting a `CONTRACTED` property into inventory is an explicit act: pick the event, the
-category, a slot range (`#1..#30`) and a date range, and the system materialises those
+Converting a contracted room category into inventory is an explicit act: pick the event,
+the category, a slot range (`#1..#30`) and a date range, and the system materialises those
 room-nights at acquisition state `NONE`. Nothing is contracted by this act. This is the
 only bridge between Phase 1 and Phase 2.
 
-The `CONTRACTED` status is enforced, not advisory: materialising a property that is only
-shortlisted or contacted is refused, and says so. Re-running the same conversion over an
-overlapping range is safe — it adds the missing nights and leaves the existing ones, and
-their commercial position, untouched.
+The category's own `CONTRACTED` status is enforced, not advisory: materialising a category
+that is only in negotiation or in contracting is refused, and says so, naming the category
+rather than the property — one hotel can have one category ready and another still being
+drafted. Re-running the same conversion over an overlapping range is safe — it adds the
+missing nights and leaves the existing ones, and their commercial position, untouched.
 
 **Removing a mistake.** The reverse of materialising: a rectangle of room-nights can be
 taken back out of inventory entirely, but only while every one of them is still completely
@@ -741,6 +755,10 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
     for) or just a reporting filter? If the former it belongs on the contract, not the view.
     *Still open. Availability currently derives the window from the inventory on record,
     which is the reporting reading (§5.3).*
+10. **Indicative price auto-fetch.** Could the price range in §3.2/§3.3 be populated
+    automatically from a source like Booking.com instead of typed by hand? Worth a
+    feasibility check — no public API exists for this, so it would mean scraping or a
+    paid data provider, neither of which is built.
 
 ---
 
@@ -750,7 +768,7 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
 | --- | --- |
 | **Room-night** | One room slot on one calendar date. The atomic record. |
 | **Room slot** | `property + category + slot number`. Our internal identity for a countable room. |
-| **Stay row** | A derived run of contiguous nights on one slot sharing a state tuple. |
+| **Category contract** | One room category's own supplier-contract status on one event's scouting list, independent of the property's and of every other category. |
 | **Hard hold** | `BLOCKED` or `SOLD` — exclusive; at most one per room-night. |
 | **Soft request** | `REQUESTED` — non-exclusive; many clients may request the same night. |
 | **Short** | Sold (or blocked) without being bought. |
@@ -879,13 +897,14 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://welodge-os.vercel.app, on Vercel with a Neon PostgreSQL database. `master` deploys automatically |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
-| §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price |
+| §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
-| §3.5 Scouting list | **Built** | Per-event entries, status, filters by status, type and amenity |
+| §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status, type and amenity; per-category contract status (`CategoryContract`), independent of the property's own status |
 | Map view | **Built** | Leaflet over OpenStreetMap, list-first as specified; venue pin and derived distance-to-venue |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now |
-| §3.6 Scouting → inventory | **Built** | Contracted property → category → room range → date range. `CONTRACTED` is enforced; re-running is safe |
+| Booking.com-style price auto-fetch | **Not built** | The indicative price range is entered by hand; open question, see §9 |
+| §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
 | §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |
 | §4.3 Exclusivity and contention | **Built** | One hard hold per night, enforced; requests are a set, and contention is counted on the stock sheet and per night |

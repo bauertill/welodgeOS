@@ -18,7 +18,8 @@ const categoryInput = z.object({
   bedConfiguration: z.string().optional(),
   bedrooms: z.number().int().min(0).optional(),
   bathrooms: z.number().min(0).optional(),
-  indicativePriceCents: z.number().int().min(0).optional(),
+  indicativePriceMinCents: z.number().int().min(0).optional(),
+  indicativePriceMaxCents: z.number().int().min(0).optional(),
   currency: z.string().length(3).default("USD"),
 });
 

@@ -69,7 +69,7 @@ conversation.
 - **One place decides what a room-night means.** `src/lib/position.ts` turns the
   `(acquisition, sales)` pair into an icon, a sentence and a severity. Every
   screen asks it; nothing re-derives that judgement locally.
-- **Money** is stored in minor units (`indicativePriceCents`) with an explicit
+- **Money** is stored in minor units (`indicativePriceMinCents`) with an explicit
   currency. Never a float, never an implicit currency.
 - **Dates** that describe a calendar day are `@db.Date`, not timestamps. A night
   is identified by the date it begins; check-out day is never a night.

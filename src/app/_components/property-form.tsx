@@ -26,7 +26,8 @@ type CategoryDraft = {
   bedConfiguration: string;
   bedrooms: string;
   bathrooms: string;
-  price: string;
+  priceMin: string;
+  priceMax: string;
   currency: string;
 };
 
@@ -63,7 +64,8 @@ const emptyCategory = (type: PropertyType): CategoryDraft => ({
   bedConfiguration: "",
   bedrooms: "",
   bathrooms: "",
-  price: "",
+  priceMin: "",
+  priceMax: "",
   currency: "USD",
 });
 
@@ -224,8 +226,11 @@ export function PropertyForm({
         bedrooms: hasBedConfiguration ? undefined : num(category.bedrooms),
         bathrooms: hasBedConfiguration ? undefined : num(category.bathrooms),
         // Prices are typed in whole currency units and stored in minor units.
-        indicativePriceCents: category.price.trim()
-          ? Math.round((num(category.price) ?? 0) * 100)
+        indicativePriceMinCents: category.priceMin.trim()
+          ? Math.round((num(category.priceMin) ?? 0) * 100)
+          : undefined,
+        indicativePriceMaxCents: category.priceMax.trim()
+          ? Math.round((num(category.priceMax) ?? 0) * 100)
           : undefined,
         currency: category.currency.trim().toUpperCase() || "USD",
       }));
@@ -528,14 +533,25 @@ export function PropertyForm({
                 </>
               )}
 
-              <Field label="Price per night">
+              <Field label="Indicative price, from" hint="Not a negotiated rate — just what it looks like on Booking.com-style listings.">
                 <Input
-                  value={category.price}
+                  value={category.priceMin}
                   onChange={(e) =>
-                    setCategory(index, { price: e.target.value })
+                    setCategory(index, { priceMin: e.target.value })
                   }
                   inputMode="decimal"
                   placeholder="220"
+                />
+              </Field>
+
+              <Field label="Indicative price, to">
+                <Input
+                  value={category.priceMax}
+                  onChange={(e) =>
+                    setCategory(index, { priceMax: e.target.value })
+                  }
+                  inputMode="decimal"
+                  placeholder="280"
                 />
               </Field>
 

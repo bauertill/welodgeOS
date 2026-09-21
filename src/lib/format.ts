@@ -42,6 +42,23 @@ export function formatMoney(cents: number, currency: string) {
   }).format(cents / 100);
 }
 
+/**
+ * "USD 220.00 – 280.00", or a single figure when only one end of the range is
+ * known — an indicative price is often given as one bound before the other is
+ * (doc §3.2, §3.3).
+ */
+export function formatMoneyRange(
+  minCents: number | null,
+  maxCents: number | null,
+  currency: string,
+): string {
+  if (minCents === null && maxCents === null) return "—";
+  if (minCents === null) return formatMoney(maxCents!, currency);
+  if (maxCents === null) return formatMoney(minCents, currency);
+  if (minCents === maxCents) return formatMoney(minCents, currency);
+  return `${formatMoney(minCents, currency)} – ${formatMoney(maxCents, currency)}`;
+}
+
 /** "21 nights", "1 night" — used everywhere a night count is shown. */
 export function formatNights(count: number) {
   return `${count} ${count === 1 ? "night" : "nights"}`;

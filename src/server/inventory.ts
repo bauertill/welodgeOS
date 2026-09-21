@@ -34,6 +34,17 @@ const person = (user: { name: string | null; email: string | null } | null) =>
 const clientLabel = (client: { name: string; shortName: string | null } | null) =>
   client ? (client.shortName ?? client.name) : null;
 
+/**
+ * The single figure exposure/financials estimate from when a category only
+ * carries an indicative range, not a negotiated rate: the midpoint, or
+ * whichever bound is known when only one is (doc §3.2, §3.3, §5.2, §7).
+ */
+function midpoint(min: number | null, max: number | null): number | null {
+  if (min === null) return max;
+  if (max === null) return min;
+  return Math.round((min + max) / 2);
+}
+
 /** The database row, flattened into the shape the derived views work on. */
 export function flatten(night: LoadedNight): NightRecord {
   return {
@@ -45,7 +56,10 @@ export function flatten(night: LoadedNight): NightRecord {
     categoryId: night.slot.categoryId,
     categoryName: night.slot.category.name,
     categorySortOrder: night.slot.category.sortOrder,
-    indicativePriceCents: night.slot.category.indicativePriceCents,
+    indicativePriceCents: midpoint(
+      night.slot.category.indicativePriceMinCents,
+      night.slot.category.indicativePriceMaxCents,
+    ),
     indicativeCurrency: night.slot.category.currency,
     propertyId: night.slot.category.property.id,
     propertyName: night.slot.category.property.name,

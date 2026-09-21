@@ -32,11 +32,25 @@ enum PropertyType {
 /// Where a property has got to in *this* event's scouting list. The same
 /// property can be shortlisted for one event and rejected for another, which is
 /// why this lives on the entry rather than on the property (doc §3.5).
+///
+/// `CONTRACTED` is kept only so the enum stays valid for any historical row —
+/// it is no longer settable from the UI. A property has no single contract
+/// status of its own; that fact now lives per room category, on
+/// `CategoryContract` (doc §3.5).
 enum ScoutingStatus {
   PROSPECT
   CONTACTED
   SHORTLISTED
   REJECTED
+  CONTRACTED
+}
+
+/// How far along one room category's supplier contract is, for one event. A
+/// property is rarely all-or-nothing: one category can be signed while another
+/// is still being drafted (doc §3.5, §3.6).
+enum CategoryContractStatus {
+  IN_NEGOTIATION
+  IN_CONTRACTING
   CONTRACTED
 }
 
@@ -127,9 +141,12 @@ model RoomCategory {
   bedrooms  Int?
   bathrooms Float?
 
-  /// Indicative nightly price at scouting time — not a contracted rate.
-  indicativePriceCents Int?
-  currency             String @default("CHF")
+  /// Indicative nightly price range at scouting time — not a contracted rate.
+  /// A range, not a point figure: what a rep sees on Booking.com-style
+  /// listings before a real rate is negotiated (doc §3.2, §3.3).
+  indicativePriceMinCents Int?
+  indicativePriceMaxCents Int?
+  currency                String @default("CHF")
 
   sortOrder Int @default(0)
 
@@ -138,6 +155,9 @@ model RoomCategory {
 
   /// Phase 2 room slots numbered 1..N within this category (doc §2.1).
   slots RoomSlot[]
+
+  /// This category's own supplier-contract status, per event (doc §3.5, §3.6).
+  categoryContracts CategoryContract[]
 
   @@index([propertyId])
 }
@@ -188,9 +208,32 @@ model ScoutingEntry {
   addedBy   User?   @relation(fields: [addedById], references: [id], onDelete: SetNull)
   addedById String?
 
+  /// The per-category contract status underneath this entry (doc §3.5, §3.6).
+  categoryContracts CategoryContract[]
+
   @@unique([eventId, propertyId])
   @@index([eventId])
   @@index([status])
+}
+
+/// One room category's supplier-contract status on one event's scouting list.
+/// Absent means `IN_NEGOTIATION` — a row only exists once someone has said
+/// otherwise, so adding a property to a list never has to pre-create one of
+/// these per category (doc §3.5, §3.6).
+model CategoryContract {
+  id     String                 @id @default(cuid())
+  status CategoryContractStatus @default(IN_NEGOTIATION)
+
+  scoutingEntry   ScoutingEntry @relation(fields: [scoutingEntryId], references: [id], onDelete: Cascade)
+  scoutingEntryId String
+
+  category   RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([scoutingEntryId, categoryId])
+  @@index([scoutingEntryId])
 }
 
 // ---------------------------------------------------------------------------

@@ -61,10 +61,14 @@ export default async function EditPropertyPage({
             bedConfiguration: category.bedConfiguration ?? "",
             bedrooms: str(category.bedrooms),
             bathrooms: str(category.bathrooms),
-            price:
-              category.indicativePriceCents === null
+            priceMin:
+              category.indicativePriceMinCents === null
                 ? ""
-                : String(category.indicativePriceCents / 100),
+                : String(category.indicativePriceMinCents / 100),
+            priceMax:
+              category.indicativePriceMaxCents === null
+                ? ""
+                : String(category.indicativePriceMaxCents / 100),
             currency: category.currency,
           })),
           contacts: property.contacts.map((contact) => ({

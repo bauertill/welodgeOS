@@ -114,7 +114,8 @@ async function main() {
             unitCount: 60,
             capacity: 2,
             bedConfiguration: "1 King",
-            indicativePriceCents: 32_000,
+            indicativePriceMinCents: 30_000,
+            indicativePriceMaxCents: 34_000,
             currency: "USD",
             sortOrder: 0,
           },
@@ -123,7 +124,8 @@ async function main() {
             unitCount: 42,
             capacity: 2,
             bedConfiguration: "2 Twin",
-            indicativePriceCents: 30_500,
+            indicativePriceMinCents: 28_500,
+            indicativePriceMaxCents: 32_500,
             currency: "USD",
             sortOrder: 1,
           },
@@ -167,7 +169,8 @@ async function main() {
             unitCount: 120,
             capacity: 2,
             bedConfiguration: "1 King",
-            indicativePriceCents: 41_000,
+            indicativePriceMinCents: 39_000,
+            indicativePriceMaxCents: 43_000,
             currency: "USD",
             sortOrder: 0,
           },
@@ -201,7 +204,8 @@ async function main() {
             capacity: 2,
             bedrooms: 1,
             bathrooms: 1,
-            indicativePriceCents: 38_000,
+            indicativePriceMinCents: 36_000,
+            indicativePriceMaxCents: 40_000,
             currency: "USD",
             sortOrder: 0,
           },
@@ -211,7 +215,8 @@ async function main() {
             capacity: 4,
             bedrooms: 2,
             bathrooms: 1.5,
-            indicativePriceCents: 56_000,
+            indicativePriceMinCents: 53_000,
+            indicativePriceMaxCents: 59_000,
             currency: "USD",
             sortOrder: 1,
           },
@@ -220,10 +225,13 @@ async function main() {
     },
   });
 
+  // Shortlisted, not Contracted — a property carries no contract status of
+  // its own any more; that lives per room category (doc §3.5, §3.6).
+  const carmelEntry = await db.scoutingEntry.create({
+    data: { eventId: event.id, propertyId: carmel.id, status: "SHORTLISTED" },
+  });
   await db.scoutingEntry.createMany({
     data: [
-      // Contracted, so Phase 2 can turn it into inventory (doc §3.6).
-      { eventId: event.id, propertyId: carmel.id, status: "CONTRACTED" },
       { eventId: event.id, propertyId: courtyard.id, status: "CONTACTED" },
       { eventId: event.id, propertyId: marinaFlats.id, status: "PROSPECT" },
     ],
@@ -255,6 +263,16 @@ async function main() {
 
   const kingRoom = await db.roomCategory.findFirstOrThrow({
     where: { propertyId: carmel.id, name: "King Room" },
+  });
+
+  // Contracted at the category level — this is what §3.6 actually gates
+  // `materialise` on now, not the property's own scouting status.
+  await db.categoryContract.create({
+    data: {
+      scoutingEntryId: carmelEntry.id,
+      categoryId: kingRoom.id,
+      status: "CONTRACTED",
+    },
   });
 
   const stayFrom = new Date("2028-07-10T00:00:00Z");

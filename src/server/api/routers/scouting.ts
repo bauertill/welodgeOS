@@ -2,11 +2,18 @@ import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 
+// `CONTRACTED` is deliberately excluded — a property has no single contract
+// status of its own any more; that lives per room category (doc §3.5, §3.6).
 const SCOUTING_STATUSES = [
   "PROSPECT",
   "CONTACTED",
   "SHORTLISTED",
   "REJECTED",
+] as const;
+
+const CATEGORY_CONTRACT_STATUSES = [
+  "IN_NEGOTIATION",
+  "IN_CONTRACTING",
   "CONTRACTED",
 ] as const;
 
@@ -52,6 +59,9 @@ export const scoutingRouter = createTRPCRouter({
             },
           },
           addedBy: { select: { name: true, email: true } },
+          // Absent for a category means "in negotiation" — see
+          // `categoryContractStatusLabels` in ~/lib/scouting (doc §3.5).
+          categoryContracts: true,
         },
       }),
     ),
@@ -81,6 +91,36 @@ export const scoutingRouter = createTRPCRouter({
       ctx.db.scoutingEntry.update({
         where: { id: input.id },
         data: { status: input.status },
+      }),
+    ),
+
+  /**
+   * One room category's own supplier-contract status on this event's
+   * scouting list — the granular fact that materialising a category into
+   * inventory is actually gated on (doc §3.5, §3.6).
+   */
+  setCategoryContractStatus: protectedProcedure
+    .input(
+      z.object({
+        scoutingEntryId: z.string(),
+        categoryId: z.string(),
+        status: z.enum(CATEGORY_CONTRACT_STATUSES),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.db.categoryContract.upsert({
+        where: {
+          scoutingEntryId_categoryId: {
+            scoutingEntryId: input.scoutingEntryId,
+            categoryId: input.categoryId,
+          },
+        },
+        update: { status: input.status },
+        create: {
+          scoutingEntryId: input.scoutingEntryId,
+          categoryId: input.categoryId,
+          status: input.status,
+        },
       }),
     ),
 

@@ -14,6 +14,7 @@ import {
   type InventoryAction,
 } from "~/lib/inventory";
 import { positionOf } from "~/lib/position";
+import { categoryContractStatusLabels } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { axisOf, describeRoom, flatten, nightInclude } from "~/server/inventory";
 
@@ -177,7 +178,10 @@ export const inventoryRouter = createTRPCRouter({
         });
       }
 
-      // §3.6 — inventory comes from a property this event has contracted.
+      // §3.6 — inventory comes from a room category this event has
+      // contracted. The property's own status is not the gate any more —
+      // one hotel routinely has some categories signed and others still
+      // being negotiated (doc §3.5).
       const entry = await ctx.db.scoutingEntry.findUnique({
         where: {
           eventId_propertyId: {
@@ -192,10 +196,22 @@ export const inventoryRouter = createTRPCRouter({
           message: `${category.property.name} is not on this event's scouting list.`,
         });
       }
-      if (entry.status !== "CONTRACTED") {
+
+      const contract = await ctx.db.categoryContract.findUnique({
+        where: {
+          scoutingEntryId_categoryId: {
+            scoutingEntryId: entry.id,
+            categoryId: category.id,
+          },
+        },
+      });
+      if ((contract?.status ?? "IN_NEGOTIATION") !== "CONTRACTED") {
+        const label = categoryContractStatusLabels[
+          contract?.status ?? "IN_NEGOTIATION"
+        ].toLowerCase();
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `${category.property.name} is marked "${entry.status.toLowerCase()}" on this event's scouting list. Only a contracted property becomes inventory — move it to Contracted first.`,
+          message: `${category.property.name} — ${category.name} is marked "${label}" on this event's scouting list. Only a contracted room category becomes inventory — mark it Contracted first.`,
         });
       }
 
@@ -305,8 +321,6 @@ export const inventoryRouter = createTRPCRouter({
             name: string;
             sortOrder: number;
             unitCount: number;
-            indicativePriceCents: number | null;
-            currency: string;
             /** The first night this category has inventory on. */
             firstNight: Date | null;
             /** The day after its last night, ready to use as a check-out. */
@@ -330,8 +344,6 @@ export const inventoryRouter = createTRPCRouter({
             name: slot.category.name,
             sortOrder: slot.category.sortOrder,
             unitCount: slot.category.unitCount,
-            indicativePriceCents: slot.category.indicativePriceCents,
-            currency: slot.category.currency,
             firstNight: null,
             lastCheckOut: null,
             slots: [],
@@ -398,34 +410,41 @@ export const inventoryRouter = createTRPCRouter({
       };
     }),
 
-  /** Properties this event has contracted but not yet turned into inventory. */
+  /**
+   * Room categories this event has contracted but not yet fully turned into
+   * inventory — grouped by property. Contracted is a per-category fact now,
+   * so a property can appear with only some of its categories listed
+   * (doc §3.5, §3.6).
+   */
   materialisable: protectedProcedure
     .input(z.object({ eventId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const entries = await ctx.db.scoutingEntry.findMany({
-        where: { eventId: input.eventId, status: "CONTRACTED" },
+      const contracts = await ctx.db.categoryContract.findMany({
+        where: { status: "CONTRACTED", scoutingEntry: { eventId: input.eventId } },
         include: {
-          property: {
-            select: {
-              id: true,
-              name: true,
-              categories: {
-                orderBy: { sortOrder: "asc" },
-                select: {
-                  id: true,
-                  name: true,
-                  unitCount: true,
-                  indicativePriceCents: true,
-                  currency: true,
-                },
-              },
-            },
+          category: { select: { id: true, name: true, unitCount: true } },
+          scoutingEntry: {
+            select: { property: { select: { id: true, name: true } } },
           },
         },
-        orderBy: { property: { name: "asc" } },
       });
 
-      return entries.map((entry) => entry.property);
+      const properties = new Map<
+        string,
+        { id: string; name: string; categories: { id: string; name: string; unitCount: number }[] }
+      >();
+      for (const contract of contracts) {
+        const property = contract.scoutingEntry.property;
+        const entry = properties.get(property.id) ?? {
+          id: property.id,
+          name: property.name,
+          categories: [],
+        };
+        entry.categories.push(contract.category);
+        properties.set(property.id, entry);
+      }
+
+      return [...properties.values()].sort((a, b) => a.name.localeCompare(b.name));
     }),
 
   /** The audit trail: who changed what, when, and why (doc §4.7). */

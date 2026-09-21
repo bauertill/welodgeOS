@@ -5,7 +5,7 @@ import { Fragment, useState } from "react";
 import type { PropertyType } from "generated/prisma";
 
 import { Pill, Table, Td, Th } from "~/app/_components/ui";
-import { formatMoney } from "~/lib/format";
+import { formatMoney, formatMoneyRange } from "~/lib/format";
 import { cheapestCategory, propertyTypeLabels, totalUnits } from "~/lib/scouting";
 
 type Category = {
@@ -15,7 +15,8 @@ type Category = {
   bedConfiguration: string | null;
   bedrooms: number | null;
   bathrooms: number | null;
-  indicativePriceCents: number | null;
+  indicativePriceMinCents: number | null;
+  indicativePriceMaxCents: number | null;
   currency: string;
 };
 
@@ -122,8 +123,8 @@ export function PropertiesTable({ properties }: { properties: PropertyRow[] }) {
                 </Td>
                 <Td>{units || "—"}</Td>
                 <Td>
-                  {cheapest?.indicativePriceCents
-                    ? formatMoney(cheapest.indicativePriceCents, cheapest.currency)
+                  {cheapest
+                    ? formatMoney(cheapest.indicativePriceMinCents!, cheapest.currency)
                     : "—"}
                 </Td>
                 <Td>
@@ -167,12 +168,11 @@ export function PropertiesTable({ properties }: { properties: PropertyRow[] }) {
                               : `${category.bedrooms ?? "—"} bed · ${category.bathrooms ?? "—"} bath`}
                           </span>
                           <span>
-                            {category.indicativePriceCents
-                              ? formatMoney(
-                                  category.indicativePriceCents,
-                                  category.currency,
-                                )
-                              : "—"}
+                            {formatMoneyRange(
+                              category.indicativePriceMinCents,
+                              category.indicativePriceMaxCents,
+                              category.currency,
+                            )}
                           </span>
                         </div>
                       ))}

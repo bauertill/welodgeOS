@@ -3,8 +3,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import type { PropertyType, ScoutingStatus } from "generated/prisma";
+import { Fragment, useMemo, useState } from "react";
+import type { CategoryContractStatus, PropertyType } from "generated/prisma";
 
 import { Button, Select } from "~/app/_components/form";
 import type { MapPin } from "~/app/_components/scouting-map";
@@ -18,6 +18,9 @@ import {
 } from "~/app/_components/ui";
 import { formatMoney } from "~/lib/format";
 import {
+  categoryContractStatusHints,
+  categoryContractStatusLabels,
+  categoryContractStatusOrder,
   cheapestCategory,
   distanceKm,
   propertyTypeLabels,
@@ -25,6 +28,7 @@ import {
   scoutingStatusLabels,
   scoutingStatusOrder,
   totalUnits,
+  type SelectableScoutingStatus,
 } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
@@ -54,9 +58,10 @@ export function ScoutingList({
 }) {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("list");
-  const [status, setStatus] = useState<ScoutingStatus | "">("");
+  const [status, setStatus] = useState<SelectableScoutingStatus | "">("");
   const [type, setType] = useState<PropertyType | "">("");
   const [amenityIds, setAmenityIds] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const entries = api.scouting.listForEvent.useQuery({
     eventId,
@@ -74,6 +79,17 @@ export function ScoutingList({
       router.refresh();
     },
   });
+  const setCategoryStatusMutation = api.scouting.setCategoryContractStatus.useMutation({
+    onSuccess: () => void entries.refetch(),
+  });
+
+  const toggleExpanded = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const rows = entries.data ?? [];
 
@@ -126,7 +142,7 @@ export function ScoutingList({
 
         <Select
           value={status}
-          onChange={(e) => setStatus(e.target.value as ScoutingStatus | "")}
+          onChange={(e) => setStatus(e.target.value as SelectableScoutingStatus | "")}
           className="w-auto"
         >
           <option value="">Any status</option>
@@ -244,19 +260,64 @@ export function ScoutingList({
                     )
                   : null;
 
+              const categoryOpen = expanded.has(entry.id);
+              const hasCategories = property.categories.length > 0;
+              const contractStatus = (categoryId: string): CategoryContractStatus =>
+                entry.categoryContracts.find((c) => c.categoryId === categoryId)
+                  ?.status ?? "IN_NEGOTIATION";
+
               return (
-                <tr key={entry.id}>
+                <Fragment key={entry.id}>
+                <tr>
                   <Td>
-                    <Link
-                      href={`/properties/${property.id}`}
-                      className="hover:text-brand-700 font-medium"
-                    >
-                      {property.name}
-                    </Link>
-                    <span className="text-ink-500 block text-xs font-light">
-                      {propertyTypeLabels[property.type]}
-                      {property.stars ? ` · ${property.stars}-star` : ""}
-                    </span>
+                    <div className="flex items-start gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(entry.id)}
+                        disabled={!hasCategories}
+                        aria-expanded={categoryOpen}
+                        aria-label={
+                          categoryOpen ? "Collapse room categories" : "Expand room categories"
+                        }
+                        className="text-ink-400 hover:text-ink-700 mt-0.5 shrink-0 disabled:opacity-0"
+                      >
+                        <svg
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          className={`h-3.5 w-3.5 transition-transform ${categoryOpen ? "rotate-90" : ""}`}
+                        >
+                          <path
+                            d="M6 4l4 4-4 4"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                      <div>
+                        <Link
+                          href={`/properties/${property.id}`}
+                          className="hover:text-brand-700 font-medium"
+                        >
+                          {property.name}
+                        </Link>
+                        <span className="text-ink-500 block text-xs font-light">
+                          {propertyTypeLabels[property.type]}
+                          {property.stars ? ` · ${property.stars}-star` : ""}
+                        </span>
+                        {hasCategories && (
+                          <span className="text-ink-500 block text-xs font-light">
+                            {property.categories
+                              .map(
+                                (c) =>
+                                  `${c.name} · ${c.unitCount} rooms · ${categoryContractStatusLabels[contractStatus(c.id)]}`,
+                              )
+                              .join(" · ")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </Td>
                   <Td>
                     {[property.city, property.country]
@@ -265,9 +326,9 @@ export function ScoutingList({
                   </Td>
                   <Td>{units || "—"}</Td>
                   <Td>
-                    {cheapest?.indicativePriceCents
+                    {cheapest
                       ? formatMoney(
-                          cheapest.indicativePriceCents,
+                          cheapest.indicativePriceMinCents!,
                           cheapest.currency,
                         )
                       : "—"}
@@ -295,7 +356,7 @@ export function ScoutingList({
                       onChange={(e) =>
                         setStatusMutation.mutate({
                           id: entry.id,
-                          status: e.target.value as ScoutingStatus,
+                          status: e.target.value as SelectableScoutingStatus,
                         })
                       }
                       className="w-36 py-1.5 text-[13px]"
@@ -319,6 +380,49 @@ export function ScoutingList({
                     </Button>
                   </Td>
                 </tr>
+
+                {categoryOpen && hasCategories && (
+                  <tr>
+                    <Td colSpan={venue ? 8 : 7}>
+                      <div className="ml-5 space-y-2">
+                        {property.categories.map((category) => (
+                          <div
+                            key={category.id}
+                            className="flex flex-wrap items-center gap-3"
+                          >
+                            <span className="text-ink-900 w-40 shrink-0 text-[13px] font-medium">
+                              {category.name}
+                            </span>
+                            <span className="text-ink-500 w-20 shrink-0 text-xs font-light">
+                              {category.unitCount} rooms
+                            </span>
+                            <Select
+                              value={contractStatus(category.id)}
+                              title={
+                                categoryContractStatusHints[contractStatus(category.id)]
+                              }
+                              onChange={(e) =>
+                                setCategoryStatusMutation.mutate({
+                                  scoutingEntryId: entry.id,
+                                  categoryId: category.id,
+                                  status: e.target.value as CategoryContractStatus,
+                                })
+                              }
+                              className="w-40 py-1.5 text-[13px]"
+                            >
+                              {categoryContractStatusOrder.map((option) => (
+                                <option key={option} value={option}>
+                                  {categoryContractStatusLabels[option]}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                    </Td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>

@@ -103,7 +103,7 @@ Phase 2 adds the commercial position, at the grain the business works at:
   nights, and why. One entry per bulk operation, linked to every night it
   touched.
 
-Money is stored in minor units (`indicativePriceCents`, `buyPriceCents`,
+Money is stored in minor units (`indicativePriceMinCents`, `buyPriceCents`,
 `sellPriceCents`) with an explicit currency, and is never converted between
 currencies. Dates that describe a calendar day are `@db.Date`, not timestamps.
 

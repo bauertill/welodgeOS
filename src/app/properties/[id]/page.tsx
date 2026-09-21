@@ -11,7 +11,7 @@ import {
   Td,
   Th,
 } from "~/app/_components/ui";
-import { formatMoney } from "~/lib/format";
+import { formatMoneyRange } from "~/lib/format";
 import { propertyTypeLabels, totalUnits } from "~/lib/scouting";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
@@ -104,13 +104,13 @@ export default async function PropertyPage({
                               .join(" · ") || "—"}
                       </Td>
                       <Td>
-                        {category.indicativePriceCents
-                          ? formatMoney(
-                              category.indicativePriceCents,
-                              category.currency,
-                            )
-                          : "—"}
-                        {category.indicativePriceCents && (
+                        {formatMoneyRange(
+                          category.indicativePriceMinCents,
+                          category.indicativePriceMaxCents,
+                          category.currency,
+                        )}
+                        {(category.indicativePriceMinCents !== null ||
+                          category.indicativePriceMaxCents !== null) && (
                           <span className="text-ink-500 block text-xs font-light">
                             Indicative
                           </span>
