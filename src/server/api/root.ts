@@ -5,6 +5,7 @@ import { inventoryRouter } from "~/server/api/routers/inventory";
 import { propertyRouter } from "~/server/api/routers/property";
 import { reportingRouter } from "~/server/api/routers/reporting";
 import { scoutingRouter } from "~/server/api/routers/scouting";
+import { updateRouter } from "~/server/api/routers/update";
 import { userRouter } from "~/server/api/routers/user";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 
@@ -21,6 +22,7 @@ export const appRouter = createTRPCRouter({
   inventory: inventoryRouter,
   reporting: reportingRouter,
   user: userRouter,
+  update: updateRouter,
 });
 
 export type AppRouter = typeof appRouter;

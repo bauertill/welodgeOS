@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button, Field, Fieldset, FormError, Input, Textarea } from "~/app/_components/form";
@@ -108,7 +109,12 @@ export function ClientList() {
             {rows.map((client) => (
               <tr key={client.id}>
                 <Td>
-                  <span className="font-medium">{client.name}</span>
+                  <Link
+                    href={`/clients/${client.id}`}
+                    className="hover:text-brand-700 font-medium"
+                  >
+                    {client.name}
+                  </Link>
                 </Td>
                 <Td>{client.shortName ?? "—"}</Td>
                 <Td>{client._count.roomNights}</Td>

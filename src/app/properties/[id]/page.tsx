@@ -11,6 +11,7 @@ import {
   Td,
   Th,
 } from "~/app/_components/ui";
+import { UpdateThread } from "~/app/_components/update-thread";
 import { formatMoneyRange } from "~/lib/format";
 import { propertyTypeLabels, totalUnits } from "~/lib/scouting";
 import { auth } from "~/server/auth";
@@ -65,6 +66,13 @@ export default async function PropertyPage({
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          <Card>
+            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
+              Updates
+            </h2>
+            <UpdateThread propertyId={property.id} />
+          </Card>
+
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
               {hasBedConfiguration ? "Room categories" : "Unit types"}

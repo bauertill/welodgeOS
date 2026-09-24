@@ -27,6 +27,17 @@ export const clientRouter = createTRPCRouter({
     }),
   ),
 
+  byId: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(({ ctx, input }) =>
+      ctx.db.client.findUnique({
+        where: { id: input.id },
+        include: {
+          _count: { select: { roomNights: true, requests: true } },
+        },
+      }),
+    ),
+
   create: protectedProcedure
     .input(clientInput)
     .mutation(({ ctx, input }) =>

@@ -29,11 +29,15 @@ export function Input({
   );
 }
 
-export function Textarea(
-  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
-) {
+export function Textarea({
+  ref,
+  ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  ref?: React.Ref<HTMLTextAreaElement>;
+}) {
   return (
     <textarea
+      ref={ref}
       {...props}
       className={`${fieldStyles} ${fieldValidStyles} ${props.className ?? ""}`}
     />

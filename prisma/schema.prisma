@@ -113,6 +113,7 @@ model Property {
   contacts        PropertyContact[]
   amenities       Amenity[]         @relation("PropertyAmenities")
   scoutingEntries ScoutingEntry[]
+  updates         Update[]
 
   scoutedBy   User?   @relation(fields: [scoutedById], references: [id], onDelete: SetNull)
   scoutedById String?
@@ -283,6 +284,7 @@ model User {
   salesNights       RoomNight[]        @relation("SalesOwner")
   requests          RoomNightRequest[] @relation("RequestOwner")
   ledgerEntries     LedgerEntry[]
+  updates           Update[]
 }
 
 model VerificationToken {
@@ -357,8 +359,33 @@ model Client {
 
   roomNights RoomNight[]
   requests   RoomNightRequest[]
+  updates    Update[]
 
   @@unique([name])
+}
+
+/// A free-text post on a property or a client's history — a meeting note, a
+/// call summary, feedback — kept forever like `LedgerEntry`. Exactly one of
+/// `propertyId`/`clientId` is set, enforced by the router rather than the
+/// database. `@[Full Name]` inside `body` is a mention, written as literal
+/// text at post time: mentions are a visual highlight only today, with no
+/// notification behind them, so there is nothing to join a `User` row for.
+model Update {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId String?
+
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String?
+
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String?
+
+  @@index([propertyId])
+  @@index([clientId])
 }
 
 /// Our own numbering of a countable room: `property + category + slot number`

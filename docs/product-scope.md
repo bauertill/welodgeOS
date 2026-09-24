@@ -116,6 +116,24 @@ Magic-link sign-in by email is built and deliberately switched off: at launch no
 outside the Workspace needs an account. It becomes available again by configuring an email
 sender, without any code change. See `docs/todos.md` §2.
 
+### 2.6 Updates — a running history per property and client
+
+A property or a client keeps a running, append-only feed of free-text posts — a meeting
+note, a call summary, feedback from the field — the same way `LedgerEntry` keeps a
+permanent record of every inventory change (§4.7). Unlike a room-night, an update is never
+about a commercial position, so it sits outside all three phases and applies to a property
+or a client regardless of what phase work is happening on it.
+
+A post can mention a colleague with `@Name`, which highlights their name inline. This is a
+visual tag only: nothing is sent to them, and nothing is stored beyond the post's own text
+— there is no notification, and no record of who was mentioned separate from the words
+themselves. That is a deliberate, minimal first version; if the team wants a mentioned
+colleague to actually be notified, that is a distinct piece of work (an email or in-app
+notification path does not exist yet, per §2.5).
+
+An update, once posted, cannot be edited or deleted — the same rule as the ledger. It is a
+record of what was said, not a shared document to be revised.
+
 ---
 
 ## 3. Phase 1 — Scouting
@@ -763,6 +781,11 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
     automatically from a source like Booking.com instead of typed by hand? Worth a
     feasibility check — no public API exists for this, so it would mean scraping or a
     paid data provider, neither of which is built.
+11. **Update mentions and notifications (§2.6).** Should tagging a colleague with `@Name`
+    actually notify them — an email, at minimum, since that is the only sending path
+    already wired up (magic-link sign-in, §2.5) — or is the visual highlight the intended
+    behaviour going forward? Left as a visual tag only until this is answered, since it is
+    the smaller and fully reversible choice.
 
 ---
 
@@ -780,6 +803,7 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
 | **Exposure** | Any night where the sales position is stronger than the acquisition position. |
 | **Flexibility window** | A party's pre-authorised `earliestArrival` → `latestDeparture` range. |
 | **Position grid** | The `(acquisition, sales)` matrix that yields icon and severity. |
+| **Update** | A permanent, append-only post on a property or client's history — a meeting note, a call summary, feedback. Can mention a colleague, as a visual highlight only. |
 
 ---
 
@@ -900,6 +924,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Roles and permissions | **Not built** | Every signed-in user has full access to everything — see §9, open question 5 |
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://welodge-os.vercel.app, on Vercel with a Neon PostgreSQL database. `master` deploys automatically |
+| §2.6 Updates | **Built** | Append-only feed per property and per client, with `@Name` mentions rendered as a highlight. No notification is sent — see §9 |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
