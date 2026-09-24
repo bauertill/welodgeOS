@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 import { Combobox } from "~/app/_components/combobox";
 import { Input } from "~/app/_components/form";
@@ -54,20 +54,6 @@ export function InventoryGrid({
     checkOut: parseDay(checkOut),
   });
   const clients = api.clients.list.useQuery();
-  const availability = api.reporting.availability.useQuery({ eventId });
-
-  // Everything starts expanded — collapsing is something a rep opts into
-  // once a hotel or category is no longer what they're looking at, not the
-  // default state of a screen they just opened.
-  const seeded = useRef(false);
-  useEffect(() => {
-    if (seeded.current || !grid.data) return;
-    seeded.current = true;
-    setExpandedProperties(new Set(grid.data.properties.map((p) => p.id)));
-    setExpandedCategories(
-      new Set(grid.data.properties.flatMap((p) => p.categories.map((c) => c.id))),
-    );
-  }, [grid.data]);
 
   const toggleSet = (
     setter: React.Dispatch<React.SetStateAction<Set<string>>>,
@@ -83,16 +69,6 @@ export function InventoryGrid({
   const properties = grid.data?.properties ?? [];
   const dates = grid.data?.dates ?? [];
   const cells = grid.data?.cells ?? {};
-
-  const availabilityByProperty = useMemo(() => {
-    const map = new Map<string, { categoryName: string; free: number; slots: number }[]>();
-    for (const row of availability.data ?? []) {
-      const list = map.get(row.propertyId) ?? [];
-      list.push({ categoryName: row.categoryName, free: row.genuinelyFree, slots: row.slots });
-      map.set(row.propertyId, list);
-    }
-    return map;
-  }, [availability.data]);
 
   // The flat, visible row order the drag-select rectangle is measured
   // against — only rooms belonging to an expanded hotel and category.
@@ -290,7 +266,6 @@ export function InventoryGrid({
             <tbody>
               {properties.map((property) => {
                 const propertyOpen = expandedProperties.has(property.id);
-                const summary = availabilityByProperty.get(property.id) ?? [];
                 return (
                   <Fragment key={property.id}>
                     <tr className="bg-ink-50/60">
@@ -307,13 +282,6 @@ export function InventoryGrid({
                           {property.name}
                           {property.stars ? ` · ${property.stars}★` : ""}
                         </button>
-                        {summary.length > 0 && (
-                          <p className="text-ink-500 mt-1 pl-5 text-[11px] font-light">
-                            {summary
-                              .map((row) => `${row.categoryName}: ${row.free} of ${row.slots} free`)
-                              .join(" · ")}
-                          </p>
-                        )}
                       </td>
                     </tr>
 

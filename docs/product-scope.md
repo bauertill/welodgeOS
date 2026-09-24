@@ -593,10 +593,9 @@ offer, per room category, without opening the stock sheet.
 
 The familiar spreadsheet view is generated, never stored: supplier / room category / room
 down the rows, one column per night, each cell carrying the icon and severity from §4.4 for
-that exact room-night. Rows are grouped property → category → slot number and can be
-collapsed at the hotel or category level; columns span whatever check-in/check-out window is
-currently in view, filtered by property, room type, client, star rating, and either axis's
-status.
+that exact room-night. Rows are grouped property → category → slot number, collapsed to the
+property level by default, and columns span whatever check-in/check-out window is currently
+in view, filtered by property and client.
 
 Editing happens by highlighting a rectangle of cells — a set of rooms crossed with a
 contiguous range of nights — which opens a panel scoped to exactly that selection. The
