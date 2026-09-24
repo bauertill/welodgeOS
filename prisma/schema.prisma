@@ -65,20 +65,62 @@ model Event {
   endDate   DateTime    @db.Date
   status    EventStatus @default(PLANNING)
 
-  /// The venue guests need to be near. Distance-to-venue is derived from this
-  /// and the property's own coordinates.
-  venueName      String?
-  venueLatitude  Float?
-  venueLongitude Float?
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// Venues, airports, stations and the rest (doc §3.7). This replaced the
+  /// single venue an event used to carry: a Games has several.
+  placesOfInterest PlaceOfInterest[]
 
   scoutingEntries ScoutingEntry[]
   roomNights      RoomNight[]
   ledger          LedgerEntry[]
 
   @@index([startDate])
+}
+
+/// What kind of place guests need to reach (doc §3.7). The category drives
+/// how the pin is drawn and how the list is grouped, nothing else.
+enum PlaceCategory {
+  VENUE
+  TRAIN_STATION
+  AIRPORT
+  /// International Broadcast Centre — where the broadcasters work.
+  IBC
+  OTHER
+}
+
+/// Somewhere guests need to get to for one event: a stadium, an airport, a
+/// station, the IBC (doc §3.7). Unlike a property, a place of interest belongs
+/// to a single event — the same airport used by two events is entered twice.
+model PlaceOfInterest {
+  id       String        @id @default(cuid())
+  name     String
+  category PlaceCategory
+
+  /// Train stations: the lines serving it, as the business writes them
+  /// ("RER A, RER D, M1, M14"). Free text — this is read, never computed on.
+  lines String?
+
+  address String?
+
+  /// Required, unlike a property's: a place nobody can locate is of no use,
+  /// since its whole purpose is to be measured from.
+  latitude  Float
+  longitude Float
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+
+  /// One name per event — two "Gare de Lyon" pins on one map is a mistake,
+  /// not a distinction.
+  @@unique([eventId, name])
+  @@index([eventId, category])
 }
 
 /// A hotel or apartment building we could contract. Scouted once, reusable

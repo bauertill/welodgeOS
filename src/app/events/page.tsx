@@ -57,9 +57,11 @@ export default async function EventsPage() {
                   >
                     {event.name}
                   </Link>
-                  {event.venueName && (
+                  {event.placesOfInterest.length > 0 && (
                     <span className="text-ink-500 block text-xs font-light">
-                      {event.venueName}
+                      {event.placesOfInterest
+                        .map((venue) => venue.name)
+                        .join(" · ")}
                     </span>
                   )}
                 </Td>

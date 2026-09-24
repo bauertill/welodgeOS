@@ -82,6 +82,9 @@ database is a Neon Postgres instance provisioned through Vercel's marketplace.
     restricted to the web addresses allowed to use it, so `os.welodge.net/*`
     has to join `welodge-os.vercel.app` and `localhost:3000` in its
     restrictions, or the map will show its "no key" notice on the live site.
+    **Still outstanding** — the keys exist and are set on Vercel, but the new
+    address was added to the key's restrictions after they were made, so this
+    has to be checked before anyone judges the live map.
 - [ ] **Know the `.env.local` trap.** Several Vercel CLI commands (`link`, and
       anything that provisions a marketplace database) write a `.env.local`
       holding the *production* `DATABASE_URL`. Next.js reads `.env.local` in
@@ -144,9 +147,55 @@ done.
 - [ ] **Configurable deadline windows.** The "option expires in 7 days" /
       "block expires in 48 hours" warning thresholds are hard-coded constants
       in the code, with no screen to change them.
+- [ ] **Google map, places of interest and client map links** (§3.7, §3.8,
+      §5.5). Specified 2026-09-18, not built. What has to happen outside the
+      code first:
+  - [ ] **A Google Cloud billing account for We Lodge**, in the same Google
+        Cloud project that already holds the sign-in client. Someone at We
+        Lodge with a company card has to do this; it can't be done on their
+        behalf. Enable the *Maps JavaScript API* and the *Routes API*.
+  - [ ] **Two keys, not one.** A *browser key* that draws the map, restricted
+        to `os.welodge.net`, `welodge-os.vercel.app` and `localhost:3000` (and
+        `localhost:3001`, which is where the app lands when another project
+        holds 3000) so it is useless on any other site; and a *server key* for
+        travel times, restricted to the
+        Routes API, which never leaves the server. Both go on Vercel and in the
+        local `.env`: the browser key as `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, the
+        server key as `GOOGLE_MAPS_SERVER_KEY`.
+  - [ ] **A map ID** (Google Cloud → Map management → Create map ID,
+        JavaScript, Vector), set as `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`. Without
+        it the map falls back to Google's demo ID, which works but is meant
+        for testing.
+  - [ ] **Set the keys on Vercel before the map code reaches `master`.** The
+        map is already switched to Google on the `google-maps` branch; without
+        a key the live site would show a notice where the map was.
+  - [ ] **A monthly budget alert in Google Cloud.** Expected cost is a few
+        dollars a month: Google gives several thousand free lookups per month,
+        and opening one property against five places of interest is 15
+        lookups (5 places × 3 modes). A budget alert is the safeguard in case
+        a link is opened far more than expected — by a crawler, for instance.
+  - [ ] **Baseline the production database first** — see §1. This is the
+        first change to the database's shape since it went live, and there is
+        no migration history to apply it from. Pushing the code to `master`
+        without updating the live database first would break the live site.
+  - [ ] **Carry the live venues across when the schema is applied.** The three
+        `Event.venue*` columns are gone, replaced by places of interest
+        (§3.7). Applying the schema drops them, so before that: read every
+        event's venue name and coordinates out of the live database, apply the
+        schema, then write each one back as a place of interest of category
+        `VENUE`. Done locally on 2026-09-24 this way; the live database still
+        has to have it done. Skipping it loses every venue silently.
+  - [ ] **Work out why the Google map stopped rendering locally.** It drew
+        correctly once, with all pins, on 2026-09-24 and then stopped. Google
+        accepts the key (maps can be created by hand on the same page), there
+        are no errors in the browser, and it is not React strict mode and not
+        the corrupted build cache that was cleared. Unresolved — the map must
+        not be called working until somebody has seen it.
 - [ ] **Google My Maps import for property coordinates** (§3.1). Coordinates
       are typed in by hand today; there's no bulk import from the sheet this
-      replaced.
+      replaced. *Waiting on the current My Map's link or KML export*, so the
+      import copies what is actually on it (layers, colours, notes) rather
+      than guessing.
 - [ ] **An admin screen for the amenity list** (§3.4). The controlled
       vocabulary of amenities is seeded in `prisma/seed.ts` and can only be
       changed by editing that file and reseeding — not through the app.

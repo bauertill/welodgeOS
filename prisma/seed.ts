@@ -4,7 +4,8 @@ const db = new PrismaClient();
 
 /**
  * Seeds the amenity vocabulary (which the app depends on) and a small, honest
- * scouting example: one event with a venue, three properties around it.
+ * scouting example: one event with its places of interest, three properties
+ * around them.
  *
  * Run with `--amenities-only` (`pnpm run db:seed:amenities`) to write just the
  * vocabulary and stop. That is the only form safe against a live database; the
@@ -69,6 +70,7 @@ async function main() {
   await db.roomSlot.deleteMany();
   await db.scoutingEntry.deleteMany();
   await db.property.deleteMany();
+  await db.placeOfInterest.deleteMany();
   await db.event.deleteMany();
   await db.client.deleteMany();
 
@@ -80,9 +82,49 @@ async function main() {
       startDate: new Date("2028-07-10T00:00:00Z"),
       endDate: new Date("2028-08-05T00:00:00Z"),
       status: "PLANNING",
-      venueName: "SoFi Stadium",
-      venueLatitude: 33.9535,
-      venueLongitude: -118.3392,
+      // Where guests have to get to (doc §3.7). A Games is several venues and
+      // more than one way in, which is why these are a list, not fields on the
+      // event.
+      placesOfInterest: {
+        create: [
+          {
+            name: "SoFi Stadium",
+            category: "VENUE",
+            address: "1001 Stadium Dr, Inglewood, CA",
+            latitude: 33.9535,
+            longitude: -118.3392,
+          },
+          {
+            name: "Los Angeles Memorial Coliseum",
+            category: "VENUE",
+            address: "3911 S Figueroa St, Los Angeles, CA",
+            latitude: 34.0141,
+            longitude: -118.2879,
+          },
+          {
+            name: "Los Angeles International Airport",
+            category: "AIRPORT",
+            address: "1 World Way, Los Angeles, CA",
+            latitude: 33.9416,
+            longitude: -118.4085,
+          },
+          {
+            name: "Union Station",
+            category: "TRAIN_STATION",
+            lines: "Metro A, Metro B, Metro D, Metrolink, Amtrak",
+            address: "800 N Alameda St, Los Angeles, CA",
+            latitude: 34.0561,
+            longitude: -118.2365,
+          },
+          {
+            name: "International Broadcast Centre",
+            category: "IBC",
+            address: "Los Angeles Convention Center, 1201 S Figueroa St",
+            latitude: 34.0403,
+            longitude: -118.2696,
+          },
+        ],
+      },
     },
   });
 

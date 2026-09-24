@@ -10,9 +10,6 @@ const eventInput = z.object({
   startDate: z.date(),
   endDate: z.date(),
   status: z.enum(["PLANNING", "ACTIVE", "CLOSED"]).default("PLANNING"),
-  venueName: z.string().optional(),
-  venueLatitude: z.number().min(-90).max(90).optional(),
-  venueLongitude: z.number().min(-180).max(180).optional(),
 });
 
 export const eventRouter = createTRPCRouter({
@@ -20,6 +17,13 @@ export const eventRouter = createTRPCRouter({
     ctx.db.event.findMany({
       orderBy: { startDate: "asc" },
       include: {
+        // Venues are places of interest now (doc §3.7), and the list names
+        // them under the event.
+        placesOfInterest: {
+          where: { category: "VENUE" },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        },
         _count: { select: { scoutingEntries: true, roomNights: true } },
       },
     }),
@@ -28,7 +32,14 @@ export const eventRouter = createTRPCRouter({
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(({ ctx, input }) =>
-      ctx.db.event.findUnique({ where: { id: input.id } }),
+      ctx.db.event.findUnique({
+        where: { id: input.id },
+        include: {
+          placesOfInterest: {
+            orderBy: [{ category: "asc" }, { name: "asc" }],
+          },
+        },
+      }),
     ),
 
   create: protectedProcedure
@@ -40,7 +51,6 @@ export const eventRouter = createTRPCRouter({
             ...input,
             city: input.city?.trim() || null,
             country: input.country?.trim() || null,
-            venueName: input.venueName?.trim() || null,
           },
         });
         await logAudit(tx, {
@@ -72,9 +82,6 @@ export const eventRouter = createTRPCRouter({
             { key: "startDate", label: "Start date" },
             { key: "endDate", label: "End date" },
             { key: "status", label: "Status" },
-            { key: "venueName", label: "Venue" },
-            { key: "venueLatitude", label: "Venue latitude" },
-            { key: "venueLongitude", label: "Venue longitude" },
           ],
         );
         return updated;

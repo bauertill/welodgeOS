@@ -140,8 +140,12 @@ src/
                         reporting, user
 ```
 
-The map is Leaflet over OpenStreetMap tiles, loaded browser-side only. The
-scouting list is the source of truth; the map renders whatever has coordinates.
+The map is Google Maps, loaded browser-side only, and needs
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (setup in `docs/todos.md` §4); without it the
+map says so and the list carries on working. The scouting list is the source of
+truth; the map renders whatever has coordinates. Looking up coordinates from an
+address still uses OpenStreetMap, because Google's terms do not let us keep
+what its lookup returns.
 
 Every screen that says something about a room-night — the stock sheet, the
 deadline dashboard, the exposure report — asks `lib/position.ts` what to say, so

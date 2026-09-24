@@ -9,10 +9,6 @@ import { api } from "~/trpc/server";
 
 export const metadata = { title: "Edit event" };
 
-/** Numbers and dates come back from the database; the form works in strings. */
-const str = (value: number | null | undefined) =>
-  value === null || value === undefined ? "" : String(value);
-
 export default async function EditEventPage({
   params,
 }: {
@@ -41,9 +37,6 @@ export default async function EditEventPage({
           startDate: dayKey(event.startDate),
           endDate: dayKey(event.endDate),
           status: event.status,
-          venueName: event.venueName ?? "",
-          venueLatitude: str(event.venueLatitude),
-          venueLongitude: str(event.venueLongitude),
         }}
       />
 

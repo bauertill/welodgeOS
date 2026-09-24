@@ -21,9 +21,6 @@ export type EventFormValues = {
   startDate: string;
   endDate: string;
   status: "PLANNING" | "ACTIVE" | "CLOSED";
-  venueName: string;
-  venueLatitude: string;
-  venueLongitude: string;
 };
 
 export const emptyEvent: EventFormValues = {
@@ -33,15 +30,12 @@ export const emptyEvent: EventFormValues = {
   startDate: "",
   endDate: "",
   status: "PLANNING",
-  venueName: "",
-  venueLatitude: "",
-  venueLongitude: "",
 };
 
 /**
- * An event is the container everything else hangs off (doc §2.3). The venue
- * coordinates are optional but worth having — distance-to-venue is derived
- * from them.
+ * An event is the container everything else hangs off (doc §2.3). Venues are
+ * not here: an event can have several, so they live on its list of places of
+ * interest (doc §3.7) alongside airports, stations and the IBC.
  */
 export function EventForm({
   initial = emptyEvent,
@@ -76,9 +70,6 @@ export function EventForm({
   const set = (key: keyof typeof values, value: string) =>
     setValues((current) => ({ ...current, [key]: value }));
 
-  const num = (value: string) =>
-    value.trim() && Number.isFinite(Number(value)) ? Number(value) : undefined;
-
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -99,9 +90,6 @@ export function EventForm({
       startDate,
       endDate,
       status: values.status,
-      venueName: values.venueName,
-      venueLatitude: num(values.venueLatitude),
-      venueLongitude: num(values.venueLongitude),
     };
 
     if (initial.id) update.mutate({ ...payload, id: initial.id });
@@ -167,31 +155,12 @@ export function EventForm({
               <option value="CLOSED">Closed</option>
             </Select>
           </Field>
-
-          <Field label="Venue">
-            <Input
-              value={values.venueName}
-              onChange={(e) => set("venueName", e.target.value)}
-              placeholder="e.g. SoFi Stadium"
-            />
-          </Field>
-
-          <Field label="Venue latitude">
-            <Input
-              value={values.venueLatitude}
-              onChange={(e) => set("venueLatitude", e.target.value)}
-              inputMode="decimal"
-            />
-          </Field>
-
-          <Field label="Venue longitude">
-            <Input
-              value={values.venueLongitude}
-              onChange={(e) => set("venueLongitude", e.target.value)}
-              inputMode="decimal"
-            />
-          </Field>
         </div>
+
+        <p className="text-ink-500 mt-4 text-xs font-light">
+          Venues, airports, stations and the IBC are kept on the event itself,
+          under Places of interest.
+        </p>
       </Fieldset>
 
       <div className="flex gap-3">

@@ -8,7 +8,7 @@ import type { CategoryContractStatus, PropertyType } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
 import { Button, Select } from "~/app/_components/form";
-import type { MapPin } from "~/app/_components/scouting-map";
+import type { MapPin, MapPlace } from "~/app/_components/scouting-map";
 import {
   EmptyState,
   Pill,
@@ -23,7 +23,7 @@ import {
   categoryContractStatusLabels,
   categoryContractStatusOrder,
   cheapestCategory,
-  distanceKm,
+  nearestPlace,
   propertyTypeLabels,
   scoutingStatusHints,
   scoutingStatusLabels,
@@ -33,7 +33,7 @@ import {
 } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
-// Leaflet touches `window` on import, so the map only ever loads in the browser.
+// Google Maps only exists in the browser, so the map never renders on the server.
 const ScoutingMap = dynamic(
   () => import("~/app/_components/scouting-map").then((m) => m.ScoutingMap),
   {
@@ -46,15 +46,14 @@ const ScoutingMap = dynamic(
   },
 );
 
-type Venue = { name: string; latitude: number; longitude: number } | null;
-
 export function ScoutingList({
   eventId,
-  venue,
+  places,
   amenities,
 }: {
   eventId: string;
-  venue: Venue;
+  /** The event's places of interest (doc §3.7) — venues, airports, stations. */
+  places: MapPlace[];
   amenities: { id: string; label: string }[];
 }) {
   const router = useRouter();
@@ -110,6 +109,13 @@ export function ScoutingList({
   ): CategoryContractStatus =>
     entry.categoryContracts.find((c) => c.categoryId === categoryId)
       ?.status ?? "IN_NEGOTIATION";
+
+  // An event can have several venues, so "to venue" means the nearest one and
+  // has to name it (doc §3.7).
+  const venues = useMemo(
+    () => places.filter((place) => place.category === "VENUE"),
+    [places],
+  );
 
   const pins: MapPin[] = useMemo(
     () =>
@@ -236,7 +242,7 @@ export function ScoutingList({
         />
       ) : view === "map" ? (
         <>
-          <ScoutingMap pins={pins} venue={venue} />
+          <ScoutingMap pins={pins} places={places} />
           {withoutCoordinates > 0 && (
             <p className="text-ink-500 text-xs font-light">
               {withoutCoordinates}{" "}
@@ -253,7 +259,7 @@ export function ScoutingList({
               <Th>Location</Th>
               <Th>Rooms</Th>
               <Th>From</Th>
-              {venue && <Th>To venue</Th>}
+              {venues.length > 0 && <Th>To venue</Th>}
               <Th>Amenities</Th>
               <Th>Status</Th>
               <Th>{""}</Th>
@@ -265,18 +271,15 @@ export function ScoutingList({
               const cheapest = cheapestCategory(property.categories);
               const units =
                 totalUnits(property.categories) || property.totalRooms || 0;
-              const distance =
-                venue &&
-                property.latitude !== null &&
-                property.longitude !== null
-                  ? distanceKm(
-                      {
-                        latitude: property.latitude,
-                        longitude: property.longitude,
-                      },
-                      venue,
-                    )
-                  : null;
+              const nearest = nearestPlace(
+                property.latitude !== null && property.longitude !== null
+                  ? {
+                      latitude: property.latitude,
+                      longitude: property.longitude,
+                    }
+                  : null,
+                venues,
+              );
 
               const categoryOpen = expanded.has(entry.id);
               const hasCategories = property.categories.length > 0;
@@ -369,9 +372,22 @@ export function ScoutingList({
                         )
                       : "—"}
                   </Td>
-                  {venue && (
+                  {venues.length > 0 && (
                     <Td>
-                      {distance === null ? "—" : `${distance.toFixed(1)} km`}
+                      {nearest === null ? (
+                        "—"
+                      ) : (
+                        <>
+                          <span className="whitespace-nowrap">
+                            {nearest.km.toFixed(1)} km
+                          </span>
+                          {venues.length > 1 && (
+                            <span className="text-ink-500 block text-xs font-light">
+                              {nearest.place.name}
+                            </span>
+                          )}
+                        </>
+                      )}
                     </Td>
                   )}
                   <Td>
@@ -419,7 +435,7 @@ export function ScoutingList({
 
                 {categoryOpen && hasCategories && (
                   <tr>
-                    <Td colSpan={venue ? 8 : 7}>
+                    <Td colSpan={venues.length > 0 ? 8 : 7}>
                       <div className="ml-5 space-y-2">
                         {property.categories.map((category) => {
                           const position = availabilityByCategory.get(category.id);

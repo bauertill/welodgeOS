@@ -1,5 +1,6 @@
 import type {
   CategoryContractStatus,
+  PlaceCategory,
   PropertyType,
   ScoutingStatus,
 } from "generated/prisma";
@@ -69,6 +70,44 @@ export const propertyTypeLabels: Record<PropertyType, string> = {
 };
 
 /**
+ * The places guests need to reach (doc §3.7). Venue first: it is the one every
+ * event has, and the one the scouting list measures distance to.
+ */
+export const placeCategoryOrder: PlaceCategory[] = [
+  "VENUE",
+  "TRAIN_STATION",
+  "AIRPORT",
+  "IBC",
+  "OTHER",
+];
+
+export const placeCategoryLabels: Record<PlaceCategory, string> = {
+  VENUE: "Venue",
+  TRAIN_STATION: "Train station",
+  AIRPORT: "Airport",
+  IBC: "IBC",
+  OTHER: "Other",
+};
+
+/** Plural forms, for the headings a list of them sits under. */
+export const placeCategoryPlurals: Record<PlaceCategory, string> = {
+  VENUE: "Venues",
+  TRAIN_STATION: "Train stations",
+  AIRPORT: "Airports",
+  IBC: "IBC",
+  OTHER: "Other places",
+};
+
+/** What each one is for, so nobody has to guess what belongs where. */
+export const placeCategoryHints: Record<PlaceCategory, string> = {
+  VENUE: "Where the event happens. Distance to the nearest one is on the scouting list.",
+  TRAIN_STATION: "Record the lines serving it — a client asks which ones.",
+  AIRPORT: "Where guests fly in.",
+  IBC: "The International Broadcast Centre, where the broadcasters work.",
+  OTHER: "Anything else guests need to get to.",
+};
+
+/**
  * A property is the same property regardless of case or stray whitespace —
  * "Hotel Carmel", "hotel carmel" and " Hotel Carmel " all name one place.
  * Used to catch a duplicate before it is ever saved (doc §3.1).
@@ -96,6 +135,30 @@ export function distanceKm(
       Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
+
+type Located = { latitude: number; longitude: number };
+
+/**
+ * The venue a property is closest to, and how far. An event can have several
+ * (doc §3.7), so "distance to venue" has to say *which* venue, or the number
+ * means nothing.
+ */
+export function nearestPlace<T extends Located & { name: string }>(
+  from: Located | null,
+  places: T[],
+): { place: T; km: number } | null {
+  if (!from || places.length === 0) return null;
+
+  return places
+    .map((place) => ({ place, km: distanceKm(from, place) }))
+    .sort((a, b) => a.km - b.km)[0]!;
+}
+
+type CategoryLike = {
+  unitCount: number;
+  indicativePriceCents: number | null;
+  currency: string;
+};
 
 /** Total rooms/units across a property's categories. */
 export function totalUnits(categories: { unitCount: number }[]): number {

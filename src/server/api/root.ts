@@ -3,6 +3,7 @@ import { auditRouter } from "~/server/api/routers/audit";
 import { clientRouter } from "~/server/api/routers/client";
 import { eventRouter } from "~/server/api/routers/event";
 import { inventoryRouter } from "~/server/api/routers/inventory";
+import { placeRouter } from "~/server/api/routers/place";
 import { propertyRouter } from "~/server/api/routers/property";
 import { reportingRouter } from "~/server/api/routers/reporting";
 import { scoutingRouter } from "~/server/api/routers/scouting";
@@ -16,6 +17,7 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
  */
 export const appRouter = createTRPCRouter({
   event: eventRouter,
+  place: placeRouter,
   property: propertyRouter,
   scouting: scoutingRouter,
   amenity: amenityRouter,
