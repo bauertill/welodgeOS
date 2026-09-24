@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AddToList } from "~/app/_components/add-to-list";
 import { EventTabs } from "~/app/_components/event-tabs";
+import { PlacesOfInterest } from "~/app/_components/places-of-interest";
 import {
   ScoutingList,
   ScoutingStatusKey,
@@ -28,14 +29,16 @@ export default async function EventPropertiesPage({
 
   if (!event) notFound();
 
-  const venue =
-    event.venueLatitude !== null && event.venueLongitude !== null
-      ? {
-          name: event.venueName ?? "Venue",
-          latitude: event.venueLatitude,
-          longitude: event.venueLongitude,
-        }
-      : null;
+  // The map and the list both read from the event's places of interest
+  // (doc §3.7) — the map shows all of them, the list measures to the venues.
+  const places = event.placesOfInterest.map((place) => ({
+    id: place.id,
+    name: place.name,
+    category: place.category,
+    lines: place.lines,
+    latitude: place.latitude,
+    longitude: place.longitude,
+  }));
 
   return (
     <>
@@ -60,7 +63,11 @@ export default async function EventPropertiesPage({
 
       <EventTabs eventId={event.id} />
 
-      <ScoutingList eventId={event.id} venue={venue} amenities={amenities} />
+      <ScoutingList eventId={event.id} places={places} amenities={amenities} />
+
+      <div className="mt-8">
+        <PlacesOfInterest eventId={event.id} />
+      </div>
 
       <Card className="mt-8">
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">

@@ -1,6 +1,8 @@
 # We Lodge OS — Product Scope: Inventory Management
 
-**Status:** Phases 1–2 built and deployed, Phase 3 specified · **Date:** 2026-09-06 ·
+**Status:** Phases 1–2 built and deployed; places of interest (§3.7) and the Google map built
+but not yet live; travel times (§3.8) and client map links (§5.5) specified · **Date:**
+2026-09-24 ·
 **Audience:** product + engineering
 
 See §12 for exactly what is implemented today. This document and the code move
@@ -107,6 +109,10 @@ Two consequences worth stating plainly, because neither is obvious from a screen
 - **A first sign-in creates the account silently.** Anyone in the Workspace who visits the
   site becomes a user of it, with full access, the moment they sign in.
 
+**One exception: client map links (§5.5).** A client who has been sent a link can open that
+one page without signing in. It shows a chosen shortlist and nothing else; it cannot be
+used to reach any other part of the system, and a rep can switch it off at any time.
+
 The system is a website, not something anyone installs. It runs at
 **https://welodge-os.vercel.app**, hosted on Vercel, with its database (PostgreSQL, hosted
 by Neon) in Vercel's `we-lodge` account. Changes reach the live site by being pushed to the
@@ -133,7 +139,7 @@ Common to every type:
 | `type` | `HOTEL` \| `APARTMENT` \| `APARTHOTEL` |
 | `address`, `city`, `country` | |
 | `latitude`, `longitude` | Optional. Present ⇒ pin on the map view. |
-| `distanceToVenue` | Derived from coordinates + the event's venue, when both exist. |
+| `distanceToVenue` | Derived: straight-line distance to the event's **nearest venue** (§3.7), when both have coordinates. |
 | `stars` | Hotels and aparthotels; optional. Not asked of a plain apartment. |
 | `amenities` | Many-to-many against a controlled vocabulary (§3.4). |
 | `contacts` | Name, role, email, phone. Zero or more. |
@@ -160,13 +166,25 @@ any event's scouting list, or carries booked inventory. Take it off every list f
 property page states this rather than silently doing nothing.
 
 **Map:** the list is the source of truth; the map is a *view* over whatever has
-coordinates. Import from Google My Maps (KML/CSV) is the expected ingestion path for the
+coordinates (§3.8). Import from Google My Maps (KML/CSV) is the expected ingestion path for the
 first load. A property with no coordinates is valid and simply absent from the map.
+
+**Google My Maps is imported, not connected.** Google offers no way for another system to
+read a My Map as it changes, so there is no live link between the two. The existing map is
+imported once; from then on We Lodge OS is where properties are kept, and the My Map is
+retired rather than maintained alongside it. Two maps edited in parallel would drift, and
+nobody could say which was right.
 
 **Finding coordinates:** the scouting form can look an address up on OpenStreetMap rather
 than making a rep hunt down latitude/longitude by hand. It is a convenience, not a source of
 truth — a rep can always override what comes back, and a miss just means entering the
-numbers manually, the same as today.
+numbers manually, the same as today. Coordinates copied out of Google Maps (right-click a
+spot, click the numbers) can be pasted in.
+
+This lookup stays on OpenStreetMap even though the map itself moves to Google (§3.8).
+Google's terms do not allow coordinates from its address lookup to be kept permanently. The
+coordinates we store are our own record of where a place is, so they come from a source
+that lets us keep them.
 
 ### 3.2 Hotel specifics
 
@@ -276,6 +294,82 @@ supplier or client relationship recorded against it is refused, and told to rele
 cancel it properly instead, which keeps the record rather than erasing it. Removal still
 writes a ledger entry (what was removed, by whom), even though the room-nights themselves
 are then deleted — the ledger's own summary stays readable as history.
+
+### 3.7 Places of interest
+
+A **place of interest** is somewhere guests will need to get to: the venue, the airport
+they fly into, the station their trains leave from. The point of recording them is to judge
+properties by how well connected they are, and to tell a client the same thing (§5.5).
+
+Places of interest **belong to one event**. The same airport used by two events in one city is
+entered twice. That was a deliberate choice for simplicity: there is no shared library of
+places the way there is for properties (§3.5), so each event keeps its own list.
+
+| Field | Notes |
+| --- | --- |
+| `event` | The event this place matters to. |
+| `name` | "Stade de France", "Paris CDG", "Gare de Lyon". |
+| `category` | `VENUE` \| `TRAIN_STATION` \| `AIRPORT` \| `IBC` \| `OTHER` |
+| `lines` | Train stations only: the lines serving it, as free text ("RER A, RER D, M1, M14"). |
+| `address` | Optional. |
+| `latitude`, `longitude` | **Required.** A place of interest that cannot be located is of no use. |
+| `notes` | Free text. |
+
+**An event can have several venues.** This replaces the single venue an event used to carry.
+Multi-venue events such as a Games or a tour are the norm rather than the exception. Any
+existing event venue becomes a place of interest of category `VENUE`, with nothing lost, and
+the event itself no longer holds a venue of its own — it is one entry in this list like any
+other.
+
+**The IBC has a category of its own**, rather than sitting under "other", because at a Games
+it is where a large share of the guests we sell to actually work, and "how far is the IBC"
+is asked often enough to be worth grouping and filtering on. Other one-off places — a
+training site, a hospitality venue, an office — are `OTHER`.
+
+**Distance to venue** on the scouting list (§3.1) is measured to the *nearest* venue, and
+says which one it is. It is a straight line, worked out on the spot from coordinates and
+free to calculate. It is meant for sorting a long list quickly, not for telling a client how
+long a journey takes. Real travel times are in §3.8.
+
+### 3.8 The map and travel times
+
+**The map is Google Maps.** It shows every property on the event's scouting list that has
+coordinates, coloured by scouting status as before, together with the event's places of
+interest, each marked by its category. The list is still the source of truth (§3.1); the
+map only displays it.
+
+The reason for moving from OpenStreetMap to Google is **travel times by public transport**.
+Google is the only provider with timetables for every city we work in. Its terms require its
+travel times to be shown on a Google map, so the map had to move with them.
+
+**Travel times** from a property to a place of interest are given for three ways of
+getting there:
+
+| Mode | What it means |
+| --- | --- |
+| **Bike** | Google's cycling route. |
+| **Car** | Google's driving route, **without live traffic**: a typical journey, not a rush-hour one. |
+| **Public transport** | Google's public transport route: trains, metro, trams, buses and the walking between them. |
+
+Rules, each deliberate:
+
+- **Travel times are never stored.** They are fetched from Google when someone looks and
+  shown right away, as "nothing derived is stored" requires. It is also what Google's terms
+  require, since they forbid keeping its travel times. They therefore never go stale, but
+  each look costs a small amount (see `docs/todos.md`).
+- **They are fetched one property at a time**, when that property is opened, not for every
+  property on the map at once. Opening one hotel costs a handful of lookups; showing a whole
+  shortlist against every place of interest at once would cost hundreds, most of them never
+  read.
+- **"Typical, no set time."** No rep chooses a departure time. Driving and cycling have no
+  timetable, so no time is needed. Public transport does: Google always calculates it for a
+  specific departure, and asked for "now" at 11 pm it answers with a night timetable. The
+  system therefore always asks for **the next weekday at 10:00, local time** — an ordinary
+  daytime journey. It cannot ask for the event dates themselves: transport operators only
+  publish timetables a few weeks ahead, and events are usually months away.
+- **Google can have no answer.** Some cities have no public transport data, and some pairs
+  have no cycling route. The time is then shown as *not available*, never as zero and never
+  as a guess.
 
 ---
 
@@ -583,6 +677,73 @@ rectangle is the same unit §4.8's bulk operations already work on; nothing abou
 change is validated or logged differs from selecting it by hand, only how the rectangle is
 chosen.
 
+### 5.5 Client map links — sharing a shortlist
+
+A **client map link** is a web page a rep sends to a client: a Google map (§3.8) showing a
+hand-picked set of properties for one event and the places of interest that matter to them,
+with how many rooms are still available and how long it takes to get from each property to
+each place.
+
+**Clients cannot sign in** (§2.5), so a link is the key. Anyone who has it can open the page;
+nobody can guess it. This is the one part of the system that is reachable without a Workspace
+account, and it shows only what is listed below.
+
+A link is made by a rep and records:
+
+| Field | Notes |
+| --- | --- |
+| `event` | The event the shortlist is for. |
+| `client` | Who it was made for, from the client list. Required, so "what have we shown this client?" can be answered. |
+| `properties` | The subset the rep picked. Only properties on this event's scouting list can be picked. |
+| `placesOfInterest` | The subset of the event's places of interest to show. All of them unless the rep narrows it. |
+| `createdBy`, `createdAt` | |
+| `revokedAt`, `revokedBy` | Set when the link is switched off. |
+
+**The link is live, not a snapshot.** Opening it shows the position as it stands at that
+moment. If rooms are sold to someone else in the meantime, the client sees fewer available.
+The rep can change which properties and places a link shows after it has been sent, and the
+same address shows the new selection. A link that must not change should be switched off
+and a new one made.
+
+**Switching a link off** takes effect immediately: the page says the link is no longer
+active and shows nothing else. It can be switched back on. Links never expire on their own;
+consistent with §2.4, nothing changes without a person deciding it.
+
+**What the client sees**, per property:
+
+- name, type (hotel, apartment, aparthotel), star rating, address, and pin on the map;
+- amenities;
+- per room category: its name, what it sleeps (bed configuration for a hotel room;
+  bedrooms and bathrooms for an apartment), and **how many are still available**;
+- travel time by bike, car and public transport to each place of interest on the link, as
+  §3.8 describes, fetched when the client opens that property; the straight-line distance
+  is shown straight away while the travel times load.
+
+Per place of interest: name, category and, for a train station, its lines.
+
+**What the client never sees:** any price, buy or sell; supplier references; other clients
+or anything they hold; scouting status; our notes; the property's contacts, website or phone;
+anything about properties or places the rep did not pick.
+
+**"Still available"** is the availability figure from §5.3, with two choices made for an
+outside audience:
+
+- **The conservative figure: blocked rooms count as taken.** §5.3 keeps both an optimistic
+  figure (blocks are assumed to lapse) and a conservative one, and open question 7 has not
+  decided between them. For a client that choice is easy: a room blocked for another client
+  cannot be promised to this one. The optimistic figure is never shown outside We Lodge.
+- **Whole stays over the period we hold,** exactly as §5.3 defines it, and the page states
+  that period ("available for every night 10 Jul – 31 Jul"). A room free for only part of
+  it is not counted.
+
+A property on the link that has **no inventory yet** (still being scouted, not contracted)
+shows its room categories with availability **"to be confirmed"**, not zero. Zero would tell
+the client it is full; the truth is that we have not secured it yet. A category we hold but
+have fully let shows **"none available"**.
+
+**Two views from inside the system:** a rep can open any link exactly as the client sees it,
+and the event lists every link made for it, per client, with its state.
+
 ---
 
 ## 6. Phase 3 — Operations
@@ -723,6 +884,9 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
 - Selling sub-units of an apartment (§3.3).
 - Yield management, dynamic pricing or demand forecasting.
 - Multi-currency consolidation.
+- A live connection to Google My Maps. Google does not offer one; the map is imported once
+  and then kept here (§3.1).
+- Client accounts. Clients see what we send them through a link (§5.5); they do not sign in.
 
 ---
 
@@ -780,6 +944,8 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
 | **Exposure** | Any night where the sales position is stronger than the acquisition position. |
 | **Flexibility window** | A party's pre-authorised `earliestArrival` → `latestDeparture` range. |
 | **Position grid** | The `(acquisition, sales)` matrix that yields icon and severity. |
+| **Place of interest** | Somewhere guests need to get to for one event: a venue, train station, airport or other. |
+| **Client map link** | A private web page showing one client a chosen shortlist, with availability and travel times. |
 
 ---
 
@@ -905,9 +1071,12 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
 | §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status, type and amenity; per-category contract status (`CategoryContract`), independent of the property's own status |
-| Map view | **Built** | Leaflet over OpenStreetMap, list-first as specified; venue pin and derived distance-to-venue |
-| Google My Maps import | **Not built** | Coordinates are typed in by hand for now |
+| Map view | **Built, not yet proven** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status. It drew correctly once, with pins, then stopped rendering locally for reasons not yet found — see `docs/todos.md` §4. Not deployed. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
+| Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | The indicative price range is entered by hand; open question, see §9 |
+| §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
+| §3.8 Travel times | **Not built** | Bike, car and public transport times from a property to a place of interest. The Google keys they need are in place |
+| §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
 | §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |

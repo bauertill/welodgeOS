@@ -19,6 +19,9 @@ export const env = createEnv({
     AUTH_RESEND_KEY: z.string().optional(),
     EMAIL_FROM: z.string().optional(),
     DATABASE_URL: z.string().url(),
+    // Google Routes API, for travel times (doc §3.8). Never sent to the
+    // browser. Not used yet.
+    GOOGLE_MAPS_SERVER_KEY: z.string().optional(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -30,7 +33,12 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    // Google Maps JavaScript API. Public by nature — it is in the page — so it
+    // is restricted to our own web addresses in Google Cloud (docs/todos.md).
+    // Without it the map says so instead of drawing.
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().optional(),
+    // Needed for the map's pins. Falls back to Google's demo ID when unset.
+    NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: z.string().optional(),
   },
 
   /**
@@ -44,6 +52,9 @@ export const env = createEnv({
     AUTH_RESEND_KEY: process.env.AUTH_RESEND_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
     DATABASE_URL: process.env.DATABASE_URL,
+    GOOGLE_MAPS_SERVER_KEY: process.env.GOOGLE_MAPS_SERVER_KEY,
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+    NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
     NODE_ENV: process.env.NODE_ENV,
   },
   /**

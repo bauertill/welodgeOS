@@ -62,6 +62,14 @@ Type is **Poppins** (300–700), loaded via `next/font`. Buttons use the site's
 fully rounded pill shape with light (300) weight. The logo lives at
 `public/welodge-logo.png` and sits on a white card, as it does on the website.
 
+The browser tab icon is that logo's mark — the half-disc and two bars, without
+the wordmark, which is illegible at 16 pixels — on the same white card.
+`public/favicon.ico` holds separately drawn 16, 32 and 48 pixel versions,
+because a shrunken large one turns to mush at the smallest size; `icon.png`
+(512) and `apple-touch-icon.png` (180) cover high-resolution tabs and a home
+screen. All three are cut from `welodge-logo.png`, so replacing the logo means
+redrawing them. They are declared in `src/app/layout.tsx`.
+
 ## Data model
 
 `prisma/schema.prisma` covers **Phase 1 (Scouting)** and **Phase 2 (Acquisition
@@ -132,8 +140,12 @@ src/
                         reporting, user
 ```
 
-The map is Leaflet over OpenStreetMap tiles, loaded browser-side only. The
-scouting list is the source of truth; the map renders whatever has coordinates.
+The map is Google Maps, loaded browser-side only, and needs
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (setup in `docs/todos.md` §4); without it the
+map says so and the list carries on working. The scouting list is the source of
+truth; the map renders whatever has coordinates. Looking up coordinates from an
+address still uses OpenStreetMap, because Google's terms do not let us keep
+what its lookup returns.
 
 Every screen that says something about a room-night — the stock sheet, the
 deadline dashboard, the exposure report — asks `lib/position.ts` what to say, so

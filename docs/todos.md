@@ -6,7 +6,7 @@ build next and what to fix in what already exists. Update it as things get
 done or the plan changes. It is not meant to be exhaustive of every polish
 item, only what someone would need to know to decide what to work on next.
 
-Last reviewed: 2026-09-06.
+Last reviewed: 2026-09-24.
 
 ---
 
@@ -59,6 +59,55 @@ Vercel's marketplace.
       hypothetical one. Neon keeps its own point-in-time history, but nobody
       has chosen a retention window, and nothing alerts anyone if the site
       stops responding.
+- [ ] **Give the site its own address: `os.welodge.net`.** *Decided
+      2026-09-24, not done yet.* The live site answers on Vercel's own
+      `welodge-os.vercel.app` today, which reads as somebody's side project
+      rather than a We Lodge system. The domain `welodge.net` is already at
+      Cloudflare, so this is a handful of settings changes and no code, in this
+      order — the order matters, because steps 3 and 4 are what keep sign-in
+      and the map from breaking on the new address:
+  - [ ] **1. Claim the address on Vercel.** The project's own sidebar →
+        **Domains** → add `os.welodge.net`. (Not Settings → Domains; Vercel
+        moved it, and its documentation has not caught up. The CLI equivalent
+        is `vercel domains add os.welodge.net welodge-os`.) Vercel then shows
+        the CNAME target to point at — a
+        value unique to this project, of the form
+        `d1d4fc829fe7bc7c.vercel-dns-017.com`. Copy it; don't reuse one from
+        another project or from a tutorial.
+  - [ ] **2. Point the name at it in Cloudflare.** `welodge.net` → DNS → add a
+        `CNAME` record, name `os`, target the value from step 1, **Proxy status
+        DNS only** — the grey cloud, not the orange one. Proxying is what
+        breaks this: Cloudflare would answer in Vercel's place, Vercel could
+        then neither confirm the address nor renew its certificate, and the
+        site would be behind two CDNs arguing about what to cache.
+        `welodge.net` has no CAA records, so nothing blocks Vercel from
+        issuing the certificate — checked 2026-09-24.
+  - [ ] **3. Let Google sign-in answer on the new address.** Google Cloud →
+        Credentials → the OAuth client behind §2 → *Authorized redirect URIs*
+        → add `https://os.welodge.net/api/auth/callback/google`, keeping the
+        existing entries. Google checks the address the sign-in came from
+        against this list and refuses anything not on it, so without this
+        step the new address loads but nobody can get in.
+  - [ ] **4. Let the map draw on the new address.** The browser key from §4 is
+        restricted to the web addresses allowed to use it, so add
+        `os.welodge.net/*` to its website restrictions alongside
+        `welodge-os.vercel.app` and `localhost:3000`. Skipping this shows the
+        map's "no key" notice on the new address only.
+  - [ ] **5. Send the old address to the new one.** Once `os.welodge.net`
+        serves the app, redirect `welodge-os.vercel.app` to it so old links
+        and bookmarks still arrive, and one address is unambiguously the real
+        one. Vercel's Domains screen offers this as *Redirect to* on the
+        domain being redirected from; if it declines to redirect its own
+        `vercel.app` address, the fallback is a host-based redirect in
+        `next.config.js`, which is a code change and belongs in its own
+        commit.
+  - [ ] **6. Then update the documentation.** `product-scope.md` §2.5 and §12,
+        this file's §1 heading, `CLAUDE.md` and the README all name
+        `welodge-os.vercel.app` as where the system lives. They stay correct
+        until the new address works and become wrong the moment it does.
+      Everyone signed in today gets signed out on the new address: a session
+      lives in a cookie belonging to one address, and this is a different one.
+      Nothing is lost — they sign in again with the same Google account.
 - [ ] **Know the `.env.local` trap.** Several Vercel CLI commands (`link`, and
       anything that provisions a marketplace database) write a `.env.local`
       holding the *production* `DATABASE_URL`. Next.js reads `.env.local` in
@@ -121,9 +170,53 @@ done.
 - [ ] **Configurable deadline windows.** The "option expires in 7 days" /
       "block expires in 48 hours" warning thresholds are hard-coded constants
       in the code, with no screen to change them.
+- [ ] **Google map, places of interest and client map links** (§3.7, §3.8,
+      §5.5). Specified 2026-09-18, not built. What has to happen outside the
+      code first:
+  - [ ] **A Google Cloud billing account for We Lodge**, in the same Google
+        Cloud project that already holds the sign-in client. Someone at We
+        Lodge with a company card has to do this; it can't be done on their
+        behalf. Enable the *Maps JavaScript API* and the *Routes API*.
+  - [ ] **Two keys, not one.** A *browser key* that draws the map, restricted
+        to `welodge-os.vercel.app` and `localhost:3000` so it is useless on any
+        other site; and a *server key* for travel times, restricted to the
+        Routes API, which never leaves the server. Both go on Vercel and in the
+        local `.env`: the browser key as `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, the
+        server key as `GOOGLE_MAPS_SERVER_KEY`.
+  - [ ] **A map ID** (Google Cloud → Map management → Create map ID,
+        JavaScript, Vector), set as `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`. Without
+        it the map falls back to Google's demo ID, which works but is meant
+        for testing.
+  - [ ] **Set the keys on Vercel before the map code reaches `master`.** The
+        map is already switched to Google on the `google-maps` branch; without
+        a key the live site would show a notice where the map was.
+  - [ ] **A monthly budget alert in Google Cloud.** Expected cost is a few
+        dollars a month: Google gives several thousand free lookups per month,
+        and opening one property against five places of interest is 15
+        lookups (5 places × 3 modes). A budget alert is the safeguard in case
+        a link is opened far more than expected — by a crawler, for instance.
+  - [ ] **Baseline the production database first** — see §1. This is the
+        first change to the database's shape since it went live, and there is
+        no migration history to apply it from. Pushing the code to `master`
+        without updating the live database first would break the live site.
+  - [ ] **Carry the live venues across when the schema is applied.** The three
+        `Event.venue*` columns are gone, replaced by places of interest
+        (§3.7). Applying the schema drops them, so before that: read every
+        event's venue name and coordinates out of the live database, apply the
+        schema, then write each one back as a place of interest of category
+        `VENUE`. Done locally on 2026-09-24 this way; the live database still
+        has to have it done. Skipping it loses every venue silently.
+  - [ ] **Work out why the Google map stopped rendering locally.** It drew
+        correctly once, with all pins, on 2026-09-24 and then stopped. Google
+        accepts the key (maps can be created by hand on the same page), there
+        are no errors in the browser, and it is not React strict mode and not
+        the corrupted build cache that was cleared. Unresolved — the map must
+        not be called working until somebody has seen it.
 - [ ] **Google My Maps import for property coordinates** (§3.1). Coordinates
       are typed in by hand today; there's no bulk import from the sheet this
-      replaced.
+      replaced. *Waiting on the current My Map's link or KML export*, so the
+      import copies what is actually on it (layers, colours, notes) rather
+      than guessing.
 - [ ] **An admin screen for the amenity list** (§3.4). The controlled
       vocabulary of amenities is seeded in `prisma/seed.ts` and can only be
       changed by editing that file and reseeding — not through the app.

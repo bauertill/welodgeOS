@@ -1,13 +1,17 @@
 "use client";
 
-import "leaflet/dist/leaflet.css";
+import {
+  AdvancedMarker,
+  APIProvider,
+  InfoWindow,
+  Map,
+  useMap,
+} from "@vis.gl/react-google-maps";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { PlaceCategory, ScoutingStatus } from "generated/prisma";
 
-import L from "leaflet";
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
-import { useEffect } from "react";
-import type { ScoutingStatus } from "generated/prisma";
-
-import { scoutingStatusLabels } from "~/lib/scouting";
+import { env } from "~/env";
+import { placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
 
 export type MapPin = {
   id: string;
@@ -25,6 +29,25 @@ export type MapPin = {
   href: string;
 };
 
+declare global {
+  interface Window {
+    /** Google calls this when it rejects the key (see `keyRefused` below). */
+    gm_authFailure?: () => void;
+  }
+}
+
+/** A place guests need to get to, drawn alongside the properties (doc §3.7). */
+export type MapPlace = {
+  id: string;
+  name: string;
+  category: PlaceCategory;
+  lines: string | null;
+  latitude: number;
+  longitude: number;
+};
+
+type Point = { lat: number; lng: number };
+
 const pinColors: Record<ScoutingStatus, string> = {
   PROSPECT: "#8a8a8a",
   CONTACTED: "#614fc9",
@@ -40,100 +63,229 @@ const pinColor = (status?: ScoutingStatus) =>
   status ? pinColors[status] : NEUTRAL_PIN;
 
 /**
- * Markers are drawn as inline HTML rather than image files — Leaflet's default
- * icons resolve to bundled assets that a Next build rewrites, and a coloured
- * dot carries the status anyway.
+ * Places of interest are squares, not dots, so a venue is never mistaken for a
+ * hotel at a glance. Colour separates one kind of place from another.
  */
-const markerIcon = (status?: ScoutingStatus, venue = false) =>
-  L.divIcon({
-    className: "",
-    iconSize: venue ? [18, 18] : [14, 14],
-    iconAnchor: venue ? [9, 9] : [7, 7],
-    html: venue
-      ? `<span style="display:block;width:18px;height:18px;border-radius:4px;background:#292929;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></span>`
-      : `<span style="display:block;width:14px;height:14px;border-radius:50%;background:${pinColor(status)};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></span>`,
-  });
+const placeColors: Record<PlaceCategory, string> = {
+  VENUE: "#292929",
+  TRAIN_STATION: "#1f6feb",
+  AIRPORT: "#0d8f5d",
+  IBC: "#b8860b",
+  OTHER: "#6b6b6b",
+};
+
+/**
+ * Advanced markers need a map ID. Google's demo ID works without any setup;
+ * a map ID of our own only matters once the map is styled (doc §3.8).
+ */
+const mapId = env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? "DEMO_MAP_ID";
+
+/** A coloured dot carries the status, as it did on the previous map. */
+function Dot({ color, place = false }: { color: string; place?: boolean }) {
+  const size = place ? 18 : 14;
+  return (
+    <span
+      style={{
+        display: "block",
+        width: size,
+        height: size,
+        borderRadius: place ? 4 : "50%",
+        background: color,
+        border: `${place ? 3 : 2}px solid #fff`,
+        boxShadow: "0 1px 4px rgba(0,0,0,.35)",
+        // Centre the dot on the point rather than hanging it above it.
+        transform: "translateY(50%)",
+      }}
+    />
+  );
+}
 
 /** Keeps every pin in frame, including when the filters change the set. */
-function FitBounds({ points }: { points: [number, number][] }) {
+function FitBounds({ points }: { points: Point[] }) {
   const map = useMap();
 
   useEffect(() => {
-    if (points.length === 0) return;
+    if (!map || points.length === 0) return;
     if (points.length === 1) {
-      map.setView(points[0]!, 13);
+      map.setCenter(points[0]!);
+      map.setZoom(13);
       return;
     }
-    map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
+    const lats = points.map((point) => point.lat);
+    const lngs = points.map((point) => point.lng);
+    map.fitBounds(
+      {
+        north: Math.max(...lats),
+        south: Math.min(...lats),
+        east: Math.max(...lngs),
+        west: Math.min(...lngs),
+      },
+      40,
+    );
   }, [map, points]);
 
   return null;
 }
 
+/** The notice that stands in for the map when it cannot be drawn. */
+function MapNotice({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="border-ink-200/60 text-ink-500 flex h-[32rem] items-center justify-center rounded-xl border bg-white px-6 text-center text-sm font-light">
+      {children}
+    </div>
+  );
+}
+
 export function ScoutingMap({
   pins,
-  venue,
+  places = [],
 }: {
   pins: MapPin[];
-  venue?: { name: string; latitude: number; longitude: number } | null;
+  places?: MapPlace[];
 }) {
-  const points: [number, number][] = [
-    ...pins.map((pin) => [pin.latitude, pin.longitude] as [number, number]),
-    ...(venue ? [[venue.latitude, venue.longitude] as [number, number]] : []),
-  ];
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  /**
+   * A click on a pin also reaches the map, whose own handler closes the popup
+   * again — so a popup opened and shut in the same click, and nothing ever
+   * appeared. Google's marker click carries no browser event to stop, so the
+   * map ignores a click that lands immediately after one on a pin.
+   */
+  const pinClickedAt = useRef(0);
+  const openPin = (id: string) => {
+    pinClickedAt.current = Date.now();
+    setOpenId(id);
+  };
+
+  /**
+   * Google rejects a key by calling this global rather than by failing the
+   * load, and draws an empty grey square. Without this the reader is left
+   * guessing; the usual cause is the web address missing from the key's
+   * allowed list.
+   */
+  const [keyRefused, setKeyRefused] = useState(false);
+  useEffect(() => {
+    window.gm_authFailure = () => setKeyRefused(true);
+    return () => {
+      delete window.gm_authFailure;
+    };
+  }, []);
+
+  const points = useMemo<Point[]>(
+    () => [
+      ...pins.map((pin) => ({ lat: pin.latitude, lng: pin.longitude })),
+      ...places.map((place) => ({ lat: place.latitude, lng: place.longitude })),
+    ],
+    [pins, places],
+  );
+
+  const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!apiKey) {
+    return <MapNotice>The map needs a Google Maps key — see docs/todos.md.</MapNotice>;
+  }
+
+  if (keyRefused) {
+    return (
+      <MapNotice>
+        Google refused the map key for this address
+        {typeof window === "undefined" ? "" : ` (${window.location.origin})`}.
+        Add it to the key&rsquo;s allowed websites in Google Cloud — see
+        docs/todos.md.
+      </MapNotice>
+    );
+  }
+
+  const openProperty = pins.find((pin) => pin.id === openId);
+  const openPlace = places.find((place) => place.id === openId);
 
   return (
     <div className="border-ink-200/60 overflow-hidden rounded-xl border">
-      <MapContainer
-        center={points[0] ?? [46.8182, 8.2275]}
-        zoom={points.length ? 12 : 6}
-        scrollWheelZoom
-        style={{ height: "32rem", width: "100%" }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+      <APIProvider apiKey={apiKey}>
+        <Map
+          mapId={mapId}
+          defaultCenter={points[0] ?? { lat: 46.8182, lng: 8.2275 }}
+          defaultZoom={points.length ? 12 : 6}
+          gestureHandling="greedy"
+          clickableIcons={false}
+          onClick={() => {
+            if (Date.now() - pinClickedAt.current < 300) return;
+            setOpenId(null);
+          }}
+          style={{ height: "32rem", width: "100%" }}
+        >
+          <FitBounds points={points} />
 
-        <FitBounds points={points} />
+          {places.map((place) => (
+            <AdvancedMarker
+              key={place.id}
+              position={{ lat: place.latitude, lng: place.longitude }}
+              title={place.name}
+              zIndex={1000}
+              clickable
+              onClick={() => openPin(place.id)}
+            >
+              <Dot color={placeColors[place.category]} place />
+            </AdvancedMarker>
+          ))}
 
-        {venue && (
-          <Marker
-            position={[venue.latitude, venue.longitude]}
-            icon={markerIcon(undefined, true)}
-          >
-            <Popup>
-              <strong>{venue.name}</strong>
-              <br />
-              Event venue
-            </Popup>
-          </Marker>
-        )}
+          {pins.map((pin) => (
+            <AdvancedMarker
+              key={pin.id}
+              position={{ lat: pin.latitude, lng: pin.longitude }}
+              title={pin.name}
+              clickable
+              onClick={() => openPin(pin.id)}
+            >
+              <Dot color={pinColor(pin.status)} />
+            </AdvancedMarker>
+          ))}
 
-        {pins.map((pin) => (
-          <Marker
-            key={pin.id}
-            position={[pin.latitude, pin.longitude]}
-            icon={markerIcon(pin.status)}
-          >
-            <Popup>
-              <strong>{pin.name}</strong>
+          {openPlace && (
+            <InfoWindow
+              position={{ lat: openPlace.latitude, lng: openPlace.longitude }}
+              pixelOffset={[0, -6]}
+              onCloseClick={() => setOpenId(null)}
+            >
+              <strong>{openPlace.name}</strong>
               <br />
-              {pin.subtitle}
-              <br />
-              {pin.status && (
+              <span style={{ color: placeColors[openPlace.category] }}>
+                {placeCategoryLabels[openPlace.category]}
+              </span>
+              {openPlace.lines && (
                 <>
-                  <span style={{ color: pinColors[pin.status] }}>
-                    {scoutingStatusLabels[pin.status]}
+                  <br />
+                  {openPlace.lines}
+                </>
+              )}
+            </InfoWindow>
+          )}
+
+          {openProperty && (
+            <InfoWindow
+              position={{
+                lat: openProperty.latitude,
+                lng: openProperty.longitude,
+              }}
+              pixelOffset={[0, -6]}
+              onCloseClick={() => setOpenId(null)}
+            >
+              <strong>{openProperty.name}</strong>
+              <br />
+              {openProperty.subtitle}
+              <br />
+              {openProperty.status && (
+                <>
+                  <span style={{ color: pinColor(openProperty.status) }}>
+                    {scoutingStatusLabels[openProperty.status]}
                   </span>
                   <br />
                 </>
               )}
-              <a href={pin.href}>Open →</a>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+              <a href={openProperty.href}>Open →</a>
+            </InfoWindow>
+          )}
+        </Map>
+      </APIProvider>
     </div>
   );
 }
