@@ -266,6 +266,27 @@ export function ScoutingList({
                 entry.categoryContracts.find((c) => c.categoryId === categoryId)
                   ?.status ?? "IN_NEGOTIATION";
 
+              // Rooms summed per status, not one line per category — a
+              // property with a dozen room types would otherwise print a
+              // dozen clauses instead of a status a rep can read at a glance.
+              const roomsByStatus = new Map<CategoryContractStatus, number>();
+              for (const category of property.categories) {
+                const status = contractStatus(category.id);
+                roomsByStatus.set(
+                  status,
+                  (roomsByStatus.get(status) ?? 0) + category.unitCount,
+                );
+              }
+              // Contracted first, not funnel order — it's the fact that
+              // matters most at a glance, before how far the rest have got.
+              const statusSummary = [...categoryContractStatusOrder]
+                .reverse()
+                .filter((status) => roomsByStatus.get(status))
+                .map(
+                  (status) =>
+                    `${roomsByStatus.get(status)} rooms ${categoryContractStatusLabels[status].toLowerCase()}`,
+                );
+
               return (
                 <Fragment key={entry.id}>
                 <tr>
@@ -306,16 +327,14 @@ export function ScoutingList({
                           {propertyTypeLabels[property.type]}
                           {property.stars ? ` · ${property.stars}-star` : ""}
                         </span>
-                        {hasCategories && (
-                          <span className="text-ink-500 block text-xs font-light">
-                            {property.categories
-                              .map(
-                                (c) =>
-                                  `${c.name} · ${c.unitCount} rooms · ${categoryContractStatusLabels[contractStatus(c.id)]}`,
-                              )
-                              .join(" · ")}
+                        {statusSummary.map((line) => (
+                          <span
+                            key={line}
+                            className="text-ink-500 block text-xs font-light"
+                          >
+                            {line}
                           </span>
-                        )}
+                        ))}
                       </div>
                     </div>
                   </Td>
