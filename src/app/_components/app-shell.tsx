@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { HeaderAuth } from "~/app/_components/header-auth";
@@ -18,12 +17,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         {/* The brand mark sits on a white card, as it does on welodge.net. */}
         <Link href="/" className="mb-8 block px-5">
           <span className="inline-flex rounded-lg bg-white px-3 py-2.5">
-            <Image
-              src="/welodge-logo.png"
+            {/* eslint-disable-next-line @next/next/no-img-element -- an SVG needs no optimisation */}
+            <img
+              src="/welodge-logo.svg"
               alt="We Lodge"
-              width={758}
-              height={304}
-              priority
+              width={784}
+              height={146}
               className="h-6 w-auto"
             />
           </span>
@@ -42,11 +41,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         <header className="bg-ink-700 flex h-14 items-center justify-between gap-4 px-6 md:h-16">
           <Link href="/" className="md:hidden">
             <span className="inline-flex rounded-lg bg-white px-3 py-2">
-              <Image
-                src="/welodge-logo.png"
+              {/* eslint-disable-next-line @next/next/no-img-element -- an SVG needs no optimisation */}
+              <img
+                src="/welodge-logo.svg"
                 alt="We Lodge"
-                width={758}
-                height={304}
+                width={784}
+                height={146}
                 className="h-5 w-auto"
               />
             </span>
