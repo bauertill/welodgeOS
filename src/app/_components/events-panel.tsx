@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { NewEventPanel } from "~/app/_components/event-form";
 import { formatRange } from "~/lib/format";
@@ -52,15 +53,19 @@ export function EventsPanel({ onClose }: { onClose: () => void }) {
       : undefined;
   const lastTab = lastSegments[2] ? tabLabels[lastSegments[2]] : undefined;
 
-  return (
+  // Portalled straight onto <body>: the sidebar this button lives in is
+  // `position: sticky`, which creates its own stacking context, so a z-index
+  // on anything nested inside it — no matter how high — can never paint
+  // above a later sibling like <main> (where the page's own sticky columns,
+  // a Leaflet map, and so on all live). Escaping the sidebar's subtree
+  // entirely is what actually fixes that, rather than another z-index bump.
+  return createPortal(
     <>
       <div
         className="fixed inset-0 z-[1010] bg-black/20"
         onClick={onClose}
         aria-hidden="true"
       />
-      {/* Above Leaflet's own panes and controls, which reach z-index 1000
-          on the Properties map — a plain z-40 sat underneath them. */}
       <div className="border-ink-200/60 fixed inset-y-0 left-0 z-[1020] flex w-full max-w-sm flex-col border-r bg-white shadow-xl md:left-60">
         <div className="border-ink-200/60 flex items-start justify-between gap-3 border-b p-5">
           <div>
@@ -139,6 +144,7 @@ export function EventsPanel({ onClose }: { onClose: () => void }) {
           </Link>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }

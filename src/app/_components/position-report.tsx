@@ -110,8 +110,7 @@ export function PositionReport({ eventId }: { eventId: string }) {
               <Th>Room type</Th>
               <Th>Window</Th>
               <Th>In inventory</Th>
-              <Th>Offerable</Th>
-              <Th>Genuinely free</Th>
+              <Th>Available</Th>
             </tr>
           </thead>
           <tbody>
@@ -129,16 +128,12 @@ export function PositionReport({ eventId }: { eventId: string }) {
                 </Td>
                 <Td>{row.slots}</Td>
                 <Td>
-                  <span className="font-medium">{row.offerable}</span>
-                  <span className="text-ink-500 block text-xs font-light">
-                    Assumes blocks lapse
-                  </span>
-                </Td>
-                <Td>
                   <span className="font-medium">{row.genuinelyFree}</span>
-                  <span className="text-ink-500 block text-xs font-light">
-                    Blocks counted as taken
-                  </span>
+                  {row.offerable > row.genuinelyFree && (
+                    <span className="text-ink-500 block text-xs font-light">
+                      Up to {row.offerable} if blocks lapse
+                    </span>
+                  )}
                 </Td>
               </tr>
             ))}
@@ -146,8 +141,8 @@ export function PositionReport({ eventId }: { eventId: string }) {
         </Table>
         <p className="text-ink-500 mt-2 text-xs font-light">
           Only rooms we have secured count — a night still in negotiation is not
-          something we can offer. The two figures differ by exactly the blocks
-          that are holding rooms without having bought them.
+          something we can offer. A block still counts as taken until it lapses
+          or is released.
         </p>
       </Collapsible>
 

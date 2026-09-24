@@ -570,9 +570,11 @@ Three consequences, all intentional, two worth confirming (§9):
 - **All-or-nothing per slot.** A slot free for 19 of 21 nights contributes zero. We sell
   whole stays, not fragments, so a partially free room is not offerable as-is.
 - **Only `SOLD` consumes availability.** Blocks and requests do not reduce it — an
-  optimistic reading that assumes blocks lapse. This should be reported alongside a second,
-  conservative figure — *availability net of hard holds* — so a rep sees both what is
-  theoretically free and what is genuinely free.
+  optimistic reading that assumes blocks lapse. A second, conservative figure —
+  *availability net of hard holds* — is computed alongside it, but the conservative one is
+  what a rep sees as the headline; the optimistic figure only surfaces as a note ("up to N
+  if blocks lapse") when the two actually differ, rather than as a second number to compare
+  every time.
 - **Only held stock counts.** `IN_PROGRESS` and unacquired nights are *not* available,
   which is correct: we cannot offer what we have not secured.
 
@@ -582,9 +584,10 @@ inventory that exists** for that `(property, category)` — its first night to i
 can be overridden per report. That is a reporting choice, not a commercial fact: if the
 window a hotel will contract for is a real term of the deal, it belongs on the contract.
 
-**Genuinely free**, the conservative figure, is also the sales team's at-a-glance position on
-the Properties tab: how many whole rooms are actually available to offer, per room category,
-without opening the stock sheet.
+**Genuinely free**, the conservative figure, is the headline everywhere availability is
+shown — the Position tab's "What we can still offer" report, and the sales team's
+at-a-glance position on the Properties tab: how many whole rooms are actually available to
+offer, per room category, without opening the stock sheet.
 
 ### 5.4 The stock sheet (the date-grid)
 
@@ -945,7 +948,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
-| §5.3 Availability | **Built** | Both the optimistic and the conservative figure, side by side; the conservative one also shown per room category on the Properties tab |
+| §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
 | §5.4 Stock sheet | **Built** | A date-grid, one cell per room-night; edited by selecting a rectangle of cells |
 | §6 Operations | **Not built** | Phase 3 |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
