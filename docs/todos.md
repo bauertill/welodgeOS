@@ -6,17 +6,17 @@ build next and what to fix in what already exists. Update it as things get
 done or the plan changes. It is not meant to be exhaustive of every polish
 item, only what someone would need to know to decide what to work on next.
 
-Last reviewed: 2026-09-06.
+Last reviewed: 2026-09-24.
 
 ---
 
 ## 1. Ship to production
 
-**Live at https://welodge-os.vercel.app since 2026-09-06**, hosted on Vercel
-under the We Lodge team (`we-lodge`) — a Vercel account of its own, separate
-from any other work, so We Lodge owns the project and is billed for it
-directly. The database is a Neon Postgres instance provisioned through
-Vercel's marketplace.
+**Live at https://os.welodge.net since 2026-09-24**, and at
+`welodge-os.vercel.app` from 2026-09-06 until then. Hosted on Vercel under the
+We Lodge team (`we-lodge`) — a Vercel account of its own, separate from any
+other work, so We Lodge owns the project and is billed for it directly. The
+database is a Neon Postgres instance provisioned through Vercel's marketplace.
 
 - [x] **Pick a host.** Vercel, We Lodge team. The GitHub repo is connected, so
       every push to `master` deploys to the live site automatically; the Vercel
@@ -59,6 +59,29 @@ Vercel's marketplace.
       hypothetical one. Neon keeps its own point-in-time history, but nobody
       has chosen a retention window, and nothing alerts anyone if the site
       stops responding.
+- [x] **The site has its own address, `os.welodge.net`** — done 2026-09-24.
+      Vercel's own `welodge-os.vercel.app` read as somebody's side project
+      rather than a We Lodge system. What was set up, in case any of it has to
+      be repeated or undone:
+  - A `CNAME` record on `welodge.net` at Cloudflare, name `os`, pointing at
+    the target Vercel gave for this project, **proxy off — DNS only**. With
+    Cloudflare's proxy on, Vercel can neither confirm the address nor renew
+    its certificate, and the site sits behind two CDNs disagreeing about what
+    to cache. The certificate is Let's Encrypt, issued by Vercel, renewed by
+    Vercel; nobody has to diarise it.
+  - `https://os.welodge.net/api/auth/callback/google` added to the OAuth
+    client's authorized redirect URIs. Without it Google refuses every
+    sign-in, because it checks the address the request came from against that
+    list. The old address stays on the list only because removing it would
+    break nothing and buy nothing.
+  - `welodge-os.vercel.app` redirects to the new address, set on Vercel's
+    Domains screen, so old links and bookmarks still arrive.
+  - Everyone was signed out once by the move: a session lives in a cookie
+    belonging to one address, and this is a different one.
+  - **Still owed when the Google Maps work merges:** the browser key is
+    restricted to the web addresses allowed to use it, so `os.welodge.net/*`
+    has to join `welodge-os.vercel.app` and `localhost:3000` in its
+    restrictions, or the map will show its "no key" notice on the live site.
 - [ ] **Know the `.env.local` trap.** Several Vercel CLI commands (`link`, and
       anything that provisions a marketplace database) write a `.env.local`
       holding the *production* `DATABASE_URL`. Next.js reads `.env.local` in

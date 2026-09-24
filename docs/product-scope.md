@@ -108,9 +108,11 @@ Two consequences worth stating plainly, because neither is obvious from a screen
   site becomes a user of it, with full access, the moment they sign in.
 
 The system is a website, not something anyone installs. It runs at
-**https://welodge-os.vercel.app**, hosted on Vercel, with its database (PostgreSQL, hosted
-by Neon) in Vercel's `we-lodge` account. Changes reach the live site by being pushed to the
-`master` branch, which builds and deploys on its own.
+**https://os.welodge.net**, hosted on Vercel, with its database (PostgreSQL, hosted by
+Neon) in Vercel's `we-lodge` account. Changes reach the live site by being pushed to the
+`master` branch, which builds and deploys on its own. It answered at
+`welodge-os.vercel.app` until 2026-09-24; that address now redirects to this one, so older
+links and bookmarks still arrive.
 
 Magic-link sign-in by email is built and deliberately switched off: at launch nobody
 outside the Workspace needs an account. It becomes available again by configuring an email
@@ -964,7 +966,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Google Workspace sign-in | **Built** | Live. A `@welodge.net` account is the only way in; first sign-in creates the user |
 | §2.5 Roles and permissions | **Not built** | Every signed-in user has full access to everything — see §9, open question 5 |
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
-| §2.5 Deployed and reachable | **Built** | https://welodge-os.vercel.app, on Vercel with a Neon PostgreSQL database. `master` deploys automatically |
+| §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.6 Updates | **Built** | Append-only feed per property and per client, with `@Name` mentions rendered as a highlight. No notification is sent — see §9 |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |

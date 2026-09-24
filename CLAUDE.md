@@ -99,5 +99,6 @@ amenity list is upserted, never wiped, because properties point at those rows.
 Never point it at production; `pnpm run db:seed:amenities` writes the vocabulary
 and stops, and is what a live database gets.
 
-The live system is at https://welodge-os.vercel.app. Pushing to `master` deploys
-it, so a merge reaches real users without further ceremony.
+The live system is at https://os.welodge.net. Pushing to `master` deploys it, so
+a merge reaches real users without further ceremony. The old address,
+https://welodge-os.vercel.app, redirects there.
