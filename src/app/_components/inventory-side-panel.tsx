@@ -12,7 +12,7 @@ import {
   Textarea,
 } from "~/app/_components/form";
 import { formatDay, formatMoney } from "~/lib/format";
-import { nightsBetween, parseDay } from "~/lib/dates";
+import { dayKey, nightsBetween, parseDay } from "~/lib/dates";
 import {
   acquisitionLabels,
   acquisitionTarget,
@@ -91,8 +91,32 @@ export function InventorySidePanel({
   const utils = api.useUtils();
 
   const [tab, setTab] = useState<"acquisition" | "sales">("acquisition");
-  const totalNights = roomCount * nightsBetween(checkIn, checkOut);
-  const single = cells.length === 1 && totalNights === 1 ? cells[0] : null;
+
+  // Editable in case the drag on the grid caught the wrong nights — the
+  // rooms stay as highlighted, only the date range can be corrected here.
+  const [checkInInput, setCheckInInput] = useState(dayKey(checkIn));
+  const [checkOutInput, setCheckOutInput] = useState(dayKey(checkOut));
+  const dateRangeEdited =
+    checkInInput !== dayKey(checkIn) || checkOutInput !== dayKey(checkOut);
+
+  const effectiveCheckIn = checkInInput ? parseDay(checkInInput) : checkIn;
+  const effectiveCheckOut = checkOutInput ? parseDay(checkOutInput) : checkOut;
+  const validRange =
+    !Number.isNaN(effectiveCheckIn.getTime()) &&
+    !Number.isNaN(effectiveCheckOut.getTime()) &&
+    effectiveCheckOut > effectiveCheckIn;
+  const effectiveNights = validRange
+    ? nightsBetween(effectiveCheckIn, effectiveCheckOut)
+    : 0;
+
+  const totalNights = roomCount * effectiveNights;
+  // The cell data the grid handed over is for the *original* selection — once
+  // the range is edited it can no longer be trusted for prefill or tallies,
+  // so those fall back to nothing rather than showing something stale.
+  const single =
+    !dateRangeEdited && cells.length === 1 && totalNights === 1
+      ? cells[0]
+      : null;
 
   const defaultAction = (
     tab === "acquisition" ? actionGroups[0] : actionGroups[1]
@@ -163,8 +187,9 @@ export function InventorySidePanel({
     onError: (e) => setError(e.message),
   });
 
-  const missing = totalNights - cells.length;
+  const missing = dateRangeEdited ? null : totalNights - cells.length;
   const allUntouched =
+    !dateRangeEdited &&
     cells.length > 0 &&
     missing === 0 &&
     cells.every(
@@ -190,8 +215,8 @@ export function InventorySidePanel({
       const existing = await utils.inventory.existingActivity.fetch({
         eventId,
         slotIds,
-        checkIn,
-        checkOut,
+        checkIn: effectiveCheckIn,
+        checkOut: effectiveCheckOut,
       });
       const activeCount = acquisitionTo
         ? existing.acquisitionActive
@@ -209,8 +234,8 @@ export function InventorySidePanel({
     apply.mutate({
       eventId,
       slotIds,
-      checkIn,
-      checkOut,
+      checkIn: effectiveCheckIn,
+      checkOut: effectiveCheckOut,
       action,
       reason: reason.trim() || undefined,
       supplierRef: supplierRef.trim() || undefined,
@@ -244,11 +269,41 @@ export function InventorySidePanel({
               {roomCount} {roomCount === 1 ? "room" : "rooms"} ·{" "}
               {totalNights} room-{totalNights === 1 ? "night" : "nights"}
             </h2>
-            <p className="text-ink-500 mt-0.5 text-xs font-light">
-              {formatDay(checkIn)} – {formatDay(checkOut)}
-              {missing > 0 &&
-                ` · ${missing} of ${totalNights} not yet in inventory`}
-            </p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="w-36">
+                <Input
+                  type="date"
+                  value={checkInInput}
+                  onChange={(e) => setCheckInInput(e.target.value)}
+                  invalid={!validRange}
+                />
+              </div>
+              <span className="text-ink-400 text-xs">–</span>
+              <div className="w-36">
+                <Input
+                  type="date"
+                  value={checkOutInput}
+                  onChange={(e) => setCheckOutInput(e.target.value)}
+                  invalid={!validRange}
+                />
+              </div>
+            </div>
+            {!validRange ? (
+              <p className="mt-1 text-xs font-medium text-[#c03654]">
+                Check-out must be after check-in.
+              </p>
+            ) : dateRangeEdited ? (
+              <p className="text-ink-500 mt-1 text-xs font-light">
+                Adjusted from the highlighted range.
+              </p>
+            ) : (
+              missing !== null &&
+              missing > 0 && (
+                <p className="text-ink-500 mt-1 text-xs font-light">
+                  {missing} of {totalNights} not yet in inventory
+                </p>
+              )
+            )}
           </div>
           <button
             type="button"
@@ -260,7 +315,7 @@ export function InventorySidePanel({
           </button>
         </div>
 
-        {cells.length > 1 && (
+        {!dateRangeEdited && cells.length > 1 && (
           <div className="border-ink-200/60 mb-4 rounded-lg border p-3 text-xs font-light">
             <p className="text-ink-700">
               Supplier: {tally(cells.map((c) => c.acquisitionState), acquisitionLabels)}
@@ -562,7 +617,7 @@ export function InventorySidePanel({
         <div className="mt-4 flex items-center gap-3">
           <Button
             type="button"
-            disabled={!slotIds.length || apply.isPending}
+            disabled={!slotIds.length || !validRange || apply.isPending}
             onClick={() => void submit()}
           >
             {apply.isPending ? "Applying…" : actionLabels[action]}

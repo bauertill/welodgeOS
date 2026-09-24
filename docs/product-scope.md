@@ -564,6 +564,10 @@ inventory that exists** for that `(property, category)` — its first night to i
 can be overridden per report. That is a reporting choice, not a commercial fact: if the
 window a hotel will contract for is a real term of the deal, it belongs on the contract.
 
+**Genuinely free**, the conservative figure, is also the sales team's at-a-glance position on
+the Properties tab: how many whole rooms are actually available to offer, per room category,
+without opening the stock sheet.
+
 ### 5.4 The stock sheet (the date-grid)
 
 The familiar spreadsheet view is generated, never stored: supplier / room category / room
@@ -916,7 +920,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
-| §5.3 Availability | **Built** | Both the optimistic and the conservative figure, side by side |
+| §5.3 Availability | **Built** | Both the optimistic and the conservative figure, side by side; the conservative one also shown per room category on the Properties tab |
 | §5.4 Stock sheet | **Built** | A date-grid, one cell per room-night; edited by selecting a rectangle of cells |
 | §6 Operations | **Not built** | Phase 3 |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |

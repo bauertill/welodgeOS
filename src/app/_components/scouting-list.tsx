@@ -93,6 +93,23 @@ export function ScoutingList({
 
   const rows = entries.data ?? [];
 
+  // The sales team's at-a-glance position, per room category: whole rooms
+  // genuinely free — bought and not blocked or sold — across the whole
+  // window (doc §5.3). Only counts rooms actually brought into Inventory; a
+  // category that is Contracted but not yet materialised has nothing to
+  // report yet.
+  const availability = api.reporting.availability.useQuery({ eventId });
+  const availabilityByCategory = new Map(
+    (availability.data ?? []).map((row) => [row.categoryId, row]),
+  );
+
+  const contractStatusOf = (
+    entry: (typeof rows)[number],
+    categoryId: string,
+  ): CategoryContractStatus =>
+    entry.categoryContracts.find((c) => c.categoryId === categoryId)
+      ?.status ?? "IN_NEGOTIATION";
+
   const pins: MapPin[] = useMemo(
     () =>
       rows
@@ -263,8 +280,7 @@ export function ScoutingList({
               const categoryOpen = expanded.has(entry.id);
               const hasCategories = property.categories.length > 0;
               const contractStatus = (categoryId: string): CategoryContractStatus =>
-                entry.categoryContracts.find((c) => c.categoryId === categoryId)
-                  ?.status ?? "IN_NEGOTIATION";
+                contractStatusOf(entry, categoryId);
 
               // Rooms summed per status, not one line per category — a
               // property with a dozen room types would otherwise print a
@@ -404,39 +420,47 @@ export function ScoutingList({
                   <tr>
                     <Td colSpan={venue ? 8 : 7}>
                       <div className="ml-5 space-y-2">
-                        {property.categories.map((category) => (
-                          <div
-                            key={category.id}
-                            className="flex flex-wrap items-center gap-3"
-                          >
-                            <span className="text-ink-900 w-40 shrink-0 text-[13px] font-medium">
-                              {category.name}
-                            </span>
-                            <span className="text-ink-500 w-20 shrink-0 text-xs font-light">
-                              {category.unitCount} rooms
-                            </span>
-                            <Select
-                              value={contractStatus(category.id)}
-                              title={
-                                categoryContractStatusHints[contractStatus(category.id)]
-                              }
-                              onChange={(e) =>
-                                setCategoryStatusMutation.mutate({
-                                  scoutingEntryId: entry.id,
-                                  categoryId: category.id,
-                                  status: e.target.value as CategoryContractStatus,
-                                })
-                              }
-                              className="w-40 py-1.5 text-[13px]"
+                        {property.categories.map((category) => {
+                          const position = availabilityByCategory.get(category.id);
+                          return (
+                            <div
+                              key={category.id}
+                              className="flex flex-wrap items-center gap-3"
                             >
-                              {categoryContractStatusOrder.map((option) => (
-                                <option key={option} value={option}>
-                                  {categoryContractStatusLabels[option]}
-                                </option>
-                              ))}
-                            </Select>
-                          </div>
-                        ))}
+                              <span className="text-ink-900 w-40 shrink-0 text-[13px] font-medium">
+                                {category.name}
+                              </span>
+                              <span className="text-ink-500 w-20 shrink-0 text-xs font-light">
+                                {category.unitCount} rooms
+                              </span>
+                              <Select
+                                value={contractStatus(category.id)}
+                                title={
+                                  categoryContractStatusHints[contractStatus(category.id)]
+                                }
+                                onChange={(e) =>
+                                  setCategoryStatusMutation.mutate({
+                                    scoutingEntryId: entry.id,
+                                    categoryId: category.id,
+                                    status: e.target.value as CategoryContractStatus,
+                                  })
+                                }
+                                className="w-40 py-1.5 text-[13px]"
+                              >
+                                {categoryContractStatusOrder.map((option) => (
+                                  <option key={option} value={option}>
+                                    {categoryContractStatusLabels[option]}
+                                  </option>
+                                ))}
+                              </Select>
+                              <span className="text-ink-500 text-xs font-light">
+                                {position && position.slots > 0
+                                  ? `${position.genuinelyFree} available`
+                                  : "Not in inventory yet"}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </Td>
                   </tr>
