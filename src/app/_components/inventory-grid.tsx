@@ -1,17 +1,14 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { AcquisitionState } from "generated/prisma";
 
-import { Input, Select } from "~/app/_components/form";
+import { Combobox } from "~/app/_components/combobox";
+import { Input } from "~/app/_components/form";
 import { InventorySidePanel, type SelectedCell } from "~/app/_components/inventory-side-panel";
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
-import { acquisitionLabels, acquisitionOrder, holdOrder, salesLabels } from "~/lib/inventory";
 import { severityLabels, severityStyles, type Severity } from "~/lib/position";
 import { api } from "~/trpc/react";
-
-type HoldState = "NONE" | "BLOCKED" | "SOLD" | "CANCELLED";
 
 /** A drag-select anchor/end, addressed by position rather than id, so the
  * rectangle between two points is a simple index range. */
@@ -37,11 +34,7 @@ export function InventoryGrid({
   onChanged: () => void;
 }) {
   const [propertyId, setPropertyId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
   const [clientId, setClientId] = useState("");
-  const [acquisitionState, setAcquisitionState] = useState<AcquisitionState | "">("");
-  const [salesState, setSalesState] = useState<HoldState | "">("");
-  const [minStars, setMinStars] = useState("");
   const [checkIn, setCheckIn] = useState(defaultCheckIn);
   const [checkOut, setCheckOut] = useState(defaultCheckOut);
 
@@ -56,11 +49,7 @@ export function InventoryGrid({
   const grid = api.inventory.grid.useQuery({
     eventId,
     propertyId: propertyId || undefined,
-    categoryId: categoryId || undefined,
     clientId: clientId || undefined,
-    acquisitionState: acquisitionState || undefined,
-    salesState: salesState || undefined,
-    minStars: minStars ? Number(minStars) : undefined,
     checkIn: parseDay(checkIn),
     checkOut: parseDay(checkOut),
   });
@@ -94,17 +83,6 @@ export function InventoryGrid({
   const properties = grid.data?.properties ?? [];
   const dates = grid.data?.dates ?? [];
   const cells = grid.data?.cells ?? {};
-
-  // Category options are scoped to the chosen property, same pattern as the
-  // property/category filter already added to the old stock sheet.
-  const categoryOptions = properties
-    .filter((property) => !propertyId || property.id === propertyId)
-    .flatMap((property) =>
-      property.categories.map((category) => ({
-        id: category.id,
-        label: propertyId ? category.name : `${property.name} — ${category.name}`,
-      })),
-    );
 
   const availabilityByProperty = useMemo(() => {
     const map = new Map<string, { categoryName: string; free: number; slots: number }[]>();
@@ -232,82 +210,44 @@ export function InventoryGrid({
       })()}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Select value={propertyId} onChange={(e) => { setPropertyId(e.target.value); setCategoryId(""); }} className="w-auto">
-          <option value="">Every property</option>
-          {properties.map((property) => (
-            <option key={property.id} value={property.id}>
-              {property.name}
-            </option>
-          ))}
-        </Select>
+        <Combobox
+          className="w-52"
+          value={propertyId}
+          onChange={setPropertyId}
+          placeholder="Every property"
+          options={properties.map((property) => ({
+            id: property.id,
+            label: property.name,
+          }))}
+        />
 
-        <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-auto">
-          <option value="">Every room type</option>
-          {categoryOptions.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.label}
-            </option>
-          ))}
-        </Select>
-
-        <Select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-auto">
-          <option value="">Every client</option>
-          {(clients.data ?? []).map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-            </option>
-          ))}
-        </Select>
-
-        <Select value={minStars} onChange={(e) => setMinStars(e.target.value)} className="w-auto">
-          <option value="">Any star rating</option>
-          {[5, 4, 3, 2, 1].map((star) => (
-            <option key={star} value={star}>
-              {star}+ stars
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={acquisitionState}
-          onChange={(e) => setAcquisitionState(e.target.value as AcquisitionState | "")}
-          className="w-auto"
-        >
-          <option value="">Any supplier status</option>
-          {acquisitionOrder.map((state) => (
-            <option key={state} value={state}>
-              {acquisitionLabels[state]}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={salesState}
-          onChange={(e) => setSalesState(e.target.value as HoldState | "")}
-          className="w-auto"
-        >
-          <option value="">Any client status</option>
-          {holdOrder.map((state) => (
-            <option key={state} value={state}>
-              {salesLabels[state]}
-            </option>
-          ))}
-        </Select>
+        <Combobox
+          className="w-52"
+          value={clientId}
+          onChange={setClientId}
+          placeholder="Every client"
+          options={(clients.data ?? []).map((client) => ({
+            id: client.id,
+            label: client.name,
+          }))}
+        />
 
         <div className="ml-auto flex items-center gap-2">
-          <Input
-            type="date"
-            value={checkIn}
-            onChange={(e) => setCheckIn(e.target.value)}
-            className="w-auto"
-          />
+          <div className="w-40">
+            <Input
+              type="date"
+              value={checkIn}
+              onChange={(e) => setCheckIn(e.target.value)}
+            />
+          </div>
           <span className="text-ink-400">–</span>
-          <Input
-            type="date"
-            value={checkOut}
-            onChange={(e) => setCheckOut(e.target.value)}
-            className="w-auto"
-          />
+          <div className="w-40">
+            <Input
+              type="date"
+              value={checkOut}
+              onChange={(e) => setCheckOut(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 

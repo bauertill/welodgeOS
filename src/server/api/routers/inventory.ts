@@ -781,6 +781,7 @@ export const inventoryRouter = createTRPCRouter({
             {
               id: string;
               name: string;
+              sortOrder: number;
               slots: Map<string, { id: string; slotNumber: number }>;
             }
           >;
@@ -804,6 +805,7 @@ export const inventoryRouter = createTRPCRouter({
           category = {
             id: night.slot.categoryId,
             name: night.slot.category.name,
+            sortOrder: night.slot.category.sortOrder,
             slots: new Map(),
           };
           property.categories.set(night.slot.categoryId, category);
@@ -845,7 +847,11 @@ export const inventoryRouter = createTRPCRouter({
                   (a, b) => a.slotNumber - b.slotNumber,
                 ),
               }))
-              .sort((a, b) => a.name.localeCompare(b.name)),
+              // Same order the property form lists categories in — a hotel's
+              // rooms first, whatever was added after (like a meeting room)
+              // last — rather than alphabetical, where "Meeting Room" sorts
+              // ahead of "ROH" by letter alone.
+              .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
           }))
           .sort((a, b) => a.name.localeCompare(b.name)),
         cells,

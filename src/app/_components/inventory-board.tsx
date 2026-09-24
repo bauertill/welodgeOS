@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
+
 import { BringIntoInventory } from "~/app/_components/bring-into-inventory";
+import { Button } from "~/app/_components/form";
 import { InventoryGrid } from "~/app/_components/inventory-grid";
-import { Card, SectionHeading, StatCard, Table, Td, Th } from "~/app/_components/ui";
+import { Card, SectionHeading, Table, Td, Th } from "~/app/_components/ui";
 import { formatDay } from "~/lib/format";
 import { api } from "~/trpc/react";
 
@@ -11,6 +14,11 @@ import { api } from "~/trpc/react";
  * ways — bringing rooms into inventory (§3.6) and editing them on the grid
  * (§4.8), which applies every bulk transition to a *rectangle* of rooms ×
  * nights, atomically.
+ *
+ * The stock sheet is where most of a rep's day happens, so it comes right
+ * after the one prominent action above it — bringing rooms in, tucked
+ * behind a button rather than left open by default. The headline numbers
+ * moved to the Position tab.
  */
 export function InventoryBoard({
   eventId,
@@ -22,49 +30,42 @@ export function InventoryBoard({
   defaultCheckOut: string;
 }) {
   const utils = api.useUtils();
-  const summary = api.reporting.summary.useQuery({ eventId });
   const ledger = api.inventory.ledger.useQuery({ eventId, limit: 25 });
+  const [showBringIntoInventory, setShowBringIntoInventory] = useState(false);
 
   const refresh = () => {
     void utils.inventory.invalidate();
     void utils.reporting.invalidate();
   };
 
-  const stats = summary.data;
-
   return (
     <div className="space-y-8">
-      {stats && stats.roomNights > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Room-nights"
-            value={stats.roomNights}
-            hint={`${stats.rooms} rooms in this event`}
-          />
-          <StatCard
-            label="Bought"
-            value={stats.bought}
-            hint={`${stats.onOption} more on option`}
-          />
-          <StatCard
-            label="Sold"
-            value={stats.sold}
-            hint={`${stats.blocked} blocked · ${stats.contested} room-nights another client is also asking for`}
-          />
-          <StatCard
-            label="Short"
-            value={stats.short}
-            hint={`Sold or blocked but not bought · ${stats.long} bought and unsold`}
+      {showBringIntoInventory ? (
+        <div>
+          <div className="mb-2 flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowBringIntoInventory(false)}
+            >
+              Hide
+            </Button>
+          </div>
+          <BringIntoInventory
+            eventId={eventId}
+            defaultCheckIn={defaultCheckIn}
+            defaultCheckOut={defaultCheckOut}
+            onDone={refresh}
           />
         </div>
+      ) : (
+        <Button
+          type="button"
+          onClick={() => setShowBringIntoInventory(true)}
+        >
+          Bring rooms into inventory
+        </Button>
       )}
-
-      <BringIntoInventory
-        eventId={eventId}
-        defaultCheckIn={defaultCheckIn}
-        defaultCheckOut={defaultCheckOut}
-        onDone={refresh}
-      />
 
       <InventoryGrid
         eventId={eventId}

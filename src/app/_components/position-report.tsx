@@ -60,6 +60,29 @@ export function PositionReport({ eventId }: { eventId: string }) {
 
   return (
     <div className="space-y-8">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Room-nights"
+          value={stats.roomNights}
+          hint={`${stats.rooms} rooms in this event`}
+        />
+        <StatCard
+          label="Bought"
+          value={stats.bought}
+          hint={`${stats.onOption} more on option`}
+        />
+        <StatCard
+          label="Sold"
+          value={stats.sold}
+          hint={`${stats.blocked} blocked · ${stats.contested} room-nights another client is also asking for`}
+        />
+        <StatCard
+          label="Short"
+          value={stats.short}
+          hint={`Sold or blocked but not bought · ${stats.long} bought and unsold`}
+        />
+      </div>
+
       {properties.length > 1 && (
         <Select
           value={propertyId}
