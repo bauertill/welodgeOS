@@ -14,7 +14,13 @@ export type MapPin = {
   name: string;
   latitude: number;
   longitude: number;
-  status: ScoutingStatus;
+  /**
+   * Only set where the map is scoped to one event. The property library's own
+   * map leaves it out: a property can be on several events' lists at once with
+   * a different status on each, so there is no one status to paint it with
+   * (doc §3.5).
+   */
+  status?: ScoutingStatus;
   subtitle: string;
   href: string;
 };
@@ -27,19 +33,25 @@ const pinColors: Record<ScoutingStatus, string> = {
   CONTRACTED: "#12b878",
 };
 
+/** What a pin with no status is drawn in. */
+const NEUTRAL_PIN = "#614fc9";
+
+const pinColor = (status?: ScoutingStatus) =>
+  status ? pinColors[status] : NEUTRAL_PIN;
+
 /**
  * Markers are drawn as inline HTML rather than image files — Leaflet's default
  * icons resolve to bundled assets that a Next build rewrites, and a coloured
  * dot carries the status anyway.
  */
-const markerIcon = (status: ScoutingStatus, venue = false) =>
+const markerIcon = (status?: ScoutingStatus, venue = false) =>
   L.divIcon({
     className: "",
     iconSize: venue ? [18, 18] : [14, 14],
     iconAnchor: venue ? [9, 9] : [7, 7],
     html: venue
       ? `<span style="display:block;width:18px;height:18px;border-radius:4px;background:#292929;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></span>`
-      : `<span style="display:block;width:14px;height:14px;border-radius:50%;background:${pinColors[status]};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></span>`,
+      : `<span style="display:block;width:14px;height:14px;border-radius:50%;background:${pinColor(status)};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></span>`,
   });
 
 /** Keeps every pin in frame, including when the filters change the set. */
@@ -88,7 +100,7 @@ export function ScoutingMap({
         {venue && (
           <Marker
             position={[venue.latitude, venue.longitude]}
-            icon={markerIcon("PROSPECT", true)}
+            icon={markerIcon(undefined, true)}
           >
             <Popup>
               <strong>{venue.name}</strong>
@@ -109,10 +121,14 @@ export function ScoutingMap({
               <br />
               {pin.subtitle}
               <br />
-              <span style={{ color: pinColors[pin.status] }}>
-                {scoutingStatusLabels[pin.status]}
-              </span>
-              <br />
+              {pin.status && (
+                <>
+                  <span style={{ color: pinColors[pin.status] }}>
+                    {scoutingStatusLabels[pin.status]}
+                  </span>
+                  <br />
+                </>
+              )}
               <a href={pin.href}>Open →</a>
             </Popup>
           </Marker>

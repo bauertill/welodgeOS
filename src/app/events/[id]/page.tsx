@@ -12,7 +12,7 @@ import { formatRange } from "~/lib/format";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
-export default async function EventScoutingPage({
+export default async function EventPropertiesPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -42,7 +42,7 @@ export default async function EventScoutingPage({
       <PageHeader
         back={{ href: "/events", label: "All events" }}
         title={event.name}
-        subtitle={`Scouting list · ${formatRange(event.startDate, event.endDate)}${
+        subtitle={`Properties · ${formatRange(event.startDate, event.endDate)}${
           event.city ? ` · ${event.city}` : ""
         }`}
         action={

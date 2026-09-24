@@ -34,7 +34,14 @@ export default async function PropertyPage({
   return (
     <>
       <PageHeader
-        back={{ href: "/properties", label: "All properties" }}
+        back={
+          property.scoutingEntries[0]
+            ? {
+                href: `/events/${property.scoutingEntries[0].event.id}`,
+                label: property.scoutingEntries[0].event.name,
+              }
+            : { href: "/events", label: "All events" }
+        }
         title={property.name}
         subtitle={[
           propertyTypeLabels[property.type],

@@ -123,7 +123,7 @@ export default async function DashboardPage() {
       <Card className="mt-8">
         <p className="text-ink-900 font-medium">What comes next</p>
         <p className="text-ink-500 mt-1 text-sm font-light">
-          Scouting and Acquisition &amp; Sales are built: an event&apos;s
+          Properties and Acquisition &amp; Sales are built: an event&apos;s
           Inventory tab holds the room-nights we buy and sell, its Deadlines tab
           shows what runs out, and its Position tab shows where that leaves us.
           Phase 3 — checking rooming lists against what we hold — is specified in{" "}
@@ -155,7 +155,7 @@ function SignedOut() {
 
       <div className="mt-14 grid gap-4 text-left sm:grid-cols-3">
         {[
-          ["Scouting", "The long list of hotels and apartments, on a map."],
+          ["Properties", "The long list of hotels and apartments, on a map."],
           ["Acquisition & sales", "What we hold, what we promised, where we are exposed."],
           ["Operations", "Rooming lists checked against what we actually own."],
         ].map(([title, copy]) => (

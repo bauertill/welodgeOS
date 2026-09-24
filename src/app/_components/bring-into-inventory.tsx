@@ -68,11 +68,11 @@ export function BringIntoInventory({
     return (
       <Fieldset
         title="Bring rooms into inventory"
-        description="Only a property marked Contracted on this event's scouting list can become inventory."
+        description="Only a property marked Contracted on this event's Properties tab can become inventory."
       >
         <p className="text-ink-500 text-sm font-light">
           Nothing is contracted for this event yet. Move a property to
-          &ldquo;Contracted&rdquo; on the Scouting tab and it will appear here.
+          &ldquo;Contracted&rdquo; on the Properties tab and it will appear here.
         </p>
       </Fieldset>
     );

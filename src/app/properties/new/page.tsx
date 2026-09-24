@@ -31,7 +31,7 @@ export default async function NewPropertyPage({
         back={
           event
             ? { href: `/events/${event.id}`, label: event.name }
-            : { href: "/properties", label: "All properties" }
+            : { href: "/events", label: "All events" }
         }
         title="Scout a property"
         subtitle={

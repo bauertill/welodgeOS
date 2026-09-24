@@ -19,7 +19,10 @@ export function DeleteProperty({ id, name }: { id: string; name: string }) {
 
   const remove = api.property.remove.useMutation({
     onSuccess: () => {
-      router.push("/properties");
+      // The server already refuses this while the property is still scouted
+      // anywhere, so by the time this succeeds there is no event's list left
+      // that this property belonged to — there is nowhere more specific to go.
+      router.push("/events");
       router.refresh();
     },
     onError: (e) => setError(e.message),

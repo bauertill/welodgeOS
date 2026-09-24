@@ -58,7 +58,7 @@ export function EventForm({
 
   const onSaved = (event: { id: string }) => {
     onDone?.();
-    router.push(`/events/${event.id}`);
+    router.push(`/events/${event.id}/inventory`);
     router.refresh();
   };
 

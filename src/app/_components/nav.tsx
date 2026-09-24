@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { getLastEventPath } from "~/lib/last-event";
+import { EventsPanel } from "~/app/_components/events-panel";
 
+// Properties has no standalone section — a property belongs to the event(s)
+// it is scouted for, so it is browsed and managed from inside an event's own
+// tab, not as a global list (doc §3.5).
 export const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/events", label: "Events" },
-  { href: "/properties", label: "Properties" },
   { href: "/clients", label: "Clients" },
 ] as const;
 
@@ -21,45 +23,59 @@ export function useIsAuthRoute() {
 
 export function Nav() {
   const pathname = usePathname();
-  // Populated on mount only — the server-rendered link has to start out
-  // pointing at the plain "/events" list, since localStorage doesn't exist
-  // there (doc §7).
-  const [lastEventPath, setLastEventPathState] = useState<string | null>(
-    null,
-  );
-
-  useEffect(() => {
-    setLastEventPathState(getLastEventPath());
-  }, [pathname]);
+  const [eventsOpen, setEventsOpen] = useState(false);
 
   if (pathname.startsWith("/signin") || pathname.startsWith("/signout"))
     return null;
 
-  return (
-    <nav className="flex flex-col gap-1 px-3">
-      {navItems.map((item) => {
-        const href =
-          item.href === "/events" && lastEventPath ? lastEventPath : item.href;
-        const active =
-          item.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(item.href);
+  const itemStyles = (active: boolean) =>
+    `rounded-full px-4 py-2.5 text-left text-[13px] transition-colors ${
+      active
+        ? "bg-brand-400 text-white"
+        : "text-ink-200 hover:bg-white/10 hover:text-white"
+    }`;
 
-        return (
-          <Link
-            key={item.href}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className={`rounded-full px-4 py-2.5 text-[13px] transition-colors ${
-              active
-                ? "bg-brand-400 text-white"
-                : "text-ink-200 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
+  return (
+    <>
+      <nav className="flex flex-col gap-1 px-3">
+        {navItems.map((item) => {
+          const active =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
+
+          // Events opens a panel rather than navigating: switching event
+          // should not cost you the page you are on.
+          if (item.href === "/events") {
+            return (
+              <button
+                key={item.href}
+                type="button"
+                onClick={() => setEventsOpen(true)}
+                aria-current={active ? "page" : undefined}
+                aria-haspopup="dialog"
+                aria-expanded={eventsOpen}
+                className={itemStyles(active)}
+              >
+                {item.label}
+              </button>
+            );
+          }
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={itemStyles(active)}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {eventsOpen && <EventsPanel onClose={() => setEventsOpen(false)} />}
+    </>
   );
 }
