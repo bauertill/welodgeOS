@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { ActivityLog } from "~/app/_components/activity-log";
 import { UpdateThread } from "~/app/_components/update-thread";
 import { Card, PageHeader } from "~/app/_components/ui";
 import { auth } from "~/server/auth";
@@ -56,6 +57,13 @@ export default async function ClientPage({
               </p>
             </Card>
           )}
+
+          <Card>
+            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
+              Activity
+            </h2>
+            <ActivityLog entity="Client" entityId={client.id} />
+          </Card>
         </div>
       </div>
     </>

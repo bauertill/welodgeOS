@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 
+import { ActivityLog } from "~/app/_components/activity-log";
 import { EventForm } from "~/app/_components/event-form";
-import { PageHeader } from "~/app/_components/ui";
+import { Card, PageHeader } from "~/app/_components/ui";
 import { dayKey } from "~/lib/dates";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
@@ -45,6 +46,15 @@ export default async function EditEventPage({
           venueLongitude: str(event.venueLongitude),
         }}
       />
+
+      <div className="mt-5">
+        <Card>
+          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
+            Activity
+          </h2>
+          <ActivityLog entity="Event" entityId={event.id} />
+        </Card>
+      </div>
     </>
   );
 }

@@ -505,6 +505,17 @@ and when" answerable.
 Every room-night also has an `owner` per axis — the rep accountable for chasing the
 supplier and the rep accountable for the client.
 
+**Undo.** Every entry also carries a snapshot of each affected night's fields exactly as
+they were beforehand — not just the state label `from`/`to` already describe, but the
+actual price, reference, owner, expiry and notes — which is what makes undoing a real fix
+rather than a guess. Undoing an entry restores every affected night to that snapshot (or
+deletes it, if the entry brought the night into being) and writes a further ledger entry
+recording the undo — nothing is ever erased, only added to. It is refused, not
+guessed around, the moment anything else has touched the same night since: the entry that
+brought rooms into inventory can no longer be undone once a sale has happened against
+them, for instance. The fix at that point is to unwind the later action by hand, or to
+undo it first. An undo itself cannot be undone, so this can never chain indefinitely.
+
 ### 4.8 Bulk operations are the primary interaction
 
 Because the grain is a night, **no meaningful action is single-record**. The core mutation
@@ -524,6 +535,32 @@ operations. What is missing is doing it as one act with one ledger entry.
 A refusal names the rooms, not each night separately: twenty-one identical lines for one
 room is a wall rather than an explanation, so consecutive nights failing for the same reason
 collapse into one line naming the range.
+
+### 4.9 The general audit trail
+
+The ledger (§4.7) only ever describes a room-night. Everything else that changes — a
+scouting status, a room category's contract status, a property, client or event edit —
+appends its own entry to a separate, general audit trail: `timestamp`, `actor`, which kind
+of thing changed and which one, a one-line summary, and — for an edit — one line per field
+that actually changed, old value to new. Like the ledger, it is append-only: nothing is
+ever edited or deleted once written, including by the thing it describes being deleted
+itself (removing a property or a scouting entry does not take its history down with it).
+
+Two things this deliberately does not do, both because they are more than today needs:
+
+- **No field-level diff of nested structures.** A property's room categories or contacts
+  changing is recorded as "Room categories updated" / "Contacts updated", not a diff of
+  every field of every category. The room-night ledger already gives a full account of
+  everything that happens to a category's actual inventory; this is enough to know *that*
+  the shape changed, without re-deriving a categories-only diff engine.
+- **No undo.** Unlike the room-night ledger (§4.7), nothing here can be restored — this is
+  a record of what happened, not a mechanism for reversing it. A mistaken property edit or
+  status change is fixed by editing it again, by hand.
+
+Where it shows up: a property's own page, a client's own page, and an event's edit page
+each show their own history; a scouting entry's row on the Properties tab shows both its
+own status history and the status history of every one of its category contracts, merged
+into one list, since both are edited in the same place.
 
 ---
 
@@ -806,6 +843,8 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
 | **Flexibility window** | A party's pre-authorised `earliestArrival` → `latestDeparture` range. |
 | **Position grid** | The `(acquisition, sales)` matrix that yields icon and severity. |
 | **Update** | A permanent, append-only post on a property or client's history — a meeting note, a call summary, feedback. Can mention a colleague, as a visual highlight only. |
+| **Undo** | Restores a ledger entry's room-nights to their exact prior fields, or deletes them if the entry created them. Refused once anything later has touched the same nights. |
+| **Audit trail** | The general, read-only history (§4.9) of everything that isn't a room-night — statuses, and property/client/event edits. |
 
 ---
 
@@ -944,7 +983,9 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.6 Deadline dashboard | **Built** | Everything expiring, soonest first, grouped by property and client, with value at stake |
 | §4.6 Calendar reminders | **Not built** | Needs Google credentials and a scheduled job. The dashboard carries the same aggregation |
 | §4.7 Ledger and ownership | **Built** | One entry per bulk operation, linked to every night it touched; an owner per axis |
+| §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused once anything later has touched the same nights |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
+| §4.9 General audit trail | **Built** | Scouting status, contract status, and property/client/event edits — no undo, and no field-level diff of nested categories/contacts |
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |

@@ -285,6 +285,7 @@ model User {
   requests          RoomNightRequest[] @relation("RequestOwner")
   ledgerEntries     LedgerEntry[]
   updates           Update[]
+  auditEntries      AuditEntry[]
 }
 
 model VerificationToken {
@@ -521,6 +522,17 @@ model LedgerEntry {
   reason     String?
   nightCount Int
 
+  /// Every affected night's mutable fields, exactly as they were *before*
+  /// this entry's write — dates as ISO strings, one object per night, each
+  /// carrying `nightId` and `existed` (false for a night this entry brought
+  /// into being, meaning undo deletes it rather than restoring fields).
+  /// What makes undo possible: unlike `fromState`/`toState`, which are only
+  /// ever a state's label, this is the actual data.
+  beforeSnapshot Json?
+  /// False only on the entry an undo itself writes, so undo can never chain
+  /// into undoing an undo.
+  undoable       Boolean @default(true)
+
   actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
   actorId String?
 
@@ -530,4 +542,30 @@ model LedgerEntry {
   nights RoomNight[] @relation("LedgerNights")
 
   @@index([eventId, createdAt])
+}
+
+/// A general, append-only record of a change to something other than a
+/// room-night — a status flip, a property/client/event edit (doc §4.9).
+/// `entityId` is a plain string, not a relation: history is meant to outlive
+/// the row it describes, so deleting a property or a scouting entry must
+/// never take its audit trail down with it.
+model AuditEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId String?
+
+  /// "Property" | "Client" | "Event" | "ScoutingEntry" | "CategoryContract"
+  entity   String
+  entityId String
+
+  /// A sentence a non-technical reader can follow, written at write time.
+  summary String
+  /// One line per changed field ("Name: \"Old\" → \"New\""). Free text —
+  /// nothing here is machine-read back; that is what LedgerEntry.beforeSnapshot
+  /// is for.
+  changes String?
+
+  @@index([entity, entityId, createdAt])
 }

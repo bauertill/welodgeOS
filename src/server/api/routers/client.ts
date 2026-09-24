@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { logAudit, logFieldChanges } from "~/server/audit";
 
 /**
  * The B2B buyers: federations, broadcasters, sponsors, event teams. Clients are
@@ -41,25 +42,47 @@ export const clientRouter = createTRPCRouter({
   create: protectedProcedure
     .input(clientInput)
     .mutation(({ ctx, input }) =>
-      ctx.db.client.create({
-        data: {
-          name: input.name.trim(),
-          shortName: blank(input.shortName),
-          notes: blank(input.notes),
-        },
+      ctx.db.$transaction(async (tx) => {
+        const client = await tx.client.create({
+          data: {
+            name: input.name.trim(),
+            shortName: blank(input.shortName),
+            notes: blank(input.notes),
+          },
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Client",
+          entityId: client.id,
+          summary: "Added",
+        });
+        return client;
       }),
     ),
 
   update: protectedProcedure
     .input(clientInput.extend({ id: z.string() }))
     .mutation(({ ctx, input }) =>
-      ctx.db.client.update({
-        where: { id: input.id },
-        data: {
+      ctx.db.$transaction(async (tx) => {
+        const before = await tx.client.findUniqueOrThrow({ where: { id: input.id } });
+        const data = {
           name: input.name.trim(),
           shortName: blank(input.shortName),
           notes: blank(input.notes),
-        },
+        };
+        const updated = await tx.client.update({ where: { id: input.id }, data });
+        await logFieldChanges(
+          tx,
+          { actorId: ctx.session.user.id, entity: "Client", entityId: input.id, summary: "Updated" },
+          before,
+          updated,
+          [
+            { key: "name", label: "Name" },
+            { key: "shortName", label: "Short name" },
+            { key: "notes", label: "Notes" },
+          ],
+        );
+        return updated;
       }),
     ),
 });

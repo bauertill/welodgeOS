@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { logAudit, logFieldChanges } from "~/server/audit";
 
 /**
  * A room category. Hotels fill in `bedConfiguration`; apartments fill in
@@ -162,30 +163,39 @@ export const propertyRouter = createTRPCRouter({
         });
       }
 
-      return ctx.db.property.create({
-        data: {
-          ...property,
-          address: blank(property.address),
-          city: blank(property.city),
-          country: blank(property.country),
-          website: blank(property.website),
-          phone: blank(property.phone),
-          notes: blank(property.notes),
-          scoutedById: ctx.session.user.id,
-          amenities: { connect: amenityIds.map((id) => ({ id })) },
-          categories: {
-            create: categories.map(({ id: _unused, ...category }, index) => ({
-              ...category,
-              sortOrder: index,
-            })),
+      return ctx.db.$transaction(async (tx) => {
+        const created = await tx.property.create({
+          data: {
+            ...property,
+            address: blank(property.address),
+            city: blank(property.city),
+            country: blank(property.country),
+            website: blank(property.website),
+            phone: blank(property.phone),
+            notes: blank(property.notes),
+            scoutedById: ctx.session.user.id,
+            amenities: { connect: amenityIds.map((id) => ({ id })) },
+            categories: {
+              create: categories.map(({ id: _unused, ...category }, index) => ({
+                ...category,
+                sortOrder: index,
+              })),
+            },
+            contacts: {
+              create: contacts.map((contact) => ({
+                ...contact,
+                email: blank(contact.email),
+              })),
+            },
           },
-          contacts: {
-            create: contacts.map((contact) => ({
-              ...contact,
-              email: blank(contact.email),
-            })),
-          },
-        },
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Property",
+          entityId: created.id,
+          summary: "Added",
+        });
+        return created;
       });
     }),
 
@@ -254,6 +264,32 @@ export const propertyRouter = createTRPCRouter({
       const removing = existing
         .filter((category) => !keeping.has(category.id))
         .map((category) => category.id);
+      // A coarse signal, not a field-level diff of every category — nested
+      // structures aren't diffed in detail today (doc §4.9).
+      const categoriesChanged =
+        removing.length > 0 || categories.some((category) => !category.id);
+
+      const [before, existingContacts] = await Promise.all([
+        ctx.db.property.findUniqueOrThrow({ where: { id } }),
+        ctx.db.propertyContact.findMany({ where: { propertyId: id } }),
+      ]);
+      // Contacts are always wholesale-replaced below, so "changed" is
+      // compared as an order-independent set rather than assumed every time.
+      const contactKey = (c: {
+        name: string;
+        role?: string | null;
+        email?: string | null;
+        phone?: string | null;
+      }) => `${c.name}|${c.role ?? ""}|${c.email ?? ""}|${c.phone ?? ""}`;
+      const existingContactKeys = new Set(existingContacts.map(contactKey));
+      const incomingContactKeys = new Set(
+        contacts.map((c) =>
+          contactKey({ ...c, email: blank(c.email), role: blank(c.role), phone: blank(c.phone) }),
+        ),
+      );
+      const contactsChanged =
+        existingContactKeys.size !== incomingContactKeys.size ||
+        [...existingContactKeys].some((key) => !incomingContactKeys.has(key));
 
       // Contacts carry nothing downstream, so they stay a wholesale replace.
       return ctx.db.$transaction(async (tx) => {
@@ -274,7 +310,7 @@ export const propertyRouter = createTRPCRouter({
           }
         }
 
-        return tx.property.update({
+        const updated = await tx.property.update({
           where: { id },
           data: {
             ...property,
@@ -293,6 +329,43 @@ export const propertyRouter = createTRPCRouter({
             },
           },
         });
+
+        await logFieldChanges(
+          tx,
+          { actorId: ctx.session.user.id, entity: "Property", entityId: id, summary: "Updated" },
+          before,
+          updated,
+          [
+            { key: "name", label: "Name" },
+            { key: "type", label: "Type" },
+            { key: "address", label: "Address" },
+            { key: "city", label: "City" },
+            { key: "country", label: "Country" },
+            { key: "stars", label: "Stars" },
+            { key: "totalRooms", label: "Total rooms" },
+            { key: "website", label: "Website" },
+            { key: "phone", label: "Phone" },
+            { key: "notes", label: "Notes" },
+          ],
+        );
+        if (categoriesChanged) {
+          await logAudit(tx, {
+            actorId: ctx.session.user.id,
+            entity: "Property",
+            entityId: id,
+            summary: "Room categories updated",
+          });
+        }
+        if (contactsChanged) {
+          await logAudit(tx, {
+            actorId: ctx.session.user.id,
+            entity: "Property",
+            entityId: id,
+            summary: "Contacts updated",
+          });
+        }
+
+        return updated;
       });
     }),
 
@@ -332,6 +405,14 @@ export const propertyRouter = createTRPCRouter({
         });
       }
 
-      return ctx.db.property.delete({ where: { id: input.id } });
+      return ctx.db.$transaction(async (tx) => {
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Property",
+          entityId: input.id,
+          summary: "Deleted",
+        });
+        return tx.property.delete({ where: { id: input.id } });
+      });
     }),
 });

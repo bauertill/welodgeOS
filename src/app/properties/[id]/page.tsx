@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { ActivityLog } from "~/app/_components/activity-log";
 import { DeleteProperty } from "~/app/_components/delete-property";
 import {
   Card,
@@ -175,6 +176,13 @@ export default async function PropertyPage({
                 ))}
               </ul>
             )}
+          </Card>
+
+          <Card>
+            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
+              Activity
+            </h2>
+            <ActivityLog entity="Property" entityId={property.id} />
           </Card>
         </div>
 

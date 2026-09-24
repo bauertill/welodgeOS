@@ -1,6 +1,8 @@
 import { z } from "zod";
 
+import { categoryContractStatusLabels, scoutingStatusLabels } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { logAudit } from "~/server/audit";
 
 // `CONTRACTED` is deliberately excluded — a property has no single contract
 // status of its own any more; that lives per room category (doc §3.5, §3.6).
@@ -80,17 +82,40 @@ export const scoutingRouter = createTRPCRouter({
   add: protectedProcedure
     .input(z.object({ eventId: z.string(), propertyId: z.string() }))
     .mutation(({ ctx, input }) =>
-      ctx.db.scoutingEntry.create({
-        data: { ...input, addedById: ctx.session.user.id },
+      ctx.db.$transaction(async (tx) => {
+        const entry = await tx.scoutingEntry.create({
+          data: { ...input, addedById: ctx.session.user.id },
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "ScoutingEntry",
+          entityId: entry.id,
+          summary: "Added to the scouting list",
+        });
+        return entry;
       }),
     ),
 
   setStatus: protectedProcedure
     .input(z.object({ id: z.string(), status: z.enum(SCOUTING_STATUSES) }))
     .mutation(({ ctx, input }) =>
-      ctx.db.scoutingEntry.update({
-        where: { id: input.id },
-        data: { status: input.status },
+      ctx.db.$transaction(async (tx) => {
+        const before = await tx.scoutingEntry.findUniqueOrThrow({
+          where: { id: input.id },
+        });
+        const updated = await tx.scoutingEntry.update({
+          where: { id: input.id },
+          data: { status: input.status },
+        });
+        if (before.status !== input.status) {
+          await logAudit(tx, {
+            actorId: ctx.session.user.id,
+            entity: "ScoutingEntry",
+            entityId: input.id,
+            summary: `Status: ${scoutingStatusLabels[before.status]} → ${scoutingStatusLabels[input.status]}`,
+          });
+        }
+        return updated;
       }),
     ),
 
@@ -108,34 +133,79 @@ export const scoutingRouter = createTRPCRouter({
       }),
     )
     .mutation(({ ctx, input }) =>
-      ctx.db.categoryContract.upsert({
-        where: {
-          scoutingEntryId_categoryId: {
+      ctx.db.$transaction(async (tx) => {
+        const before = await tx.categoryContract.findUnique({
+          where: {
+            scoutingEntryId_categoryId: {
+              scoutingEntryId: input.scoutingEntryId,
+              categoryId: input.categoryId,
+            },
+          },
+        });
+        const contract = await tx.categoryContract.upsert({
+          where: {
+            scoutingEntryId_categoryId: {
+              scoutingEntryId: input.scoutingEntryId,
+              categoryId: input.categoryId,
+            },
+          },
+          update: { status: input.status },
+          create: {
             scoutingEntryId: input.scoutingEntryId,
             categoryId: input.categoryId,
+            status: input.status,
           },
-        },
-        update: { status: input.status },
-        create: {
-          scoutingEntryId: input.scoutingEntryId,
-          categoryId: input.categoryId,
-          status: input.status,
-        },
+        });
+        const beforeStatus = before?.status ?? "IN_NEGOTIATION";
+        if (beforeStatus !== input.status) {
+          await logAudit(tx, {
+            actorId: ctx.session.user.id,
+            entity: "CategoryContract",
+            entityId: contract.id,
+            summary: `Contract status: ${categoryContractStatusLabels[beforeStatus]} → ${categoryContractStatusLabels[input.status]}`,
+          });
+        }
+        return contract;
       }),
     ),
 
   setNotes: protectedProcedure
     .input(z.object({ id: z.string(), notes: z.string() }))
     .mutation(({ ctx, input }) =>
-      ctx.db.scoutingEntry.update({
-        where: { id: input.id },
-        data: { notes: input.notes.trim() || null },
+      ctx.db.$transaction(async (tx) => {
+        const notes = input.notes.trim() || null;
+        const updated = await tx.scoutingEntry.update({
+          where: { id: input.id },
+          data: { notes },
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "ScoutingEntry",
+          entityId: input.id,
+          summary: "Notes updated",
+        });
+        return updated;
       }),
     ),
 
   remove: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) =>
-      ctx.db.scoutingEntry.delete({ where: { id: input.id } }),
+      ctx.db.$transaction(async (tx) => {
+        // Written before the delete, and against the property (not the
+        // scouting entry itself) — once removed, there is no scouting-entry
+        // page left for this to show up on.
+        const entry = await tx.scoutingEntry.findUniqueOrThrow({
+          where: { id: input.id },
+          include: { property: { select: { id: true, name: true } }, event: true },
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Property",
+          entityId: entry.propertyId,
+          summary: `Removed from "${entry.event.name}"'s scouting list`,
+        });
+        return tx.scoutingEntry.delete({ where: { id: input.id } });
+      }),
     ),
 });

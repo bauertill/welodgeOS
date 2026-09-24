@@ -16,7 +16,15 @@ import {
 import { positionOf } from "~/lib/position";
 import { categoryContractStatusLabels } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { axisOf, describeRoom, flatten, nightInclude } from "~/server/inventory";
+import {
+  axisOf,
+  describeRoom,
+  flatten,
+  type NightSnapshot,
+  nightInclude,
+  snapshotNight,
+  snapshotToFields,
+} from "~/server/inventory";
 
 /**
  * Phase 2 — acquisition and sales at the grain the business actually operates
@@ -235,6 +243,22 @@ export const inventoryRouter = createTRPCRouter({
           ),
         );
 
+        // Recorded before creating anything, so undo can tell "this entry
+        // brought it into being" apart from "this was already here" — a
+        // re-materialised overlap must never let undo delete a night some
+        // earlier materialise owns.
+        const alreadyPresent = await tx.roomNight.findMany({
+          where: {
+            eventId: input.eventId,
+            slotId: { in: slots.map((slot) => slot.id) },
+            date: { gte: input.checkIn, lt: input.checkOut },
+          },
+          select: { slotId: true, date: true },
+        });
+        const alreadyPresentKeys = new Set(
+          alreadyPresent.map((night) => `${night.slotId}|${dayKey(night.date)}`),
+        );
+
         // `skipDuplicates` leans on the `(slot, date)` uniqueness constraint
         // (invariant §4.5.2): re-materialising an overlapping range adds the
         // missing nights and leaves the existing ones — and their commercial
@@ -256,8 +280,10 @@ export const inventoryRouter = createTRPCRouter({
             slotId: { in: slots.map((slot) => slot.id) },
             date: { gte: input.checkIn, lt: input.checkOut },
           },
-          select: { id: true },
         });
+        const newlyCreated = fresh.filter(
+          (night) => !alreadyPresentKeys.has(`${night.slotId}|${dayKey(night.date)}`),
+        );
 
         await tx.ledgerEntry.create({
           data: {
@@ -267,6 +293,7 @@ export const inventoryRouter = createTRPCRouter({
             toState: "NONE",
             nightCount: created.count,
             summary: `Brought ${category.property.name} ${category.name} #${input.slotFrom}–#${input.slotTo} into inventory for ${formatDay(input.checkIn)} – ${formatDay(input.checkOut)} (${created.count} room-nights, nothing contracted).`,
+            beforeSnapshot: newlyCreated.map((night) => snapshotNight(night, false)),
             nights: { connect: fresh.map((night) => ({ id: night.id })) },
           },
         });
@@ -455,7 +482,16 @@ export const inventoryRouter = createTRPCRouter({
         where: { eventId: input.eventId },
         orderBy: { createdAt: "desc" },
         take: input.limit,
-        include: { actor: { select: { name: true, email: true } } },
+        select: {
+          id: true,
+          createdAt: true,
+          summary: true,
+          reason: true,
+          fromState: true,
+          nightCount: true,
+          undoable: true,
+          actor: { select: { name: true, email: true } },
+        },
       }),
     ),
 
@@ -649,6 +685,14 @@ export const inventoryRouter = createTRPCRouter({
       const period = `${formatDay(checkIn)} – ${formatDay(checkOut)}`;
       const rooms = `${slotIds.length} ${slotIds.length === 1 ? "room" : "rooms"}`;
 
+      // A request is a claim on a *different* table (`RoomNightRequest`), not
+      // a field on the night itself — nothing here to snapshot, so undo isn't
+      // offered for these two actions rather than only half-restoring state.
+      const isRequestAction = action === "REQUEST" || action === "WITHDRAW_REQUEST";
+      const beforeSnapshot: NightSnapshot[] | null = isRequestAction
+        ? null
+        : nights.map((night) => snapshotNight(night));
+
       // A currency with no amount behind it is noise, so it only travels with
       // a price (invariant §4.5.9).
       const requestData = {
@@ -696,6 +740,8 @@ export const inventoryRouter = createTRPCRouter({
             nightCount: ids.length,
             summary: `${actionLabels[action]} — ${rooms} × ${nightCount} ${nightCount === 1 ? "night" : "nights"}, ${period}${client ? `, ${client.name}` : ""}.`,
             reason: reason?.trim() || null,
+            undoable: !isRequestAction,
+            beforeSnapshot: beforeSnapshot ?? undefined,
             nights: { connect: ids.map((id) => ({ id })) },
           },
         });
@@ -934,6 +980,10 @@ export const inventoryRouter = createTRPCRouter({
             nightCount: ids.length,
             summary: `Removed from inventory — ${rooms} × ${nightCount} ${nightCount === 1 ? "night" : "nights"}, ${period}. Never contracted; brought in by mistake.`,
             reason: reason?.trim() || null,
+            // Every one of these nights is NONE/NONE (checked above), so
+            // undoing a removal is just re-materialising them exactly as
+            // they were.
+            beforeSnapshot: nights.map((night) => snapshotNight(night)),
             nights: { connect: ids.map((id) => ({ id })) },
           },
         });
@@ -941,6 +991,102 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       return { removed: ids.length, rooms: slotIds.length };
+    }),
+
+  /**
+   * Restores a ledger entry's affected nights to exactly how they were
+   * before it ran — a real fix for "I did the wrong thing", not just the
+   * narrow "untouched `materialise`" case `remove` covers. Refused, not
+   * guessed around, the moment anything else has touched the same nights
+   * since (doc §4.7).
+   */
+  undo: protectedProcedure
+    .input(z.object({ ledgerEntryId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const entry = await ctx.db.ledgerEntry.findUnique({
+        where: { id: input.ledgerEntryId },
+      });
+      if (!entry) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No such change." });
+      }
+      if (!entry.undoable || !entry.beforeSnapshot) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This change cannot be undone.",
+        });
+      }
+
+      const snapshot = entry.beforeSnapshot as unknown as NightSnapshot[];
+      const nightIds = snapshot.map((s) => s.nightId);
+
+      const later = await ctx.db.ledgerEntry.findMany({
+        where: {
+          eventId: entry.eventId,
+          createdAt: { gt: entry.createdAt },
+          nights: { some: { id: { in: nightIds } } },
+        },
+        include: {
+          nights: { where: { id: { in: nightIds } }, include: nightInclude },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      if (later.length > 0) {
+        const problems: Problem[] = later.flatMap((laterEntry) =>
+          laterEntry.nights.map((night) => ({
+            room: describeRoom(night),
+            date: night.date,
+            reason: `changed again since — "${laterEntry.summary}" — undo that first, or fix it by hand.`,
+          })),
+        );
+        refuse(problems);
+      }
+
+      await ctx.db.$transaction(async (tx) => {
+        const stillExisting: string[] = [];
+        for (const s of snapshot) {
+          if (!s.existed) {
+            await tx.roomNight.deleteMany({ where: { id: s.nightId } });
+            continue;
+          }
+          const current = await tx.roomNight.findUnique({
+            where: { id: s.nightId },
+            select: { id: true },
+          });
+          if (current) {
+            await tx.roomNight.update({
+              where: { id: s.nightId },
+              data: snapshotToFields(s),
+            });
+          } else {
+            // Already deleted by a since-severed `remove` — recreate it
+            // with the same id rather than error, so undo still works.
+            await tx.roomNight.create({
+              data: {
+                id: s.nightId,
+                eventId: entry.eventId,
+                slotId: s.slotId,
+                date: new Date(s.date),
+                ...snapshotToFields(s),
+              },
+            });
+          }
+          stillExisting.push(s.nightId);
+        }
+
+        await tx.ledgerEntry.create({
+          data: {
+            eventId: entry.eventId,
+            actorId: ctx.session.user.id,
+            axis: entry.axis,
+            undoable: false,
+            nightCount: snapshot.length,
+            summary: `Undid: ${entry.summary}`,
+            nights: { connect: stillExisting.map((id) => ({ id })) },
+          },
+        });
+      });
+
+      return { undone: snapshot.length };
     }),
 });
 

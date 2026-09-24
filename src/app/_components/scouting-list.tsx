@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
 import type { CategoryContractStatus, PropertyType } from "generated/prisma";
 
+import { ScoutingActivityLog } from "~/app/_components/activity-log";
 import { Button, Select } from "~/app/_components/form";
 import type { MapPin } from "~/app/_components/scouting-map";
 import {
@@ -461,6 +462,9 @@ export function ScoutingList({
                             </div>
                           );
                         })}
+                      </div>
+                      <div className="border-ink-200/60 mt-3 ml-5 border-t pt-3">
+                        <ScoutingActivityLog scoutingEntryId={entry.id} />
                       </div>
                     </Td>
                   </tr>

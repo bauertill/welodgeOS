@@ -1,4 +1,5 @@
 import { amenityRouter } from "~/server/api/routers/amenity";
+import { auditRouter } from "~/server/api/routers/audit";
 import { clientRouter } from "~/server/api/routers/client";
 import { eventRouter } from "~/server/api/routers/event";
 import { inventoryRouter } from "~/server/api/routers/inventory";
@@ -23,6 +24,7 @@ export const appRouter = createTRPCRouter({
   reporting: reportingRouter,
   user: userRouter,
   update: updateRouter,
+  audit: auditRouter,
 });
 
 export type AppRouter = typeof appRouter;

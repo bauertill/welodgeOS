@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { logAudit, logFieldChanges } from "~/server/audit";
 
 const eventInput = z.object({
   name: z.string().min(1, "An event needs a name"),
@@ -33,20 +34,50 @@ export const eventRouter = createTRPCRouter({
   create: protectedProcedure
     .input(eventInput)
     .mutation(({ ctx, input }) =>
-      ctx.db.event.create({
-        data: {
-          ...input,
-          city: input.city?.trim() || null,
-          country: input.country?.trim() || null,
-          venueName: input.venueName?.trim() || null,
-        },
+      ctx.db.$transaction(async (tx) => {
+        const event = await tx.event.create({
+          data: {
+            ...input,
+            city: input.city?.trim() || null,
+            country: input.country?.trim() || null,
+            venueName: input.venueName?.trim() || null,
+          },
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Event",
+          entityId: event.id,
+          summary: "Created",
+        });
+        return event;
       }),
     ),
 
   update: protectedProcedure
     .input(eventInput.extend({ id: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const { id, ...data } = input;
-      return ctx.db.event.update({ where: { id }, data });
-    }),
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const { id, ...data } = input;
+        const before = await tx.event.findUniqueOrThrow({ where: { id } });
+        const updated = await tx.event.update({ where: { id }, data });
+        await logFieldChanges(
+          tx,
+          { actorId: ctx.session.user.id, entity: "Event", entityId: id, summary: "Updated" },
+          before,
+          updated,
+          [
+            { key: "name", label: "Name" },
+            { key: "city", label: "City" },
+            { key: "country", label: "Country" },
+            { key: "startDate", label: "Start date" },
+            { key: "endDate", label: "End date" },
+            { key: "status", label: "Status" },
+            { key: "venueName", label: "Venue" },
+            { key: "venueLatitude", label: "Venue latitude" },
+            { key: "venueLongitude", label: "Venue longitude" },
+          ],
+        );
+        return updated;
+      }),
+    ),
 });

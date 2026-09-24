@@ -1,4 +1,10 @@
-import type { LedgerAxis, Prisma } from "generated/prisma";
+import type {
+  AcquisitionState,
+  LedgerAxis,
+  Prisma,
+  RoomNight,
+  SalesState,
+} from "generated/prisma";
 
 import type { NightRecord } from "~/lib/stay-rows";
 import type { InventoryAction } from "~/lib/inventory";
@@ -91,6 +97,85 @@ export function flatten(night: LoadedNight): NightRecord {
 /** "Hotel Carmel · King Room #5" — how a room is named to a human. */
 export const describeRoom = (night: LoadedNight) =>
   `${night.slot.category.property.name} · ${night.slot.category.name} #${night.slot.slotNumber}`;
+
+/**
+ * A room-night's mutable fields exactly as they were before a change —
+ * dates as ISO strings, since this is what `LedgerEntry.beforeSnapshot`
+ * stores as JSON. `existed: false` means this entry brought the night into
+ * being, so undoing it deletes the row rather than restoring fields.
+ */
+export type NightSnapshot = {
+  nightId: string;
+  existed: boolean;
+  slotId: string;
+  date: string;
+  acquisitionState: AcquisitionState;
+  supplierRef: string | null;
+  optionExpiry: string | null;
+  buyPriceCents: number | null;
+  buyCurrency: string | null;
+  acquisitionNotes: string | null;
+  acquisitionOwnerId: string | null;
+  salesState: SalesState;
+  clientId: string | null;
+  clientRef: string | null;
+  blockExpiry: string | null;
+  dueDate: string | null;
+  sellPriceCents: number | null;
+  sellCurrency: string | null;
+  salesNotes: string | null;
+  salesOwnerId: string | null;
+};
+
+/** Captures a night's current field values as a snapshot — call this with
+ * data already fetched *before* the write that's about to happen. */
+export function snapshotNight(night: RoomNight, existed = true): NightSnapshot {
+  return {
+    nightId: night.id,
+    existed,
+    slotId: night.slotId,
+    date: night.date.toISOString(),
+    acquisitionState: night.acquisitionState,
+    supplierRef: night.supplierRef,
+    optionExpiry: night.optionExpiry?.toISOString() ?? null,
+    buyPriceCents: night.buyPriceCents,
+    buyCurrency: night.buyCurrency,
+    acquisitionNotes: night.acquisitionNotes,
+    acquisitionOwnerId: night.acquisitionOwnerId,
+    salesState: night.salesState,
+    clientId: night.clientId,
+    clientRef: night.clientRef,
+    blockExpiry: night.blockExpiry?.toISOString() ?? null,
+    dueDate: night.dueDate?.toISOString() ?? null,
+    sellPriceCents: night.sellPriceCents,
+    sellCurrency: night.sellCurrency,
+    salesNotes: night.salesNotes,
+    salesOwnerId: night.salesOwnerId,
+  };
+}
+
+/** The inverse of `snapshotNight` — a `RoomNight` update payload restoring
+ * every field a snapshot carries, dates parsed back from ISO strings. */
+export function snapshotToFields(snapshot: NightSnapshot) {
+  return {
+    acquisitionState: snapshot.acquisitionState,
+    supplierRef: snapshot.supplierRef,
+    optionExpiry: snapshot.optionExpiry ? new Date(snapshot.optionExpiry) : null,
+    buyPriceCents: snapshot.buyPriceCents,
+    buyCurrency: snapshot.buyCurrency,
+    acquisitionNotes: snapshot.acquisitionNotes,
+    acquisitionOwnerId: snapshot.acquisitionOwnerId,
+    salesState: snapshot.salesState,
+    clientId: snapshot.clientId,
+    clientRef: snapshot.clientRef,
+    blockExpiry: snapshot.blockExpiry ? new Date(snapshot.blockExpiry) : null,
+    dueDate: snapshot.dueDate ? new Date(snapshot.dueDate) : null,
+    sellPriceCents: snapshot.sellPriceCents,
+    sellCurrency: snapshot.sellCurrency,
+    salesNotes: snapshot.salesNotes,
+    salesOwnerId: snapshot.salesOwnerId,
+  };
+}
 
 
 /**
