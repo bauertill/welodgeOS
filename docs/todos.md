@@ -178,7 +178,9 @@ done.
         first change to the database's shape since it went live, and there is
         no migration history to apply it from. Pushing the code to `master`
         without updating the live database first would break the live site.
-  - [ ] **Carry the live venues across when the schema is applied.** The three
+  - [ ] **Carry the live venues across when the schema is applied.** Use
+        `prisma/venues-to-places.ts`: `read` before applying the schema,
+        `prisma db push`, then `write`. Re-running `write` is safe. The three
         `Event.venue*` columns are gone, replaced by places of interest
         (§3.7). Applying the schema drops them, so before that: read every
         event's venue name and coordinates out of the live database, apply the
