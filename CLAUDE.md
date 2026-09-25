@@ -87,17 +87,31 @@ conversation.
 | Command | What it does |
 | --- | --- |
 | `./start-database.sh` | Local Postgres in Docker |
-| `pnpm run db:push` | Apply `prisma/schema.prisma` to the database |
+| `pnpm run db:push` | Apply `prisma/schema.prisma` straight to the *local* database, no migration recorded |
+| `pnpm exec prisma migrate dev --name <what-changed>` | The way a schema change is made: writes a migration file and applies it |
 | `pnpm run db:seed` | Reset demo data and load the amenity vocabulary |
 | `pnpm run db:seed:amenities` | Load the amenity vocabulary only — the sole form safe against the live database |
 | `pnpm run dev` | Development server on :3000 |
 | `pnpm run typecheck` | `tsc --noEmit` |
-| `pnpm run build` | Production build — run before claiming something works |
+| `pnpm run build` | Applies pending migrations, then builds — run before claiming something works. Needs the database running |
 
 `pnpm run db:seed` deletes and rebuilds the demo event and properties. The
 amenity list is upserted, never wiped, because properties point at those rows.
 Never point it at production; `pnpm run db:seed:amenities` writes the vocabulary
 and stops, and is what a live database gets.
+
+**A schema change is a migration, not a `db:push`.** `prisma/migrations` is the
+record of how the database got its shape, and `pnpm run build` — the command the
+host runs on deploy — applies anything outstanding before the new code serves a
+request. So a change to `prisma/schema.prisma` ships with the migration that
+applies it, in the same commit, or production gets code that expects a table
+nobody created. That is not hypothetical: it took the live site down on
+2026-09-25.
+
+Where a change moves data as well as shape — a column becoming a table, a value
+splitting in two — the move belongs *inside* the migration, between the create
+and the drop. A step somebody has to remember to run is a step somebody will
+forget, at the worst moment.
 
 The live system is at https://os.welodge.net. Pushing to `master` deploys it, so
 a merge reaches real users without further ceremony. The old address,

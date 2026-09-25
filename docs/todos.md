@@ -30,15 +30,27 @@ database is a Neon Postgres instance provisioned through Vercel's marketplace.
       is not reused) are set. `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` are still
       outstanding, which is what §2 is about. Resend is deliberately unset; see
       the decision recorded there.
-- [ ] **Run migrations against production, not `db:push`.** *Still open, and
-      now more pressing than when it was written.* The production schema was
-      created on 2026-09-06 with `prisma db push` — the development convenience
-      this item warns against — because there is no migration history to deploy
-      instead. Production therefore has all 17 tables but no baseline to
-      migrate from. Before the schema changes again: run `prisma migrate dev`
-      locally to generate an initial migration, then baseline production
-      against it with `prisma migrate resolve --applied`. Doing this while the
-      database still holds no real data is far cheaper than doing it later.
+- [x] **Run migrations against production, not `db:push`** — done
+      2026-09-25, after `db:push` and a deploy in the wrong order took the live
+      site down for the morning. What exists now:
+  - `prisma/migrations/0_init` is the live database exactly as it stood that
+    morning. It is never run against production; production is *told* it is
+    already applied (`prisma migrate resolve --applied 0_init`), which is what
+    "baselining" means.
+  - `prisma/migrations/20260925090000_places_of_interest` is the first real
+    migration: it creates the places-of-interest table, copies each event's
+    venue into it, and only then drops the old venue columns. The copy is part
+    of the migration, so it cannot be forgotten.
+  - **The build runs the migrations.** `pnpm run build` is now
+    `prisma migrate deploy && next build`, which is the command Vercel runs, so
+    the database is brought up to date *before* the code that needs it goes
+    live. This is the piece whose absence caused the outage: a schema change
+    could reach production with no step that applied it.
+  - A consequence worth knowing: `pnpm run build` now needs a reachable
+    database, locally too. Start the database before building.
+  - Rehearsed before use, on a throwaway copy of the live database with a
+    venue that had coordinates: the venue arrived as a place of interest, the
+    event kept its inventory, the old columns went.
 - [x] **Decide what "seeding production" means.** It means the amenity
       vocabulary and nothing else. Production holds no events, properties or
       clients — those are entered through the app, so nobody ever has to wonder
@@ -174,19 +186,11 @@ done.
         and opening one property against five places of interest is 15
         lookups (5 places × 3 modes). A budget alert is the safeguard in case
         a link is opened far more than expected — by a crawler, for instance.
-  - [ ] **Baseline the production database first** — see §1. This is the
-        first change to the database's shape since it went live, and there is
-        no migration history to apply it from. Pushing the code to `master`
-        without updating the live database first would break the live site.
-  - [ ] **Carry the live venues across when the schema is applied.** Use
-        `prisma/venues-to-places.ts`: `read` before applying the schema,
-        `prisma db push`, then `write`. Re-running `write` is safe. The three
-        `Event.venue*` columns are gone, replaced by places of interest
-        (§3.7). Applying the schema drops them, so before that: read every
-        event's venue name and coordinates out of the live database, apply the
-        schema, then write each one back as a place of interest of category
-        `VENUE`. Done locally on 2026-09-24 this way; the live database still
-        has to have it done. Skipping it loses every venue silently.
+  - [x] **The database upgrade is a migration now** — see §1. It was a
+        manual step, done in the wrong order on 2026-09-25, which is what took
+        the site down. The migration creates the table, carries the venues
+        across and drops the old columns, and the build applies it before the
+        new code serves anything.
   - [ ] **Work out why the Google map stopped rendering locally.** It drew
         correctly once, with all pins, on 2026-09-24 and then stopped. Google
         accepts the key (maps can be created by hand on the same page), there
@@ -247,9 +251,5 @@ document.
       on read (`CLAUDE.md`), the position grid, the invariant checks and the
       reporting math (`src/lib/position.ts`, `src/lib/reporting.ts`) are the
       highest-value places to start.
-- [ ] **No Prisma migration history.** The schema has only ever been applied
-      with `prisma db push`, which doesn't produce migration files — including
-      the push that created the live database on 2026-09-06. Production now
-      exists, so this is no longer theoretical: it has to be resolved before
-      the schema changes again, and it is cheapest to do now while no real
-      data is at stake. See §1 above for the steps.
+- [x] **Prisma migration history** — created 2026-09-25, see §1. Schema
+      changes are now migrations, and the build applies them.

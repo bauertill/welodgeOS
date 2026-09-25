@@ -49,6 +49,3 @@ yarn-error.log*
 .claude/settings.local.json
 # prisma generated client
 /generated
-
-# Holds live venue data while the schema is applied (prisma/venues-to-places.ts)
-prisma/venues-backup.json
