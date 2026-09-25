@@ -391,6 +391,26 @@ Rules, each deliberate:
   have no cycling route. The time is then shown as *not available*, never as zero and never
   as a guess.
 
+**Opening a pin opens a panel beside the map**, rather than a bubble on top of it. For a
+property it carries what a rep is asked on the phone: what it is, its star rating and
+scouting status, **how many rooms are still available** — the conservative figure of §5.3,
+per room category, over the window we hold it for — and the travel times above. A property
+we have not contracted says so ("not contracted yet — nothing held") rather than reporting
+zero, because "we have none left" and "we have not secured any" are different answers. For
+a place of interest the panel is just the place: what kind it is, and a station's lines.
+
+**Departure time, honestly.** Google needs a time zone to know when "10:00 on a weekday"
+is, and we hold none for a property — only its coordinates. Rather than buy that from
+another Google service, the offset is estimated from longitude, 15° to the hour. That is
+wrong by an hour or so wherever political time zones disagree with the sun, which does not
+matter for "mid-morning", and is far better than treating every property as if it sat in
+Greenwich — which would ask Los Angeles for a 3am timetable.
+
+**How the map itself looks is not in the code.** Google ignores styling passed by the page
+when a map ID is set; the map's own appearance — whether motorway shields, business pins
+and the like are drawn at all — is set in the Google Cloud console against that map ID.
+Decluttering the map so our own pins stand out is a change made there, not here.
+
 ---
 
 ## 4. Phase 2 — Acquisition & Sales
@@ -1139,11 +1159,12 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
 | §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status, type and amenity; per-category contract status (`CategoryContract`), independent of the property's own status |
-| Map view | **Built, not yet proven** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status. It drew correctly once, with pins, then stopped rendering locally for reasons not yet found — see `docs/todos.md` §4. Not deployed. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
+| Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | The indicative price range is entered by hand; open question, see §9 |
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
-| §3.8 Travel times | **Not built** | Bike, car and public transport times from a property to a place of interest. The Google keys they need are in place |
+| §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
+| §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
@@ -1198,3 +1219,8 @@ Recorded here rather than silently: each is a place where building it changed ou
    made unmissable.
 8. **Margin is left out where buy and sell are in different currencies**, and the count of
    such nights is reported. Inventing a rate would be the one thing invariant 9 forbids.
+9. **A property's time zone is estimated from its longitude** (§3.8), at 15° to the hour,
+   rather than looked up. It is used for one thing only — asking Google for a weekday
+   mid-morning public transport departure — where being an hour out changes nothing a rep
+   would notice. A real lookup is another paid Google service for a number that never
+   reaches the screen.

@@ -7,6 +7,7 @@ import { placeRouter } from "~/server/api/routers/place";
 import { propertyRouter } from "~/server/api/routers/property";
 import { reportingRouter } from "~/server/api/routers/reporting";
 import { scoutingRouter } from "~/server/api/routers/scouting";
+import { travelRouter } from "~/server/api/routers/travel";
 import { updateRouter } from "~/server/api/routers/update";
 import { userRouter } from "~/server/api/routers/user";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
@@ -24,6 +25,7 @@ export const appRouter = createTRPCRouter({
   clients: clientRouter,
   inventory: inventoryRouter,
   reporting: reportingRouter,
+  travel: travelRouter,
   user: userRouter,
   update: updateRouter,
   audit: auditRouter,

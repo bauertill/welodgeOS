@@ -191,12 +191,19 @@ done.
         the site down. The migration creates the table, carries the venues
         across and drops the old columns, and the build applies it before the
         new code serves anything.
-  - [ ] **Work out why the Google map stopped rendering locally.** It drew
-        correctly once, with all pins, on 2026-09-24 and then stopped. Google
-        accepts the key (maps can be created by hand on the same page), there
-        are no errors in the browser, and it is not React strict mode and not
-        the corrupted build cache that was cleared. Unresolved — the map must
-        not be called working until somebody has seen it.
+  - [x] **The map draws** — confirmed on 2026-09-25 in a normal browser, pins
+        and all. It still fails to draw inside the automated browser used for
+        checking work, where the map container is created but Google never
+        fills it; the committed version before the side panel fails there too,
+        so it is that session, not the code. Worth knowing when a check of the
+        map comes back empty: look in a real browser before believing it.
+  - [ ] **Declutter the map in the Google Cloud console.** Motorway shields and
+        Google's own business pins compete with ours at every zoom. Map
+        appearance belongs to the map ID, not the page — Google ignores styling
+        sent by the code once a map ID is set — so this is a change to the map
+        style in the console against `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`: turn
+        road shields and points of interest down or off. The pins themselves
+        are already drawn larger than the places of interest (§3.8).
 - [ ] **Google My Maps import for property coordinates** (§3.1). Coordinates
       are typed in by hand today; there's no bulk import from the sheet this
       replaced. *Waiting on the current My Map's link or KML export*, so the

@@ -127,10 +127,12 @@ export function ScoutingList({
         )
         .map((entry) => ({
           id: entry.id,
+          propertyId: entry.property.id,
           name: entry.property.name,
           latitude: entry.property.latitude!,
           longitude: entry.property.longitude!,
           status: entry.status,
+          stars: entry.property.stars,
           subtitle: [
             propertyTypeLabels[entry.property.type],
             entry.property.city,
@@ -242,7 +244,12 @@ export function ScoutingList({
         />
       ) : view === "map" ? (
         <>
-          <ScoutingMap pins={pins} places={places} />
+          <ScoutingMap
+            pins={pins}
+            places={places}
+            availability={availability.data ?? []}
+            eventId={eventId}
+          />
           {withoutCoordinates > 0 && (
             <p className="text-ink-500 text-xs font-light">
               {withoutCoordinates}{" "}
