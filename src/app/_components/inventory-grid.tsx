@@ -7,6 +7,7 @@ import { Input } from "~/app/_components/form";
 import { InventorySidePanel, type SelectedCell } from "~/app/_components/inventory-side-panel";
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
+import { formatRange } from "~/lib/format";
 import { severityLabels, severityStyles, type Severity } from "~/lib/position";
 import { api } from "~/trpc/react";
 
@@ -166,6 +167,21 @@ export function InventoryGrid({
     checkOut: parseDay(checkOut),
   }, { enabled: restored });
   const clients = api.clients.list.useQuery();
+  // What is available over the window in view (doc §5.4): whole rooms held
+  // by us and not sold on every night of it. Only a sale takes a room — a
+  // block is a hold that may lapse, so a blocked room still counts here. This
+  // is §5.3's optimistic figure; the Position tab leads with the conservative
+  // one. Deliberately not narrowed by the client filter: what is free is free
+  // whichever client is asking.
+  const available = api.reporting.availability.useQuery(
+    {
+      eventId,
+      propertyId: propertyId || undefined,
+      checkIn: parseDay(checkIn),
+      checkOut: parseDay(checkOut),
+    },
+    { enabled: restored },
+  );
 
   const toggleSet = (
     setter: React.Dispatch<React.SetStateAction<Set<string>>>,
@@ -272,12 +288,32 @@ export function InventoryGrid({
 
   if (!restored || grid.isLoading) return null;
 
+  const freeByCategory = new Map(
+    (available.data ?? []).map((row) => [row.categoryId, row.offerable]),
+  );
+  const freeInProperty = (property: (typeof properties)[number]) =>
+    property.categories.reduce((sum, category) => sum + (freeByCategory.get(category.id) ?? 0), 0);
+  const freeInView = properties.reduce((sum, property) => sum + freeInProperty(property), 0);
+
   return (
     <div>
       <SectionHeading
         title="Stock sheet"
         hint="One cell per room per night. Drag across rooms and dates to select, then edit or remove them in the panel."
       />
+
+      {available.data && properties.length > 0 && (
+        <p className="text-ink-700 mb-3 text-sm font-light">
+          <span
+            className={`mr-1.5 inline-flex rounded-full px-3 py-1 text-[13px] font-medium ${
+              freeInView > 0 ? "bg-[#12b878]/10 text-[#0d8f5d]" : "bg-ink-50 text-ink-500"
+            }`}
+          >
+            {roomsAvailable(freeInView)}
+          </span>
+          for the whole of {formatRange(parseDay(checkIn), parseDay(checkOut))}
+        </p>
+      )}
 
       {Object.values(cells).length === 0 ? null : (() => {
         const issues = ([4, 3, 2, 1] as const).filter((sev) => severityCounts[sev] > 0);
@@ -364,7 +400,7 @@ export function InventoryGrid({
           ref={scroller}
           className="border-ink-200/60 max-h-[calc(100vh-7rem)] overflow-auto overscroll-contain rounded-xl border bg-white"
         >
-          <table className="border-collapse text-left text-xs">
+          <table className="min-w-full border-collapse text-left text-xs">
             <thead>
               <tr>
                 <th className="sticky top-0 left-0 z-30 min-w-56 border-b border-r shadow-[inset_0_-1px_0_var(--color-ink-200)] border-ink-200/60 bg-white px-3 py-2 font-medium text-ink-500">
@@ -401,6 +437,7 @@ export function InventoryGrid({
                           <Chevron open={propertyOpen} />
                           {property.name}
                           {property.stars ? ` · ${property.stars}★` : ""}
+                          {available.data && <AvailableTag count={freeInProperty(property)} />}
                         </button>
                       </td>
                     </tr>
@@ -423,7 +460,9 @@ export function InventoryGrid({
                                   <Chevron open={categoryOpen} />
                                   {category.name}
                                   <span className="text-ink-500 font-light">
-                                    · {category.slots.length} rooms
+                                    {available.data
+                                      ? ` · ${roomsAvailable(freeByCategory.get(category.id) ?? 0)}`
+                                      : ` · ${category.slots.length} rooms`}
                                   </span>
                                 </button>
                               </td>
@@ -565,6 +604,25 @@ function writeWindow(
   } catch {
     // Losing this is a convenience, not a correctness problem.
   }
+}
+
+/** "25 rooms available" — always spelled out in full, so it cannot be misread. */
+function roomsAvailable(count: number) {
+  if (count === 0) return "No rooms available";
+  return `${count} ${count === 1 ? "room" : "rooms"} available`;
+}
+
+/** Beside a hotel's name — green when there is anything to offer. */
+function AvailableTag({ count }: { count: number }) {
+  return (
+    <span
+      className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
+        count > 0 ? "bg-[#12b878]/10 text-[#0d8f5d]" : "bg-ink-50 text-ink-500"
+      }`}
+    >
+      {roomsAvailable(count)}
+    </span>
+  );
 }
 
 function Chevron({ open }: { open: boolean }) {

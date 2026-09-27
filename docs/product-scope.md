@@ -859,10 +859,11 @@ inventory that exists** for that `(property, category)` — its first night to i
 can be overridden per report. That is a reporting choice, not a commercial fact: if the
 window a hotel will contract for is a real term of the deal, it belongs on the contract.
 
-**Genuinely free**, the conservative figure, is the headline everywhere availability is
-shown — the Position tab's "What we can still offer" report, and the sales team's
-at-a-glance position on the Properties tab: how many whole rooms are actually available to
-offer, per room category, without opening the stock sheet.
+**Genuinely free**, the conservative figure, is the headline on the Position tab's "What
+we can still offer" report and in the sales team's at-a-glance position on the Properties
+tab: how many whole rooms are actually available to offer, per room category, without
+opening the stock sheet. The stock sheet itself is the exception: its "rooms available"
+counts only sales as taking a room (§5.4).
 
 ### 5.4 The stock sheet (the date-grid)
 
@@ -871,6 +872,28 @@ down the rows, one column per night, each cell carrying the icon and severity fr
 that exact room-night. Rows are grouped property → category → slot number, collapsed to the
 property level by default, and columns span whatever check-in/check-out window is currently
 in view, filtered by property and client.
+
+**What is available, at a glance.** Above the sheet one line says how many rooms are
+available for the whole window in view — "6 rooms available for the whole of 10 Jul – 05
+Aug 2028" — and each hotel row carries the same figure for that hotel ("6 rooms available",
+or "No rooms available"), so it can be read with every hotel still collapsed. Opening a
+hotel shows it per room type ("6 rooms available"). It is always written out as "N rooms
+available", never a bare number beside a room count, so it cannot be misread.
+
+Here, **only a sale takes a room.** A room counts as available if on every night of the
+window we hold it (bought or on option) and it is not sold; a block does not stop it
+counting, because a block is a hold that may lapse. This is §5.3's optimistic figure, and
+it is a deliberate choice for the stock sheet: the Position tab and the map's side panel
+still lead with the conservative one, which counts blocks as taken, so where a room is
+blocked but not sold the two can differ by those rooms. Two further things follow:
+
+- **Narrowing the dates answers a client's question directly.** Set the window to the stay
+  they want and the figure is what can be offered for exactly those nights.
+- **A room type is measured over the nights it has inside the window.** A hotel contracted
+  only to 31 July is not counted as having nothing because the window runs to 5 August.
+
+The figure follows the property filter but not the client filter: what is free is free,
+whichever client is asking.
 
 The sheet scrolls in both directions inside a frame no taller than the window, so the row of
 dates stays pinned along its top and the room column down its left however far it is
@@ -1329,7 +1352,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
-| §5.4 Stock sheet | **Built** | A date-grid, one cell per room-night; edited by selecting a rectangle of cells, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the date window is remembered per event, per browser |
+| §5.4 Stock sheet | **Built** | A date-grid, one cell per room-night; edited by selecting a rectangle of cells, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the date window is remembered per event, per browser. Rooms available for the window — only sold rooms taken, blocks still counted (§5.3's optimistic figure) — in total and per hotel and room type |
 | §6 Operations | **Not built** | Phase 3 |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
@@ -1377,5 +1400,10 @@ Recorded here rather than silently: each is a place where building it changed ou
    to correct what they wrote. What the original rule protected — that what was said is
    never lost — is kept by storing every replaced wording, and a reader is always told when
    something has been edited.
+11. **The stock sheet's "rooms available" counts only sales as taking a room** (§5.4),
+   where §5.3 makes the conservative figure — blocks counted as taken — the headline
+   everywhere. Asked for by the business: on the sheet a rep wants what is not yet sold,
+   treating a block as a hold that may lapse. The Position tab and the map panel keep the
+   conservative figure, so the two can differ by the rooms that are blocked but not sold.
 
 
