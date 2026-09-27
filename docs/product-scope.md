@@ -533,6 +533,166 @@ when a map ID is set; the map's own appearance — whether motorway shields, bus
 and the like are drawn at all — is set in the Google Cloud console against that map ID.
 Decluttering the map so our own pins stand out is a change made there, not here.
 
+### 3.9 The accommodation overview — the Properties tab
+
+> **Specified, not built.** This section is the agreed structure for replacing the team's
+> Monday.com "Accommodation Overview" board with the event's Properties tab. Nothing below
+> exists in the software yet; §12 says so.
+
+**What it replaces.** On Monday each event is a board: properties sorted into colour-coded
+groups, each property a row with some fifty columns — much of it what contracting a hotel
+needs — and each property opening into its room categories, with their own rates, taxes and
+counts. The Properties tab becomes that board, but built on what the system already knows,
+so a hotel's details are entered once and reused on every event, and the stock sheet
+(§5.4), the map (§3.8) and availability (§5.3) read the same facts.
+
+#### Groups
+
+- **Groups belong to an event.** Each event has its own, created, named, recoloured,
+  reordered and deleted by the team as they like — "We Lodge Accommodation – Contracted",
+  "Proposal received", "Apartments", "LA28 official hotels", "Not relevant / no
+  availability". A group has a name and a colour from a fixed palette of about ten, chosen
+  so every one reads clearly on the page.
+- **A property sits in one group per event**, and may sit in a different group on another
+  event. A property on the event's list with no group sits under *No group* at the bottom.
+  Deleting a group moves its properties there; nothing is taken off the list.
+- **Groups are independent of status.** A group is how the team chooses to sort its work;
+  the status (§3.5) is a fact about the pursuit. A "Proposal received" group can hold
+  properties of any status, as on Monday.
+- **Each group's header summarises it**: "38 properties / 55 room categories", who the
+  account managers are, and two thin coloured bars showing the mix of statuses and of
+  property types in the group. Groups can be collapsed.
+
+#### The property row
+
+Each property is a row; its name is pinned on the left and the rest scrolls sideways. Short
+fields are edited in the row itself; the long ones — terms, contracting details — open the
+property's full record in a side panel with the fields in sections. Which columns the table
+shows by default is a presentation choice, not stored data: account manager, area, status,
+type, rating, total rooms, applicable period, and the contract status of its room
+categories. **A property has no rate of its own**: Monday's *Daily Rate* column is dropped,
+because a rate only means something for a room category — the rates are on the room
+categories below.
+
+Fields fall into three kinds, and where each one lives is the substance of this design:
+
+**1. About the property itself — entered once, the same on every event.** Most exist
+already (§3.1); new ones are marked *new*.
+
+| Monday column | Here | Notes |
+| --- | --- | --- |
+| Property | Name | |
+| Property Type | Type | Hotel, apartment, aparthotel (§3.1) |
+| Area | Area — *new* | The neighbourhood, e.g. "Santa Monica". City stays separate |
+| City, Location | City, address and map position | Position is what the map and travel times use |
+| Rating | Stars | |
+| Total # of Rooms | Stated total | The sum of the room categories wins when there are any (§3.1) |
+| Year it was built | Year built — *new* | |
+| General Phone, General Email | Phone, general email — *email new* | |
+| Website | Website | |
+| Video | Video link — *new* | A link, not an upload |
+| CI time, CO time | Check-in time, check-out time — *new* | The property's standard times |
+| Breakfast, Cleaning, Laundry, Gym | Four short text fields — *new* | Free text, so "Included", "USD 25 pp" or "No" all fit |
+| Other Amenities | Amenities | The controlled list (§3.4) |
+| Contact Person, Email Address, Mobile | Contacts | Already several per property (§3.1), with name, role, email and phone |
+| Public transport | Public transport — *new* | Free text, entered by hand |
+| Provider | Provider — *new* | The chain or group the property belongs to; see below |
+
+**Contracting details** — the legal entity a contract is signed with, entered once per
+property: **trade name, VAT number, registration number, IBAN, BIC, name of signatory,
+designation (job title) of signatory**, and the **email address for contracts** — where a
+contract is sent for signature, which need not be the general email or any contact's. All
+*new*. Because everyone who signs in sees everything (§2.5), **bank details are visible to
+every colleague**. That was put to the business and accepted for now; if it changes, it is
+part of deciding on roles (§9, question 5).
+
+**Providers — the chain or group.** A **provider** is the hotel chain or group a property
+belongs to — Marriott, Accor, a local apartment operator. It is its own record, entered once:
+**one provider has many properties, and a property has at most one provider** (an independent
+hotel has none). The property's name stays the property's own ("Hotel Carmel Santa Monica");
+the provider is shown beside it and can be filtered and grouped by, so the team can see at a
+glance every hotel it is talking to within one group. Now and then a chain signs one contract, or
+has one contact, for several of its hotels. So a provider can carry **its own contacts and
+contracting details** — the same fields as a property's — entered once:
+
+- A property with no contracting details of its own **uses its provider's**, and says so
+  ("From Marriott International"). Anything entered on the property itself always wins, so
+  a hotel that signs its own contract is never overridden by its group.
+- A property's contacts are listed with its **provider's contacts after them**, each marked
+  as the provider's, so the right person is there whichever of the two deals with us.
+
+Most properties will have their own details and leave the provider's empty; the fallback is
+for the exception, not the rule.
+
+**2. Agreed for this event — per event, never overwriting another event's.** These live
+on the property's entry in the event's list (§3.5), beside its status:
+
+| Monday column | Here | Notes |
+| --- | --- | --- |
+| Account Manager | Account manager — *new* | A colleague; the rep who owns this hotel on this event |
+| Status | Status (§3.5) | Kept as it is: Prospect, Contacted, Shortlisted, Rejected. Contracted is per room category |
+| Applicable Period | Applicable period — *new* | A text box, see below |
+| Rates Include | Rates include — *new* | A text box, see below |
+| Deposit | Deposit — *new* | Free text |
+| Block Expiration Date | Block expiry — *new* | A date: when the hotel's hold on our rooms runs out. Distinct from a client's block on a night (§4.2) |
+| Cancellation Terms, Payment Terms | Two text fields — *new* | |
+| Deadline for RL | Rooming list deadline — *new* | A date, ahead of Phase 3 (§6) |
+| Minimum stay | Minimum stay — *new* | A number of nights, e.g. 3 |
+| Comments | Notes on the entry (§3.5) | Already event-specific |
+| Group | Group — *new* | See above |
+
+**Applicable period and rates include are contracting text.** They say, in the words that go
+to the lawyers, when the rates apply and what they include, for the property as a whole on
+this event. So they are free-text boxes a rep writes and owns — not worked out, and not
+overwritten when a room category changes. A **Fill from room categories** button drafts them
+from the categories below (each category's applicable period and what its rate includes,
+one line per category), and the rep edits from there. That the same facts also sit on the
+room categories is deliberate: the categories are the working figures, this is the wording
+of the contract.
+
+**3. Worked out, never typed.** *Distance from the IBC* and *Distance to stadium by car*
+are travel times to the event's places of interest (§3.7, §3.8), which the system already
+fetches from Google. *Distance to dining options by car* and *Closest convenience store by
+car* are found by Google too: when a property is opened, the nearest restaurants and the
+nearest convenience store are looked up around it, with the drive time to each — *new*.
+Like travel times, none of it is stored (Google's terms require that, and it means the
+figures cannot go stale), and all of it is shown in the property's side panel. The table
+shows the straight-line distance to the nearest venue instead, because asking Google about
+290 hotels every time the tab opens would be slow, and cost money on every visit. Each
+property opened costs a few lookups, as travel times already do.
+
+#### Room categories
+
+Each property opens into its **room categories** — Monday's *subitems*, called room
+categories here as everywhere else in the system (§3.2). Columns, in Monday's order:
+
+| Column | Kind | Here |
+| --- | --- | --- |
+| Rate per night | per event | Amount and currency (never a float, §4.5) — *new* |
+| Rate include | per event | Free text, e.g. "TOT & TMD" — *new* |
+| TOT | per event | A percentage, e.g. 15.00% — *new* |
+| Other applicable tax | per event | Free text, e.g. "TMD: 6.25 USD (ADR 200–…)" — *new* |
+| Applicable period | per event | Free text — *new* |
+| # of units | the property's | The number of rooms of the type (§3.2) |
+| Size | the property's | Free text, e.g. "28 m²" — *new* |
+| Bed configuration | the property's | §3.2 |
+| Notes | the property's | Free text — *new* |
+
+The per-event ones live with the category's contract status for that event (§3.5), so an
+LA28 rate never overwrites an EXPO 2030 rate for the same room type. The indicative price
+range from scouting (§3.2) stays as it is, for categories with no rate yet.
+
+#### What is deliberately not in the first version
+
+- **Tags.** Monday's *Tags* column is not carried over: the team does not use it.
+
+- **Importing the Monday board.** Decided later. The structure above is laid out so that
+  an Excel export from Monday maps onto it column by column.
+- **Choosing which columns show.** The first version has a fixed set of default columns;
+  the rest are in the side panel.
+- **Monday's other views** (Map, Kanban). The map already exists (§3.8).
+
+
 ---
 
 ## 4. Phase 2 — Acquisition & Sales
@@ -1435,6 +1595,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
+| §3.9 Accommodation overview | **Specified, not built** | Groups per event, the property row, per-event terms and contracting details, room category rates and taxes, and providers (chains and groups) with many properties each, whose contacts and contracting details a property can fall back on. Replaces the Monday.com board |
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
