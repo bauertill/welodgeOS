@@ -130,8 +130,6 @@ export function Avatar({
 const dotStyles: Record<Presence, string> = {
   ACTIVE: "bg-[#12b878]",
   AWAY: "bg-white border-2 border-ink-500",
-  AT_LUNCH: "bg-[#e0a02a]",
-  DONE_FOR_THE_DAY: "bg-ink-500",
   DO_NOT_DISTURB: "bg-[#db4b68] after:absolute after:inset-x-[3px] after:top-1/2 after:h-[2px] after:-translate-y-1/2 after:rounded after:bg-white",
 };
 

@@ -6,14 +6,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { useIsAuthRoute } from "~/app/_components/nav";
 import { PresenceDot } from "~/app/_components/team-directory";
-import { Button, Field, FormError, friendlyError, Input } from "~/app/_components/form";
+import { FormError, friendlyError } from "~/app/_components/form";
 import { CustomStatusDialog, CustomStatusText } from "~/app/_components/status-dialog";
-import { formatUntil } from "~/lib/format";
 import {
-  endOfToday,
   heartbeatMs,
   idleAfterMs,
-  lunchChoices,
   presenceLabels,
   presencePollMs,
   statusChoices,
@@ -270,42 +267,28 @@ export function PresenceHeartbeat() {
   return null;
 }
 
-/** "HH:MM" an hour from now, as a starting point for "back at". */
-function inAnHour() {
-  const at = new Date(Date.now() + 60 * 60_000);
-  return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
-}
-
 /**
- * "● Active ▾" in the header: where a person sets their own status (doc §2.7).
- * At lunch asks how long before it is set; Add a status opens "Your status".
+ * "● Active ▾" in the header: where a person sets their own status (doc §2.7)
+ * — Automatic, Do not disturb or Set as away — and, below, a status in their
+ * own words.
  */
 export function StatusPicker() {
   const utils = api.useUtils();
   const me = api.user.me.useQuery(undefined, { refetchInterval: presencePollMs });
   const [open, setOpen] = useState(false);
-  const [askingLunch, setAskingLunch] = useState(false);
-  const [backAt, setBackAt] = useState(inAnHour);
-  const [lunchProblem, setLunchProblem] = useState<string | null>(null);
   const [editingCustom, setEditingCustom] = useState(false);
   const setStatus = api.user.setStatus.useMutation({
     onSuccess: () => {
       void utils.user.invalidate();
       void utils.chat.invalidate();
-      close();
+      setOpen(false);
     },
   });
-
-  const close = () => {
-    setOpen(false);
-    setAskingLunch(false);
-    setLunchProblem(null);
-  };
 
   useEffect(() => {
     if (!open) return;
     const onEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
@@ -313,28 +296,16 @@ export function StatusPicker() {
 
   if (useIsAuthRoute() || !me.data) return null;
   const mine = me.data;
-  // Your own dot: if you are looking at it, you are active.
-  const presence = mine.presence === "AWAY" ? "ACTIVE" : mine.presence;
-  const until = mine.presence === mine.status ? mine.statusUntil : null;
-
-  const lunchFor = (minutes: number) =>
-    setStatus.mutate({ status: "AT_LUNCH", until: new Date(Date.now() + minutes * 60_000) });
-  const lunchUntil = () => {
-    const [hours, minutes] = backAt.split(":").map(Number);
-    const at = new Date();
-    at.setHours(hours ?? 0, minutes ?? 0, 0, 0);
-    if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) {
-      setLunchProblem("Choose a time later today.");
-      return;
-    }
-    setStatus.mutate({ status: "AT_LUNCH", until: at });
-  };
+  // A status set by hand and still running; otherwise you are on automatic.
+  const setByHand = mine.status && mine.presence === mine.status ? mine.status : null;
+  // Your own dot on automatic: if you are looking at it, you are active.
+  const presence = setByHand ?? "ACTIVE";
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
         className="flex max-w-[16rem] items-center gap-2 rounded-full border border-white/25 px-4 py-2 text-[13px] font-light text-white transition-colors hover:bg-white/10"
@@ -353,117 +324,68 @@ export function StatusPicker() {
 
       {open && (
         <>
-          <div className="fixed inset-0 z-[1010]" onClick={close} aria-hidden="true" />
+          <div className="fixed inset-0 z-[1010]" onClick={() => setOpen(false)} aria-hidden="true" />
           <div
             role="menu"
             className="absolute right-0 z-[1020] mt-2 w-80 rounded-xl bg-white p-2 shadow-xl"
           >
-            {askingLunch ? (
-              <div className="p-2">
+            {statusChoices.map((choice) => {
+              const chosen = setByHand === choice.status;
+              return (
                 <button
+                  key={choice.label}
                   type="button"
-                  onClick={() => setAskingLunch(false)}
-                  className="text-ink-500 hover:text-brand-700 mb-2 text-[13px] font-light"
+                  role="menuitemradio"
+                  aria-checked={chosen}
+                  disabled={setStatus.isPending}
+                  onClick={() => setStatus.mutate({ status: choice.status, until: null })}
+                  className="hover:bg-ink-50 flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
                 >
-                  ← Back
+                  <PresenceDot presence={choice.status ?? "ACTIVE"} className="mt-1 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-ink-900 block text-[13px] font-medium">{choice.label}</span>
+                    {choice.hint && (
+                      <span className="text-ink-500 block text-xs font-light">{choice.hint}</span>
+                    )}
+                  </span>
+                  {chosen && (
+                    <span aria-hidden="true" className="text-brand-700 text-[13px]">
+                      ✓
+                    </span>
+                  )}
                 </button>
-                <p className="text-ink-900 text-[13px] font-medium">How long will you be at lunch?</p>
-                <p className="text-ink-500 mb-3 text-xs font-light">
-                  You go back to automatic when it runs out.
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {lunchChoices.map((choice) => (
-                    <Button
-                      key={choice.minutes}
-                      type="button"
-                      variant="secondary"
-                      className="justify-center"
-                      disabled={setStatus.isPending}
-                      onClick={() => lunchFor(choice.minutes)}
-                    >
-                      {choice.label}
-                    </Button>
-                  ))}
-                </div>
-                <div className="mt-3 flex items-end gap-2">
-                  <Field label="Or back at" className="flex-1">
-                    <Input type="time" value={backAt} onChange={(e) => setBackAt(e.target.value)} />
-                  </Field>
-                  <Button type="button" disabled={setStatus.isPending} onClick={lunchUntil}>
-                    Set
-                  </Button>
-                </div>
-                <FormError message={lunchProblem ?? friendlyError(setStatus.error)} />
-              </div>
-            ) : (
-              <>
-                {statusChoices.map((choice) => {
-                  const chosen =
-                    choice.status === null
-                      ? mine.presence === "ACTIVE" || mine.presence === "AWAY"
-                      : mine.presence === choice.status;
-                  return (
-                    <button
-                      key={choice.label}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={chosen}
-                      disabled={setStatus.isPending}
-                      onClick={() => {
-                        if (choice.status === "AT_LUNCH") setAskingLunch(true);
-                        else
-                          setStatus.mutate({
-                            status: choice.status,
-                            until: choice.status === "DONE_FOR_THE_DAY" ? endOfToday() : null,
-                          });
-                      }}
-                      className="hover:bg-ink-50 flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
-                    >
-                      <PresenceDot presence={choice.status ?? "ACTIVE"} className="mt-1 shrink-0" />
-                      <span className="min-w-0 flex-1">
-                        <span className="text-ink-900 block text-[13px] font-medium">
-                          {choice.label}
-                          {chosen && until && (
-                            <span className="text-ink-500 font-light"> · {formatUntil(until)}</span>
-                          )}
-                        </span>
-                        <span className="text-ink-500 block text-xs font-light">{choice.hint}</span>
-                      </span>
-                      {chosen && (
-                        <span aria-hidden="true" className="text-brand-700 text-[13px]">
-                          ✓
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+              );
+            })}
 
-                <div className="border-ink-200/60 mt-1 border-t pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      close();
-                      setEditingCustom(true);
-                    }}
-                    className="hover:bg-ink-50 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
-                  >
-                    <span aria-hidden="true" className="w-3 text-center text-[13px]">
-                      {mine.customStatus ? mine.customStatus.emoji : "✎"}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      {mine.customStatus ? (
-                        <CustomStatusText
-                          status={mine.customStatus}
-                          showUntil
-                          className="text-ink-900 max-w-full text-[13px]"
-                        />
-                      ) : (
-                        <span className="text-ink-900 text-[13px] font-medium">Add a status</span>
-                      )}
-                    </span>
-                  </button>
-                </div>
-              </>
+            <div className="border-ink-200/60 mt-1 border-t pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setEditingCustom(true);
+                }}
+                className="hover:bg-ink-50 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
+              >
+                <span aria-hidden="true" className="w-3 text-center text-[13px]">
+                  {mine.customStatus ? mine.customStatus.emoji : "✎"}
+                </span>
+                <span className="min-w-0 flex-1">
+                  {mine.customStatus ? (
+                    <CustomStatusText
+                      status={mine.customStatus}
+                      showUntil
+                      className="text-ink-900 max-w-full text-[13px]"
+                    />
+                  ) : (
+                    <span className="text-ink-900 text-[13px] font-medium">Add a status</span>
+                  )}
+                </span>
+              </button>
+            </div>
+            {setStatus.error && (
+              <div className="px-3 pb-2">
+                <FormError message={friendlyError(setStatus.error)} />
+              </div>
             )}
           </div>
         </>

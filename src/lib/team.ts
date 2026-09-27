@@ -78,8 +78,6 @@ export function customStatusOf(
 export const presenceLabels: Record<Presence, string> = {
   ACTIVE: "Active",
   AWAY: "Away",
-  AT_LUNCH: "At lunch",
-  DONE_FOR_THE_DAY: "Done for the day",
   DO_NOT_DISTURB: "Do not disturb",
 };
 
@@ -127,24 +125,11 @@ export function untilFor(choice: Exclude<ClearAfter, "custom">, now = new Date()
   return clearAfterUntil[choice](now);
 }
 
-export function endOfToday(now = new Date()) {
-  return endOfDay(now);
-}
-
-/** How long lunch lasts. It always has a limit: nobody is at lunch all afternoon. */
-export const lunchChoices: { label: string; minutes: number }[] = [
-  { label: "30 min", minutes: 30 },
-  { label: "45 min", minutes: 45 },
-  { label: "1 hour", minutes: 60 },
-  { label: "1½ hours", minutes: 90 },
-];
-
-/** The choices in the status menu; `null` is automatic. */
-export const statusChoices: { status: UserStatus | null; label: string; hint: string }[] = [
-  { status: null, label: "Automatic", hint: "Active while you use the system, Away when you don't" },
-  { status: "AT_LUNCH", label: "At lunch", hint: "Choose how long; back to automatic after" },
-  { status: "DONE_FOR_THE_DAY", label: "Done for the day", hint: "Back to automatic tomorrow" },
-  { status: "DO_NOT_DISTURB", label: "Do not disturb", hint: "Also silences the message sound" },
+/** The choices in the status menu; `null` is automatic. Each lasts until changed. */
+export const statusChoices: { status: UserStatus | null; label: string; hint?: string }[] = [
+  { status: null, label: "Automatic", hint: "Based on your activity" },
+  { status: "DO_NOT_DISTURB", label: "Do not disturb", hint: "Mutes the message sound" },
+  { status: "AWAY", label: "Set as away" },
 ];
 
 // --- Custom status ----------------------------------------------------------
@@ -154,12 +139,14 @@ export const defaultEmoji = "💬";
 
 /** One-click statuses, with how long each usually lasts. */
 export const customStatusPresets: { emoji: string; text: string; clearAfter: Exclude<ClearAfter, "custom"> }[] = [
+  { emoji: "🥪", text: "At lunch", clearAfter: "1h" },
   { emoji: "🏃", text: "Be right back", clearAfter: "30m" },
   { emoji: "📅", text: "In a meeting", clearAfter: "1h" },
   { emoji: "🚗", text: "Commuting", clearAfter: "1h" },
   { emoji: "🏨", text: "On a site visit", clearAfter: "today" },
   { emoji: "🤒", text: "Out sick", clearAfter: "today" },
   { emoji: "🌴", text: "On holiday", clearAfter: "week" },
+  { emoji: "🌙", text: "Done for the day", clearAfter: "today" },
 ];
 
 export const emojiChoices = [

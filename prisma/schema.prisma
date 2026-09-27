@@ -361,8 +361,7 @@ enum PhoneKind {
 
 /** A status a person sets by hand, overriding the automatic Active/Away. */
 enum UserStatus {
-  AT_LUNCH
-  DONE_FOR_THE_DAY
+  AWAY
   DO_NOT_DISTURB
 }
 

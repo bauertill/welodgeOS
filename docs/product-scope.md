@@ -176,9 +176,7 @@ there is room:
 | Dot | Means |
 | --- | --- |
 | Green | **Active** — using the system in the last couple of minutes |
-| Empty circle | **Away** — has not clicked, typed or moved the mouse in the system for about five minutes, or does not have it open |
-| Amber | **At lunch** — set by hand |
-| Grey | **Done for the day** — set by hand |
+| Empty circle | **Away** — has not clicked, typed or moved the mouse in the system for about five minutes, does not have it open, or has set themselves as away |
 | Red with a bar | **Do not disturb** — set by hand |
 
 Active and Away are **automatic**, judged from activity rather than from whether a tab is
@@ -186,32 +184,31 @@ merely open: a tab left in the background all afternoon does not keep someone gr
 Nothing about this is stored as a status — the system records when a person last used it,
 and works out Active or Away whenever someone looks.
 
-The other three are chosen from the status button at the top of every page, which also
-shows your own. A status set by hand wins over the automatic one:
+The status button at the top of every page shows your own, and offers three choices, as
+Google Chat does:
 
-- **At lunch** always has a time limit, because nobody is at lunch all afternoon: choosing
-  it asks how long — 30 minutes, 45 minutes, an hour, an hour and a half — or what time you
-  will be back. Colleagues see when, as in "At lunch · until 13:30".
-- **Done for the day** lasts until midnight where you are.
-- **Do not disturb** lasts until you turn it off, and while it is on the message chime is
-  silent for you; messages still arrive and still count as unread.
+- **Automatic** — Active or Away, from your activity, as above.
+- **Do not disturb** — the message chime is silent for you; messages still arrive and
+  still count as unread.
+- **Set as away** — you show as Away even while you are using the system.
 
-When a time limit passes you are back on automatic. Nothing is changed when it passes —
-the system simply stops honouring a status whose time is up, the same way it works out
-Active and Away on the spot. Nobody else is told anything when a status changes; it is only
-visible on the dot.
+Each lasts until you choose another. Nobody else is told anything when a status changes; it
+is only visible on the dot. *At lunch* and *Done for the day* are not on this menu: they
+are ready-made statuses in your own words (below), which is where a time limit belongs.
+They were briefly dot statuses of their own; anyone who had one set when that changed kept
+it, carried across as the matching own-words status with the same end time.
 
 **A status in your own words.** Separately from the dot, a person can say what they are
 doing — *Add a status* in the same menu. It has an emoji, chosen from a short list, and up
 to 64 characters of text, and it shows beside their name in the directory, in the list of
 conversations and at the top of a conversation with them. A few common ones can be picked
-in one click, each with the time it usually lasts: *Be right back* (30 minutes), *In a
-meeting* (an hour), *Commuting* (an hour), *On a site visit* (today), *Out sick* (today) and
-*On holiday* (this week). Whichever it is, the person chooses when it stops showing: after
+in one click, each with the time it usually lasts: *At lunch* (an hour), *Be right back*
+(30 minutes), *In a meeting* (an hour), *Commuting* (an hour), *On a site visit* (today),
+*Out sick* (today), *On holiday* (this week) and *Done for the day* (today). Whichever it is, the person chooses when it stops showing: after
 30 minutes, an hour or four hours, at the end of today, at the end of this week (Sunday),
 at a date and time of their choosing, or never. "Today" and "this week" end at midnight
 where the person is. It can be cleared by hand at any time. The two are independent: you
-can be *At lunch* with no status, or *Active* while *On a site visit*.
+can be *Do not disturb* with no status, or *Active* while *At lunch*.
 
 **Chat.** There are two kinds of conversation:
 
@@ -1266,7 +1263,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.6 Updates | **Built** | Append-only feed per property and per client, with `@Name` mentions rendered as a highlight. No notification is sent — see §9 |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
-| §2.7 Presence | **Built** | Automatic Active/Away from activity; At lunch (always with a time limit), Done for the day (until midnight) and Do not disturb (until turned off) set by hand. Refreshes every half minute or so |
+| §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |
 | §2.7 Status in your own words | **Built** | Emoji and up to 64 characters, six ready-made ones, and a choice of when it stops showing — including a custom date and time, or never |
 | §2.7 Chat | **Built** | Private conversations and named groups, text only, with unread counts. Checks for new messages every few seconds rather than instantly |
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |

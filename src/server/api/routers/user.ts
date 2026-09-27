@@ -81,17 +81,12 @@ export const userRouter = createTRPCRouter({
   }),
 
   /**
-   * Set a status by hand, or go back to automatic with `null`. At lunch and
-   * Done for the day always carry the time they run out; Do not disturb may.
+   * Set a status by hand — Do not disturb or Away — or go back to automatic
+   * with `null`. The menu sets them until changed; a time limit is accepted
+   * for when one is offered.
    */
   setStatus: protectedProcedure
-    .input(
-      z
-        .object({ status: z.nativeEnum(UserStatus).nullable(), until: futureDate.nullable() })
-        .refine((value) => value.status !== "AT_LUNCH" || value.until, {
-          message: "Say how long you will be at lunch.",
-        }),
-    )
+    .input(z.object({ status: z.nativeEnum(UserStatus).nullable(), until: futureDate.nullable() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db.user.update({
         where: { id: ctx.session.user.id },
