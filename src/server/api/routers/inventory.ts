@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import type { Prisma } from "generated/prisma";
 
 import { addDays, dayKey, eachNight, nightsBetween } from "~/lib/dates";
 import { formatDay } from "~/lib/format";
@@ -137,6 +138,87 @@ function collapse(problems: Problem[]): string[] {
 
 /** A night just outside the sheet's window, as much as is needed to tell whether a stay continues. */
 type EdgeNight = Omit<BlockNight, "severity">;
+
+/**
+ * Adds the nights of an extension that are not in inventory yet (§5.4), as
+ * "nothing started" — the same thing bringing rooms in does (§3.6), and under
+ * the same rule: only a room type this event has contracted. Recorded as its
+ * own ledger entry, so it can be undone like any other addition.
+ */
+async function addMissingNights(
+  tx: Prisma.TransactionClient,
+  input: {
+    eventId: string;
+    slotIds: string[];
+    nights: Date[];
+    present: { slotId: string; date: Date }[];
+    actorId: string;
+  },
+) {
+  const have = new Set(input.present.map((night) => `${night.slotId}|${dayKey(night.date)}`));
+  const slots = await tx.roomSlot.findMany({
+    where: { id: { in: input.slotIds } },
+    include: { category: { include: { property: { select: { id: true, name: true } } } } },
+  });
+
+  const missing = slots.flatMap((slot) =>
+    input.nights
+      .filter((date) => !have.has(`${slot.id}|${dayKey(date)}`))
+      .map((date) => ({ slot, date })),
+  );
+  if (missing.length === 0) return 0;
+
+  // §3.6 — inventory only comes from a contracted room category.
+  for (const category of new Map(missing.map(({ slot }) => [slot.category.id, slot.category])).values()) {
+    const entry = await tx.scoutingEntry.findUnique({
+      where: { eventId_propertyId: { eventId: input.eventId, propertyId: category.propertyId } },
+    });
+    const contract = entry
+      ? await tx.categoryContract.findUnique({
+          where: { scoutingEntryId_categoryId: { scoutingEntryId: entry.id, categoryId: category.id } },
+        })
+      : null;
+    if (contract?.status !== "CONTRACTED") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Nothing was changed. ${category.property.name} — ${category.name} is not marked Contracted for this event, so its rooms cannot be extended into new nights. Mark it Contracted first.`,
+      });
+    }
+  }
+
+  await tx.roomNight.createMany({
+    data: missing.map(({ slot, date }) => ({ slotId: slot.id, eventId: input.eventId, date })),
+    skipDuplicates: true,
+  });
+  const created = await tx.roomNight.findMany({
+    where: {
+      eventId: input.eventId,
+      OR: missing.map(({ slot, date }) => ({ slotId: slot.id, date })),
+    },
+  });
+
+  const first = slots[0]!;
+  const numbers = slots.map((slot) => slot.slotNumber).sort((a, b) => a - b);
+  const dates = missing.map(({ date }) => date.getTime());
+  const from = new Date(Math.min(...dates));
+  const to = addDays(new Date(Math.max(...dates)), 1);
+  const roomsText =
+    numbers.length === 1 ? `#${numbers[0]}` : `${numbers.length} rooms (#${numbers[0]}–#${numbers.at(-1)})`;
+
+  await tx.ledgerEntry.create({
+    data: {
+      eventId: input.eventId,
+      actorId: input.actorId,
+      axis: "INVENTORY",
+      toState: "NONE",
+      nightCount: created.length,
+      summary: `Extended ${first.category.property.name} ${first.category.name} ${roomsText} into ${formatDay(from)} – ${formatDay(to)} (${created.length} room-nights added, nothing contracted).`,
+      beforeSnapshot: created.map((night) => snapshotNight(night, false)),
+      nights: { connect: created.map((night) => ({ id: night.id })) },
+    },
+  });
+  return created.length;
+}
 
 export const inventoryRouter = createTRPCRouter({
   /**
@@ -481,8 +563,8 @@ export const inventoryRouter = createTRPCRouter({
   /** The audit trail: who changed what, when, and why (doc §4.7). */
   ledger: protectedProcedure
     .input(z.object({ eventId: z.string(), limit: z.number().min(1).max(200).default(50) }))
-    .query(({ ctx, input }) =>
-      ctx.db.ledgerEntry.findMany({
+    .query(async ({ ctx, input }) => {
+      const entries = await ctx.db.ledgerEntry.findMany({
         where: { eventId: input.eventId },
         orderBy: { createdAt: "desc" },
         take: input.limit,
@@ -494,16 +576,54 @@ export const inventoryRouter = createTRPCRouter({
           fromState: true,
           nightCount: true,
           undoable: true,
+          undoneAt: true,
           actor: { select: { name: true, email: true } },
         },
-      }),
-    ),
+      });
+      // An entry already undone offers no second undo.
+      return entries.map(({ undoneAt, ...entry }) => ({
+        ...entry,
+        undoable: entry.undoable && !undoneAt,
+        undone: Boolean(undoneAt),
+      }));
+    }),
 
   /**
    * §4.8 — the core mutation. Applies one transition to a rectangle of slots ×
    * nights, atomically, refusing the whole operation and naming the nights that
    * would break an invariant.
    */
+  /** Extend rooms into nights they do not have yet, and nothing more (§5.4). */
+  addNights: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        slotIds: z.array(z.string()).min(1, "Pick at least one room"),
+        checkIn: z.date(),
+        checkOut: z.date(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const present = await tx.roomNight.findMany({
+          where: {
+            eventId: input.eventId,
+            slotId: { in: input.slotIds },
+            date: { gte: input.checkIn, lt: input.checkOut },
+          },
+          select: { slotId: true, date: true },
+        });
+        const added = await addMissingNights(tx, {
+          eventId: input.eventId,
+          slotIds: input.slotIds,
+          nights: eachNight(input.checkIn, input.checkOut),
+          present,
+          actorId: ctx.session.user.id,
+        });
+        return { added };
+      }),
+    ),
+
   applyChange: protectedProcedure
     .input(
       attributes.extend({
@@ -513,9 +633,18 @@ export const inventoryRouter = createTRPCRouter({
         checkOut: z.date(),
         action: z.enum(ACTIONS),
         reason: z.string().optional(),
+        /**
+         * Extend from the sheet (§5.4): nights in the selection that are not
+         * in inventory yet are added first, as "nothing started", then the
+         * change applies to all of them — one step, all or nothing.
+         */
+        addMissing: z.boolean().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) =>
+      // One transaction from start to finish, so a change that is refused
+      // leaves no half-added nights behind.
+      ctx.db.$transaction(async (tx) => {
       const { action, eventId, slotIds, checkIn, checkOut, reason } = input;
 
       const nightCount = nightsBetween(checkIn, checkOut);
@@ -527,27 +656,44 @@ export const inventoryRouter = createTRPCRouter({
         });
       }
 
-      const nights = await ctx.db.roomNight.findMany({
-        where: {
+      const inRange = {
+        eventId,
+        slotId: { in: slotIds },
+        date: { gte: checkIn, lt: checkOut },
+      };
+      const expected = slotIds.length * nightCount;
+      const present = await tx.roomNight.findMany({
+        where: inRange,
+        select: { slotId: true, date: true },
+      });
+
+      // Extending: add whatever part of the selection is not in inventory yet.
+      let added = 0;
+      if (present.length !== expected) {
+        if (!input.addMissing) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Nothing was changed. ${expected - present.length} of the ${expected} room-nights you selected are not in this event's inventory yet. Bring them in first.`,
+          });
+        }
+        added = await addMissingNights(tx, {
           eventId,
-          slotId: { in: slotIds },
-          date: { gte: checkIn, lt: checkOut },
-        },
+          slotIds,
+          nights: eachNight(checkIn, checkOut),
+          present,
+          actorId: ctx.session.user.id,
+        });
+      }
+
+      const nights = await tx.roomNight.findMany({
+        where: inRange,
         include: nightInclude,
         orderBy: [{ slotId: "asc" }, { date: "asc" }],
       });
 
-      const expected = slotIds.length * nightCount;
-      if (nights.length !== expected) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Nothing was changed. ${expected - nights.length} of the ${expected} room-nights you selected are not in this event's inventory yet. Bring them in first.`,
-        });
-      }
-
       const problems: Problem[] = [];
       const client = input.clientId
-        ? await ctx.db.client.findUnique({ where: { id: input.clientId } })
+        ? await tx.client.findUnique({ where: { id: input.clientId } })
         : null;
       if (input.clientId && !client) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "No such client." });
@@ -707,7 +853,7 @@ export const inventoryRouter = createTRPCRouter({
         ownerId: input.salesOwnerId ?? null,
       };
 
-      await ctx.db.$transaction(async (tx) => {
+      {
         if (action === "REQUEST") {
           // A request is a claim, not a hold — many clients may hold one on the
           // same night, and asking twice is the same claim (doc §4.3).
@@ -749,10 +895,11 @@ export const inventoryRouter = createTRPCRouter({
             nights: { connect: ids.map((id) => ({ id })) },
           },
         });
-      });
+      }
 
-      return { nights: ids.length, rooms: slotIds.length };
-    }),
+      return { nights: ids.length, rooms: slotIds.length, added };
+      }, { timeout: 30_000 }),
+    ),
 
   /**
    * The date-grid: every matching room-night as a cell, keyed by slot and
@@ -1055,14 +1202,25 @@ export const inventoryRouter = createTRPCRouter({
           message: "This change cannot be undone.",
         });
       }
+      if (entry.undoneAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This change has already been undone.",
+        });
+      }
 
       const snapshot = entry.beforeSnapshot as unknown as NightSnapshot[];
       const nightIds = snapshot.map((s) => s.nightId);
 
+      // Only later changes still in force stand in the way: one that has
+      // itself been undone, or the record of an undo, does not — so undoing
+      // the latest change and then the one before it works (§4.7).
       const later = await ctx.db.ledgerEntry.findMany({
         where: {
           eventId: entry.eventId,
           createdAt: { gt: entry.createdAt },
+          undoneAt: null,
+          isUndo: false,
           nights: { some: { id: { in: nightIds } } },
         },
         include: {
@@ -1113,12 +1271,17 @@ export const inventoryRouter = createTRPCRouter({
           stillExisting.push(s.nightId);
         }
 
+        await tx.ledgerEntry.update({
+          where: { id: entry.id },
+          data: { undoneAt: new Date() },
+        });
         await tx.ledgerEntry.create({
           data: {
             eventId: entry.eventId,
             actorId: ctx.session.user.id,
             axis: entry.axis,
             undoable: false,
+            isUndo: true,
             nightCount: snapshot.length,
             summary: `Undid: ${entry.summary}`,
             nights: { connect: stillExisting.map((id) => ({ id })) },

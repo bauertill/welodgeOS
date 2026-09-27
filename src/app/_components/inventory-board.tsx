@@ -125,6 +125,9 @@ export function InventoryBoard({
                     </Td>
                     <Td>{entry.nightCount}</Td>
                     <Td>
+                      {entry.undone && (
+                        <span className="text-ink-500 text-xs font-light">Undone</span>
+                      )}
                       {entry.undoable && (
                         <Button
                           type="button"

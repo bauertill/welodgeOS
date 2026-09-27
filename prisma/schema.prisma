@@ -706,6 +706,13 @@ model LedgerEntry {
   /// False only on the entry an undo itself writes, so undo can never chain
   /// into undoing an undo.
   undoable       Boolean @default(true)
+  /// When this entry was undone, if it has been. An undone entry no longer
+  /// stands in the way of undoing what came before it, and cannot be undone
+  /// twice (doc §4.7).
+  undoneAt       DateTime?
+  /// True on the entry an undo writes — a record of the undo, which is never
+  /// itself something that blocks undoing an earlier entry.
+  isUndo         Boolean @default(false)
 
   actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
   actorId String?

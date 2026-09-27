@@ -154,8 +154,22 @@ export function InventorySidePanel({
     onSuccess: (outcome) => {
       setError(null);
       setResult(
-        `${actionLabels[action]} applied to ${outcome.rooms} ${outcome.rooms === 1 ? "room" : "rooms"} — ${outcome.nights} room-nights.`,
+        `${outcome.added ? `Added ${outcome.added} room-nights to inventory, then ` : ""}${
+          outcome.added ? actionLabels[action].toLowerCase() : actionLabels[action]
+        } applied to ${outcome.rooms} ${outcome.rooms === 1 ? "room" : "rooms"} — ${outcome.nights} room-nights.`,
       );
+      onApplied();
+    },
+    onError: (e) => {
+      setResult(null);
+      setError(e.message);
+    },
+  });
+
+  const addNights = api.inventory.addNights.useMutation({
+    onSuccess: (outcome) => {
+      setError(null);
+      setResult(`Added ${outcome.added} room-nights to inventory. Nothing is contracted on them yet.`);
       onApplied();
     },
     onError: (e) => {
@@ -237,6 +251,8 @@ export function InventorySidePanel({
       checkIn: effectiveCheckIn,
       checkOut: effectiveCheckOut,
       action,
+      // Extending from the sheet: nights not in inventory yet are added first.
+      addMissing: true,
       reason: reason.trim() || undefined,
       supplierRef: supplierRef.trim() || undefined,
       optionExpiry: optionExpiry ? parseDay(optionExpiry) : undefined,
@@ -299,9 +315,26 @@ export function InventorySidePanel({
             ) : (
               missing !== null &&
               missing > 0 && (
-                <p className="text-ink-500 mt-1 text-xs font-light">
-                  {missing} of {totalNights} not yet in inventory
-                </p>
+                <div className="bg-brand-50 text-brand-800 mt-2 rounded-lg px-3 py-2 text-xs font-light">
+                  <p>
+                    <span className="font-medium">
+                      {missing} of {totalNights} room-nights aren't in inventory yet.
+                    </span>{" "}
+                    Any change below adds them first, extending these rooms.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={addNights.isPending}
+                    onClick={() => {
+                      setError(null);
+                      setResult(null);
+                      addNights.mutate({ eventId, slotIds, checkIn, checkOut });
+                    }}
+                    className="text-brand-700 mt-1 font-medium underline disabled:opacity-50"
+                  >
+                    Only add them to inventory
+                  </button>
+                </div>
               )
             )}
           </div>

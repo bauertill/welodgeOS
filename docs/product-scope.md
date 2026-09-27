@@ -749,10 +749,14 @@ actual price, reference, owner, expiry and notes — which is what makes undoing
 rather than a guess. Undoing an entry restores every affected night to that snapshot (or
 deletes it, if the entry brought the night into being) and writes a further ledger entry
 recording the undo — nothing is ever erased, only added to. It is refused, not
-guessed around, the moment anything else has touched the same night since: the entry that
-brought rooms into inventory can no longer be undone once a sale has happened against
-them, for instance. The fix at that point is to unwind the later action by hand, or to
-undo it first. An undo itself cannot be undone, so this can never chain indefinitely.
+guessed around, the moment anything else still in force has touched the same night since:
+the entry that brought rooms into inventory can no longer be undone once a sale has happened
+against them, for instance. The fix at that point is to unwind the later action by hand, or
+to undo it first — after which the earlier entry can be undone too: a change that has itself
+been undone, and the record an undo writes, no longer stand in the way. So undoing the latest
+change and then the one before it works, step by step. An entry can be undone only once, and
+shows as *Undone* in "What changed" afterwards. An undo itself cannot be undone, so this can
+never chain indefinitely.
 
 ### 4.8 Bulk operations are the primary interaction
 
@@ -978,7 +982,25 @@ dragging reads "CI 10 Jul → CO 31 Jul · 2 rooms × 21 nights". A single day o
 that one night, since nobody checks in and out on the same day. So that a stay can end on
 the window's own check-out day, the sheet has one column more than it has nights: the day
 after the last night, in lighter grey. Nothing is drawn in it except the CO of stays that
-leave that day. A
+leave that day.
+
+**Extending rooms from the sheet.** A selection may include nights a room does not have
+yet — dragging past the end of a stay to add a few nights. The panel says so first ("4 of 8
+room-nights aren't in inventory yet. Any change below adds them first, extending these
+rooms"), and then either:
+
+- **any change** — sell, block, buy, take an option — adds the missing nights and applies
+  itself to the whole selection, as **one step, all or nothing**: if the change is refused
+  for any night (a night already sold to someone else, a block to extend that is not
+  there), nothing is added either; or
+- **Only add them to inventory** adds the nights and nothing more, as "nothing started".
+
+The same rule applies as bringing rooms in (§3.6): only rooms of a room type this event
+has marked *Contracted* can be extended into new nights. The addition is recorded in "What
+changed" as its own entry ("Extended Hotel Carmel King Room 2 rooms (#1–#2) into 31 Jul –
+02 Aug"), followed by the change, and each can be undone. Extending a sale into nights we
+have not yet bought from the hotel is allowed — it is a real situation — and those nights
+carry the red *needs attention* mark until they are bought. A
 selection can run past what is on screen: dragging to within a finger's width of an edge,
 or past it, scrolls the sheet that way — faster the further out the pointer goes — and the
 rectangle keeps growing with it. If that edge of the sheet is itself off screen, because the
@@ -1420,13 +1442,13 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.6 Deadline dashboard | **Built** | Everything expiring, soonest first, grouped by property and client, with value at stake |
 | §4.6 Calendar reminders | **Not built** | Needs Google credentials and a scheduled job. The dashboard carries the same aggregation |
 | §4.7 Ledger and ownership | **Built** | One entry per bulk operation, linked to every night it touched; an owner per axis |
-| §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused once anything later has touched the same nights |
+| §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
 | §4.9 General audit trail | **Built** | Scouting status, contract status, and property/client/event edits — no undo, and no field-level diff of nested categories/contacts |
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
-| §5.4 Stock sheet | **Built** | A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those |
+| §5.4 Stock sheet | **Built** | A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
 | §6 Operations | **Not built** | Phase 3 |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
