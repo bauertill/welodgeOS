@@ -563,6 +563,7 @@ export function InventoryGrid({
           options={(clients.data ?? []).map((client) => ({
             id: client.id,
             label: client.name,
+            detail: client.shortName,
           }))}
         />
 

@@ -480,7 +480,7 @@ export function InventorySidePanel({
                   <option value="">Choose…</option>
                   {(clients.data ?? []).map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}
+                      {c.shortName ? `${c.shortName} — ${c.name}` : c.name}
                     </option>
                   ))}
                   <option value="__new__">+ Add a new client…</option>

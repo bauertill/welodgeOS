@@ -18,7 +18,12 @@ export function Combobox({
   /** The chosen option's id, or "" for none. */
   value: string;
   onChange: (value: string) => void;
-  options: { id: string; label: string }[];
+  /**
+   * `detail` is shown beside the label and searched too — a client's short
+   * name, say, so "CNOSF" finds the Comité National Olympique et Sportif
+   * Français.
+   */
+  options: { id: string; label: string; detail?: string | null }[];
   /** Shown when nothing is chosen, and as the "clear" option in the list. */
   placeholder: string;
   className?: string;
@@ -33,10 +38,26 @@ export function Combobox({
   // to the placeholder) — typing only replaces it once the field is opened.
   const displayValue = open ? query : (selected?.label ?? "");
 
-  const filtered = query.trim()
-    ? options.filter((o) =>
-        o.label.toLowerCase().includes(query.trim().toLowerCase()),
-      )
+  // Capitals and accents ignored, so "comite" finds "Comité".
+  const fold = (text: string) =>
+    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const wanted = fold(query.trim());
+  // Best match first, so Enter picks what was meant: an exact short name
+  // ("nos" is NOS, not CNOSF), then a name or short name that starts with the
+  // text, then one that merely contains it.
+  const rank = (o: { label: string; detail?: string | null }) => {
+    const words = [fold(o.label), ...(o.detail ? [fold(o.detail)] : [])];
+    if (words.some((word) => word === wanted)) return 0;
+    if (words.some((word) => word.startsWith(wanted))) return 1;
+    if (words.some((word) => word.includes(wanted))) return 2;
+    return null;
+  };
+  const filtered = wanted
+    ? options
+        .map((option, index) => ({ option, index, score: rank(option) }))
+        .filter((entry) => entry.score !== null)
+        .sort((a, b) => a.score! - b.score! || a.index - b.index)
+        .map((entry) => entry.option)
     : options;
 
   useEffect(() => {
@@ -93,7 +114,9 @@ export function Combobox({
       />
 
       {open && (
-        <ul className="border-ink-200/60 absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border bg-white py-1 text-sm shadow-lg">
+        // Above the stock sheet's pinned date row and room column (z-20/30),
+        // which would otherwise cover it.
+        <ul className="border-ink-200/60 absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border bg-white py-1 text-sm shadow-lg">
           <li>
             <button
               type="button"
@@ -124,6 +147,12 @@ export function Combobox({
                   } ${option.id === value ? "font-medium" : "font-light"}`}
                 >
                   {option.label}
+                  {option.detail && (
+                    <span className={index === highlighted ? "text-white/80" : "text-ink-500"}>
+                      {" "}
+                      · {option.detail}
+                    </span>
+                  )}
                 </button>
               </li>
             ))

@@ -874,7 +874,10 @@ counts a room when at least half its nights are ours and unsold (§5.4).
 The familiar spreadsheet view is generated, never stored: supplier / room category / room
 down the rows, one column per night. Rows are grouped property → category → slot number,
 collapsed to the property level by default, and columns span whatever check-in/check-out
-window is currently in view, filtered by property and client.
+window is currently in view, filtered by property and client. The client filter finds a client by
+full name or by short name — "CNOSF", "OBS" — ignoring capitals and accents, lists each with
+its short name beside it, and puts the best match first, so an exact short name wins: "nos"
+is NOS before CNOSF. The panel's client list shows the short name first too.
 
 **Blocks, not one mark per night.** The Google Sheet put an emoji in every cell; a client
 holding ten rooms for three weeks was 210 identical ticks. The sheet now draws **one block**
