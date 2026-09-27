@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { PropertyForm } from "~/app/_components/property-form";
 import { PageHeader } from "~/app/_components/ui";
+import { contractingFields, propertyDetailFields, propertyServiceFields } from "~/lib/contracting";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
@@ -77,6 +78,14 @@ export default async function EditPropertyPage({
             email: contact.email ?? "",
             phone: contact.phone ?? "",
           })),
+          details: Object.fromEntries(
+            [...propertyDetailFields, ...propertyServiceFields, ...contractingFields].map((field) => [
+              field.key,
+              property[field.key] ?? "",
+            ]),
+          ),
+          yearBuilt: str(property.yearBuilt),
+          providerId: property.providerId ?? "",
         }}
       />
     </>

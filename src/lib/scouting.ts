@@ -1,5 +1,6 @@
 import type {
   CategoryContractStatus,
+  GroupColour,
   PlaceCategory,
   PropertyType,
   ScoutingStatus,
@@ -186,3 +187,36 @@ export function cheapestCategory<T extends PricedCategory>(
         (a.indicativePriceMinCents ?? 0) - (b.indicativePriceMinCents ?? 0),
     )[0];
 }
+
+// --- Groups on the Properties tab (doc §3.9) ---------------------------------
+
+/** The group palette: each colour legible as text on the page and as a bar. */
+export const groupColours: Record<GroupColour, { label: string; hex: string }> = {
+  PURPLE: { label: "Purple", hex: "#8b5cf6" },
+  BLUE: { label: "Blue", hex: "#3b82f6" },
+  TEAL: { label: "Teal", hex: "#0d9488" },
+  GREEN: { label: "Green", hex: "#16a34a" },
+  LIME: { label: "Lime", hex: "#65a30d" },
+  YELLOW: { label: "Yellow", hex: "#ca8a04" },
+  ORANGE: { label: "Orange", hex: "#ea580c" },
+  RED: { label: "Red", hex: "#dc2626" },
+  PINK: { label: "Pink", hex: "#db2777" },
+  GREY: { label: "Grey", hex: "#6b7280" },
+};
+
+export const groupColourOrder = Object.keys(groupColours) as GroupColour[];
+
+/** Colours for the status and type mix bars in a group's header. */
+export const scoutingStatusColours: Record<SelectableScoutingStatus | "CONTRACTED", string> = {
+  PROSPECT: "#b8b8b8",
+  CONTACTED: "#c69eee",
+  SHORTLISTED: "#8b5cf6",
+  REJECTED: "#db4b68",
+  CONTRACTED: "#12b878",
+};
+
+export const propertyTypeColours: Record<PropertyType, string> = {
+  HOTEL: "#f28b82",
+  APARTMENT: "#8e7cc3",
+  APARTHOTEL: "#e0c341",
+};

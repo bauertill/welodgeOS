@@ -535,9 +535,19 @@ Decluttering the map so our own pins stand out is a change made there, not here.
 
 ### 3.9 The accommodation overview — the Properties tab
 
-> **Specified, not built.** This section is the agreed structure for replacing the team's
-> Monday.com "Accommodation Overview" board with the event's Properties tab. Nothing below
-> exists in the software yet; §12 says so.
+> **Partly built.** This section is the agreed structure for replacing the team's
+> Monday.com "Accommodation Overview" board with the event's Properties tab. **Groups,
+> providers, the property's own fields and contracting details, the per-event terms and the
+> side panel** are built; **room category rates and taxes, "Fill from room categories", and
+> the Google lookups for dining and shops** are not yet. §12 says exactly which is which.
+
+**Opening a property.** On the Properties tab, a property's name opens a side panel rather
+than leaving the page: the terms agreed for this event at the top, editable and saved on
+this event only, then the contracting details that apply (the property's own, or its
+provider's, said so), its contacts and its provider's, and the rest of what is known about
+it, with a link to edit the property or open its full page. The row itself shows the
+provider beside the type, the account manager, and the area above the city; each group's
+header shows its account managers.
 
 **What it replaces.** On Monday each event is a board: properties sorted into colour-coded
 groups, each property a row with some fifty columns — much of it what contracting a hotel
@@ -1595,7 +1605,11 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
-| §3.9 Accommodation overview | **Specified, not built** | Groups per event, the property row, per-event terms and contracting details, room category rates and taxes, and providers (chains and groups) with many properties each, whose contacts and contracting details a property can fall back on. Replaces the Monday.com board |
+| §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group shows its properties / room categories and status and type mix bars, and collapses. A property's group is chosen in its row |
+| §3.9 Providers | **Built** | A page listing them (Providers, in the menu) and one per provider with its contracting details, contacts and properties. Chosen on a property's form, or added from there. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
+| §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity |
+| §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row and the group header |
+| §3.9 Room category rates, "Fill from room categories", dining and shops | **Specified, not built** | Rate per night, rate include, TOT, other tax and applicable period per event; size and notes per category; the button drafting the property's contracting text; Google's nearest restaurants and convenience store |
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |

@@ -6,6 +6,7 @@ import { eventRouter } from "~/server/api/routers/event";
 import { inventoryRouter } from "~/server/api/routers/inventory";
 import { placeRouter } from "~/server/api/routers/place";
 import { propertyRouter } from "~/server/api/routers/property";
+import { providerRouter } from "~/server/api/routers/provider";
 import { reportingRouter } from "~/server/api/routers/reporting";
 import { scoutingRouter } from "~/server/api/routers/scouting";
 import { travelRouter } from "~/server/api/routers/travel";
@@ -21,6 +22,7 @@ export const appRouter = createTRPCRouter({
   event: eventRouter,
   place: placeRouter,
   property: propertyRouter,
+  provider: providerRouter,
   scouting: scoutingRouter,
   amenity: amenityRouter,
   clients: clientRouter,

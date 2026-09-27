@@ -14,6 +14,11 @@ import {
   Select,
   Textarea,
 } from "~/app/_components/form";
+import {
+  contractingFields,
+  propertyDetailFields,
+  propertyServiceFields,
+} from "~/lib/contracting";
 import { normalizePropertyName } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
@@ -55,7 +60,18 @@ export type PropertyFormValues = {
   amenityIds: string[];
   categories: CategoryDraft[];
   contacts: ContactDraft[];
+  /** The details, services and contracting fields of doc §3.9, by key. */
+  details: Partial<Record<DetailKey, string>>;
+  yearBuilt: string;
+  providerId: string;
 };
+
+const detailKeys = [
+  ...propertyDetailFields.map((field) => field.key),
+  ...propertyServiceFields.map((field) => field.key),
+  ...contractingFields.map((field) => field.key),
+] as const;
+export type DetailKey = (typeof detailKeys)[number];
 
 const emptyCategory = (type: PropertyType): CategoryDraft => ({
   name: type === "APARTMENT" ? "Apartment" : "",
@@ -87,6 +103,9 @@ export const emptyProperty: PropertyFormValues = {
   amenityIds: [],
   categories: [emptyCategory("HOTEL")],
   contacts: [],
+  details: {},
+  yearBuilt: "",
+  providerId: "",
 };
 
 /** "" → undefined, so an untouched optional field is simply absent. */
@@ -248,6 +267,9 @@ export function PropertyForm({
       website: text(values.website),
       phone: text(values.phone),
       notes: text(values.notes),
+      ...Object.fromEntries(detailKeys.map((key) => [key, text(values.details[key] ?? "")])),
+      yearBuilt: num(values.yearBuilt),
+      providerId: values.providerId || null,
       amenityIds: values.amenityIds,
       categories,
       contacts: values.contacts
@@ -645,6 +667,65 @@ export function PropertyForm({
       </Fieldset>
 
       <Fieldset
+        title="More about the property"
+        description="The same on every event. What was agreed for a particular event — rates, deposit, terms — is kept on that event's Properties tab."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Provider" hint="The chain or group it belongs to, if any.">
+            <ProviderPicker value={values.providerId} onChange={(id) => set("providerId", id)} />
+          </Field>
+          <Field label="Year built">
+            <Input
+              inputMode="numeric"
+              value={values.yearBuilt}
+              onChange={(e) => set("yearBuilt", e.target.value)}
+              placeholder="1998"
+            />
+          </Field>
+          {propertyDetailFields.map((field) => (
+            <Field key={field.key} label={field.label}>
+              <Input
+                value={values.details[field.key] ?? ""}
+                onChange={(e) => set("details", { ...values.details, [field.key]: e.target.value })}
+                placeholder={field.placeholder}
+              />
+            </Field>
+          ))}
+        </div>
+      </Fieldset>
+
+      <Fieldset title="Services" description="Short answers, as the hotel gives them.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {propertyServiceFields.map((field) => (
+            <Field key={field.key} label={field.label}>
+              <Input
+                value={values.details[field.key] ?? ""}
+                onChange={(e) => set("details", { ...values.details, [field.key]: e.target.value })}
+                placeholder={field.placeholder}
+              />
+            </Field>
+          ))}
+        </div>
+      </Fieldset>
+
+      <Fieldset
+        title="Contracting details"
+        description="The legal entity we sign with. Leave these empty if the property's provider signs for it — its provider's details are used instead. Visible to every colleague."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {contractingFields.map((field) => (
+            <Field key={field.key} label={field.label}>
+              <Input
+                type={field.key === "contractEmail" ? "email" : "text"}
+                value={values.details[field.key] ?? ""}
+                onChange={(e) => set("details", { ...values.details, [field.key]: e.target.value })}
+              />
+            </Field>
+          ))}
+        </div>
+      </Fieldset>
+
+      <Fieldset
         title="Contacts"
         description="Who we speak to at the property."
         action={
@@ -751,5 +832,56 @@ export function PropertyForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Choose the property's provider, or add a new one without leaving the form. */
+function ProviderPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const utils = api.useUtils();
+  const providers = api.provider.list.useQuery();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const create = api.provider.create.useMutation({
+    onSuccess: (provider) => {
+      void utils.provider.list.invalidate();
+      onChange(provider.id);
+      setAdding(false);
+      setName("");
+    },
+  });
+
+  if (adding) {
+    return (
+      <div className="space-y-1">
+        <div className="flex gap-2">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Marriott International" autoFocus />
+          <Button
+            type="button"
+            disabled={!name.trim() || create.isPending}
+            onClick={() => create.mutate({ name })}
+          >
+            Add
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+            Cancel
+          </Button>
+        </div>
+        {create.error && <p className="text-xs text-[#c03654]">{create.error.message}</p>}
+      </div>
+    );
+  }
+  return (
+    <Select
+      value={value}
+      onChange={(e) => (e.target.value === "__new__" ? setAdding(true) : onChange(e.target.value))}
+    >
+      <option value="">None — independent</option>
+      {(providers.data ?? []).map((provider) => (
+        <option key={provider.id} value={provider.id}>
+          {provider.name}
+        </option>
+      ))}
+      <option value="__new__">+ Add a new provider…</option>
+    </Select>
   );
 }

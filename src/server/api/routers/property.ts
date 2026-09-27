@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { contractingFields, propertyDetailFields, propertyServiceFields } from "~/lib/contracting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit, logFieldChanges } from "~/server/audit";
 
@@ -44,6 +45,27 @@ const propertyInput = z.object({
   website: z.string().optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
+  // The rest of what the team records about a property (doc §3.9).
+  area: z.string().optional(),
+  yearBuilt: z.number().int().min(1000).max(2100).optional(),
+  generalEmail: z.string().optional(),
+  videoUrl: z.string().optional(),
+  checkInTime: z.string().optional(),
+  checkOutTime: z.string().optional(),
+  breakfast: z.string().optional(),
+  cleaning: z.string().optional(),
+  laundry: z.string().optional(),
+  gym: z.string().optional(),
+  publicTransport: z.string().optional(),
+  tradeName: z.string().optional(),
+  vatNumber: z.string().optional(),
+  registrationNumber: z.string().optional(),
+  iban: z.string().optional(),
+  bic: z.string().optional(),
+  signatoryName: z.string().optional(),
+  signatoryTitle: z.string().optional(),
+  contractEmail: z.string().optional(),
+  providerId: z.string().nullable().optional(),
   amenityIds: z.array(z.string()).default([]),
   categories: z.array(categoryInput).default([]),
   contacts: z.array(contactInput).default([]),
@@ -55,10 +77,35 @@ const detail = {
   contacts: { orderBy: { name: "asc" } },
   amenities: { orderBy: { sortOrder: "asc" } },
   scoutedBy: { select: { name: true, email: true } },
+  // The chain or group, with what a property falls back on (doc §3.9).
+  provider: { include: { contacts: { orderBy: { name: "asc" } } } },
 } as const;
 
 /** Empty strings arrive from HTML inputs; the database wants nulls. */
 const blank = (value: string | undefined) => (value?.trim() ? value.trim() : null);
+
+/** Every free-text field of a property, blanked the same way. */
+const textKeys = [
+  "address",
+  "city",
+  "country",
+  "website",
+  "phone",
+  "notes",
+  ...propertyDetailFields.map((field) => field.key),
+  ...propertyServiceFields.map((field) => field.key),
+  ...contractingFields.map((field) => field.key),
+] as const;
+function cleaned<T extends { providerId?: string | null }>(property: T): T & { providerId: string | null } {
+  const record = property as Record<string, unknown>;
+  return {
+    ...property,
+    ...(Object.fromEntries(
+      textKeys.map((key) => [key, blank(record[key] as string | undefined)]),
+    ) as Partial<T>),
+    providerId: property.providerId || null,
+  };
+}
 
 export const propertyRouter = createTRPCRouter({
   /** Just names, for duplicate detection — a property list is too heavy to fetch on every keystroke. */
@@ -166,13 +213,7 @@ export const propertyRouter = createTRPCRouter({
       return ctx.db.$transaction(async (tx) => {
         const created = await tx.property.create({
           data: {
-            ...property,
-            address: blank(property.address),
-            city: blank(property.city),
-            country: blank(property.country),
-            website: blank(property.website),
-            phone: blank(property.phone),
-            notes: blank(property.notes),
+            ...cleaned(property),
             scoutedById: ctx.session.user.id,
             amenities: { connect: amenityIds.map((id) => ({ id })) },
             categories: {
@@ -313,13 +354,7 @@ export const propertyRouter = createTRPCRouter({
         const updated = await tx.property.update({
           where: { id },
           data: {
-            ...property,
-            address: blank(property.address),
-            city: blank(property.city),
-            country: blank(property.country),
-            website: blank(property.website),
-            phone: blank(property.phone),
-            notes: blank(property.notes),
+            ...cleaned(property),
             amenities: { set: amenityIds.map((amenityId) => ({ id: amenityId })) },
             contacts: {
               create: contacts.map((contact) => ({
@@ -346,6 +381,11 @@ export const propertyRouter = createTRPCRouter({
             { key: "website", label: "Website" },
             { key: "phone", label: "Phone" },
             { key: "notes", label: "Notes" },
+            { key: "yearBuilt", label: "Year built" },
+            { key: "providerId", label: "Provider" },
+            ...propertyDetailFields,
+            ...propertyServiceFields,
+            ...contractingFields,
           ],
         );
         if (categoriesChanged) {

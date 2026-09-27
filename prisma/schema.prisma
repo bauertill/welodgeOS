@@ -75,6 +75,7 @@ model Event {
   scoutingEntries ScoutingEntry[]
   roomNights      RoomNight[]
   ledger          LedgerEntry[]
+  propertyGroups  PropertyGroup[]
 
   @@index([startDate])
 }
@@ -148,6 +149,39 @@ model Property {
   phone   String?
   notes   String?
 
+  // The rest of what the team records about a property (doc §3.9) — the same
+  // on every event.
+  /// The neighbourhood, e.g. "Santa Monica". City stays separate.
+  area           String?
+  yearBuilt      Int?
+  generalEmail   String?
+  videoUrl       String?
+  /// The property's standard times, as written, e.g. "15:00".
+  checkInTime    String?
+  checkOutTime   String?
+  /// Free text, so "Included", "USD 25 pp" or "No" all fit.
+  breakfast      String?
+  cleaning       String?
+  laundry        String?
+  gym            String?
+  publicTransport String?
+
+  // Contracting details (doc §3.9): the legal entity a contract is signed
+  // with. Visible to every colleague — accepted by the business for now.
+  tradeName          String?
+  vatNumber          String?
+  registrationNumber String?
+  iban               String?
+  bic                String?
+  signatoryName      String?
+  signatoryTitle     String?
+  /// Where a contract is sent for signature.
+  contractEmail      String?
+
+  /// The chain or group it belongs to, if any.
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  providerId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -219,6 +253,50 @@ model Amenity {
 }
 
 /// Someone at the property we talk to.
+/**
+ * A provider (doc §3.9): the hotel chain or group a property belongs to. One
+ * provider has many properties. It can carry its own contacts and contracting
+ * details for the rare chain that signs one contract for several hotels; a
+ * property with none of its own falls back on these.
+ */
+model Provider {
+  id    String  @id @default(cuid())
+  name  String  @unique
+  website String?
+  notes String?
+
+  // Contracting details (doc §3.9): the legal entity a contract is signed
+  // with. Visible to every colleague — accepted by the business for now.
+  tradeName          String?
+  vatNumber          String?
+  registrationNumber String?
+  iban               String?
+  bic                String?
+  signatoryName      String?
+  signatoryTitle     String?
+  /// Where a contract is sent for signature.
+  contractEmail      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  properties Property[]
+  contacts   ProviderContact[]
+}
+
+model ProviderContact {
+  id    String  @id @default(cuid())
+  name  String
+  role  String?
+  email String?
+  phone String?
+
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId String
+
+  @@index([providerId])
+}
+
 model PropertyContact {
   id    String  @id @default(cuid())
   name  String
@@ -248,11 +326,31 @@ model ScoutingEntry {
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   propertyId String
 
-  addedBy   User?   @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  addedBy   User?   @relation("AddedBy", fields: [addedById], references: [id], onDelete: SetNull)
   addedById String?
 
   /// The per-category contract status underneath this entry (doc §3.5, §3.6).
   categoryContracts CategoryContract[]
+
+  /// The group the team has sorted this property into on this event (doc
+  /// §3.9). Empty means "No group". Deleting a group leaves its entries here.
+  group   PropertyGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  groupId String?
+
+  // Agreed for this event (doc §3.9) — never shared with another event's entry.
+  /// The rep who owns this hotel on this event.
+  accountManager   User?   @relation("AccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
+  accountManagerId String?
+  /// Contracting text, in the words that go to the lawyers.
+  applicablePeriod  String?
+  ratesInclude      String?
+  deposit           String?
+  cancellationTerms String?
+  paymentTerms      String?
+  /// When the hotel's hold on our rooms runs out — not a client's block (§4.2).
+  blockExpiry         DateTime? @db.Date
+  roomingListDeadline DateTime? @db.Date
+  minimumStayNights   Int?
 
   @@unique([eventId, propertyId])
   @@index([eventId])
@@ -263,6 +361,41 @@ model ScoutingEntry {
 /// Absent means `IN_NEGOTIATION` — a row only exists once someone has said
 /// otherwise, so adding a property to a list never has to pre-create one of
 /// these per category (doc §3.5, §3.6).
+/** The colours a property group can have — a fixed palette, each legible on the page. */
+enum GroupColour {
+  PURPLE
+  BLUE
+  TEAL
+  GREEN
+  LIME
+  YELLOW
+  ORANGE
+  RED
+  PINK
+  GREY
+}
+
+/**
+ * A group on an event's Properties tab (doc §3.9): how the team chooses to
+ * sort its work — "Proposal received", "Apartments" — independent of status.
+ * Each event has its own.
+ */
+model PropertyGroup {
+  id        String      @id @default(cuid())
+  name      String
+  colour    GroupColour @default(PURPLE)
+  /// Order on the page, top first.
+  position  Int         @default(0)
+  createdAt DateTime    @default(now())
+
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+
+  entries ScoutingEntry[]
+
+  @@index([eventId])
+}
+
 model CategoryContract {
   id     String                 @id @default(cuid())
   status CategoryContractStatus @default(IN_NEGOTIATION)
@@ -320,7 +453,7 @@ model User {
   sessions      Session[]
 
   scoutedProperties Property[]
-  scoutingEntries   ScoutingEntry[]
+  scoutingEntries   ScoutingEntry[] @relation("AddedBy")
 
   acquisitionNights RoomNight[]        @relation("AcquisitionOwner")
   salesNights       RoomNight[]        @relation("SalesOwner")
@@ -348,6 +481,7 @@ model User {
   customStatusUntil DateTime?
   conversations ConversationMember[]
   messages      Message[]
+  accountManaged ScoutingEntry[] @relation("AccountManager")
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------

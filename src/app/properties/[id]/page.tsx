@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
 import { DeleteProperty } from "~/app/_components/delete-property";
+import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import {
   Card,
   PageHeader,
@@ -193,6 +194,7 @@ export default async function PropertyPage({
             </h2>
             <dl className="space-y-2 text-sm font-light">
               <Row label="Address" value={property.address} />
+              <Row label="Area" value={property.area} />
               <Row
                 label="City"
                 value={
@@ -231,41 +233,23 @@ export default async function PropertyPage({
 
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
+              More about the property
+            </h2>
+            <PropertyFacts property={property} />
+          </Card>
+
+          <Card>
+            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
+              Contracting details
+            </h2>
+            <ContractingDetails property={property} />
+          </Card>
+
+          <Card>
+            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
               Contacts
             </h2>
-            {property.contacts.length === 0 ? (
-              <p className="text-ink-500 text-sm font-light">
-                No contacts recorded.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {property.contacts.map((contact) => (
-                  <li key={contact.id} className="text-sm font-light">
-                    <span className="text-ink-900 font-medium">
-                      {contact.name}
-                    </span>
-                    {contact.role && (
-                      <span className="text-ink-500 block text-xs">
-                        {contact.role}
-                      </span>
-                    )}
-                    {contact.email && (
-                      <a
-                        href={`mailto:${contact.email}`}
-                        className="text-brand-700 block text-xs"
-                      >
-                        {contact.email}
-                      </a>
-                    )}
-                    {contact.phone && (
-                      <span className="text-ink-500 block text-xs">
-                        {contact.phone}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ContactList property={property} />
           </Card>
 
           {property.scoutedBy && (

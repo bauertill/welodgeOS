@@ -1,3 +1,5 @@
+import { TRPCError } from "@trpc/server";
+import { GroupColour } from "generated/prisma";
 import { z } from "zod";
 
 import { categoryContractStatusLabels, scoutingStatusLabels } from "~/lib/scouting";
@@ -25,6 +27,160 @@ const CATEGORY_CONTRACT_STATUSES = [
  * many events' lists as we like (doc §3.5).
  */
 export const scoutingRouter = createTRPCRouter({
+  // --- A property on this event: its terms (doc §3.9) ------------------------
+
+  /**
+   * One entry with everything the side panel shows: the terms agreed for this
+   * event, and the property's own details, contacts and contracting details —
+   * with its provider's, for the fallback.
+   */
+  entry: protectedProcedure.input(z.object({ id: z.string() })).query(({ ctx, input }) =>
+    ctx.db.scoutingEntry.findUnique({
+      where: { id: input.id },
+      include: {
+        accountManager: { select: { id: true, name: true, email: true } },
+        property: {
+          include: {
+            contacts: { orderBy: { name: "asc" } },
+            amenities: { orderBy: { sortOrder: "asc" } },
+            provider: { include: { contacts: { orderBy: { name: "asc" } } } },
+          },
+        },
+      },
+    }),
+  ),
+
+  /** Save the terms agreed for this property on this event. */
+  updateTerms: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        accountManagerId: z.string().nullable(),
+        applicablePeriod: z.string().max(5000),
+        ratesInclude: z.string().max(5000),
+        deposit: z.string().max(5000),
+        cancellationTerms: z.string().max(5000),
+        paymentTerms: z.string().max(5000),
+        blockExpiry: z.date().nullable(),
+        roomingListDeadline: z.date().nullable(),
+        minimumStayNights: z.number().int().min(1, "A minimum stay is at least one night.").max(365).nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...terms } = input;
+      const text = (value: string) => (value.trim() ? value.trim() : null);
+      const updated = await ctx.db.scoutingEntry.update({
+        where: { id },
+        data: {
+          ...terms,
+          applicablePeriod: text(terms.applicablePeriod),
+          ratesInclude: text(terms.ratesInclude),
+          deposit: text(terms.deposit),
+          cancellationTerms: text(terms.cancellationTerms),
+          paymentTerms: text(terms.paymentTerms),
+        },
+      });
+      await logAudit(ctx.db, {
+        actorId: ctx.session.user.id,
+        entity: "ScoutingEntry",
+        entityId: id,
+        summary: "Terms updated",
+      });
+      return updated;
+    }),
+
+  // --- Groups on the Properties tab (doc §3.9) --------------------------------
+
+  /** An event's groups, top first. */
+  groups: protectedProcedure
+    .input(z.object({ eventId: z.string() }))
+    .query(({ ctx, input }) =>
+      ctx.db.propertyGroup.findMany({
+        where: { eventId: input.eventId },
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      }),
+    ),
+
+  createGroup: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        name: z.string().trim().min(1, "A group needs a name.").max(120),
+        colour: z.nativeEnum(GroupColour),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const last = await ctx.db.propertyGroup.aggregate({
+        where: { eventId: input.eventId },
+        _max: { position: true },
+      });
+      // New groups go at the bottom, as on Monday.
+      return ctx.db.propertyGroup.create({
+        data: { ...input, position: (last._max.position ?? -1) + 1 },
+      });
+    }),
+
+  /** Rename or recolour a group. */
+  updateGroup: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().trim().min(1, "A group needs a name.").max(120).optional(),
+        colour: z.nativeEnum(GroupColour).optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.db.propertyGroup.update({
+        where: { id: input.id },
+        data: { name: input.name, colour: input.colour },
+      }),
+    ),
+
+  /** Move a group one place up or down the page. */
+  moveGroup: protectedProcedure
+    .input(z.object({ id: z.string(), direction: z.enum(["up", "down"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const group = await ctx.db.propertyGroup.findUniqueOrThrow({ where: { id: input.id } });
+      const siblings = await ctx.db.propertyGroup.findMany({
+        where: { eventId: group.eventId },
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      });
+      const index = siblings.findIndex((sibling) => sibling.id === group.id);
+      const swapWith = siblings[input.direction === "up" ? index - 1 : index + 1];
+      if (!swapWith) return;
+      // Renumber the whole list, so positions stay a clean 0, 1, 2… however
+      // groups were made.
+      const order = siblings.map((sibling) => sibling.id);
+      order[index] = swapWith.id;
+      order[siblings.indexOf(swapWith)] = group.id;
+      await ctx.db.$transaction(
+        order.map((id, position) => ctx.db.propertyGroup.update({ where: { id }, data: { position } })),
+      );
+    }),
+
+  /** Delete a group. Its properties stay on the list, under "No group". */
+  deleteGroup: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) => ctx.db.propertyGroup.delete({ where: { id: input.id } })),
+
+  /** Put a property into a group on this event, or into none with `null`. */
+  setGroup: protectedProcedure
+    .input(z.object({ id: z.string(), groupId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const entry = await ctx.db.scoutingEntry.findUniqueOrThrow({ where: { id: input.id } });
+      if (input.groupId) {
+        const group = await ctx.db.propertyGroup.findUnique({ where: { id: input.groupId } });
+        // A group belongs to one event; a property cannot join another event's.
+        if (!group || group.eventId !== entry.eventId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "That group is not on this event." });
+        }
+      }
+      return ctx.db.scoutingEntry.update({
+        where: { id: input.id },
+        data: { groupId: input.groupId },
+      });
+    }),
+
   listForEvent: protectedProcedure
     .input(
       z.object({
@@ -58,9 +214,11 @@ export const scoutingRouter = createTRPCRouter({
             include: {
               categories: { orderBy: { sortOrder: "asc" } },
               amenities: { orderBy: { sortOrder: "asc" } },
+              provider: { select: { id: true, name: true } },
             },
           },
           addedBy: { select: { name: true, email: true } },
+          accountManager: { select: { id: true, name: true, email: true, image: true } },
           // Absent for a category means "in negotiation" — see
           // `categoryContractStatusLabels` in ~/lib/scouting (doc §3.5).
           categoryContracts: true,
