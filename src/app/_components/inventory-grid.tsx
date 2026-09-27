@@ -7,10 +7,9 @@ import { Input } from "~/app/_components/form";
 import { InventorySidePanel, type SelectedCell } from "~/app/_components/inventory-side-panel";
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
-import { formatRange } from "~/lib/format";
 import { acquisitionLabels, salesLabels } from "~/lib/inventory";
 import { severityLabels, type Severity } from "~/lib/position";
-import { buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
+import { blockKind, buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
 import { api } from "~/trpc/react";
 
 /** A drag-select anchor/end, addressed by position rather than id, so the
@@ -196,9 +195,90 @@ export function InventoryGrid({
       return next;
     });
 
-  const properties = grid.data?.properties ?? [];
+  const allProperties = grid.data?.properties ?? [];
   const dates = grid.data?.dates ?? [];
+  // One more column than there are nights: the window's check-out day. It is
+  // not a night — nothing is drawn in it but CO marks — but it lets a
+  // selection end on it, since the last highlighted day is the check-out.
+  const columns = useMemo(
+    () => (dates.length ? [...dates, addDays(dates[dates.length - 1]!, 1)] : []),
+    [dates],
+  );
   const cells = grid.data?.cells ?? {};
+
+  // Issues are counted per block, not per night (§5.4): one client at one
+  // hotel with the same problem over the same stay is one thing to look at.
+  // So the blocks are worked out over every room, open or not.
+  const everyRow = useMemo(
+    () =>
+      allProperties.flatMap((property) =>
+        property.categories.flatMap((category) =>
+          category.slots.map((slot) => ({ slotId: slot.id, propertyId: property.id, categoryId: category.id })),
+        ),
+      ),
+    [allProperties],
+  );
+  const everyBlock = useMemo(
+    () =>
+      buildBlocks(
+        everyRow.length,
+        dates.length,
+        (row, date) => {
+          const cell = cells[`${everyRow[row]!.slotId}|${dayKey(dates[date]!)}`];
+          if (!cell || !blockKind(cell.position)) return null;
+          return {
+            sales: cell.position.sales,
+            acquisition: cell.position.acquisition,
+            clientName: cell.clientName,
+            requestedBy: cell.requestedBy.map((r) => r.name),
+            severity: cell.position.severity,
+          };
+        },
+        (row) => everyRow[row]!.categoryId,
+      ).blocks,
+    [everyRow, dates, cells],
+  );
+  const issues = useMemo(() => {
+    const byLevel = new Map<Severity, { keys: Set<string>; slots: Set<string> }>();
+    for (const block of everyBlock) {
+      if (block.severity === 0) continue;
+      const level = byLevel.get(block.severity) ?? { keys: new Set<string>(), slots: new Set<string>() };
+      const property = everyRow[block.rows[0]!]!.propertyId;
+      // The same client, state and hotel is one issue, even across room types.
+      level.keys.add([property, block.kind, block.client ?? "", block.acquisition].join("|"));
+      for (const row of block.rows) level.slots.add(everyRow[row]!.slotId);
+      byLevel.set(block.severity, level);
+    }
+    return byLevel;
+  }, [everyBlock, everyRow]);
+
+  // Clicking a "Look out for" count shows only the rooms with that issue.
+  const [issueFilter, setIssueFilter] = useState<Severity | null>(null);
+  const properties = useMemo(() => {
+    const wanted = issueFilter ? issues.get(issueFilter)?.slots : null;
+    if (!wanted) return allProperties;
+    return allProperties
+      .map((property) => ({
+        ...property,
+        categories: property.categories
+          .map((category) => ({ ...category, slots: category.slots.filter((slot) => wanted.has(slot.id)) }))
+          .filter((category) => category.slots.length > 0),
+      }))
+      .filter((property) => property.categories.length > 0);
+  }, [allProperties, issueFilter, issues]);
+  // ...and opens them, since the point is to see them.
+  useEffect(() => {
+    if (!issueFilter) return;
+    setExpandedProperties((open) => new Set([...open, ...properties.map((property) => property.id)]));
+    setExpandedCategories(
+      (open) => new Set([...open, ...properties.flatMap((property) => property.categories.map((c) => c.id))]),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- when the filter is chosen
+  }, [issueFilter]);
+  // A filter for an issue that no longer exists — fixed, or out of the dates — lapses.
+  useEffect(() => {
+    if (issueFilter && !issues.has(issueFilter)) setIssueFilter(null);
+  }, [issueFilter, issues]);
 
   // The flat, visible row order the drag-select rectangle is measured
   // against — only rooms belonging to an expanded hotel and category.
@@ -236,9 +316,9 @@ export function InventoryGrid({
         (row, date) => {
           const cell = cells[`${visibleRows[row]!.slotId}|${dayKey(dates[date]!)}`];
           if (!cell) return null;
-          // No client and nothing started with the supplier: nothing to say,
-          // so it stays blank rather than being drawn as a block.
-          if (cell.position.acquisition === "NONE" && cell.position.sales === "NONE") return null;
+          // Nobody holds it and neither do we: nothing to say, so it stays
+          // blank rather than being drawn as a block.
+          if (!blockKind(cell.position)) return null;
           return {
             sales: cell.position.sales,
             acquisition: cell.position.acquisition,
@@ -262,14 +342,21 @@ export function InventoryGrid({
       if (!hasClient(block.kind)) continue;
       for (const run of block.runs) {
         const day = run.to + 1;
-        if (day >= dates.length) continue;
-        const there = blockAt[run.row]?.[day];
-        if (there != null && hasClient(blocks[there]!.kind)) continue;
+        if (day > dates.length) continue;
+        if (day === dates.length) {
+          // The window's check-out day: what happens there is the night just
+          // after the window. A stay carrying on, or another client's, gets no CO.
+          const next = grid.data?.edges.after[visibleRows[run.row]!.slotId];
+          if (next && (continuesStay(block, next) || hasClient(blockKind(next)))) continue;
+        } else {
+          const there = blockAt[run.row]?.[day];
+          if (there != null && hasClient(blocks[there]!.kind)) continue;
+        }
         marks.set(`${run.row}|${day}`, block.id);
       }
     }
     return marks;
-  }, [blocks, blockAt, dates.length]);
+  }, [blocks, blockAt, dates.length, grid.data, visibleRows]);
 
   // Whether a block's stay really carries on past the window, from the night
   // either side of it — so "CI 10 Jul" is only said when it is true.
@@ -298,11 +385,6 @@ export function InventoryGrid({
     checkOutDay?: Date;
   } | null>(null);
 
-  const severityCounts = useMemo(() => {
-    const counts: Record<Severity, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
-    for (const cell of Object.values(cells)) counts[cell.position.severity]++;
-    return counts;
-  }, [cells]);
 
   const rectangle = (a: CellRef, b: CellRef) => {
     const rowFrom = Math.min(a.rowIndex, b.rowIndex);
@@ -310,6 +392,15 @@ export function InventoryGrid({
     const dateFrom = Math.min(a.dateIndex, b.dateIndex);
     const dateTo = Math.max(a.dateIndex, b.dateIndex);
     return { rowFrom, rowTo, dateFrom, dateTo };
+  };
+
+  /** Whether this column is the check-out day of the current selection. */
+  const isSelectionCheckOut = (dateIndex: number) => {
+    const ref = dragging ? focus : committed?.focus;
+    const start = dragging ? anchor : committed?.anchor;
+    if (!ref || !start) return false;
+    const { dateFrom, dateTo } = rectangle(start, ref);
+    return dateTo > dateFrom && dateIndex === dateTo;
   };
 
   const inRectangle = (rowIndex: number, dateIndex: number) => {
@@ -325,25 +416,37 @@ export function InventoryGrid({
     );
   };
 
+  // What a highlighted run of days means (§5.4): the first is the check-in and
+  // the last the check-out, which is not a night. A single day on its own is
+  // that one night — a stay cannot check in and out on the same day — and the
+  // check-out column alone is no stay at all.
+  const stayOf = (dateFrom: number, dateTo: number) => {
+    if (dateFrom >= dates.length) return null;
+    const checkIn = columns[dateFrom];
+    const checkOut = dateTo > dateFrom ? columns[dateTo] : addDays(columns[dateFrom]!, 1);
+    if (!checkIn || !checkOut) return null;
+    return { checkIn, checkOut, nights: Math.max(1, dateTo - dateFrom) };
+  };
+
   // Live feedback while dragging, so a rep never has to count rows by eye —
   // committed selections get their own count in the side panel.
   const liveCount = useMemo(() => {
     if (!dragging || !anchor || !focus) return null;
     const { rowFrom, rowTo, dateFrom, dateTo } = rectangle(anchor, focus);
     const rooms = rowTo - rowFrom + 1;
-    const nights = dateTo - dateFrom + 1;
-    return { rooms, nights };
-  }, [dragging, anchor, focus]);
+    const stay = stayOf(dateFrom, dateTo);
+    if (!stay) return null;
+    return { rooms, ...stay };
+  }, [dragging, anchor, focus, columns]);
 
   const selection = useMemo(() => {
     if (!committed) return null;
     const { rowFrom, rowTo, dateFrom, dateTo } = rectangle(committed.anchor, committed.focus);
     const slotIds = visibleRows.slice(rowFrom, rowTo + 1).map((row) => row.slotId);
-    const from = dates[dateFrom];
-    const to = dates[dateTo];
-    if (!slotIds.length || !from || !to) return null;
-    return { slotIds, checkIn: from, checkOut: addDays(to, 1) };
-  }, [committed, visibleRows, dates]);
+    const stay = stayOf(dateFrom, dateTo);
+    if (!slotIds.length || !stay) return null;
+    return { slotIds, checkIn: stay.checkIn, checkOut: stay.checkOut };
+  }, [committed, visibleRows, columns]);
 
   const selectedCells: SelectedCell[] = useMemo(() => {
     if (!selection) return [];
@@ -366,12 +469,30 @@ export function InventoryGrid({
 
   if (!restored || grid.isLoading) return null;
 
+  // Per room type: rooms with at least half their nights in view free (§5.4).
   const freeByCategory = new Map(
-    (available.data ?? []).map((row) => [row.categoryId, row.offerable]),
+    (available.data ?? []).map((row) => [row.categoryId, row.mostlyFree]),
   );
   const freeInProperty = (property: (typeof properties)[number]) =>
     property.categories.reduce((sum, category) => sum + (freeByCategory.get(category.id) ?? 0), 0);
-  const freeInView = properties.reduce((sum, property) => sum + freeInProperty(property), 0);
+
+  // A room type where nobody holds anything in view — no client, and nothing
+  // secured from the supplier — is drawn blank (§5.4), so it says why rather
+  // than looking broken.
+  const nothingSecured = new Set(
+    properties.flatMap((property) =>
+      property.categories
+        .filter((category) =>
+          category.slots.every((slot) =>
+            dates.every((date) => {
+              const cell = cells[`${slot.id}|${dayKey(date)}`];
+              return !cell || !blockKind(cell.position);
+            }),
+          ),
+        )
+        .map((category) => category.id),
+    ),
+  );
 
   return (
     <div>
@@ -380,33 +501,44 @@ export function InventoryGrid({
         hint="One cell per room per night. Drag across rooms and dates to select, then edit or remove them in the panel."
       />
 
-      {available.data && properties.length > 0 && (
-        <p className="text-ink-700 mb-3 text-sm font-light">
-          <span
-            className={`mr-1.5 inline-flex rounded-full px-3 py-1 text-[13px] font-medium ${
-              freeInView > 0 ? "bg-[#12b878]/10 text-[#0d8f5d]" : "bg-ink-50 text-ink-500"
-            }`}
-          >
-            {roomsAvailable(freeInView)}
-          </span>
-          for the whole of {formatRange(parseDay(checkIn), parseDay(checkOut))}
-        </p>
-      )}
-
       {Object.values(cells).length === 0 ? null : (() => {
-        const issues = ([4, 3, 2, 1] as const).filter((sev) => severityCounts[sev] > 0);
-        return issues.length === 0 ? (
+        const levels = ([4, 3, 2, 1] as const).filter((level) => issues.has(level));
+        return levels.length === 0 ? (
           <p className="text-ink-500 mb-4 text-[13px] font-light">
             Nothing to look out for in this window — every cell is clear.
           </p>
         ) : (
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <span className="text-ink-500 text-[13px] font-light">Look out for:</span>
-            {issues.map((sev) => (
-              <SeverityBadge key={sev} severity={sev}>
-                {severityCounts[sev]} {severityLabels[sev].toLowerCase()}
-              </SeverityBadge>
-            ))}
+            {levels.map((level) => {
+              const count = issues.get(level)!.keys.size;
+              const active = issueFilter === level;
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  aria-pressed={active}
+                  title={active ? "Show everything again" : `Show only the ${severityLabels[level].toLowerCase()} issues`}
+                  onClick={() => setIssueFilter(active ? null : level)}
+                  className={`rounded-full transition-shadow ${
+                    active ? "ring-ink-900 ring-2 ring-offset-2" : "hover:ring-ink-200 hover:ring-2 hover:ring-offset-1"
+                  } ${issueFilter && !active ? "opacity-50" : ""}`}
+                >
+                  <SeverityBadge severity={level}>
+                    {count} {severityLabels[level].toLowerCase()}
+                  </SeverityBadge>
+                </button>
+              );
+            })}
+            {issueFilter && (
+              <button
+                type="button"
+                onClick={() => setIssueFilter(null)}
+                className="text-brand-700 ml-1 text-[13px] font-light hover:underline"
+              >
+                Show everything
+              </button>
+            )}
           </div>
         );
       })()}
@@ -417,7 +549,7 @@ export function InventoryGrid({
           value={propertyId}
           onChange={setPropertyId}
           placeholder="Every property"
-          options={properties.map((property) => ({
+          options={allProperties.map((property) => ({
             id: property.id,
             label: property.name,
           }))}
@@ -487,10 +619,13 @@ export function InventoryGrid({
                 <th className="sticky top-0 left-0 z-30 w-56 min-w-56 border-b border-r shadow-[inset_0_-1px_0_var(--color-ink-200)] border-ink-200/60 bg-white px-3 py-2 font-medium text-ink-500">
                   Hotel / room type / room
                 </th>
-                {dates.map((date) => (
+                {columns.map((date, index) => (
                   <th
                     key={dayKey(date)}
-                    className="border-ink-200/60 sticky top-0 z-20 min-w-9 border-b bg-white shadow-[inset_0_-1px_0_var(--color-ink-200)] px-1 py-2 text-center font-medium text-ink-500"
+                    title={index === dates.length ? "Check-out day only — the nights shown end the day before" : undefined}
+                    className={`border-ink-200/60 sticky top-0 z-20 min-w-9 border-b bg-white shadow-[inset_0_-1px_0_var(--color-ink-200)] px-1 py-2 text-center font-medium ${
+                      index === dates.length ? "text-ink-500/50" : "text-ink-500"
+                    }`}
                   >
                     {date.getUTCDate()}
                     <span className="block text-[10px] font-light">
@@ -510,7 +645,7 @@ export function InventoryGrid({
                   <Fragment key={property.id}>
                     <tr className="bg-ink-50/60">
                       <td
-                        colSpan={dates.length + 2}
+                        colSpan={columns.length + 2}
                         className="sticky left-0 z-10 border-b border-ink-200/60 bg-ink-50/60 px-3 py-2"
                       >
                         <button
@@ -522,6 +657,11 @@ export function InventoryGrid({
                           {property.name}
                           {property.stars ? ` · ${property.stars}★` : ""}
                           {available.data && <AvailableTag count={freeInProperty(property)} />}
+                          {property.categories.every((category) => nothingSecured.has(category.id)) && (
+                            <span className="text-ink-500 ml-2 text-[11px] font-light">
+                              Nothing secured for these dates
+                            </span>
+                          )}
                         </button>
                       </td>
                     </tr>
@@ -533,7 +673,7 @@ export function InventoryGrid({
                           <Fragment key={category.id}>
                             <tr>
                               <td
-                                colSpan={dates.length + 2}
+                                colSpan={columns.length + 2}
                                 className="sticky left-0 z-10 border-b border-ink-200/60 bg-white px-3 py-1.5 pl-6"
                               >
                                 <button
@@ -547,6 +687,7 @@ export function InventoryGrid({
                                     {available.data
                                       ? ` · ${roomsAvailable(freeByCategory.get(category.id) ?? 0)}`
                                       : ` · ${category.slots.length} rooms`}
+                                    {nothingSecured.has(category.id) && " · nothing secured"}
                                   </span>
                                 </button>
                               </td>
@@ -560,7 +701,7 @@ export function InventoryGrid({
                                     <td className="border-ink-200/60 sticky left-0 z-10 border-b bg-white px-3 py-1 pl-10 font-medium text-ink-700">
                                       #{slot.slotNumber}
                                     </td>
-                                    {dates.map((date, dateIndex) => {
+                                    {columns.map((date, dateIndex) => {
                                       const key = `${slot.id}|${dayKey(date)}`;
                                       const cell = cells[key];
                                       const selected = rowIndex >= 0 && inRectangle(rowIndex, dateIndex);
@@ -598,6 +739,10 @@ export function InventoryGrid({
                                       };
                                       const isLabel =
                                         block && block.labelRow === rowIndex && block.labelDate === dateIndex;
+                                      const explainBlank =
+                                        dateIndex === 0 &&
+                                        slot.id === category.slots[0]?.id &&
+                                        nothingSecured.has(category.id);
                                       return (
                                         <td
                                           key={key}
@@ -634,6 +779,8 @@ export function InventoryGrid({
                                           {block ? (
                                             <div
                                               className={`absolute ${kindStyles[block.kind]} ${
+                                                issueFilter && block.severity !== issueFilter ? "opacity-25" : ""
+                                              } ${
                                                 edge.top ? "top-[3px]" : "top-0"
                                               } ${edge.bottom ? "bottom-[3px]" : "-bottom-px"} ${
                                                 edge.left ? "left-[2px]" : "left-0"
@@ -669,20 +816,33 @@ export function InventoryGrid({
                                               CO
                                             </span>
                                           )}
+                                          {explainBlank && (
+                                            // Free to run on into the empty space to the right: it is
+                                            // the only thing on this row.
+                                            <span className="text-ink-500 pointer-events-none absolute top-0 bottom-0 left-[6px] z-[1] flex items-center text-[11px] font-light whitespace-nowrap italic">
+                                              Nothing secured from the supplier, and no client, for these dates.
+                                            </span>
+                                          )}
                                           {selected && (
                                             // Over the bars, not under them: a tint on every
                                             // selected night and one outline round the whole
-                                            // selection.
+                                            // selection. Its last day is the check-out, not a
+                                            // night, so it is tinted lighter and marked CO.
                                             <div
-                                              className={`bg-brand-900/20 border-brand-900 pointer-events-none absolute inset-0 z-[3] ${
+                                              className={`border-brand-900 pointer-events-none absolute inset-0 z-[3] flex items-center justify-center text-[10px] font-bold text-brand-900 ${
+                                                isSelectionCheckOut(dateIndex) ? "bg-white/60" : "bg-brand-900/20"
+                                              } ${
                                                 inRectangle(rowIndex - 1, dateIndex) ? "" : "border-t-2"
                                               } ${inRectangle(rowIndex + 1, dateIndex) ? "" : "border-b-2"} ${
                                                 inRectangle(rowIndex, dateIndex - 1) ? "" : "border-l-2"
                                               } ${inRectangle(rowIndex, dateIndex + 1) ? "" : "border-r-2"}`}
-                                            />
+                                            >
+                                              {isSelectionCheckOut(dateIndex) && "CO"}
+                                            </div>
                                           )}
                                           {block && isLabel && (
                                             <BlockLabel
+                                              faded={Boolean(issueFilter && block.severity !== issueFilter)}
                                               block={block}
                                               dates={dates}
                                               afterCheckOut={Boolean(checkOut)}
@@ -729,9 +889,9 @@ export function InventoryGrid({
 
       {liveCount && (
         <div className="pointer-events-none fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full bg-ink-900 px-4 py-2 text-[13px] font-medium whitespace-nowrap text-white shadow-lg">
-          {liveCount.rooms} {liveCount.rooms === 1 ? "room" : "rooms"} ×{" "}
-          {liveCount.nights} {liveCount.nights === 1 ? "night" : "nights"} ={" "}
-          {liveCount.rooms * liveCount.nights} room-nights selected
+          CI {shortDay(liveCount.checkIn)} → CO {shortDay(liveCount.checkOut)} · {liveCount.rooms}{" "}
+          {liveCount.rooms === 1 ? "room" : "rooms"} × {liveCount.nights}{" "}
+          {liveCount.nights === 1 ? "night" : "nights"} = {liveCount.rooms * liveCount.nights} room-nights selected
         </div>
       )}
 
@@ -824,36 +984,27 @@ function writeWindow(
 const kindLabels: Record<BlockKind, string> = {
   SOLD: "Sold",
   BLOCKED: "Blocked",
-  REQUESTED: "Requested",
   OUR_STOCK: "Our stock, unsold",
-  NOT_SECURED: "In progress",
-  RECORD: "Released or cancelled",
 };
 
 const kindStyles: Record<BlockKind, string> = {
   SOLD: "bg-brand-500",
   BLOCKED: "bg-brand-100 border-brand-300",
-  // Solid tints rather than see-through ones, so the row lines behind a
+  // A solid tint rather than a see-through one, so the row lines behind a
   // block never show through it.
-  REQUESTED: "bg-[#f9ecd4] border-[#efcf94]",
   OUR_STOCK: "bg-[#dcf4eb]",
-  NOT_SECURED: "bg-[repeating-linear-gradient(135deg,#ececec_0_4px,#f7f7f7_4px_8px)]",
-  RECORD: "bg-ink-50/60",
 };
 
 const kindText: Record<BlockKind, string> = {
   SOLD: "text-white",
   BLOCKED: "text-brand-800",
-  REQUESTED: "text-[#8a5a0f]",
   OUR_STOCK: "text-[#0d8f5d]",
-  NOT_SECURED: "text-ink-500",
-  RECORD: "text-ink-500",
 };
 
 
-const outlined = (kind: BlockKind) => kind === "BLOCKED" || kind === "REQUESTED";
+const outlined = (kind: BlockKind) => kind === "BLOCKED";
 
-const hasClient = (kind: BlockKind) => kind === "SOLD" || kind === "BLOCKED" || kind === "REQUESTED";
+const hasClient = (kind: BlockKind | null) => kind === "SOLD" || kind === "BLOCKED";
 
 const shortDay = (date: Date) =>
   date.toLocaleString("en-CH", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -883,7 +1034,9 @@ function BlockLabel({
   dates,
   afterCheckOut,
   continues,
+  faded,
 }: {
+  faded?: boolean;
   block: Block;
   dates: Date[];
   /** The block starts on another client's check-out day: leave that cell to the "CO". */
@@ -908,7 +1061,7 @@ function BlockLabel({
           ? { left: "100%", width: `calc(${(block.labelSpan - 1) * 100}% - 6px)` }
           : { left: "6px", width: `calc(${block.labelSpan * 100}% - 10px)` }
       }
-      className={`pointer-events-none absolute top-0 bottom-0 z-[1] flex items-center gap-1 overflow-hidden text-[11px] leading-none font-medium whitespace-nowrap ${kindText[block.kind]}`}
+      className={`pointer-events-none absolute top-0 bottom-0 z-[1] ${faded ? "opacity-40" : ""} flex items-center gap-1 overflow-hidden text-[11px] leading-none font-medium whitespace-nowrap ${kindText[block.kind]}`}
     >
       {block.severity >= 2 && <AttentionMark severity={block.severity} />}
       <span className="truncate">{parts.join(" · ")}</span>
@@ -985,9 +1138,15 @@ function BlockSummary({
       <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1 font-light">
         <dt className="text-ink-500">Sales</dt>
         <dd className="text-ink-900">
-          {salesLabels[block.sales]}
+          {block.kind === "OUR_STOCK" ? "No client" : salesLabels[block.sales]}
           {block.client && hasClient(block.kind) ? ` — ${block.client}` : ""}
         </dd>
+        {block.requestedBy.length > 0 && (
+          <>
+            <dt className="text-ink-500">Requested by</dt>
+            <dd className="text-ink-900">{block.requestedBy.join(", ")}</dd>
+          </>
+        )}
         <dt className="text-ink-500">Acquisition</dt>
         <dd className="text-ink-900">{acquisitionLabels[block.acquisition]}</dd>
         <dt className="text-ink-500">{hasClient(block.kind) ? "Check-in" : "From"}</dt>
@@ -1030,7 +1189,7 @@ function BlockSummary({
 }
 
 function Legend() {
-  const shown: BlockKind[] = ["SOLD", "BLOCKED", "REQUESTED", "OUR_STOCK", "NOT_SECURED"];
+  const shown: BlockKind[] = ["SOLD", "BLOCKED", "OUR_STOCK"];
   return (
     <div className="text-ink-500 mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] font-light">
       {shown.map((kind) => (

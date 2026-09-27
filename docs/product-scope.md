@@ -863,7 +863,7 @@ window a hotel will contract for is a real term of the deal, it belongs on the c
 we can still offer" report and in the sales team's at-a-glance position on the Properties
 tab: how many whole rooms are actually available to offer, per room category, without
 opening the stock sheet. The stock sheet itself is the exception: its "rooms available"
-counts only sales as taking a room (§5.4).
+counts a room when at least half its nights are ours and unsold (§5.4).
 
 ### 5.4 The stock sheet (the date-grid)
 
@@ -882,11 +882,17 @@ different days, and the label then gives the spread ("CI 10–12 Jul"). A block 
 the story changes — a different client, a sale beside a block, or one room whose option runs
 out sooner and so needs attention sooner.
 
-- **Colour is the sales status:** solid for *Sold*, outlined light for *Blocked*, amber
-  outline for *Requested*, green for our stock nobody holds, and hatched grey for nights
-  still *In progress* with the supplier. A legend above the sheet says so. A night with no
-  client where nothing has been started with the supplier is left **blank**, the same as a
-  day with no inventory at all: there is nothing to say about it. It can still be selected.
+- **Only three things are drawn:** solid for *Sold*, outlined light for *Blocked*, and green
+  for our own stock nobody holds. A legend above the sheet says so. Everything else is left
+  **blank**, the same as a day with no inventory at all: a night nobody holds and we do not
+  hold either — nothing started, still in progress with the supplier, or handed back. A
+  soft request holds nothing (§4.3), so a requested night is drawn as whatever it is on our
+  side — our stock if we hold it, otherwise blank — and who asked is named in the hover
+  summary. A sale or block on a night we have not secured is still drawn, with its warning.
+  Blank nights can still be selected. So that a room type or a whole hotel that is entirely
+  blank does not look broken, it says so in words: "nothing secured" beside the room type,
+  "Nothing secured for these dates" beside the hotel, and a line across its first room once
+  opened.
 - **Check-in and check-out are explicit.** Because the sheet counts nights, a stay's
   check-out day is not a night and would be blank. Instead the stay's bar runs on across that
   day, marked **CO**, unless another client's stay begins that very day. Pointing at a CO
@@ -900,10 +906,11 @@ out sooner and so needs attention sooner.
 - **Something needing attention is marked**, with a red or amber "!" in the label: the same
   judgement as §4.4 — sold without having secured it, an option that is running out — taken
   from the worst night in the block, so grouping never hides a problem. The *Look out for*
-  counts above the sheet are unchanged.
+  counts above the sheet count these blocks as issues (see above).
 - **Hovering over a block summarises it**, without clicking anything: who it is for, the
   **Sales** position (sold, blocked, requested, no client) and the **Acquisition** position
-  (bought, option, in progress) as two separate lines, check-in and check-out with the
+  (bought, option, in progress) as two separate lines, any clients who have asked for it,
+  check-in and check-out with the
   number of nights, and which rooms — "5 rooms of 30 · #1–#5" — followed by the §4.4 sentence
   and any deadline.
 
@@ -911,24 +918,42 @@ Grouping changes only how the sheet is drawn. What a night means is still decide
 for each night on its own, and selecting still works night by night: a selection is drawn
 over the blocks, as a tint with one outline around it, and can cut across them.
 
-**What is available, at a glance.** Above the sheet one line says how many rooms are
-available for the whole window in view — "6 rooms available for the whole of 10 Jul – 05
-Aug 2028" — and each hotel row carries the same figure for that hotel ("6 rooms available",
-or "No rooms available"), so it can be read with every hotel still collapsed. Opening a
-hotel shows it per room type ("6 rooms available"). It is always written out as "N rooms
-available", never a bare number beside a room count, so it cannot be misread.
+**What is available, at a glance.** Each hotel row carries how many of its rooms are
+available ("30 rooms available", or "No rooms available"), so it can be read with every
+hotel still collapsed, and each room type the same once opened. It is always written out as
+"N rooms available", never a bare number beside a room count, so it cannot be misread, and
+carries no dates: in practice every room checks in and out on different days, so there is
+no single period to name. There is no total across hotels above the sheet; added up, it
+said nothing a rep could act on.
 
-Here, **only a sale takes a room.** A room counts as available if on every night of the
-window we hold it (bought or on option) and it is not sold; a block does not stop it
-counting, because a block is a hold that may lapse. This is §5.3's optimistic figure, and
-it is a deliberate choice for the stock sheet: the Position tab and the map's side panel
-still lead with the conservative one, which counts blocks as taken, so where a room is
-blocked but not sold the two can differ by those rooms. Two further things follow:
+**Look out for — issues, not nights.** Above the sheet the §4.4 severities are counted
+as **issues**: one client at one hotel with the same problem over the same stay is one
+issue, however many rooms and nights it covers — "1 critical", not 168 room-nights, which
+made things look far worse than they were. An issue is a block (see below), and blocks of
+the same client, state and hotel count once even across room types. *Watch* is mostly our
+own unsold stock: not wrong, but money on the book.
 
-- **Narrowing the dates answers a client's question directly.** Set the window to the stay
-  they want and the figure is what can be offered for exactly those nights.
-- **A room type is measured over the nights it has inside the window.** A hotel contracted
-  only to 31 July is not counted as having nothing because the window runs to 5 August.
+**Clicking a count shows only those issues:** the sheet narrows to the hotels, room types
+and rooms that have one, opens them, and fades every other block in those rooms. Clicking it
+again, or *Show everything*, puts the sheet back. A filter whose issue disappears — fixed,
+or outside newly chosen dates — lapses by itself.
+
+**A room counts as available when at least half of its nights are free.** Its nights are
+the room-nights it has in inventory within the dates shown; a night is free when we hold
+it (bought or on option) and it is not sold. Exactly half counts. So a room with 26 nights
+in view, 21 of them bought and unsold, counts (81%); one with 4 of 10 free does not. Two
+choices sit inside that:
+
+- **Only a sale takes a night.** A blocked night still counts as free, because a block is a
+  hold that may lapse.
+- **A night where nothing has been started counts against the room**, since it is not
+  something we can offer — but only nights in inventory are counted at all.
+
+This is deliberately looser than §5.3's whole-stay rule, which the Position tab and the
+map's side panel keep: there a room counts only if it is free on every night, and blocks
+count as taken. The stock sheet asks "roughly how much have we got?", the Position tab
+"what can we promise for the whole stay?", so the two will often differ. Narrowing the dates
+to the stay a client wants makes the stock sheet's answer about exactly those nights.
 
 The figure follows the property filter but not the client filter: what is free is free,
 whichever client is asking.
@@ -945,7 +970,15 @@ appears beside the window whenever it differs from the event's, and choosing it 
 remembered one.
 
 Editing happens by highlighting a rectangle of cells — a set of rooms crossed with a
-contiguous range of nights — which opens a panel scoped to exactly that selection. A
+contiguous range of days — which opens a panel scoped to exactly that selection. **The last
+day highlighted is the check-out day**, as a stay is written everywhere else: highlighting
+10 Jul to 31 Jul selects check-in 10 Jul, check-out 31 Jul, 21 nights, and changes those 21
+nights. That day is drawn lighter and marked CO in the selection, and the counter while
+dragging reads "CI 10 Jul → CO 31 Jul · 2 rooms × 21 nights". A single day on its own is
+that one night, since nobody checks in and out on the same day. So that a stay can end on
+the window's own check-out day, the sheet has one column more than it has nights: the day
+after the last night, in lighter grey. Nothing is drawn in it except the CO of stays that
+leave that day. A
 selection can run past what is on screen: dragging to within a finger's width of an edge,
 or past it, scrolls the sheet that way — faster the further out the pointer goes — and the
 rectangle keeps growing with it. If that edge of the sheet is itself off screen, because the
@@ -1393,7 +1426,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
-| §5.4 Stock sheet | **Built** | A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the date window is remembered per event, per browser. Rooms available for the window — only sold rooms taken, blocks still counted (§5.3's optimistic figure) — in total and per hotel and room type |
+| §5.4 Stock sheet | **Built** | A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those |
 | §6 Operations | **Not built** | Phase 3 |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
@@ -1441,11 +1474,11 @@ Recorded here rather than silently: each is a place where building it changed ou
    to correct what they wrote. What the original rule protected — that what was said is
    never lost — is kept by storing every replaced wording, and a reader is always told when
    something has been edited.
-11. **The stock sheet's "rooms available" counts only sales as taking a room** (§5.4),
-   where §5.3 makes the conservative figure — blocks counted as taken — the headline
-   everywhere. Asked for by the business: on the sheet a rep wants what is not yet sold,
-   treating a block as a hold that may lapse. The Position tab and the map panel keep the
-   conservative figure, so the two can differ by the rooms that are blocked but not sold.
+11. **The stock sheet's "rooms available" is its own, looser figure** (§5.4): a room counts
+   when at least half its nights in view are ours and unsold, and a block does not take a
+   night — where §5.3 counts only rooms free on every night, blocks as taken. Asked for by
+   the business: rooms rarely share one check-in and check-out, so the whole-stay rule said
+   "none" beside rooms that plainly had space. The Position tab and the map panel keep §5.3.
 12. **The stock sheet draws blocks, not one icon per room-night** (§5.4, §11.4). The legacy
    sheet's emoji per cell worked in a spreadsheet but buried the one thing a rep needs —
    which client holds which dates — under hundreds of identical marks. Each night is still

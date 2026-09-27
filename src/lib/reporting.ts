@@ -274,6 +274,13 @@ export type Availability = {
   offerable: number;
   /** The same figure with blocks counted as taken. What is genuinely free. */
   genuinelyFree: number;
+  /**
+   * The stock sheet's figure (§5.4): rooms where at least half of their
+   * room-nights in the window are ours and not sold. In practice every room
+   * checks in and out on different days, so "free on every night" is too
+   * strict to be useful at a glance. A block does not take a night.
+   */
+  mostlyFree: number;
 };
 
 /**
@@ -346,6 +353,14 @@ export function availability(
               night.acquisitionState === "OPTION") &&
             !isHardHold(night.salesState),
         ),
+        mostlyFree: [...bySlot.values()].filter((slotNights) => {
+          const free = slotNights.filter(
+            (night) =>
+              (night.acquisitionState === "BOUGHT" || night.acquisitionState === "OPTION") &&
+              night.salesState !== "SOLD",
+          ).length;
+          return free * 2 >= slotNights.length;
+        }).length,
       };
     })
     .sort(

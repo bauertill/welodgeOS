@@ -23,28 +23,28 @@ export type BlockNight = {
   severity: Severity;
 };
 
-/** What a rep reads a block as, in the business's own words (doc §10). */
-export type BlockKind = "SOLD" | "BLOCKED" | "REQUESTED" | "OUR_STOCK" | "NOT_SECURED" | "RECORD";
+/**
+ * What a rep reads a block as, in the business's own words (doc §10). Only
+ * three things are drawn: a sale, a block, and our own stock nobody holds.
+ */
+export type BlockKind = "SOLD" | "BLOCKED" | "OUR_STOCK";
 
-export function blockKind(night: Pick<BlockNight, "sales" | "acquisition">): BlockKind {
+/**
+ * The kind a night is drawn as, or null where the sheet leaves it blank: no
+ * client holds it and we do not hold it either — nothing started, still in
+ * progress, or handed back. A soft request holds nothing (§4.3), so a
+ * requested night reads as whatever it is on the supply side.
+ */
+export function blockKind(night: Pick<BlockNight, "sales" | "acquisition">): BlockKind | null {
   if (night.sales === "SOLD") return "SOLD";
   if (night.sales === "BLOCKED") return "BLOCKED";
-  if (night.sales === "REQUESTED") return "REQUESTED";
-  // Nobody on it: ours to sell if we hold it, otherwise still being
-  // negotiated. (Nothing started at all is not a block: the sheet leaves it blank.)
   if (night.acquisition === "BOUGHT" || night.acquisition === "OPTION") return "OUR_STOCK";
-  if (night.acquisition === "RELEASED" || night.sales === "CANCELLED") return "RECORD";
-  return "NOT_SECURED";
+  return null;
 }
 
-/** Who a block is for: the client with the hold, or those asking. */
-export function blockClient(night: Pick<BlockNight, "sales" | "clientName" | "requestedBy">) {
+/** Who a block is for: the client with the hold. */
+export function blockClient(night: Pick<BlockNight, "sales" | "clientName">) {
   if (night.sales === "SOLD" || night.sales === "BLOCKED") return night.clientName;
-  if (night.sales === "REQUESTED") {
-    const [first, ...rest] = night.requestedBy;
-    if (!first) return null;
-    return rest.length ? `${first} +${rest.length}` : first;
-  }
   return null;
 }
 
@@ -67,8 +67,10 @@ export function continuesStay(
  * block splits where, say, one room's option expires sooner than the rest.
  */
 function blockKey(night: BlockNight) {
+  const kind = blockKind(night);
+  if (!kind) return null;
   return [
-    blockKind(night),
+    kind,
     night.acquisition,
     blockClient(night) ?? "",
     night.severity >= 2 ? night.severity : "",
@@ -89,6 +91,8 @@ export type Block = {
   lastDate: number;
   /** Nights in the block, summed over its rooms. */
   roomNights: number;
+  /** Clients with a soft request on any night of it — shown on hover, not drawn. */
+  requestedBy: string[];
   /** Whether every room in it has the same check-in and check-out. */
   uniform: boolean;
   /** Where its label goes: the first night of its top row, and how many nights that run has. */
@@ -119,6 +123,7 @@ export function buildBlocks(
       return night ? blockKey(night) : null;
     }),
   );
+  // (A night that is not drawn has no key, so it joins no block.)
   const blocks: Block[] = [];
 
   for (let row = 0; row < rowCount; row++) {
@@ -167,7 +172,7 @@ export function buildBlocks(
 
       blocks.push({
         id,
-        kind: blockKind(night),
+        kind: blockKind(night)!,
         client: blockClient(night),
         sales: night.sales,
         acquisition: night.acquisition,
@@ -177,6 +182,7 @@ export function buildBlocks(
         firstDate: Math.min(...runs.map((run) => run.from)),
         lastDate: Math.max(...runs.map((run) => run.to)),
         roomNights: cells.length,
+        requestedBy: [...new Set(cells.flatMap(([r, d]) => nightAt(r, d)!.requestedBy))].sort(),
         uniform: runs.every((run) => run.from === top.from && run.to === top.to),
         labelRow: top.row,
         labelDate: top.from,
