@@ -8,7 +8,9 @@ import { InventorySidePanel, type SelectedCell } from "~/app/_components/invento
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
 import { formatRange } from "~/lib/format";
-import { severityLabels, severityStyles, type Severity } from "~/lib/position";
+import { acquisitionLabels, salesLabels } from "~/lib/inventory";
+import { severityLabels, type Severity } from "~/lib/position";
+import { buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
 import { api } from "~/trpc/react";
 
 /** A drag-select anchor/end, addressed by position rather than id, so the
@@ -201,13 +203,18 @@ export function InventoryGrid({
   // The flat, visible row order the drag-select rectangle is measured
   // against — only rooms belonging to an expanded hotel and category.
   const visibleRows = useMemo(() => {
-    const rows: { slotId: string; slotNumber: number }[] = [];
+    const rows: { slotId: string; slotNumber: number; categoryId: string; categorySize: number }[] = [];
     for (const property of properties) {
       if (!expandedProperties.has(property.id)) continue;
       for (const category of property.categories) {
         if (!expandedCategories.has(category.id)) continue;
         for (const slot of category.slots) {
-          rows.push({ slotId: slot.id, slotNumber: slot.slotNumber });
+          rows.push({
+            slotId: slot.id,
+            slotNumber: slot.slotNumber,
+            categoryId: category.id,
+            categorySize: category.slots.length,
+          });
         }
       }
     }
@@ -219,6 +226,77 @@ export function InventoryGrid({
     visibleRows.forEach((row, index) => map.set(row.slotId, index));
     return map;
   }, [visibleRows]);
+
+  // Neighbouring nights that say the same thing, drawn as one block (§5.4).
+  const { blocks, blockAt } = useMemo(
+    () =>
+      buildBlocks(
+        visibleRows.length,
+        dates.length,
+        (row, date) => {
+          const cell = cells[`${visibleRows[row]!.slotId}|${dayKey(dates[date]!)}`];
+          if (!cell) return null;
+          // No client and nothing started with the supplier: nothing to say,
+          // so it stays blank rather than being drawn as a block.
+          if (cell.position.acquisition === "NONE" && cell.position.sales === "NONE") return null;
+          return {
+            sales: cell.position.sales,
+            acquisition: cell.position.acquisition,
+            clientName: cell.clientName,
+            requestedBy: cell.requestedBy.map((r) => r.name),
+            severity: cell.position.severity,
+          };
+        },
+        (row) => visibleRows[row]!.categoryId,
+      ),
+    [visibleRows, dates, cells],
+  );
+
+  // "CO" goes in the cell after a client's last night — the check-out day,
+  // which is not a night and would otherwise be blank — unless another
+  // client's stay already starts there. The stay's bar runs half way into
+  // that cell: the guest leaves during the day, not the night before.
+  const checkOutMarks = useMemo(() => {
+    const marks = new Map<string, number>();
+    for (const block of blocks) {
+      if (!hasClient(block.kind)) continue;
+      for (const run of block.runs) {
+        const day = run.to + 1;
+        if (day >= dates.length) continue;
+        const there = blockAt[run.row]?.[day];
+        if (there != null && hasClient(blocks[there]!.kind)) continue;
+        marks.set(`${run.row}|${day}`, block.id);
+      }
+    }
+    return marks;
+  }, [blocks, blockAt, dates.length]);
+
+  // Whether a block's stay really carries on past the window, from the night
+  // either side of it — so "CI 10 Jul" is only said when it is true.
+  const continues = useMemo(
+    () =>
+      blocks.map((block) => ({
+        before: block.runs.some(
+          (run) =>
+            run.from === 0 &&
+            continuesStay(block, grid.data?.edges.before[visibleRows[run.row]!.slotId]),
+        ),
+        after: block.runs.some(
+          (run) =>
+            run.to === dates.length - 1 &&
+            continuesStay(block, grid.data?.edges.after[visibleRows[run.row]!.slotId]),
+        ),
+      })),
+    [blocks, grid.data, visibleRows, dates.length],
+  );
+
+  const [hovered, setHovered] = useState<{
+    block: number;
+    x: number;
+    y: number;
+    /** Set when the pointer is on the block's check-out day rather than one of its nights. */
+    checkOutDay?: Date;
+  } | null>(null);
 
   const severityCounts = useMemo(() => {
     const counts: Record<Severity, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
@@ -387,6 +465,8 @@ export function InventoryGrid({
         </div>
       </div>
 
+      {properties.length > 0 && <Legend />}
+
       {properties.length === 0 ? (
         <EmptyState
           title="Nothing matches"
@@ -397,13 +477,14 @@ export function InventoryGrid({
         // date row can stay pinned along its top and the room column down
         // its left, however far the sheet is scrolled.
         <div
+          onMouseLeave={() => setHovered(null)}
           ref={scroller}
           className="border-ink-200/60 max-h-[calc(100vh-7rem)] overflow-auto overscroll-contain rounded-xl border bg-white"
         >
-          <table className="min-w-full border-collapse text-left text-xs">
+          <table className="w-full border-collapse text-left text-xs">
             <thead>
               <tr>
-                <th className="sticky top-0 left-0 z-30 min-w-56 border-b border-r shadow-[inset_0_-1px_0_var(--color-ink-200)] border-ink-200/60 bg-white px-3 py-2 font-medium text-ink-500">
+                <th className="sticky top-0 left-0 z-30 w-56 min-w-56 border-b border-r shadow-[inset_0_-1px_0_var(--color-ink-200)] border-ink-200/60 bg-white px-3 py-2 font-medium text-ink-500">
                   Hotel / room type / room
                 </th>
                 {dates.map((date) => (
@@ -417,6 +498,9 @@ export function InventoryGrid({
                     </span>
                   </th>
                 ))}
+                {/* Takes up any spare width, so a short window neither
+                    stretches the room column nor leaves the rows short. */}
+                <th aria-hidden="true" className="sticky top-0 z-20 w-full border-b border-ink-200/60 bg-white shadow-[inset_0_-1px_0_var(--color-ink-200)]" />
               </tr>
             </thead>
             <tbody>
@@ -426,7 +510,7 @@ export function InventoryGrid({
                   <Fragment key={property.id}>
                     <tr className="bg-ink-50/60">
                       <td
-                        colSpan={dates.length + 1}
+                        colSpan={dates.length + 2}
                         className="sticky left-0 z-10 border-b border-ink-200/60 bg-ink-50/60 px-3 py-2"
                       >
                         <button
@@ -449,7 +533,7 @@ export function InventoryGrid({
                           <Fragment key={category.id}>
                             <tr>
                               <td
-                                colSpan={dates.length + 1}
+                                colSpan={dates.length + 2}
                                 className="sticky left-0 z-10 border-b border-ink-200/60 bg-white px-3 py-1.5 pl-6"
                               >
                                 <button
@@ -480,6 +564,40 @@ export function InventoryGrid({
                                       const key = `${slot.id}|${dayKey(date)}`;
                                       const cell = cells[key];
                                       const selected = rowIndex >= 0 && inRectangle(rowIndex, dateIndex);
+                                      const blockId = rowIndex >= 0 ? blockAt[rowIndex]?.[dateIndex] : null;
+                                      const block = blockId != null ? blocks[blockId] : undefined;
+                                      const same = (r: number, d: number) =>
+                                        blockId != null && blockAt[r]?.[d] === blockId;
+                                      // A night joins what is above or below it when that is
+                                      // the same block — or the same stay's check-out half-cell,
+                                      // where rooms in one stay leave on different days.
+                                      const joins = (r: number, d: number) =>
+                                        same(r, d) || (blockId != null && checkOutMarks.get(`${r}|${d}`) === blockId);
+                                      const edge = {
+                                        top: !joins(rowIndex - 1, dateIndex),
+                                        bottom: !joins(rowIndex + 1, dateIndex),
+                                        left: !same(rowIndex, dateIndex - 1),
+                                        // Open on the right when the stay runs on into its
+                                        // check-out half-cell.
+                                        right:
+                                          !same(rowIndex, dateIndex + 1) &&
+                                          checkOutMarks.get(`${rowIndex}|${dateIndex + 1}`) !== blockId,
+                                      };
+                                      const checkOutOf = checkOutMarks.get(`${rowIndex}|${dateIndex}`);
+                                      const checkOut = checkOutOf != null ? blocks[checkOutOf] : undefined;
+                                      const coJoins = (r: number) =>
+                                        checkOutMarks.get(`${r}|${dateIndex}`) === checkOutOf ||
+                                        blockAt[r]?.[dateIndex] === checkOutOf;
+                                      const coEdge = checkOut && {
+                                        top: !coJoins(rowIndex - 1),
+                                        bottom: !coJoins(rowIndex + 1),
+                                        // Joined to the same stay above or below, it runs to the
+                                        // edge of the cell like the rest of that stay does, so the
+                                        // shape steps cleanly instead of leaving a notch.
+                                        flush: coJoins(rowIndex - 1) || coJoins(rowIndex + 1),
+                                      };
+                                      const isLabel =
+                                        block && block.labelRow === rowIndex && block.labelDate === dateIndex;
                                       return (
                                         <td
                                           key={key}
@@ -489,20 +607,92 @@ export function InventoryGrid({
                                             if (rowIndex < 0 || e.button !== 0) return;
                                             e.preventDefault();
                                             pointer.current = { x: e.clientX, y: e.clientY };
+                                            setHovered(null);
                                             setDragging(true);
                                             setAnchor({ rowIndex, dateIndex });
                                             setFocus({ rowIndex, dateIndex });
                                             setCommitted(null);
                                           }}
-                                          title={cell?.position.headline}
-                                          className={`border-ink-200/40 h-8 w-9 cursor-pointer select-none border-b text-center align-middle ${
-                                            cell ? severityStyles[cell.position.severity] : "bg-ink-50/40 text-ink-300"
-                                          } ${selected ? "ring-brand-400 ring-2 ring-inset" : ""}`}
+                                          onMouseMove={(e) => {
+                                            if (dragging) return;
+                                            // On a check-out day, the stay leaving is what the rep is
+                                            // pointing at.
+                                            const shown = checkOutOf ?? blockId;
+                                            setHovered(
+                                              shown != null
+                                                ? {
+                                                    block: shown,
+                                                    x: e.clientX,
+                                                    y: e.clientY,
+                                                    checkOutDay: checkOutOf != null ? date : undefined,
+                                                  }
+                                                : null,
+                                            );
+                                          }}
+                                          className="border-ink-200/60 relative h-8 w-9 min-w-9 cursor-pointer border-b p-0 select-none"
                                         >
-                                          {cell ? cell.position.icon : ""}
+                                          {block ? (
+                                            <div
+                                              className={`absolute ${kindStyles[block.kind]} ${
+                                                edge.top ? "top-[3px]" : "top-0"
+                                              } ${edge.bottom ? "bottom-[3px]" : "-bottom-px"} ${
+                                                edge.left ? "left-[2px]" : "left-0"
+                                              } ${edge.right ? "right-[2px]" : "right-0"} ${
+                                                edge.top && edge.left ? "rounded-tl-md" : ""
+                                              } ${edge.top && edge.right ? "rounded-tr-md" : ""} ${
+                                                edge.bottom && edge.left ? "rounded-bl-md" : ""
+                                              } ${edge.bottom && edge.right ? "rounded-br-md" : ""} ${
+                                                // An outline round the whole block, not every night.
+                                                outlined(block.kind)
+                                                  ? `${edge.top ? "border-t" : ""} ${edge.bottom ? "border-b" : ""} ${edge.left ? "border-l" : ""} ${edge.right ? "border-r" : ""}`
+                                                  : ""
+                                              }`}
+                                            />
+                                          ) : null}
+                                          {checkOut && coEdge && (
+                                            // The stay's own bar, carried across its check-out day
+                                            // and marked CO — drawn over whatever the room does
+                                            // next, empty or back to unsold stock.
+                                            <span
+                                              className={`absolute left-0 z-[2] flex items-center justify-center text-[10px] font-semibold ${
+                                                coEdge.flush ? "right-0" : "right-[2px]"
+                                              } ${
+                                                kindStyles[checkOut.kind]
+                                              } ${kindText[checkOut.kind]} ${coEdge.top ? "top-[3px] rounded-tr-md" : "top-0"} ${
+                                                coEdge.bottom ? "bottom-[3px] rounded-br-md" : "-bottom-px"
+                                              } ${
+                                                outlined(checkOut.kind)
+                                                  ? `border-r ${coEdge.top ? "border-t" : ""} ${coEdge.bottom ? "border-b" : ""}`
+                                                  : ""
+                                              }`}
+                                            >
+                                              CO
+                                            </span>
+                                          )}
+                                          {selected && (
+                                            // Over the bars, not under them: a tint on every
+                                            // selected night and one outline round the whole
+                                            // selection.
+                                            <div
+                                              className={`bg-brand-900/20 border-brand-900 pointer-events-none absolute inset-0 z-[3] ${
+                                                inRectangle(rowIndex - 1, dateIndex) ? "" : "border-t-2"
+                                              } ${inRectangle(rowIndex + 1, dateIndex) ? "" : "border-b-2"} ${
+                                                inRectangle(rowIndex, dateIndex - 1) ? "" : "border-l-2"
+                                              } ${inRectangle(rowIndex, dateIndex + 1) ? "" : "border-r-2"}`}
+                                            />
+                                          )}
+                                          {block && isLabel && (
+                                            <BlockLabel
+                                              block={block}
+                                              dates={dates}
+                                              afterCheckOut={Boolean(checkOut)}
+                                              continues={continues[block.id]}
+                                            />
+                                          )}
                                         </td>
                                       );
                                     })}
+                                    <td aria-hidden="true" className="border-ink-200/60 border-b" />
                                   </tr>
                                 );
                               })}
@@ -515,6 +705,26 @@ export function InventoryGrid({
             </tbody>
           </table>
         </div>
+      )}
+
+      {hovered && !dragging && blocks[hovered.block] && (
+        <BlockSummary
+          block={blocks[hovered.block]!}
+          dates={dates}
+          rooms={blocks[hovered.block]!.rows.map((row) => visibleRows[row]!)}
+          detail={(() => {
+            const b = blocks[hovered.block]!;
+            const row = visibleRows[b.labelRow];
+            const date = dates[b.labelDate];
+            const cell = row && date ? cells[`${row.slotId}|${dayKey(date)}`] : undefined;
+            return cell?.position;
+          })()}
+          checkOutDay={hovered.checkOutDay}
+          continuesBefore={continues[hovered.block]?.before ?? false}
+          continuesAfter={continues[hovered.block]?.after ?? false}
+          x={hovered.x}
+          y={hovered.y}
+        />
       )}
 
       {liveCount && (
@@ -560,8 +770,11 @@ function visibleCellArea(box: HTMLElement) {
     bottom: Math.min(rect.bottom, window.innerHeight),
     // How far the pinned date row is above the screen, and the grid's
     // bottom below it — what the page must scroll to bring each on.
-    overTop: Math.max(0, -(corner?.top ?? rect.top)),
-    overBottom: Math.max(0, rect.bottom - window.innerHeight),
+    // In whole pixels: the page scrolls in whole pixels, so a fraction left
+    // over would ask it to move by less than one, forever, and the grid would
+    // never get its turn.
+    overTop: Math.max(0, Math.floor(-(corner?.top ?? rect.top))),
+    overBottom: Math.max(0, Math.floor(rect.bottom - window.innerHeight)),
   };
 }
 
@@ -604,6 +817,241 @@ function writeWindow(
   } catch {
     // Losing this is a convenience, not a correctness problem.
   }
+}
+
+// --- Blocks (doc §5.4) -------------------------------------------------------
+
+const kindLabels: Record<BlockKind, string> = {
+  SOLD: "Sold",
+  BLOCKED: "Blocked",
+  REQUESTED: "Requested",
+  OUR_STOCK: "Our stock, unsold",
+  NOT_SECURED: "In progress",
+  RECORD: "Released or cancelled",
+};
+
+const kindStyles: Record<BlockKind, string> = {
+  SOLD: "bg-brand-500",
+  BLOCKED: "bg-brand-100 border-brand-300",
+  // Solid tints rather than see-through ones, so the row lines behind a
+  // block never show through it.
+  REQUESTED: "bg-[#f9ecd4] border-[#efcf94]",
+  OUR_STOCK: "bg-[#dcf4eb]",
+  NOT_SECURED: "bg-[repeating-linear-gradient(135deg,#ececec_0_4px,#f7f7f7_4px_8px)]",
+  RECORD: "bg-ink-50/60",
+};
+
+const kindText: Record<BlockKind, string> = {
+  SOLD: "text-white",
+  BLOCKED: "text-brand-800",
+  REQUESTED: "text-[#8a5a0f]",
+  OUR_STOCK: "text-[#0d8f5d]",
+  NOT_SECURED: "text-ink-500",
+  RECORD: "text-ink-500",
+};
+
+
+const outlined = (kind: BlockKind) => kind === "BLOCKED" || kind === "REQUESTED";
+
+const hasClient = (kind: BlockKind) => kind === "SOLD" || kind === "BLOCKED" || kind === "REQUESTED";
+
+const shortDay = (date: Date) =>
+  date.toLocaleString("en-CH", { day: "numeric", month: "short", timeZone: "UTC" });
+
+/** "10 Jul", or "10–12 Jul" where the rooms in a block start on different days. */
+function dayRange(days: Date[]) {
+  const times = days.map((day) => day.getTime());
+  const first = new Date(Math.min(...times));
+  const last = new Date(Math.max(...times));
+  if (first.getTime() === last.getTime()) return shortDay(first);
+  return first.getUTCMonth() === last.getUTCMonth()
+    ? `${first.getUTCDate()}–${shortDay(last)}`
+    : `${shortDay(first)} – ${shortDay(last)}`;
+}
+
+function stayDates(block: Block, dates: Date[]) {
+  const checkIn = dayRange(block.runs.map((run) => dates[run.from]!));
+  const checkOut = dayRange(block.runs.map((run) => addDays(dates[run.to]!, 1)));
+  return { checkIn, checkOut };
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The one label a block carries: who, what, check-in, check-out, how many rooms. */
+function BlockLabel({
+  block,
+  dates,
+  afterCheckOut,
+  continues,
+}: {
+  block: Block;
+  dates: Date[];
+  /** The block starts on another client's check-out day: leave that cell to the "CO". */
+  afterCheckOut: boolean;
+  continues?: { before: boolean; after: boolean };
+}) {
+  const stay = stayDates(block, dates);
+  const checkIn = continues?.before ? `before ${stay.checkIn}` : stay.checkIn;
+  const checkOut = continues?.after ? `after ${stay.checkOut}` : stay.checkOut;
+  const parts = [
+    block.client ?? kindLabels[block.kind],
+    block.client ? kindLabels[block.kind] : null,
+    hasClient(block.kind) ? `CI ${checkIn} · CO ${checkOut}` : `${checkIn} – ${checkOut}`,
+    block.rows.length > 1 ? plural(block.rows.length, "room", "rooms") : null,
+  ].filter(Boolean);
+  return (
+    <span
+      // As wide as the block's first stretch of nights: the cells are all the
+      // same width, so a multiple of this one is exactly that.
+      style={
+        afterCheckOut
+          ? { left: "100%", width: `calc(${(block.labelSpan - 1) * 100}% - 6px)` }
+          : { left: "6px", width: `calc(${block.labelSpan * 100}% - 10px)` }
+      }
+      className={`pointer-events-none absolute top-0 bottom-0 z-[1] flex items-center gap-1 overflow-hidden text-[11px] leading-none font-medium whitespace-nowrap ${kindText[block.kind]}`}
+    >
+      {block.severity >= 2 && <AttentionMark severity={block.severity} />}
+      <span className="truncate">{parts.join(" · ")}</span>
+    </span>
+  );
+}
+
+function AttentionMark({ severity }: { severity: Severity }) {
+  return (
+    <span
+      aria-label={severityLabels[severity]}
+      className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ${
+        severity >= 3 ? "bg-[#c03654]" : "bg-[#e0a02a]"
+      }`}
+    >
+      !
+    </span>
+  );
+}
+
+/** The hover card: who holds what, for when, and what we hold from the supplier. */
+function BlockSummary({
+  block,
+  dates,
+  rooms,
+  detail,
+  checkOutDay,
+  continuesBefore,
+  continuesAfter,
+  x,
+  y,
+}: {
+  block: Block;
+  dates: Date[];
+  rooms: { slotNumber: number; categorySize: number }[];
+  detail?: { headline: string; detail: string | null; flags: string[] };
+  checkOutDay?: Date;
+  continuesBefore: boolean;
+  continuesAfter: boolean;
+  x: number;
+  y: number;
+}) {
+  const { checkIn, checkOut } = stayDates(block, dates);
+  const numbers = rooms.map((room) => room.slotNumber).sort((a, b) => a - b);
+  const contiguous = numbers.every((n, i) => i === 0 || n === numbers[i - 1]! + 1);
+  const roomList =
+    numbers.length === 1
+      ? `#${numbers[0]}`
+      : contiguous
+        ? `#${numbers[0]}–#${numbers.at(-1)}`
+        : numbers.slice(0, 8).map((n) => `#${n}`).join(", ") + (numbers.length > 8 ? "…" : "");
+  const nights = block.uniform ? block.runs[0]!.to - block.runs[0]!.from + 1 : null;
+  // Keep the card on screen near the right and bottom edges.
+  const left = Math.min(x + 14, window.innerWidth - 300);
+  const top = y + 16 + 220 > window.innerHeight ? y - 16 - 220 : y + 16;
+
+  return (
+    <div
+      className="pointer-events-none fixed z-[1030] w-72 rounded-xl bg-white p-3 text-[12px] shadow-xl ring-1 ring-black/5"
+      style={{ left, top }}
+    >
+      {checkOutDay && (
+        <p className="bg-brand-50 text-brand-800 -mx-1 mb-2 rounded-md px-2 py-1 text-[12px] font-medium">
+          Check-out day: {shortDay(checkOutDay)}
+          <span className="block text-[11px] font-light">
+            The guest leaves this day — it is not a night of the stay.
+          </span>
+        </p>
+      )}
+      <p className="text-ink-900 flex items-center gap-1.5 text-[13px] font-semibold">
+        {block.severity >= 2 && <AttentionMark severity={block.severity} />}
+        {block.client ?? kindLabels[block.kind]}
+      </p>
+      <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1 font-light">
+        <dt className="text-ink-500">Sales</dt>
+        <dd className="text-ink-900">
+          {salesLabels[block.sales]}
+          {block.client && hasClient(block.kind) ? ` — ${block.client}` : ""}
+        </dd>
+        <dt className="text-ink-500">Acquisition</dt>
+        <dd className="text-ink-900">{acquisitionLabels[block.acquisition]}</dd>
+        <dt className="text-ink-500">{hasClient(block.kind) ? "Check-in" : "From"}</dt>
+        <dd className="text-ink-900">
+          {continuesBefore ? `before ${checkIn}` : checkIn}
+        </dd>
+        <dt className="text-ink-500">{hasClient(block.kind) ? "Check-out" : "Until"}</dt>
+        <dd className="text-ink-900">
+          {continuesAfter ? `after ${checkOut}` : checkOut}
+          {nights && !continuesBefore && !continuesAfter && (
+            <span className="text-ink-500"> · {plural(nights, "night", "nights")}</span>
+          )}
+        </dd>
+        <dt className="text-ink-500">Rooms</dt>
+        <dd className="text-ink-900">
+          {plural(numbers.length, "room", "rooms")} of {rooms[0]?.categorySize ?? numbers.length} · {roomList}
+        </dd>
+      </dl>
+      {!block.uniform && (
+        <p className="text-ink-500 mt-2 font-light">Not every room checks in and out on the same day.</p>
+      )}
+      {detail && (
+        <p className="border-ink-200/60 text-ink-700 mt-2 border-t pt-2 font-light">
+          {detail.headline}
+          {detail.detail && <span className="text-ink-500 block">{detail.detail}</span>}
+          {detail.flags.map((flag) => (
+            <span key={flag} className="block text-[#c03654]">
+              {flag}
+            </span>
+          ))}
+        </p>
+      )}
+      {(continuesBefore || continuesAfter) && (
+        <p className="text-ink-500 mt-2 text-[11px] font-light">
+          This carries on past the dates shown — widen them to see all of it.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Legend() {
+  const shown: BlockKind[] = ["SOLD", "BLOCKED", "REQUESTED", "OUR_STOCK", "NOT_SECURED"];
+  return (
+    <div className="text-ink-500 mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] font-light">
+      {shown.map((kind) => (
+        <span key={kind} className="flex items-center gap-1.5">
+          <span
+            className={`relative inline-block h-3 w-5 overflow-hidden rounded-sm ${kindStyles[kind]} ${outlined(kind) ? "border" : ""}`}
+          />
+          {kindLabels[kind]}
+        </span>
+      ))}
+      <span className="flex items-center gap-1.5">
+        <span className="bg-brand-500 inline-flex h-3 w-5 items-center justify-center rounded-sm text-[7px] font-semibold text-white">
+          CO
+        </span>
+        Check-out day
+      </span>
+      <span className="flex items-center gap-1.5">
+        <AttentionMark severity={3} /> Needs attention — hover for why
+      </span>
+    </div>
+  );
 }
 
 /** "25 rooms available" — always spelled out in full, so it cannot be misread. */

@@ -14,6 +14,7 @@ import {
   type InventoryAction,
 } from "~/lib/inventory";
 import { positionOf } from "~/lib/position";
+import type { BlockNight } from "~/lib/stock-blocks";
 import { categoryContractStatusLabels } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
@@ -133,6 +134,9 @@ function collapse(problems: Problem[]): string[] {
     a.localeCompare(b, undefined, { numeric: true }),
   );
 }
+
+/** A night just outside the sheet's window, as much as is needed to tell whether a stay continues. */
+type EdgeNight = Omit<BlockNight, "severity">;
 
 export const inventoryRouter = createTRPCRouter({
   /**
@@ -881,7 +885,43 @@ export const inventoryRouter = createTRPCRouter({
         };
       }
 
+      // The night either side of the window, per room, so the sheet can tell a
+      // stay that really begins on the first day shown from one that only
+      // appears to because the window cuts it off (doc §5.4).
+      const slotIds = [...new Set(nights.map((night) => night.slotId))];
+      const edgeNights = slotIds.length
+        ? await ctx.db.roomNight.findMany({
+            where: {
+              eventId: input.eventId,
+              slotId: { in: slotIds },
+              date: { in: [addDays(input.checkIn, -1), input.checkOut] },
+            },
+            include: nightInclude,
+          })
+        : [];
+      const edges = { before: {} as Record<string, EdgeNight>, after: {} as Record<string, EdgeNight> };
+      for (const night of edgeNights) {
+        const record = flatten(night);
+        const position = positionOf({
+          acquisitionState: record.acquisitionState,
+          optionExpiry: record.optionExpiry,
+          salesState: record.salesState,
+          blockExpiry: record.blockExpiry,
+          dueDate: record.dueDate,
+          clientName: record.clientName,
+          requestedBy: record.requestedBy.map((r) => r.name),
+        });
+        const side = night.date < input.checkIn ? edges.before : edges.after;
+        side[night.slotId] = {
+          sales: position.sales,
+          acquisition: position.acquisition,
+          clientName: record.clientName,
+          requestedBy: record.requestedBy.map((r) => r.name),
+        };
+      }
+
       return {
+        edges,
         dates: eachNight(input.checkIn, input.checkOut),
         properties: [...properties.values()]
           .map((property) => ({
