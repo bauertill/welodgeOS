@@ -105,7 +105,8 @@ Two consequences worth stating plainly, because neither is obvious from a screen
 
 - **Everyone who signs in sees everything.** There are no roles yet. A rep can read and
   change any event, any property and any client, not only their own. This is a known gap,
-  not a decision (§9, open question 5).
+  not a decision (§9, open question 5). The one exception is chat (§2.7): a conversation
+  is visible only to the colleagues in it.
 - **A first sign-in creates the account silently.** Anyone in the Workspace who visits the
   site becomes a user of it, with full access, the moment they sign in.
 
@@ -141,6 +142,115 @@ notification path does not exist yet, per §2.5).
 
 An update, once posted, cannot be edited or deleted — the same rule as the ledger. It is a
 record of what was said, not a shared document to be revised.
+
+### 2.7 The team — profiles and internal chat
+
+Like Updates, this sits outside the three phases: it is about the people at We Lodge, not
+about room-nights. It is reached by hovering over (or clicking) **We Lodge AG** at the foot
+of the sidebar, which opens a small menu — *My profile*, *Team* and *Messages*. On a phone,
+where there is no sidebar, a *Team* link in the header leads to the same place. A count of
+unread messages shows beside the company name, so it is visible without opening the menu.
+
+**The profile.** Each person completes their own, and only their own: their name, a job
+title, and any number of phone numbers. Every number is marked **Mobile**, **WhatsApp** or
+**Mobile & WhatsApp** — the third exists because one number is usually both, and making
+someone enter it twice would be busywork. The numbers keep the order the person gave, so
+the first is the one to try first. The email shown is the Google account the person signs
+in with (§2.5). It cannot be changed from the profile, because it is not a contact detail
+the person chose but the identity that lets them in; changing it would lock them out.
+
+**The team directory** lists everyone who has ever signed in, with their title, email and
+numbers, and a *Message* button that opens a private conversation with that person.
+
+**Finding a colleague from Messages.** The list of conversations has a search box above it.
+Typing narrows the conversations to those whose name, or whose members' names, match, and
+lists underneath — under *Start a conversation* — any colleague who matches by name, email
+or job title and whom you have not messaged privately yet. Choosing one opens a private
+conversation with them. Enter opens the first result. Before you have any conversations at
+all, the list shows every colleague, so there is always somewhere to start.
+
+**Who is around.** Everyone's picture carries a coloured dot, in the directory, in the list
+of conversations and at the top of an open conversation, with the words beside it where
+there is room:
+
+| Dot | Means |
+| --- | --- |
+| Green | **Active** — using the system in the last couple of minutes |
+| Empty circle | **Away** — has not clicked, typed or moved the mouse in the system for about five minutes, or does not have it open |
+| Amber | **At lunch** — set by hand |
+| Grey | **Done for the day** — set by hand |
+| Red with a bar | **Do not disturb** — set by hand |
+
+Active and Away are **automatic**, judged from activity rather than from whether a tab is
+merely open: a tab left in the background all afternoon does not keep someone green.
+Nothing about this is stored as a status — the system records when a person last used it,
+and works out Active or Away whenever someone looks.
+
+The other three are chosen from the status button at the top of every page, which also
+shows your own. A status set by hand wins over the automatic one:
+
+- **At lunch** always has a time limit, because nobody is at lunch all afternoon: choosing
+  it asks how long — 30 minutes, 45 minutes, an hour, an hour and a half — or what time you
+  will be back. Colleagues see when, as in "At lunch · until 13:30".
+- **Done for the day** lasts until midnight where you are.
+- **Do not disturb** lasts until you turn it off, and while it is on the message chime is
+  silent for you; messages still arrive and still count as unread.
+
+When a time limit passes you are back on automatic. Nothing is changed when it passes —
+the system simply stops honouring a status whose time is up, the same way it works out
+Active and Away on the spot. Nobody else is told anything when a status changes; it is only
+visible on the dot.
+
+**A status in your own words.** Separately from the dot, a person can say what they are
+doing — *Add a status* in the same menu. It has an emoji, chosen from a short list, and up
+to 64 characters of text, and it shows beside their name in the directory, in the list of
+conversations and at the top of a conversation with them. A few common ones can be picked
+in one click, each with the time it usually lasts: *Be right back* (30 minutes), *In a
+meeting* (an hour), *Commuting* (an hour), *On a site visit* (today), *Out sick* (today) and
+*On holiday* (this week). Whichever it is, the person chooses when it stops showing: after
+30 minutes, an hour or four hours, at the end of today, at the end of this week (Sunday),
+at a date and time of their choosing, or never. "Today" and "this week" end at midnight
+where the person is. It can be cleared by hand at any time. The two are independent: you
+can be *At lunch* with no status, or *Active* while *On a site visit*.
+
+**Chat.** There are two kinds of conversation:
+
+- **Private** — between exactly two colleagues. A pair only ever has one: pressing
+  *Message* on someone you have already talked to reopens that conversation rather than
+  starting another. It cannot be left, and nobody can be added to it — for a third person,
+  start a group.
+- **Group** — named, with any number of members. Anyone in a group can add colleagues to
+  it; a newcomer sees the whole history, including what was said before they joined. Anyone
+  can leave a group, and then no longer sees it.
+
+A message is text only, and like an update it cannot be edited or deleted once sent. A
+message counts as unread for a member until they have had the conversation open on screen;
+your own messages are never unread to you.
+
+**What chat is deliberately not, yet** — each of these is a separate piece of work, not an
+oversight:
+
+- **It is not instant.** There is no live connection to the server: an open conversation
+  checks for new messages every few seconds, and the unread count every ten. A message
+  can therefore take a few seconds to appear on the other side.
+- **No notification leaves the system.** Nobody is emailed or pushed anything. Inside it,
+  there are two signals: the unread count, and a short chime whenever that count goes up
+  while the system is open in a browser tab. The chime does not play for a message in the
+  conversation you are looking at, nor when the system is closed. Browsers only allow a
+  page to make sound after you have clicked or typed on it, so a tab that has just been
+  opened stays silent until then. It is also silent while you are on Do not disturb.
+  The sound can be switched off from the Team menu; that
+  choice is remembered per browser, not per person. With the system open in two tabs, the
+  chime plays in both.
+- **No files.** Sharing a file needs somewhere to store it (for example Vercel Blob, which
+  has to be switched on in the Vercel account). It was held back until that is set up.
+- **No calling.** Neither calling from inside the system nor tap-to-call buttons on the
+  numbers. Agreed to come later.
+
+**Chat is the one exception to "everyone sees everything"** (§2.5). A conversation is
+visible only to its members; nobody else can open it from the system, whatever they know
+about it. It is not private from whoever runs the database, which is where the messages are
+stored.
 
 ---
 
@@ -1154,6 +1264,14 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.6 Updates | **Built** | Append-only feed per property and per client, with `@Name` mentions rendered as a highlight. No notification is sent — see §9 |
+| §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
+| §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
+| §2.7 Presence | **Built** | Automatic Active/Away from activity; At lunch (always with a time limit), Done for the day (until midnight) and Do not disturb (until turned off) set by hand. Refreshes every half minute or so |
+| §2.7 Status in your own words | **Built** | Emoji and up to 64 characters, six ready-made ones, and a choice of when it stops showing — including a custom date and time, or never |
+| §2.7 Chat | **Built** | Private conversations and named groups, text only, with unread counts. Checks for new messages every few seconds rather than instantly |
+| §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
+| §2.7 Calling | **Not built** | Deliberately left for a later iteration |
+| §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |

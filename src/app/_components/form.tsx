@@ -146,3 +146,17 @@ export function Fieldset({
     </section>
   );
 }
+
+type ServerError = {
+  message: string;
+  data?: {
+    zodError?: { fieldErrors: Record<string, string[] | undefined>; formErrors: string[] } | null;
+  } | null;
+} | null;
+
+/** The plain-English reason the server refused, rather than its raw validation report. */
+export function friendlyError(error: ServerError) {
+  if (!error) return null;
+  const zod = error.data?.zodError;
+  return (zod && (Object.values(zod.fieldErrors).flat()[0] ?? zod.formErrors[0])) ?? error.message;
+}

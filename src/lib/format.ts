@@ -68,3 +68,40 @@ export function formatNights(count: number) {
 export function formatRooms(count: number) {
   return `${count} ${count === 1 ? "room" : "rooms"}`;
 }
+
+// A chat message is a moment, not a calendar day, so unlike everything above
+// it is shown in the reader's own time zone: "14:05" today, "Tue 14:05" this
+// week, "12 Sep 14:05" before that.
+const timeFormat = new Intl.DateTimeFormat("en-CH", { hour: "2-digit", minute: "2-digit" });
+const weekdayTimeFormat = new Intl.DateTimeFormat("en-CH", {
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const dayTimeFormat = new Intl.DateTimeFormat("en-CH", {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+export function formatMoment(moment: Date, now = new Date()) {
+  if (moment.toDateString() === now.toDateString()) return timeFormat.format(moment);
+  if (now.getTime() - moment.getTime() < 6 * 24 * 60 * 60 * 1000) {
+    return weekdayTimeFormat.format(moment);
+  }
+  return dayTimeFormat.format(moment);
+}
+
+/** When a status runs out: "until 13:30", "until Tue 13:30", "for today". */
+export function formatUntil(until: Date, now = new Date()) {
+  const sameDay = until.toDateString() === now.toDateString();
+  if (sameDay && until.getHours() === 23 && until.getMinutes() === 59) return "for today";
+  if (sameDay) return `until ${timeFormat.format(until)}`;
+  if (until.getTime() - now.getTime() < 6 * 24 * 60 * 60 * 1000) {
+    return until.getHours() === 23 && until.getMinutes() === 59
+      ? `until end of ${new Intl.DateTimeFormat("en-CH", { weekday: "long" }).format(until)}`
+      : `until ${weekdayTimeFormat.format(until)}`;
+  }
+  return `until ${dayTimeFormat.format(until)}`;
+}

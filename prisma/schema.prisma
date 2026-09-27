@@ -328,6 +328,103 @@ model User {
   ledgerEntries     LedgerEntry[]
   updates           Update[]
   auditEntries      AuditEntry[]
+
+  // The team profile (doc §2.7). The sign-in email above is the contact
+  // email: it is what Google vouches for, so it is shown, never edited.
+  jobTitle      String?
+  phones        UserPhone[]
+  // Presence (doc §2.7). When the person last used the system — "Active" or
+  // "Away" is judged from this on read, never stored — and the status they
+  // set by hand, if any; empty means automatic. A status whose `statusUntil`
+  // has passed is ignored on read rather than cleared: nothing changes on its
+  // own.
+  lastSeenAt    DateTime?
+  status        UserStatus?
+  statusUntil   DateTime?
+  // A status in the person's own words, shown beside their name, with an
+  // emoji and an optional time after which it no longer shows.
+  customStatusEmoji String?
+  customStatusText  String?
+  customStatusUntil DateTime?
+  conversations ConversationMember[]
+  messages      Message[]
+}
+
+// --- The team: profiles and internal chat (doc §2.7) --------------------------
+
+/** How a colleague can be reached on a number — one number is often both. */
+enum PhoneKind {
+  MOBILE
+  WHATSAPP
+  MOBILE_AND_WHATSAPP
+}
+
+/** A status a person sets by hand, overriding the automatic Active/Away. */
+enum UserStatus {
+  AT_LUNCH
+  DONE_FOR_THE_DAY
+  DO_NOT_DISTURB
+}
+
+/** A phone number on a colleague's profile; a person can have any number of them. */
+model UserPhone {
+  id       String    @id @default(cuid())
+  number   String
+  kind     PhoneKind
+  // The order the person listed them in; the first is the one to try first.
+  position Int
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
+}
+
+/**
+ * A chat: either a private conversation between exactly two colleagues, or a
+ * named group. `directKey` is the two members' ids, sorted and joined, so that
+ * a pair of colleagues can only ever have one private conversation.
+ */
+model Conversation {
+  id        String   @id @default(cuid())
+  // Set for a group, empty for a private conversation.
+  name      String?
+  directKey String?  @unique
+  createdAt DateTime @default(now())
+
+  members  ConversationMember[]
+  messages Message[]
+}
+
+/** Who is in a conversation, and how far they have read. */
+model ConversationMember {
+  joinedAt   DateTime  @default(now())
+  // Everything posted after this, by someone else, is unread for this member.
+  lastReadAt DateTime?
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+/** One chat message. Text only for now; it cannot be edited or deleted. */
+model Message {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId String?
+
+  @@index([conversationId, createdAt])
 }
 
 model VerificationToken {

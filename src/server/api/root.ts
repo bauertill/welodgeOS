@@ -1,5 +1,6 @@
 import { amenityRouter } from "~/server/api/routers/amenity";
 import { auditRouter } from "~/server/api/routers/audit";
+import { chatRouter } from "~/server/api/routers/chat";
 import { clientRouter } from "~/server/api/routers/client";
 import { eventRouter } from "~/server/api/routers/event";
 import { inventoryRouter } from "~/server/api/routers/inventory";
@@ -29,6 +30,7 @@ export const appRouter = createTRPCRouter({
   user: userRouter,
   update: updateRouter,
   audit: auditRouter,
+  chat: chatRouter,
 });
 
 export type AppRouter = typeof appRouter;

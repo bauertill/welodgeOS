@@ -2,6 +2,13 @@ import Link from "next/link";
 
 import { HeaderAuth } from "~/app/_components/header-auth";
 import { Nav } from "~/app/_components/nav";
+import {
+  MessageSound,
+  PresenceHeartbeat,
+  StatusPicker,
+  TeamHeaderLink,
+  TeamMenu,
+} from "~/app/_components/team-menu";
 import { auth } from "~/server/auth";
 
 /**
@@ -13,6 +20,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      {session?.user && (
+        <>
+          <MessageSound />
+          <PresenceHeartbeat />
+        </>
+      )}
       <aside className="bg-ink-700 sticky top-0 hidden h-screen w-60 shrink-0 flex-col py-6 md:flex">
         {/* The brand mark sits on a white card, as it does on welodge.net. */}
         <Link href="/" className="mb-8 block px-5">
@@ -31,9 +44,13 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         <Nav />
 
         <div className="mt-auto px-6 pt-6">
-          <p className="text-[11px] tracking-wide text-white/40 uppercase">
-            We Lodge AG
-          </p>
+          {session?.user ? (
+            <TeamMenu />
+          ) : (
+            <p className="text-[11px] tracking-wide text-white/40 uppercase">
+              We Lodge AG
+            </p>
+          )}
         </div>
       </aside>
 
@@ -53,6 +70,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
 
           <div className="ml-auto flex items-center gap-4">
+            {session?.user && <TeamHeaderLink />}
+            {session?.user && <StatusPicker />}
             <HeaderAuth email={session?.user?.name ?? session?.user?.email ?? null} />
           </div>
         </header>
