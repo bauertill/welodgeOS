@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Combobox } from "~/app/_components/combobox";
 import { Input } from "~/app/_components/form";
@@ -35,8 +35,26 @@ export function InventoryGrid({
 }) {
   const [propertyId, setPropertyId] = useState("");
   const [clientId, setClientId] = useState("");
+  // The check-in/check-out window is remembered per event, in this browser,
+  // so coming back to the tab does not snap it back to the event's dates.
+  // Read after mount — storage only exists in the browser — and the sheet
+  // waits for it, rather than loading the event's dates first and then the
+  // remembered ones.
   const [checkIn, setCheckIn] = useState(defaultCheckIn);
   const [checkOut, setCheckOut] = useState(defaultCheckOut);
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    const saved = readWindow(eventId);
+    if (saved) {
+      setCheckIn(saved.checkIn);
+      setCheckOut(saved.checkOut);
+    }
+    setRestored(true);
+  }, [eventId]);
+  useEffect(() => {
+    if (restored) writeWindow(eventId, checkIn, checkOut, defaultCheckIn, defaultCheckOut);
+  }, [restored, eventId, checkIn, checkOut, defaultCheckIn, defaultCheckOut]);
+  const isEventWindow = checkIn === defaultCheckIn && checkOut === defaultCheckOut;
 
   const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -46,13 +64,107 @@ export function InventoryGrid({
   const [dragging, setDragging] = useState(false);
   const [committed, setCommitted] = useState<{ anchor: CellRef; focus: CellRef } | null>(null);
 
+  const scroller = useRef<HTMLDivElement>(null);
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  // The latest drag state, for the window listeners below.
+  const drag = useRef({ anchor, focus });
+  drag.current = { anchor, focus };
+
+  // While dragging, the selection keeps going when the pointer leaves the
+  // grid: near or past an edge the grid scrolls that way, faster the further
+  // out the pointer is, and the selection follows to whichever cell is now
+  // under it. Letting go anywhere on the page finishes the selection.
+  //
+  // "Edge" means the edge you can see. The grid is as tall as the window, so
+  // when the page is not scrolled right down to it, its own bottom sits below
+  // the screen where the pointer cannot reach — dragging to the bottom of the
+  // screen then scrolls the page until the grid is in view, and only then
+  // the grid itself. The same going up.
+  useEffect(() => {
+    if (!dragging) return;
+    let frame = 0;
+
+    const cellUnderPointer = () => {
+      const box = scroller.current;
+      const at = pointer.current;
+      if (!box || !at) return;
+      const area = visibleCellArea(box);
+      // Clamp into the visible cells, so a pointer over the pinned date row or
+      // room column — or off the grid, or off the screen — still lands on one.
+      const x = Math.min(Math.max(at.x, area.left + 2), area.right - 2);
+      const y = Math.min(Math.max(at.y, area.top + 2), area.bottom - 2);
+      const cell = document.elementFromPoint(x, y)?.closest<HTMLElement>("td[data-row]");
+      if (!cell) return;
+      const rowIndex = Number(cell.dataset.row);
+      const dateIndex = Number(cell.dataset.date);
+      const current = drag.current.focus;
+      if (current?.rowIndex !== rowIndex || current?.dateIndex !== dateIndex) {
+        setFocus({ rowIndex, dateIndex });
+      }
+    };
+
+    const step = () => {
+      const box = scroller.current;
+      const at = pointer.current;
+      if (box && at) {
+        const area = visibleCellArea(box);
+        const speed = (overshoot: number) => Math.min(40, Math.max(0, overshoot) / 2 + 4);
+        const edge = 32;
+        let dx = 0;
+        let dy = 0;
+        if (at.x > area.right - edge) dx = speed(at.x - (area.right - edge));
+        else if (at.x < area.left + edge) dx = -speed(area.left + edge - at.x);
+        if (at.y > area.bottom - edge) dy = speed(at.y - (area.bottom - edge));
+        else if (at.y < area.top + edge) dy = -speed(area.top + edge - at.y);
+        if (dy) {
+          // While that edge of the grid is off screen, the page scrolls just
+          // far enough to bring it on — never past it, so the grid is not
+          // carried away — and after that the grid scrolls.
+          if (dy > 0 && area.overBottom > 0) window.scrollBy(0, Math.min(dy, area.overBottom));
+          else if (dy < 0 && area.overTop > 0) window.scrollBy(0, Math.max(dy, -area.overTop));
+          else box.scrollBy(0, dy);
+        }
+        if (dx) box.scrollBy(dx, 0);
+        if (dx || dy) cellUnderPointer();
+      }
+      frame = requestAnimationFrame(step);
+    };
+
+    const onMove = (e: MouseEvent) => {
+      pointer.current = { x: e.clientX, y: e.clientY };
+      cellUnderPointer();
+    };
+    const onUp = () => {
+      const { anchor: start, focus: end } = drag.current;
+      if (start && end) setCommitted({ anchor: start, focus: end });
+      setDragging(false);
+      pointer.current = null;
+    };
+
+    // Scrolling by wheel or trackpad mid-drag moves the cells under a still
+    // pointer; the selection follows those too.
+    const box = scroller.current;
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("scroll", cellUnderPointer, { passive: true });
+    box?.addEventListener("scroll", cellUnderPointer, { passive: true });
+    frame = requestAnimationFrame(step);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("scroll", cellUnderPointer);
+      box?.removeEventListener("scroll", cellUnderPointer);
+      cancelAnimationFrame(frame);
+    };
+  }, [dragging]);
+
   const grid = api.inventory.grid.useQuery({
     eventId,
     propertyId: propertyId || undefined,
     clientId: clientId || undefined,
     checkIn: parseDay(checkIn),
     checkOut: parseDay(checkOut),
-  });
+  }, { enabled: restored });
   const clients = api.clients.list.useQuery();
 
   const toggleSet = (
@@ -158,7 +270,7 @@ export function InventoryGrid({
     setFocus(null);
   };
 
-  if (grid.isLoading) return null;
+  if (!restored || grid.isLoading) return null;
 
   return (
     <div>
@@ -209,6 +321,18 @@ export function InventoryGrid({
         />
 
         <div className="ml-auto flex items-center gap-2">
+          {!isEventWindow && (
+            <button
+              type="button"
+              onClick={() => {
+                setCheckIn(defaultCheckIn);
+                setCheckOut(defaultCheckOut);
+              }}
+              className="text-brand-700 mr-1 text-[13px] font-light hover:underline"
+            >
+              Back to event dates
+            </button>
+          )}
           <div className="w-40">
             <Input
               type="date"
@@ -233,27 +357,23 @@ export function InventoryGrid({
           description="Nothing in this event's inventory matches the current filters and date window."
         />
       ) : (
+        // Scrolls both ways inside a box no taller than the window, so the
+        // date row can stay pinned along its top and the room column down
+        // its left, however far the sheet is scrolled.
         <div
-          className="border-ink-200/60 overflow-auto rounded-xl border bg-white"
-          onMouseUp={() => {
-            if (dragging && anchor && focus) setCommitted({ anchor, focus });
-            setDragging(false);
-          }}
-          onMouseLeave={() => {
-            if (dragging && anchor && focus) setCommitted({ anchor, focus });
-            setDragging(false);
-          }}
+          ref={scroller}
+          className="border-ink-200/60 max-h-[calc(100vh-7rem)] overflow-auto overscroll-contain rounded-xl border bg-white"
         >
           <table className="border-collapse text-left text-xs">
             <thead>
               <tr>
-                <th className="sticky left-0 z-10 min-w-56 border-b border-r border-ink-200/60 bg-white px-3 py-2 font-medium text-ink-500">
+                <th className="sticky top-0 left-0 z-30 min-w-56 border-b border-r shadow-[inset_0_-1px_0_var(--color-ink-200)] border-ink-200/60 bg-white px-3 py-2 font-medium text-ink-500">
                   Hotel / room type / room
                 </th>
                 {dates.map((date) => (
                   <th
                     key={dayKey(date)}
-                    className="border-ink-200/60 min-w-9 border-b px-1 py-2 text-center font-medium text-ink-500"
+                    className="border-ink-200/60 sticky top-0 z-20 min-w-9 border-b bg-white shadow-[inset_0_-1px_0_var(--color-ink-200)] px-1 py-2 text-center font-medium text-ink-500"
                   >
                     {date.getUTCDate()}
                     <span className="block text-[10px] font-light">
@@ -324,15 +444,16 @@ export function InventoryGrid({
                                       return (
                                         <td
                                           key={key}
-                                          onMouseDown={() => {
-                                            if (rowIndex < 0) return;
+                                          data-row={rowIndex >= 0 ? rowIndex : undefined}
+                                          data-date={dateIndex}
+                                          onMouseDown={(e) => {
+                                            if (rowIndex < 0 || e.button !== 0) return;
+                                            e.preventDefault();
+                                            pointer.current = { x: e.clientX, y: e.clientY };
                                             setDragging(true);
                                             setAnchor({ rowIndex, dateIndex });
                                             setFocus({ rowIndex, dateIndex });
                                             setCommitted(null);
-                                          }}
-                                          onMouseEnter={() => {
-                                            if (dragging && rowIndex >= 0) setFocus({ rowIndex, dateIndex });
                                           }}
                                           title={cell?.position.headline}
                                           className={`border-ink-200/40 h-8 w-9 cursor-pointer select-none border-b text-center align-middle ${
@@ -382,6 +503,68 @@ export function InventoryGrid({
       )}
     </div>
   );
+}
+
+/**
+ * The part of the grid's cells you can actually see: right of the pinned room
+ * column, below the pinned date row, and within the window. The pinned
+ * corner cell is measured rather than the header row, because the header row
+ * as a whole scrolls away; only its cells are pinned.
+ */
+function visibleCellArea(box: HTMLElement) {
+  const rect = box.getBoundingClientRect();
+  const corner = box.querySelector("thead th")?.getBoundingClientRect();
+  return {
+    left: Math.max(corner?.right ?? rect.left, 0),
+    right: Math.min(rect.right, window.innerWidth),
+    top: Math.max(corner?.bottom ?? rect.top, 0),
+    bottom: Math.min(rect.bottom, window.innerHeight),
+    // How far the pinned date row is above the screen, and the grid's
+    // bottom below it — what the page must scroll to bring each on.
+    overTop: Math.max(0, -(corner?.top ?? rect.top)),
+    overBottom: Math.max(0, rect.bottom - window.innerHeight),
+  };
+}
+
+const windowKey = (eventId: string) => `welodge:inventory-window:${eventId}`;
+
+/** The window last looked at for this event, if it was not the event's own. */
+function readWindow(eventId: string): { checkIn: string; checkOut: string } | null {
+  try {
+    const saved = window.localStorage.getItem(windowKey(eventId));
+    if (!saved) return null;
+    const parsed = JSON.parse(saved) as { checkIn?: unknown; checkOut?: unknown };
+    const valid = (value: unknown): value is string =>
+      typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+    return valid(parsed.checkIn) && valid(parsed.checkOut)
+      ? { checkIn: parsed.checkIn, checkOut: parsed.checkOut }
+      : null;
+  } catch {
+    // No storage (private browsing, or rendering on the server): the event's dates.
+    return null;
+  }
+}
+
+/**
+ * Remember the window — or forget it once it is back to the event's dates, so
+ * an event whose dates are later corrected is not stuck on the old ones.
+ */
+function writeWindow(
+  eventId: string,
+  checkIn: string,
+  checkOut: string,
+  defaultCheckIn: string,
+  defaultCheckOut: string,
+) {
+  try {
+    if (checkIn === defaultCheckIn && checkOut === defaultCheckOut) {
+      window.localStorage.removeItem(windowKey(eventId));
+    } else {
+      window.localStorage.setItem(windowKey(eventId), JSON.stringify({ checkIn, checkOut }));
+    }
+  } catch {
+    // Losing this is a convenience, not a correctness problem.
+  }
 }
 
 function Chevron({ open }: { open: boolean }) {

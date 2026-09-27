@@ -857,8 +857,26 @@ that exact room-night. Rows are grouped property → category → slot number, c
 property level by default, and columns span whatever check-in/check-out window is currently
 in view, filtered by property and client.
 
+The sheet scrolls in both directions inside a frame no taller than the window, so the row of
+dates stays pinned along its top and the room column down its left however far it is
+scrolled. Scrolling with the pointer over the sheet moves the sheet, not the page behind it.
+
+**The window is remembered.** It starts as the event's own dates, but check-ins often fall
+before the event begins, so whatever window a rep last chose for an event is kept and
+restored when they come back to the tab — per event, and per browser: it is a convenience
+kept on the rep's own computer, not a setting shared with colleagues. *Back to event dates*
+appears beside the window whenever it differs from the event's, and choosing it forgets the
+remembered one.
+
 Editing happens by highlighting a rectangle of cells — a set of rooms crossed with a
-contiguous range of nights — which opens a panel scoped to exactly that selection. The
+contiguous range of nights — which opens a panel scoped to exactly that selection. A
+selection can run past what is on screen: dragging to within a finger's width of an edge,
+or past it, scrolls the sheet that way — faster the further out the pointer goes — and the
+rectangle keeps growing with it. If that edge of the sheet is itself off screen, because the
+page is not scrolled right down to it, the page scrolls first, just far enough to bring the
+sheet fully into view, and then the sheet scrolls; the page never runs on past the sheet.
+Scrolling with the wheel or trackpad in mid-drag moves the selection along too. Letting go anywhere on the page, even outside the sheet,
+finishes the selection. The
 rectangle is the same unit §4.8's bulk operations already work on; nothing about *how* a
 change is validated or logged differs from selecting it by hand, only how the rectangle is
 chosen.
@@ -1296,7 +1314,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
-| §5.4 Stock sheet | **Built** | A date-grid, one cell per room-night; edited by selecting a rectangle of cells |
+| §5.4 Stock sheet | **Built** | A date-grid, one cell per room-night; edited by selecting a rectangle of cells, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the date window is remembered per event, per browser |
 | §6 Operations | **Not built** | Phase 3 |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
