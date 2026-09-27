@@ -140,8 +140,17 @@ themselves. That is a deliberate, minimal first version; if the team wants a men
 colleague to actually be notified, that is a distinct piece of work (an email or in-app
 notification path does not exist yet, per §2.5).
 
-An update, once posted, cannot be edited or deleted — the same rule as the ledger. It is a
-record of what was said, not a shared document to be revised.
+**Its author can edit an update; nobody can delete one.** An *Edit* link sits beside each of
+your own posts, and only your own — a colleague's cannot be changed by anyone else. An
+edited post says so underneath, with when: "Edited today at 14:05", or "Edited 25 Sept at
+09:12". It keeps its original date in the feed and its place in the order; editing does not
+bump it to the top.
+
+This relaxes what was originally a rule that a post could never change, the same as the
+ledger. What that rule protected is kept: every earlier wording of a post is stored when it
+is replaced, so nothing that was said is lost, and the "Edited" note means a reader always
+knows the text is not what was first posted. The earlier wordings are not shown anywhere yet
+— there is no "see previous versions" — but they are there if they are ever needed.
 
 ### 2.7 The team — profiles and internal chat
 
@@ -220,7 +229,13 @@ can be *Do not disturb* with no status, or *Active* while *At lunch*.
   it; a newcomer sees the whole history, including what was said before they joined. Anyone
   can leave a group, and then no longer sees it.
 
-A message is text only, and like an update it cannot be edited or deleted once sent. A
+A message is text only. Like an update (§2.6), **its sender can edit it, and nobody can
+delete it.** On your own messages an *Edit* link appears when you point at the message — and
+always on a touch screen, which cannot point. The message is changed where it stands, in
+its place in the conversation, and shows *Edited* beside its time; pointing at that says
+when. Every earlier wording is kept, but not shown anywhere yet. An edit is not a new
+message: nobody is told, it plays no chime and makes nothing unread. You can only edit a
+message in a conversation you are still in. A
 message counts as unread for a member until they have had the conversation open on screen;
 your own messages are never unread to you.
 
@@ -1278,12 +1293,12 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Roles and permissions | **Not built** | Every signed-in user has full access to everything — see §9, open question 5 |
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
-| §2.6 Updates | **Built** | Append-only feed per property and per client, with `@Name` mentions rendered as a highlight. No notification is sent — see §9 |
+| §2.6 Updates | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. No deleting. No notification is sent — see §9 |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
 | §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |
 | §2.7 Status in your own words | **Built** | Emoji and up to 64 characters, six ready-made ones, and a choice of when it stops showing — including a custom date and time, or never |
-| §2.7 Chat | **Built** | Private conversations and named groups, text only, with unread counts. Checks for new messages every few seconds rather than instantly |
+| §2.7 Chat | **Built** | Private conversations and named groups, text only, with unread counts. Checks for new messages every few seconds rather than instantly. The sender can edit a message, which then shows *Edited*; earlier wordings are kept but not shown. No deleting |
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
@@ -1357,3 +1372,10 @@ Recorded here rather than silently: each is a place where building it changed ou
    mid-morning public transport departure — where being an hour out changes nothing a rep
    would notice. A real lookup is another paid Google service for a number that never
    reaches the screen.
+10. **An update, and a chat message, can be edited by its author** (§2.6, §2.7), where both
+   were first specified as unchangeable once posted, like the ledger. Reps asked to be able
+   to correct what they wrote. What the original rule protected — that what was said is
+   never lost — is kept by storing every replaced wording, and a reader is always told when
+   something has been edited.
+
+

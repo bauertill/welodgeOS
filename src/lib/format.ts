@@ -105,3 +105,18 @@ export function formatUntil(until: Date, now = new Date()) {
   }
   return `until ${dayTimeFormat.format(until)}`;
 }
+
+const dayMonthFormat = new Intl.DateTimeFormat("en-CH", { day: "numeric", month: "short" });
+
+/** "today at 14:05", "yesterday at 09:12", "25 Sept at 09:12" — in the reader's time zone. */
+export function formatMomentInWords(moment: Date, now = new Date()) {
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const day =
+    moment.toDateString() === now.toDateString()
+      ? "today"
+      : moment.toDateString() === yesterday.toDateString()
+        ? "yesterday"
+        : dayMonthFormat.format(moment);
+  return `${day} at ${timeFormat.format(moment)}`;
+}

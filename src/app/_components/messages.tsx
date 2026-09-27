@@ -9,7 +9,7 @@ import { Button, Field, FormError, Input, Textarea } from "~/app/_components/for
 import { Avatar, PresenceDot } from "~/app/_components/team-directory";
 import { UnreadBadge } from "~/app/_components/team-menu";
 import { CustomStatusText } from "~/app/_components/status-dialog";
-import { formatMoment, formatUntil } from "~/lib/format";
+import { formatMoment, formatMomentInWords, formatUntil } from "~/lib/format";
 import { personName, presenceLabels, presencePollMs, threadPollMs, unreadPollMs, type Presence } from "~/lib/team";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -304,6 +304,17 @@ function Thread({ id, myId }: { id: string; myId: string }) {
   );
   const [body, setBody] = useState("");
   const [showMembers, setShowMembers] = useState(false);
+  const [editing, setEditing] = useState<{ messageId: string; body: string } | null>(null);
+  const edit = api.chat.edit.useMutation({
+    onSuccess: () => {
+      setEditing(null);
+      void utils.chat.messages.invalidate({ conversationId: id });
+      void utils.chat.conversations.invalidate();
+    },
+  });
+  const saveEdit = () => {
+    if (editing?.body.trim() && !edit.isPending) edit.mutate(editing);
+  };
   const bottom = useRef<HTMLDivElement>(null);
 
   const markRead = api.chat.markRead.useMutation({
@@ -416,21 +427,73 @@ function Thread({ id, myId }: { id: string; myId: string }) {
           const showAuthor =
             conversation.data.isGroup && !mine && previous?.author?.id !== message.author?.id;
           return (
-            <div key={message.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+            <div key={message.id} className={`group flex flex-col ${mine ? "items-end" : "items-start"}`}>
               {showAuthor && (
                 <span className="text-ink-500 mb-0.5 px-1 text-[11px] font-medium">
                   {message.author ? personName(message.author) : "Former colleague"}
                 </span>
               )}
-              <div
-                className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm font-light break-words whitespace-pre-line ${
-                  mine ? "bg-brand-400 text-white" : "bg-ink-50 text-ink-900"
-                }`}
-              >
-                {message.body}
-              </div>
-              <span className="text-ink-500 mt-0.5 px-1 text-[10px] font-light">
+              {editing?.messageId === message.id ? (
+                <div className="w-full max-w-[80%]">
+                  <Textarea
+                    value={editing.body}
+                    onChange={(e) => setEditing({ messageId: message.id, body: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        saveEdit();
+                      }
+                      if (e.key === "Escape") setEditing(null);
+                    }}
+                    rows={2}
+                    autoFocus
+                    aria-label="Edit message"
+                    className="resize-none"
+                  />
+                  <div className="mt-1 flex items-center justify-end gap-2 text-[11px] font-light">
+                    {edit.error && <span className="mr-auto text-[#c03654]">{edit.error.message}</span>}
+                    <span className="text-ink-500">Enter saves · Esc cancels</span>
+                    <Button type="button" variant="secondary" className="px-3 py-1" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      className="px-3 py-1"
+                      disabled={!editing.body.trim() || edit.isPending}
+                      onClick={saveEdit}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm font-light break-words whitespace-pre-line ${
+                    mine ? "bg-brand-400 text-white" : "bg-ink-50 text-ink-900"
+                  }`}
+                >
+                  {message.body}
+                </div>
+              )}
+              <span className="text-ink-500 mt-0.5 flex items-center gap-1.5 px-1 text-[10px] font-light">
                 {formatMoment(message.createdAt)}
+                {message.editedAt && (
+                  <span title={`Edited ${formatMomentInWords(message.editedAt)}`}>· Edited</span>
+                )}
+                {mine && editing?.messageId !== message.id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      edit.reset();
+                      setEditing({ messageId: message.id, body: message.body });
+                    }}
+                    // Shown on hover, so it does not clutter every bubble — and
+                    // always on a touch screen, which has no hover.
+                    className="hover:text-brand-700 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
+                  >
+                    · Edit
+                  </button>
+                )}
               </span>
             </div>
           );

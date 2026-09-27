@@ -411,11 +411,17 @@ model ConversationMember {
   @@index([userId])
 }
 
-/** One chat message. Text only for now; it cannot be edited or deleted. */
+/**
+ * One chat message. Text only for now. Its author can edit it — the earlier
+ * wording is kept in `MessageRevision` — but nobody can delete it.
+ */
 model Message {
   id        String   @id @default(cuid())
   body      String
   createdAt DateTime @default(now())
+  // Set when the author last changed the text (doc §2.7).
+  editedAt  DateTime?
+  revisions MessageRevision[]
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
@@ -424,6 +430,19 @@ model Message {
   authorId String?
 
   @@index([conversationId, createdAt])
+}
+
+/** A wording a chat message had before its author edited it — kept, never shown yet. */
+model MessageRevision {
+  id         String   @id @default(cuid())
+  body       String
+  // When this wording was replaced.
+  replacedAt DateTime @default(now())
+
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+
+  @@index([messageId])
 }
 
 model VerificationToken {
@@ -513,6 +532,10 @@ model Update {
   id        String   @id @default(cuid())
   body      String
   createdAt DateTime @default(now())
+  // Set when the author last changed the text (doc §2.6). Every earlier
+  // wording is kept in `UpdateRevision`, so an edit never loses what was said.
+  editedAt  DateTime?
+  revisions UpdateRevision[]
 
   author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
   authorId String?
@@ -531,6 +554,19 @@ model Update {
 /// (doc §2.1). It is *not* the hotel's room number — that is learned at
 /// allocation time in Phase 3. A slot is a stable identity across events; the
 /// room-nights hanging off it each belong to exactly one event.
+/** A wording an update had before its author edited it — kept, never shown yet. */
+model UpdateRevision {
+  id         String   @id @default(cuid())
+  body       String
+  // When this wording was replaced.
+  replacedAt DateTime @default(now())
+
+  update   Update @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  updateId String
+
+  @@index([updateId])
+}
+
 model RoomSlot {
   id         String @id @default(cuid())
   slotNumber Int

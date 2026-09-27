@@ -10,8 +10,8 @@ import type { db as Db } from "~/server/db";
  * named groups. Unlike everything else in the system, a conversation is only
  * visible to its members — every procedure here checks membership first.
  *
- * Messages are text only and, like Updates (§2.6), cannot be edited or
- * deleted. There is no live connection: an open conversation asks for new
+ * Messages are text only and, like Updates (§2.6), can be edited by their
+ * author — keeping the wording they replaced — but never deleted. There is no live connection: an open conversation asks for new
  * messages every few seconds (see `threadPollMs`).
  */
 
@@ -241,6 +241,43 @@ export const chatRouter = createTRPCRouter({
         data: { lastReadAt: message.createdAt },
       });
       return message;
+    }),
+
+  /**
+   * Change the text of your own message, in a conversation you are still in.
+   * The wording it had is kept, and the message records when it was edited.
+   * An edit is not a new message: it counts as unread for nobody.
+   */
+  edit: protectedProcedure
+    .input(z.object({ messageId: z.string(), body: z.string().max(10_000) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const body = input.body.trim();
+      if (!body) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A message needs some text." });
+      }
+      const message = await ctx.db.message.findUnique({ where: { id: input.messageId } });
+      if (!message) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "This message no longer exists." });
+      }
+      await requireMember(ctx.db, message.conversationId, userId);
+      if (message.authorId !== userId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the person who sent a message can edit it.",
+        });
+      }
+      // Saving the same words is not an edit.
+      if (body === message.body) return message;
+
+      const [, updated] = await ctx.db.$transaction([
+        ctx.db.messageRevision.create({ data: { messageId: message.id, body: message.body } }),
+        ctx.db.message.update({
+          where: { id: message.id },
+          data: { body, editedAt: new Date() },
+        }),
+      ]);
+      return updated;
     }),
 
   /** Mark everything in a conversation as read, because it is on screen. */

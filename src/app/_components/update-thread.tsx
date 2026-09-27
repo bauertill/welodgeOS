@@ -4,22 +4,32 @@ import { useState } from "react";
 
 import { Button } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
-import { formatDay } from "~/lib/format";
+import { formatDay, formatMomentInWords } from "~/lib/format";
 import { renderUpdateBody } from "~/lib/updates";
 import { api } from "~/trpc/react";
 
 type Scope = { propertyId: string; clientId?: undefined } | { clientId: string; propertyId?: undefined };
 
 /**
- * The Updates feed (doc §2.6): a running, append-only history of meeting
- * notes and feedback on a property or a client, with @mentions of colleagues.
- * Newest first, same convention as the inventory ledger.
+ * The Updates feed (doc §2.6): a running history of meeting notes and
+ * feedback on a property or a client, with @mentions of colleagues. Newest
+ * first, same convention as the inventory ledger. An author can edit their
+ * own post, which then says it was edited, and when.
  */
 export function UpdateThread(scope: Scope) {
   const utils = api.useUtils();
   const updates = api.update.list.useQuery(scope);
   const people = api.user.list.useQuery();
+  const me = api.user.me.useQuery();
   const [body, setBody] = useState("");
+  const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
+
+  const edit = api.update.edit.useMutation({
+    onSuccess: () => {
+      setEditing(null);
+      void utils.update.list.invalidate(scope);
+    },
+  });
 
   const post = api.update.post.useMutation({
     onSuccess: () => {
@@ -61,13 +71,62 @@ export function UpdateThread(scope: Scope) {
                 <span className="text-ink-900 text-[13px] font-medium">
                   {entry.author?.name ?? entry.author?.email ?? "—"}
                 </span>
-                <span className="text-ink-500 text-xs font-light whitespace-nowrap">
+                <span className="text-ink-500 flex items-baseline gap-3 text-xs font-light whitespace-nowrap">
+                  {entry.author?.id === me.data?.id && editing?.id !== entry.id && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        edit.reset();
+                        setEditing({ id: entry.id, body: entry.body });
+                      }}
+                      className="hover:text-brand-700 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  )}
                   {formatDay(entry.createdAt)}
                 </span>
               </div>
-              <p className="text-ink-700 mt-1 text-sm font-light whitespace-pre-line">
-                {renderUpdateBody(entry.body)}
-              </p>
+
+              {editing?.id === entry.id ? (
+                <div className="mt-2">
+                  <MentionTextarea
+                    value={editing.body}
+                    onChange={(value) => setEditing({ id: entry.id, body: value })}
+                    people={people.data ?? []}
+                    rows={3}
+                  />
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    {edit.error && (
+                      <p className="mr-auto text-xs text-[#c03654]">{edit.error.message}</p>
+                    )}
+                    <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={!editing.body.trim() || edit.isPending}
+                      onClick={() => edit.mutate(editing)}
+                    >
+                      {edit.isPending ? "Saving…" : "Save"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-ink-700 mt-1 text-sm font-light whitespace-pre-line">
+                    {renderUpdateBody(entry.body)}
+                  </p>
+                  {entry.editedAt && (
+                    <p
+                      className="text-ink-500 mt-1 text-[11px] font-light italic"
+                      title={entry.editedAt.toLocaleString("en-CH")}
+                    >
+                      Edited {formatMomentInWords(entry.editedAt)}
+                    </p>
+                  )}
+                </>
+              )}
             </li>
           ))}
         </ul>
