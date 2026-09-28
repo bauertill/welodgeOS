@@ -148,7 +148,8 @@ export const clientRouter = createTRPCRouter({
         take: 300,
         include: {
           accountManager: person,
-          _count: { select: { roomNights: true, requests: true, contacts: true } },
+          // Only nights sold to the client — not blocked, not cancelled.
+          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, requests: true, contacts: true } },
           contacts: q ? { where: contactMatch, orderBy: { name: "asc" }, take: 5, select: { id: true, name: true, title: true } } : false,
         },
       });
@@ -183,7 +184,7 @@ export const clientRouter = createTRPCRouter({
         include: {
           accountManager: person,
           contacts: { orderBy: { name: "asc" }, include: { accountManager: person } },
-          _count: { select: { roomNights: true, requests: true } },
+          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, requests: true } },
         },
       }),
     ),

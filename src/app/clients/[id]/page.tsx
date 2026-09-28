@@ -55,7 +55,7 @@ export default async function ClientPage({
               At a glance
             </h2>
             <dl className="space-y-2 text-sm font-light">
-              <Row label="Room-nights held" value={String(client._count.roomNights)} />
+              <Row label="Room-nights sold" value={String(client._count.roomNights)} />
               <Row label="Requests open" value={String(client._count.requests)} />
             </dl>
           </Card>

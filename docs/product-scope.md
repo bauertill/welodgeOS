@@ -1088,6 +1088,11 @@ the other.
 
 Up to 300 results show at a time; a search narrows them.
 
+Beside each client, the list shows its category, account manager and number of contacts,
+the **room-nights sold** — nights the client has bought from us; nights they have only
+blocked, and cancelled ones, are not counted — and the requests open. The client's own
+page shows the same two figures.
+
 The category, type and priority lists are a first draft taken from the monday board; they
 are expected to change once the team has used them.
 
