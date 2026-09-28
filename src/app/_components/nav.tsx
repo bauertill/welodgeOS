@@ -8,12 +8,12 @@ import { EventsPanel } from "~/app/_components/events-panel";
 
 // Properties has no standalone section — a property belongs to the event(s)
 // it is scouted for, so it is browsed and managed from inside an event's own
-// tab, not as a global list (doc §3.5).
+// tab, not as a global list (doc §3.5). Providers follow the same rule: a
+// chain is reached through its properties on an event (doc §3.9).
 export const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/events", label: "Events" },
   { href: "/clients", label: "Clients" },
-  { href: "/providers", label: "Providers" },
 ] as const;
 
 /** Sign-in lives inside the shell but without its navigation. */

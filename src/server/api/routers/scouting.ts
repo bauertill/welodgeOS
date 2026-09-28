@@ -238,6 +238,8 @@ export const scoutingRouter = createTRPCRouter({
         status: z.enum(SCOUTING_STATUSES).optional(),
         type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]).optional(),
         amenityIds: z.array(z.string()).default([]),
+        /** One chain's properties on this event (doc §3.9). */
+        providerId: z.string().optional(),
       }),
     )
     .query(({ ctx, input }) =>
@@ -247,6 +249,7 @@ export const scoutingRouter = createTRPCRouter({
           status: input.status,
           property: {
             type: input.type,
+            providerId: input.providerId,
             // Every selected amenity must be present, not just one of them —
             // the filter narrows the list rather than widening it.
             ...(input.amenityIds.length

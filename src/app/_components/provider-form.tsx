@@ -5,72 +5,15 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button, Field, Fieldset, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
-import { EmptyState, Table, Td, Th } from "~/app/_components/ui";
 import { contractingFields, type ContractingKey } from "~/lib/contracting";
 import { propertyTypeLabels } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
-
-/** Every provider, and a quick way to add one (doc §3.9). */
-export function ProviderList() {
-  const router = useRouter();
-  const providers = api.provider.list.useQuery();
-  const [name, setName] = useState("");
-  const create = api.provider.create.useMutation({
-    onSuccess: (provider) => router.push(`/providers/${provider.id}`),
-  });
-
-  return (
-    <div className="space-y-6">
-      <form
-        className="flex max-w-xl gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          create.mutate({ name });
-        }}
-      >
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Marriott International" aria-label="New provider" />
-        <Button type="submit" disabled={!name.trim() || create.isPending}>
-          Add provider
-        </Button>
-      </form>
-      <FormError message={friendlyError(create.error)} />
-
-      {providers.data && providers.data.length === 0 ? (
-        <EmptyState
-          title="No providers yet"
-          description="Add a chain or group here, or from a property's form, then choose it on each of its properties."
-        />
-      ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>Provider</Th>
-              <Th>Properties</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {(providers.data ?? []).map((provider) => (
-              <tr key={provider.id}>
-                <Td>
-                  <Link href={`/providers/${provider.id}`} className="hover:text-brand-700 font-medium">
-                    {provider.name}
-                  </Link>
-                </Td>
-                <Td>{provider._count.properties}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-    </div>
-  );
-}
 
 type Provider = NonNullable<RouterOutputs["provider"]["byId"]>;
 type ContactDraft = { name: string; role: string; email: string; phone: string };
 
 /** A provider's own details: contacts and contracting details its properties can fall back on. */
-export function ProviderForm({ provider }: { provider: Provider }) {
+export function ProviderForm({ provider, backTo }: { provider: Provider; backTo?: string }) {
   const router = useRouter();
   const [name, setName] = useState(provider.name);
   const [website, setWebsite] = useState(provider.website ?? "");
@@ -94,7 +37,7 @@ export function ProviderForm({ provider }: { provider: Provider }) {
       router.refresh();
     },
   });
-  const remove = api.provider.remove.useMutation({ onSuccess: () => router.push("/providers") });
+  const remove = api.provider.remove.useMutation({ onSuccess: () => router.push(backTo ?? "/events") });
 
   const setContact = (index: number, patch: Partial<ContactDraft>) => {
     setSaved(false);
@@ -205,7 +148,10 @@ export function ProviderForm({ provider }: { provider: Provider }) {
           <ul className="space-y-1 text-sm">
             {provider.properties.map((property) => (
               <li key={property.id}>
-                <Link href={`/properties/${property.id}`} className="hover:text-brand-700">
+                <Link
+                  href={`/properties/${property.id}${backTo ? `?back=${encodeURIComponent(backTo)}` : ""}`}
+                  className="hover:text-brand-700"
+                >
                   {property.name}
                 </Link>
                 <span className="text-ink-500 font-light">

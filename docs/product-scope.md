@@ -657,6 +657,15 @@ contracting details** — the same fields as a property's — entered once:
 Most properties will have their own details and leave the provider's empty; the fallback is
 for the exception, not the rule.
 
+**Providers are reached through an event, not from the menu.** Like a property (§3.5), a
+provider is entered once and shared by every event its hotels are on, but it has no section
+of its own: everything about properties is worked on inside an event. A provider is opened
+from its name — on a property's row on the Properties tab, in the side panel, or on the
+property's page — and its page's back link returns to that event. On the Properties tab,
+**Every provider** filters the list down to one chain's hotels on this event. A provider is
+added from a property's form, and renamed, given contacts and contracting details, or
+deleted on its own page.
+
 **2. Agreed for this event — per event, never overwriting another event's.** These live
 on the property's entry in the event's list (§3.5), beside its status:
 
@@ -1629,7 +1638,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group shows its properties / room categories and status and type mix bars, and collapses. A property's group is chosen in its row |
-| §3.9 Providers | **Built** | A page listing them (Providers, in the menu) and one per provider with its contracting details, contacts and properties. Chosen on a property's form, or added from there. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
+| §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row and the group header |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: rate per night and currency, rate include, TOT, other applicable tax, applicable period. Size and notes per category on the property's form |

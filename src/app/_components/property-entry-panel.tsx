@@ -242,7 +242,7 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
 
             <section>
               <h3 className="text-ink-900 mb-3 text-[15px] font-medium">About the property</h3>
-              <PropertyFacts property={property} />
+              <PropertyFacts property={property} backTo={`/events/${entry.data.eventId}`} />
               <PendingLink
                 href={`/properties/${property.id}`}
                 className="text-brand-700 mt-3 inline-block text-[13px] font-light hover:underline"

@@ -41,14 +41,17 @@ const linkish = (value: string | null) =>
   );
 
 /** The property itself: provider, year built, general email, video, times, services. */
-export function PropertyFacts({ property }: { property: PropertyLike }) {
+export function PropertyFacts({ property, backTo }: { property: PropertyLike; backTo?: string }) {
   return (
     <dl className="space-y-2 text-sm font-light">
       <DetailRow
         label="Provider"
         value={
           property.provider ? (
-            <Link href={`/providers/${property.provider.id}`} className="text-brand-700 hover:underline">
+            <Link
+              href={`/providers/${property.provider.id}${backTo ? `?back=${encodeURIComponent(backTo)}` : ""}`}
+              className="text-brand-700 hover:underline"
+            >
               {property.provider.name}
             </Link>
           ) : null

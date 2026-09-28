@@ -245,7 +245,7 @@ export default async function PropertyPage({
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
               More about the property
             </h2>
-            <PropertyFacts property={property} />
+            <PropertyFacts property={property} backTo={cameFrom ? `/events/${cameFrom.event.id}` : undefined} />
           </Card>
 
           <Card>

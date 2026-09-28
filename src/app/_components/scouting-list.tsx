@@ -63,6 +63,8 @@ export function ScoutingList({
   const [view, setView] = useState<"list" | "map">("list");
   const [status, setStatus] = useState<SelectableScoutingStatus | "">("");
   const [type, setType] = useState<PropertyType | "">("");
+  const [providerId, setProviderId] = useState("");
+  const providers = api.provider.list.useQuery();
   const [amenityIds, setAmenityIds] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -71,6 +73,7 @@ export function ScoutingList({
     status: status || undefined,
     type: type || undefined,
     amenityIds,
+    providerId: providerId || undefined,
   });
 
   const setStatusMutation = api.scouting.setStatus.useMutation({
@@ -258,7 +261,17 @@ export function ScoutingList({
                           </button>
                         </span>
                         <span className="text-ink-500 block text-xs font-light">
-                          {property.provider ? `${property.provider.name} · ` : ""}
+                          {property.provider && (
+                            <>
+                              <PendingLink
+                                href={`/providers/${property.provider.id}?back=${encodeURIComponent(`/events/${eventId}`)}`}
+                                className="hover:text-brand-700 hover:underline"
+                              >
+                                {property.provider.name}
+                              </PendingLink>
+                              {" · "}
+                            </>
+                          )}
                           {propertyTypeLabels[property.type]}
                           {property.stars ? ` · ${property.stars}-star` : ""}
                         </span>
@@ -452,6 +465,17 @@ export function ScoutingList({
           <option value="APARTMENT">Apartments only</option>
           <option value="APARTHOTEL">Aparthotels only</option>
         </Select>
+
+        {(providers.data ?? []).length > 0 && (
+          <Select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="w-auto" aria-label="Provider">
+            <option value="">Every provider</option>
+            {(providers.data ?? []).map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.name}
+              </option>
+            ))}
+          </Select>
+        )}
 
         <span className="text-ink-500 ml-auto text-[13px] font-light">
           {entries.isLoading
