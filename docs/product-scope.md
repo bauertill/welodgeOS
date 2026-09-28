@@ -543,7 +543,8 @@ Decluttering the map so our own pins stand out is a change made there, not here.
 
 **Room categories on the tab.** Opening a property's row shows its room categories as a
 table in Monday's column order, with each category's contract status and rooms available
-after them. **Edit rate** on a row edits that category's rate per night (with its currency),
+after them. **Edit rate** on a row edits that category's **buying rate** — what we pay the
+hotel per night, as contracted — with its currency,
 what the rate includes, TOT, other applicable tax and applicable period for this event, in
 place; a TOT that is not a percentage, or a rate that is not a number, is refused with the
 reason. Units, size, bed configuration and notes are the property's own and are changed on
@@ -711,7 +712,7 @@ categories here as everywhere else in the system (§3.2). Columns, in Monday's o
 
 | Column | Kind | Here |
 | --- | --- | --- |
-| Rate per night | per event | Amount and currency (never a float, §4.5) — *new* |
+| Buying rate | per event | What we pay the hotel per night, as contracted for this event: amount and currency (never a float, §4.5) — *new*. Monday calls it *Rate per night* |
 | Rate include | per event | Free text, e.g. "TOT & TMD" — *new* |
 | TOT | per event | A percentage, e.g. 15.00% — *new* |
 | Other applicable tax | per event | Free text, e.g. "TMD: 6.25 USD (ADR 200–…)" — *new* |
@@ -722,8 +723,10 @@ categories here as everywhere else in the system (§3.2). Columns, in Monday's o
 | Notes | the property's | Free text — *new* |
 
 The per-event ones live with the category's contract status for that event (§3.5), so an
-LA28 rate never overwrites an EXPO 2030 rate for the same room type. The indicative price
-range from scouting (§3.2) stays as it is, for categories with no rate yet.
+LA28 rate never overwrites an EXPO 2030 rate for the same room type. The indicative,
+Booking-style price range from scouting (§3.2) is kept, but **shown only on the property's
+own page**, labelled indicative: on the Properties tab a rate always means the buying rate,
+so the tab's old *From* column, which showed the indicative price, is gone.
 
 #### What is deliberately not in the first version
 
@@ -1444,7 +1447,11 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
    split/merge is not a single operation (§4.8).*
 3. **Contracted vs indicative price.** Should a negotiated rate live on the category
    (a rate card per event) with the night-level price as an override, rather than being
-   entered per night?
+   entered per night? *Half answered: the rate card now exists — each room category's
+   buying rate per event, on the Properties tab (§3.9). But the nights do not use it yet:
+   the stock sheet's buy price is still entered per night, and the financials (§7) read
+   only that. Open: should a night with no buy price of its own take its category's buying
+   rate?*
 4. **Roles and permissions.** Is the "We Lodge Rep" an accountability label only, or does
    it gate who may sell/buy/release?
 5. **Overbooking policy.** Do we ever deliberately sell more than we hold at a category
@@ -1642,7 +1649,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
-| §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: rate per night and currency, rate include, TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
+| §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include, TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
 | §3.9 Nearby dining and convenience store | **Built, not yet seen working** | Built to Google's Places service and tested only without a key (the laptop has none); needs Places switched on for the live key. Travel times to the event's places of interest also shown in the side panel |
 | §3.9 Monday import | **Not built** | Decided later, as agreed |

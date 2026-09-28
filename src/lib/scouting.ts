@@ -166,28 +166,6 @@ export function totalUnits(categories: { unitCount: number }[]): number {
   return categories.reduce((sum, category) => sum + category.unitCount, 0);
 }
 
-type PricedCategory = {
-  indicativePriceMinCents: number | null;
-  indicativePriceMaxCents: number | null;
-  currency: string;
-};
-
-/**
- * The category with the lowest indicative starting price, which is what
- * "from USD x" means on a row — the low end of its range, since the range
- * itself is indicative only (doc §3.2, §3.3).
- */
-export function cheapestCategory<T extends PricedCategory>(
-  categories: T[],
-): T | undefined {
-  return categories
-    .filter((category) => category.indicativePriceMinCents !== null)
-    .sort(
-      (a, b) =>
-        (a.indicativePriceMinCents ?? 0) - (b.indicativePriceMinCents ?? 0),
-    )[0];
-}
-
 // --- Groups on the Properties tab (doc §3.9) ---------------------------------
 
 /** The group palette: each colour legible as text on the page and as a bar. */

@@ -16,11 +16,9 @@ import {
   Td,
   Th,
 } from "~/app/_components/ui";
-import { formatMoney } from "~/lib/format";
 import {
   categoryContractStatusLabels,
   categoryContractStatusOrder,
-  cheapestCategory,
   nearestPlace,
   propertyTypeLabels,
   scoutingStatusHints,
@@ -175,7 +173,6 @@ export function ScoutingList({
 
   const renderEntry = (entry: (typeof rows)[number]) => {
               const property = entry.property;
-              const cheapest = cheapestCategory(property.categories);
               const units =
                 totalUnits(property.categories) || property.totalRooms || 0;
               const nearest = nearestPlace(
@@ -308,14 +305,6 @@ export function ScoutingList({
                     {!property.area && !property.city && "—"}
                   </Td>
                   <Td>{units || "—"}</Td>
-                  <Td>
-                    {cheapest
-                      ? formatMoney(
-                          cheapest.indicativePriceMinCents!,
-                          cheapest.currency,
-                        )
-                      : "—"}
-                  </Td>
                   {venues.length > 0 && (
                     <Td>
                       {nearest === null ? (
@@ -394,7 +383,7 @@ export function ScoutingList({
 
                 {categoryOpen && hasCategories && (
                   <tr>
-                    <Td colSpan={venues.length > 0 ? 10 : 9}>
+                    <Td colSpan={venues.length > 0 ? 9 : 8}>
                       <RoomCategoryTable
                         scoutingEntryId={entry.id}
                         propertyId={property.id}
@@ -582,7 +571,6 @@ export function ScoutingList({
                   <Th>Account manager</Th>
                   <Th>Location</Th>
                   <Th>Rooms</Th>
-                  <Th>From</Th>
                   {venues.length > 0 && <Th>To venue</Th>}
                   <Th>Amenities</Th>
                   <Th>Status</Th>

@@ -114,7 +114,7 @@ export const scoutingRouter = createTRPCRouter({
       const { scoutingEntryId, categoryId, ...terms } = input;
       const text = (value: string) => (value.trim() ? value.trim() : null);
       if (terms.ratePerNightCents !== null && !terms.rateCurrency) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Say which currency the rate is in." });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Say which currency the buying rate is in." });
       }
       const data = {
         ratePerNightCents: terms.ratePerNightCents,

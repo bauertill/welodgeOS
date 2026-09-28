@@ -78,7 +78,9 @@ export function RoomCategoryTable({
           <thead className="bg-ink-50/60">
             <tr>
               <th className={th}>Room category</th>
-              <th className={th}>Rate per night</th>
+              <th className={th} title="What we pay the hotel per night, as contracted for this event. The indicative, Booking-style price is on the property's own page.">
+                Buying rate
+              </th>
               <th className={th}>Rate include</th>
               <th className={th}>TOT</th>
               <th className={th}>Other applicable tax</th>
@@ -215,7 +217,7 @@ function EditRow({
     const rateNumber = rate.trim() ? Number(rate.replace(",", ".")) : null;
     const totNumber = tot.trim() ? Number(tot.replace(",", ".").replace("%", "")) : null;
     if (rateNumber !== null && (!Number.isFinite(rateNumber) || rateNumber < 0)) {
-      setProblem("The rate should be a number, like 281.50.");
+      setProblem("The buying rate should be a number, like 281.50.");
       return;
     }
     if (totNumber !== null && (!Number.isFinite(totNumber) || totNumber < 0 || totNumber > 100)) {
@@ -241,7 +243,7 @@ function EditRow({
       <td className={`${td} text-ink-900 pt-3 text-[13px] font-medium whitespace-nowrap`}>{category.name}</td>
       <td className={td}>
         <div className="flex gap-1">
-          <Input value={rate} onChange={(e) => setRate(e.target.value)} placeholder="281.50" inputMode="decimal" className="w-24 py-1 text-[13px]" aria-label="Rate per night" autoFocus />
+          <Input value={rate} onChange={(e) => setRate(e.target.value)} placeholder="281.50" inputMode="decimal" className="w-24 py-1 text-[13px]" aria-label="Buying rate" autoFocus />
           <Select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-20 py-1 text-[12px]" aria-label="Currency">
             {(CURRENCIES.includes(currency) ? CURRENCIES : [currency, ...CURRENCIES]).map((option) => (
               <option key={option}>{option}</option>
