@@ -105,6 +105,7 @@ export function ScoutingList({
   });
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [openEntry, setOpenEntry] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState<Set<string>>(new Set());
   const sections = [
     ...(groups.data ?? []).map((group) => ({
       group,
@@ -407,8 +408,29 @@ export function ScoutingList({
                           })
                         }
                       />
+                      {/* The history only grows, so it is behind a button rather
+                          than always open under the room categories. */}
                       <div className="border-ink-200/60 mt-3 ml-5 border-t pt-3">
-                        <ScoutingActivityLog scoutingEntryId={entry.id} />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setHistoryOpen((current) => {
+                              const next = new Set(current);
+                              if (next.has(entry.id)) next.delete(entry.id);
+                              else next.add(entry.id);
+                              return next;
+                            })
+                          }
+                          aria-expanded={historyOpen.has(entry.id)}
+                          className="text-brand-700 text-[13px] font-light hover:underline"
+                        >
+                          {historyOpen.has(entry.id) ? "Hide history" : "View history"}
+                        </button>
+                        {historyOpen.has(entry.id) && (
+                          <div className="mt-3">
+                            <ScoutingActivityLog scoutingEntryId={entry.id} />
+                          </div>
+                        )}
                       </div>
                     </Td>
                   </tr>

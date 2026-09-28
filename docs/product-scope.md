@@ -560,6 +560,10 @@ place; a TOT that is not a percentage, or a rate that is not a number, is refuse
 reason. Units, size, bed configuration and notes are the property's own and are changed on
 its form, which the table links to.
 
+Below a property's room categories, **View history** opens the record of changes to this
+property on this event — status, terms, rates — and **Hide history** closes it; it is not
+shown open, since it only ever grows.
+
 **Fill from room categories.** In the side panel, this button drafts *Applicable period* and
 *Rates include* from the room categories — one line per category ("King Room: 10 Jul – 31
 Jul 2028"), or a single line when every category says the same — and asks before
