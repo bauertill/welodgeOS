@@ -833,6 +833,15 @@ model SalesRequest {
   cancellationPolicy     String?
   otherServices          String?
 
+  /// The private link a client opens to fill in their own contracting
+  /// details (doc §4.11): the unguessable part of its address. Empty means no
+  /// link, or one switched off; a new link gets a new code, so an old one
+  /// stops working.
+  contractingToken       String?   @unique
+  contractingLinkMadeAt  DateTime?
+  /// When the client last sent the form.
+  contractingSubmittedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

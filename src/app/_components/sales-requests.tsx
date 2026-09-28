@@ -11,7 +11,7 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Card, EmptyState } from "~/app/_components/ui";
 import { daysUntil, dayKey, today } from "~/lib/dates";
-import { formatDate, formatMoney } from "~/lib/format";
+import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import {
   closedStages,
   contractingFields,
@@ -170,6 +170,7 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
               <th className={th}>Event</th>
               <th className={th}>What they need</th>
               <th className={th}>Period</th>
+              <th className={th} title="The client's room-nights on this event, from the inventory">Rooms</th>
               <th className={th}>Follow up</th>
               <th className={th}>Account manager</th>
               <th className={th}>Days open</th>
@@ -190,6 +191,16 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                 </td>
                 <td className={`${td} max-w-44`}>
                   <span className="line-clamp-2">{request.period ?? "—"}</span>
+                </td>
+                <td className={`${td} whitespace-nowrap`}>
+                  {request.nightsSold || request.nightsBlocked ? (
+                    <>
+                      {request.nightsSold > 0 && <span className="block">{request.nightsSold} nights sold</span>}
+                      {request.nightsBlocked > 0 && <span className="text-brand-800 block">{request.nightsBlocked} blocked</span>}
+                    </>
+                  ) : (
+                    <span className="text-ink-500">—</span>
+                  )}
                 </td>
                 <td className={td}>
                   <FollowUp on={request.followUpOn} closed={isClosed(request.stage)} />
@@ -440,11 +451,14 @@ function TextSection<K extends InterestKey | ContractingKey>({
   title,
   fields,
   empty,
+  extra,
 }: {
   request: FullRequest;
   title: string;
   fields: readonly { key: K; label: string; placeholder?: string }[];
   empty: string;
+  /** Shown under the fields, and while editing too. */
+  extra?: React.ReactNode;
 }) {
   const saved = useSaved();
   const save = api.sales.update.useMutation();
@@ -474,6 +488,7 @@ function TextSection<K extends InterestKey | ContractingKey>({
           ))}
         </dl>
       )}
+      {extra}
     </EditableCard>
   );
 }
@@ -515,6 +530,82 @@ function TextEditor<K extends string>({
       </div>
       <SaveButtons pending={pending} onCancel={onCancel} error={error} />
     </form>
+  );
+}
+
+/**
+ * The private link for the client to fill in their own company details and
+ * who signs (doc §4.11): made, copied and switched off here.
+ */
+function ContractingLink({ request }: { request: FullRequest }) {
+  const saved = useSaved();
+  const make = api.sales.makeContractingLink.useMutation({ onSuccess: saved });
+  const off = api.sales.switchOffContractingLink.useMutation({ onSuccess: saved });
+  const [copied, setCopied] = useState(false);
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const url = request.contractingToken ? `${origin}/contracting/${request.contractingToken}` : null;
+  const error = make.error ?? off.error;
+
+  return (
+    <div className="border-ink-200/60 mt-4 border-t pt-4">
+      <p className="text-ink-900 text-[13px] font-medium">Link for the client</p>
+      {request.contractingSubmittedAt && (
+        <p className="mt-1 text-xs font-light text-[#0a7a47]">
+          The client sent their details {formatDate(request.contractingSubmittedAt)} — check them above.
+        </p>
+      )}
+      {url ? (
+        <>
+          <p className="text-ink-500 mt-1 text-xs font-light">
+            Send this to the client instead of the Word form. It asks only for their company details, who signs, and
+            their contact persons — never our terms or notes — and what they send lands here.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="bg-ink-50 text-ink-700 max-w-full truncate rounded px-2 py-1 text-xs">{url}</code>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(url).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+              }}
+              className="text-brand-700 text-xs font-medium hover:underline"
+            >
+              {copied ? "Copied" : "Copy link"}
+            </button>
+            <a href={url} target="_blank" rel="noreferrer" className="text-brand-700 text-xs font-light hover:underline">
+              Open ↗
+            </a>
+            <button
+              type="button"
+              disabled={off.isPending}
+              onClick={() => off.mutate({ id: request.id })}
+              className="text-xs font-light text-[#c03654] hover:underline"
+            >
+              Switch off
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="mt-1">
+          <p className="text-ink-500 text-xs font-light">
+            A private web page where the client fills in their company details and who signs, instead of the Word form.
+            No sign-in; anyone with the link can open it, so send it only to the client.
+          </p>
+          <button
+            type="button"
+            disabled={make.isPending}
+            onClick={() => make.mutate({ id: request.id })}
+            className="text-brand-700 mt-2 text-[13px] font-medium hover:underline"
+          >
+            {make.isPending ? "Making the link…" : request.contractingLinkMadeAt ? "Make a new link" : "Make a link"}
+          </button>
+        </div>
+      )}
+      {error && <FormError message={friendlyError(error)} />}
+    </div>
   );
 }
 
@@ -777,11 +868,13 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           <TextSection request={request} title="Initial interest" fields={interestFields} empty="Nothing recorded yet — Edit to add what the client asked for." />
+          <RoomsCard request={request} />
           <TextSection
             request={request}
             title="Contracting details"
             fields={contractingFields}
             empty="None yet. These are what the lawyers need to draw up the contract — the client's legal name, address, VAT and registration numbers, and who signs."
+            extra={<ContractingLink request={request} />}
           />
         </div>
         <div className="space-y-5">
@@ -790,6 +883,91 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
       </div>
     </div>
+  );
+}
+
+const roomStateLabels = { SOLD: "Sold", BLOCKED: "Blocked", REQUESTED: "Requested" } as const;
+const roomStateStyles = {
+  SOLD: "bg-[#e3f8ee] text-[#0a7a47]",
+  BLOCKED: "bg-brand-50 text-brand-800",
+  REQUESTED: "bg-[#fff4e0] text-[#a15c00]",
+} as const;
+
+/**
+ * The rooms behind the request (doc §4.11): this client's room-nights on the
+ * request's event, as the inventory has them right now.
+ */
+function RoomsCard({ request }: { request: FullRequest }) {
+  const rooms = api.sales.rooms.useQuery({ id: request.id });
+  const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
+  const td = "border-ink-200/40 border-b px-3 py-2 align-top text-[13px] font-light";
+  const data = rooms.data;
+  return (
+    <Card>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-ink-900 text-[15px] font-medium">Rooms</h2>
+        {data && (
+          <Link href={`/events/${data.eventId}/inventory`} className="text-brand-700 text-[13px] font-light hover:underline">
+            Open the event&apos;s inventory
+          </Link>
+        )}
+      </div>
+      {rooms.isLoading ? (
+        <p className="text-ink-500 text-sm font-light">…</p>
+      ) : data === null ? (
+        <p className="text-ink-500 text-sm font-light">Choose the event under Details to see the rooms the client has asked for, blocked or bought.</p>
+      ) : !data || data.rows.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">
+          No rooms for {request.client.name} on {request.event?.name} yet. They appear here once rooms are requested, blocked or
+          sold to the client in the event&apos;s inventory.
+        </p>
+      ) : (
+        <>
+          <div className="border-ink-200/60 overflow-x-auto rounded-lg border">
+            <table className="w-full text-left">
+              <thead className="bg-ink-50/60">
+                <tr>
+                  <th className={th}>Where</th>
+                  <th className={th}>Status</th>
+                  <th className={th}>Rooms</th>
+                  <th className={th}>Nights</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => (
+                  <tr key={`${row.propertyId}-${row.categoryName}-${row.state}`}>
+                    <td className={`${td} text-ink-900`}>
+                      <Link href={`/properties/${row.propertyId}`} className="hover:text-brand-700">
+                        {row.propertyName}
+                      </Link>
+                      <span className="text-ink-500 block text-xs">{row.categoryName}</span>
+                    </td>
+                    <td className={td}>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${roomStateStyles[row.state]}`}>{roomStateLabels[row.state]}</span>
+                      {row.blockExpiry && (
+                        <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">until {formatDate(row.blockExpiry)}</span>
+                      )}
+                    </td>
+                    <td className={`${td} whitespace-nowrap`}>
+                      {row.rooms}
+                      <span className="text-ink-500 block text-xs">{row.nights} room-nights</span>
+                    </td>
+                    <td className={`${td} whitespace-nowrap`}>
+                      {row.from.getTime() === row.to.getTime() ? formatDate(row.from) : formatRange(row.from, row.to)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-ink-500 mt-2 text-xs font-light">
+            Every room-night {request.client.name} has on {request.event?.name}, from the inventory. &ldquo;Nights&rdquo; runs from the
+            first night to the last; there may be gaps between. If the client has more than one request for this event, each
+            shows the same rooms.
+          </p>
+        </>
+      )}
+    </Card>
   );
 }
 

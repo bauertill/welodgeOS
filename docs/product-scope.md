@@ -1123,11 +1123,11 @@ read-only mail access, kept to the Workspace (`docs/todos.md`).
 
 ### 4.11 Sales requests — from first interest to signed
 
-> **Partly built.** Registering a request, its stages, follow-ups and contracting details,
-> the list, and each request's page exist. **The link for a client to fill in their own
-> contracting details is specified, not built**, and a request is not yet tied to the
-> room-nights it asks for (§12). Nothing has been imported from monday.com's *Sales
-> Requests* board (199 deals).
+> **Built.** Registering a request, its stages, follow-ups and contracting details, the
+> list, each request's page, the link for a client to fill in their own contracting
+> details, and the rooms behind a request. Nothing has been imported into the live system
+> from monday.com's *Sales Requests* board (199 deals); four were copied into a laptop's
+> own database as test data only.
 
 **A sales request is a client's interest in accommodation, followed from the first enquiry
 to its end.** It replaces monday's *Sales Requests* board, which calls one a *deal*. It is
@@ -1138,7 +1138,18 @@ follow up with, and for whom we still need to find units.
 
 It is the commercial conversation, not the rooms. A room-night's own *Requested* (§4.2) is
 a soft claim on one particular night; a sales request is the whole enquiry those nights
-may come to belong to. Tying the two together is a later step (§12).
+come to belong to.
+
+**The rooms behind a request.** A request's page shows the client's room-nights on the
+request's event — requested, blocked and sold — by property and room category: how many
+rooms, how many room-nights, from the first night to the last, and, for a block, the
+earliest date it runs out. The list shows each request's nights sold and blocked. None of
+it is stored on the request: it is worked out from the inventory (§4.2) each time, so it
+cannot disagree with the stock sheet. The link is the client and the event, which has two
+consequences worth knowing. A request with no event shows no rooms. And if a client has
+two requests open for the same event — a second phase, say — both show the same rooms;
+telling them apart would mean choosing the request each time rooms are blocked or sold,
+which is not asked for today.
 
 **Where a request stands** — its *stage*:
 
@@ -1195,14 +1206,27 @@ a way to show only those. The list can show closed requests instead, or all of t
 be narrowed to one event, one account manager, or a search on client, contact or what they
 need. A client's own page lists that client's requests, with a way to register a new one.
 
-#### The client fills in their own contracting details — *specified, not built*
+#### The client fills in their own contracting details
 
 Today the client is sent a Word document, fills it in, and someone types its contents into
-monday. Instead, a request will have a **private link** to send the client — like a client
-map link (§5.5), no sign-in needed, and switched off by a rep at any time. It opens a page
-with the contracting form, and what the client submits lands on the request, where the
-account manager checks it. The link shows nothing but that form: not the request, not our
-notes, not our prices.
+monday. Instead, **Make a link** on a request's *Contracting details* gives a **private
+link** to send the client — no sign-in needed. It opens a page, in We Lodge's colours but
+with none of our menus, that asks for what the Word form asks for: the company's trade
+name, address, VAT number and registration number; who signs, and their designation (a
+second signatory if needed); and the contact persons, each with name, job title and email,
+as many as they like.
+
+What the client sends lands on the request at once, and the history records it as sent by
+the client; the *Contracting details* card says when, so the account manager knows to check
+it. The client can open the link again, see what they sent, correct it and send again. A
+trade name is required; everything else may be left for later.
+
+**The link shows nothing but that form**: not the request, not the rest of the contracting
+details (which are our terms — the property, payment schedule, cancellation policy, other
+services), not our notes, not our prices. The page is told nothing else about the request,
+so none of it can leak through it. Anyone with the link can open it, so it is sent only to
+the client. **Switch off** stops it working at once — the details already sent stay —
+and **Make a new link** gives a fresh address, so an old one never comes back to life.
 
 ---
 
@@ -1857,9 +1881,9 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
-| §4.11 Client fills in contracting details by link | **Specified, not built** | The details are typed in by us today |
-| §4.11 Request tied to its room-nights | **Not built** | A request does not yet show the nights it asked for, blocked or bought |
-| §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided |
+| §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
+| §4.11 Rooms behind a request | **Built** | The client's requested, blocked and sold room-nights on the request's event, by property and category, from the inventory. Two requests from one client for one event show the same rooms |
+| §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
 | §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |

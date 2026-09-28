@@ -17,6 +17,20 @@ export const navItems = [
   { href: "/sales", label: "Sales requests" },
 ] as const;
 
+/**
+ * Pages opened by people outside We Lodge — a client filling in their
+ * contracting details (doc §4.11) — show none of our own menus or header.
+ */
+export function isPublicPath(pathname: string) {
+  return pathname.startsWith("/contracting/");
+}
+
+/** The team's own sidebar and header, left out on a public page. */
+export function TeamChrome({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  return isPublicPath(pathname) ? null : <>{children}</>;
+}
+
 /** Sign-in lives inside the shell but without its navigation. */
 export function useIsAuthRoute() {
   const pathname = usePathname();

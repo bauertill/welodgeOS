@@ -35,7 +35,7 @@ export function diffFields<T extends Record<string, unknown>>(
 export function logAudit(
   tx: Prisma.TransactionClient,
   data: {
-    actorId: string;
+    actorId: string | null;
     entity: string;
     entityId: string;
     summary: string;

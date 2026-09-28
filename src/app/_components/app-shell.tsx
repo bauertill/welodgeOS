@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { HeaderAuth } from "~/app/_components/header-auth";
-import { Nav } from "~/app/_components/nav";
+import { Nav, TeamChrome } from "~/app/_components/nav";
 import {
   MessageSound,
   PresenceHeartbeat,
@@ -26,6 +26,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <PresenceHeartbeat />
         </>
       )}
+      <TeamChrome>
       <aside className="bg-ink-700 sticky top-0 hidden h-screen w-60 shrink-0 flex-col py-6 md:flex">
         {/* The brand mark sits on a white card, as it does on welodge.net. */}
         <Link href="/" className="mb-8 block px-5">
@@ -53,8 +54,10 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </aside>
+      </TeamChrome>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <TeamChrome>
         <header className="bg-ink-700 flex h-14 items-center justify-between gap-4 px-6 md:h-16">
           <Link href="/" className="md:hidden">
             <span className="inline-flex rounded-lg bg-white px-3 py-2">
@@ -75,6 +78,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             <HeaderAuth email={session?.user?.name ?? session?.user?.email ?? null} />
           </div>
         </header>
+        </TeamChrome>
 
         <main className="flex-1 px-6 py-8">{children}</main>
       </div>

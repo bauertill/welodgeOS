@@ -75,3 +75,46 @@ export const contractingFields = [
 
 export type InterestKey = (typeof interestFields)[number]["key"];
 export type ContractingKey = (typeof contractingFields)[number]["key"];
+
+/**
+ * The contracting details the client fills in themselves, through the link
+ * (doc §4.11) — their company and who signs. The rest are our terms, and are
+ * never shown to them.
+ */
+export const clientContractingKeys = [
+  "tradeName",
+  "companyAddress",
+  "vatNumber",
+  "registrationNumber",
+  "signatory1Name",
+  "signatory1Designation",
+  "signatory2Name",
+  "signatory2Designation",
+  "contractContacts",
+] as const satisfies readonly ContractingKey[];
+
+export type ClientContractingKey = (typeof clientContractingKeys)[number];
+
+/** A contact person for the contract, as the link's form asks for one. */
+export type ContractContact = { name: string; jobTitle: string; email: string };
+
+/** "Name, Job title, email" per line — how the contact persons are kept. */
+export function joinContractContacts(people: ContractContact[]) {
+  return people
+    .map((person) => [person.name, person.jobTitle, person.email].map((part) => part.trim().replace(/,/g, " ")).filter(Boolean).join(", "))
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** The lines back into people; a line in another shape is kept whole as the name. */
+export function splitContractContacts(text: string | null): ContractContact[] {
+  return (text ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(",").map((part) => part.trim());
+      const email = parts.length > 1 && parts[parts.length - 1]!.includes("@") ? parts.pop()! : "";
+      return parts.length === 2 ? { name: parts[0]!, jobTitle: parts[1]!, email } : { name: parts.join(", "), jobTitle: "", email };
+    });
+}

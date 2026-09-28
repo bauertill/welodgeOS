@@ -1,17 +1,19 @@
 import { SalesRequestStage, type Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 
 import { parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney } from "~/lib/format";
 import {
+  clientContractingKeys,
   contractingFields,
   interestFields,
   isClosed,
   openStages,
   salesStageLabels,
 } from "~/lib/sales";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
 
 /**
@@ -139,7 +141,7 @@ export const salesRouter = createTRPCRouter({
         q: z.string().max(200).default(""),
       }),
     )
-    .query(({ ctx, input }) => {
+    .query(async ({ ctx, input }) => {
       const q = input.q.trim();
       const where: Prisma.SalesRequestWhereInput = {
         ...(input.show === "open" && { stage: { in: openStages } }),
@@ -156,12 +158,109 @@ export const salesRouter = createTRPCRouter({
           ],
         }),
       };
-      return ctx.db.salesRequest.findMany({
+      const requests = await ctx.db.salesRequest.findMany({
         where,
         orderBy: [{ followUpOn: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
         take: 500,
         include,
       });
+      // The client's hard holds on the request's event, counted from the
+      // room-nights themselves (doc §4.11) — never stored on the request.
+      const eventIds = [...new Set(requests.map((request) => request.eventId).filter((id): id is string => Boolean(id)))];
+      const counts = eventIds.length
+        ? await ctx.db.roomNight.groupBy({
+            by: ["eventId", "clientId", "salesState"],
+            where: {
+              eventId: { in: eventIds },
+              clientId: { in: [...new Set(requests.map((request) => request.clientId))] },
+              salesState: { in: ["BLOCKED", "SOLD"] },
+            },
+            _count: { _all: true },
+          })
+        : [];
+      const count = (request: (typeof requests)[number], state: "BLOCKED" | "SOLD") =>
+        counts.find((row) => row.eventId === request.eventId && row.clientId === request.clientId && row.salesState === state)?._count._all ?? 0;
+      return requests.map((request) => ({
+        ...request,
+        nightsBlocked: request.eventId ? count(request, "BLOCKED") : 0,
+        nightsSold: request.eventId ? count(request, "SOLD") : 0,
+      }));
+    }),
+
+  /**
+   * The rooms behind a request (doc §4.11): the client's requested, blocked
+   * and sold room-nights on the request's event, by property and room
+   * category, worked out from the inventory each time it is asked.
+   */
+  rooms: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const request = await ctx.db.salesRequest.findUniqueOrThrow({
+        where: { id: input.id },
+        select: { clientId: true, eventId: true },
+      });
+      if (!request.eventId) return null;
+      const where = { eventId: request.eventId };
+      const category = { select: { name: true, property: { select: { id: true, name: true } } } } as const;
+      const [held, requested] = await Promise.all([
+        ctx.db.roomNight.findMany({
+          where: { ...where, clientId: request.clientId, salesState: { in: ["BLOCKED", "SOLD"] } },
+          select: { date: true, slotId: true, salesState: true, blockExpiry: true, slot: { select: { category } } },
+        }),
+        ctx.db.roomNightRequest.findMany({
+          where: { clientId: request.clientId, roomNight: where },
+          select: { roomNight: { select: { date: true, slotId: true, slot: { select: { category } } } } },
+        }),
+      ]);
+      type Row = {
+        propertyId: string;
+        propertyName: string;
+        categoryName: string;
+        state: "REQUESTED" | "BLOCKED" | "SOLD";
+        nights: number;
+        rooms: Set<string>;
+        from: Date;
+        to: Date;
+        blockExpiry: Date | null;
+      };
+      const rows = new Map<string, Row>();
+      const add = (
+        night: { date: Date; slotId: string; slot: { category: { name: string; property: { id: string; name: string } } } },
+        state: Row["state"],
+        blockExpiry: Date | null = null,
+      ) => {
+        const { category } = night.slot;
+        const key = `${category.property.id}|${category.name}|${state}`;
+        const row =
+          rows.get(key) ??
+          ({
+            propertyId: category.property.id,
+            propertyName: category.property.name,
+            categoryName: category.name,
+            state,
+            nights: 0,
+            rooms: new Set<string>(),
+            from: night.date,
+            to: night.date,
+            blockExpiry: null,
+          } satisfies Row);
+        row.nights += 1;
+        row.rooms.add(night.slotId);
+        if (night.date < row.from) row.from = night.date;
+        if (night.date > row.to) row.to = night.date;
+        // The earliest a block runs out is the one to watch.
+        if (blockExpiry && (!row.blockExpiry || blockExpiry < row.blockExpiry)) row.blockExpiry = blockExpiry;
+        rows.set(key, row);
+      };
+      for (const night of held) add(night, night.salesState as "BLOCKED" | "SOLD", night.blockExpiry);
+      for (const { roomNight } of requested) add(roomNight, "REQUESTED");
+      const order = { SOLD: 0, BLOCKED: 1, REQUESTED: 2 } as const;
+      return {
+        eventId: request.eventId,
+        rows: [...rows.values()]
+          .sort((a, b) => a.propertyName.localeCompare(b.propertyName) || a.categoryName.localeCompare(b.categoryName) || order[a.state] - order[b.state])
+          .map(({ rooms, ...row }) => ({ ...row, rooms: rooms.size })),
+      };
     }),
 
   /** A client's requests, for its own page. */
@@ -283,5 +382,94 @@ export const salesRouter = createTRPCRouter({
         return after;
       }),
     ),
-});
 
+  // --- The client's contracting link (doc §4.11) --------------------------------
+
+  /**
+   * Make a link for the client to fill in their contracting details. Making a
+   * new one replaces the old: its address changes, so the old one stops working.
+   */
+  makeContractingLink: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const updated = await ctx.db.salesRequest.update({
+        where: { id: input.id },
+        data: { contractingToken: randomBytes(24).toString("base64url"), contractingLinkMadeAt: new Date() },
+        select: { contractingToken: true },
+      });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.id, summary: "Contracting link made" });
+      return updated;
+    }),
+
+  /** Switch the link off: it then opens nothing. The details already sent stay. */
+  switchOffContractingLink: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.salesRequest.update({ where: { id: input.id }, data: { contractingToken: null } });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.id, summary: "Contracting link switched off" });
+    }),
+
+  /**
+   * What the client's page shows, found by the link's code alone — no sign-in.
+   * Only their own company details and who we are dealing with: nothing else
+   * on the request is sent to the browser.
+   */
+  contractingForm: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100) }))
+    .query(async ({ ctx, input }) => {
+      const request = await ctx.db.salesRequest.findUnique({
+        where: { contractingToken: input.token },
+        select: {
+          ...Object.fromEntries(clientContractingKeys.map((key) => [key, true])),
+          contractingSubmittedAt: true,
+          client: { select: { name: true } },
+          event: { select: { name: true } },
+        } as const,
+      });
+      if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+      return {
+        clientName: request.client.name,
+        eventName: request.event?.name ?? null,
+        submittedAt: request.contractingSubmittedAt,
+        values: Object.fromEntries(clientContractingKeys.map((key) => [key, (request as Record<string, unknown>)[key] ?? ""])) as Record<
+          (typeof clientContractingKeys)[number],
+          string
+        >,
+      };
+    }),
+
+  /** The client sends the form: it lands on the request, and the history says so. */
+  submitContracting: publicProcedure
+    .input(
+      z.object({
+        token: z.string().min(20).max(100),
+        values: z.object(Object.fromEntries(clientContractingKeys.map((key) => [key, z.string().max(5000)])) as Record<
+          (typeof clientContractingKeys)[number],
+          z.ZodString
+        >),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const before = await tx.salesRequest.findUnique({ where: { contractingToken: input.token }, include });
+        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+        if (!input.values.tradeName.trim()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Please give your company's trade name." });
+        }
+        const data = Object.fromEntries(clientContractingKeys.map((key) => [key, blank(input.values[key])]));
+        const after = await tx.salesRequest.update({
+          where: { id: before.id },
+          data: { ...data, contractingSubmittedAt: new Date() },
+          include,
+        });
+        await logAudit(tx, {
+          actorId: null,
+          entity: "SalesRequest",
+          entityId: before.id,
+          summary: "Contracting details sent by the client, through the link",
+          changes: diffFields(readable(before), readable(after), historyFields),
+        });
+        return { ok: true };
+      }),
+    ),
+});
