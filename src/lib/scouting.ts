@@ -78,7 +78,6 @@ export const placeCategoryOrder: PlaceCategory[] = [
   "VENUE",
   "TRAIN_STATION",
   "AIRPORT",
-  "IBC",
   "OTHER",
 ];
 
@@ -86,7 +85,6 @@ export const placeCategoryLabels: Record<PlaceCategory, string> = {
   VENUE: "Venue",
   TRAIN_STATION: "Train station",
   AIRPORT: "Airport",
-  IBC: "IBC",
   OTHER: "Other",
 };
 
@@ -95,16 +93,14 @@ export const placeCategoryPlurals: Record<PlaceCategory, string> = {
   VENUE: "Venues",
   TRAIN_STATION: "Train stations",
   AIRPORT: "Airports",
-  IBC: "IBC",
   OTHER: "Other places",
 };
 
 /** What each one is for, so nobody has to guess what belongs where. */
 export const placeCategoryHints: Record<PlaceCategory, string> = {
-  VENUE: "Where the event happens. Distance to the nearest one is on the scouting list.",
+  VENUE: "Where the event happens — a stadium, an arena, the IBC. Distance to the nearest one is on the scouting list.",
   TRAIN_STATION: "Record the lines serving it — a client asks which ones.",
   AIRPORT: "Where guests fly in.",
-  IBC: "The International Broadcast Centre, where the broadcasters work.",
   OTHER: "Anything else guests need to get to.",
 };
 

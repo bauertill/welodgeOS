@@ -119,7 +119,7 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
   return (
     <Fieldset
       title="Places of interest"
-      description="Where guests need to get to — venues, airports, stations, the IBC. Properties are judged on how well they connect to these."
+      description="Where guests need to get to — venues such as the stadium or the IBC, airports, stations. Properties are judged on how well they connect to these."
       action={
         draft === null && (
           <Button type="button" onClick={() => setDraft(emptyDraft)}>

@@ -14,7 +14,6 @@ export const placeColors: Record<PlaceCategory, string> = {
   VENUE: "#292929",
   TRAIN_STATION: "#1f6feb",
   AIRPORT: "#0d8f5d",
-  IBC: "#b8860b",
   OTHER: "#6b6b6b",
 };
 

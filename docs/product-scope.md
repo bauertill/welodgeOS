@@ -458,7 +458,7 @@ appear as pins on the Properties tab's map.
 | --- | --- |
 | `event` | The event this place matters to. |
 | `name` | "Stade de France", "Paris CDG", "Gare de Lyon". |
-| `category` | `VENUE` \| `TRAIN_STATION` \| `AIRPORT` \| `IBC` \| `OTHER` |
+| `category` | `VENUE` \| `TRAIN_STATION` \| `AIRPORT` \| `OTHER` |
 | `lines` | Train stations only: the lines serving it, as free text ("RER A, RER D, M1, M14"). |
 | `address` | Optional. |
 | `latitude`, `longitude` | **Required.** A place of interest that cannot be located is of no use. |
@@ -470,10 +470,11 @@ existing event venue becomes a place of interest of category `VENUE`, with nothi
 the event itself no longer holds a venue of its own — it is one entry in this list like any
 other.
 
-**The IBC has a category of its own**, rather than sitting under "other", because at a Games
-it is where a large share of the guests we sell to actually work, and "how far is the IBC"
-is asked often enough to be worth grouping and filtering on. Other one-off places — a
-training site, a hospitality venue, an office — are `OTHER`.
+**The IBC is a venue**, named "IBC", not a kind of place of its own. It had its own kind at
+first; the business put it right — the IBC is the name of a place, like the stadium's — and
+any place recorded that way became a venue, name and position unchanged. As a venue it
+counts for "distance to the nearest venue". Other one-off places — a training site, a
+hospitality venue, an office — are `OTHER`.
 
 **Distance to venue** on the scouting list (§3.1) is measured to the *nearest* venue, and
 says which one it is. It is a straight line, worked out on the spot from coordinates and
@@ -1526,7 +1527,7 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
 | **Update** | A permanent, append-only post on a property or client's history — a meeting note, a call summary, feedback. Can mention a colleague, as a visual highlight only. |
 | **Undo** | Restores a ledger entry's room-nights to their exact prior fields, or deletes them if the entry created them. Refused once anything later has touched the same nights. |
 | **Audit trail** | The general, read-only history (§4.9) of everything that isn't a room-night — statuses, and property/client/event edits. |
-| **Place of interest** | Somewhere guests need to get to for one event: a venue, train station, airport, the IBC, or other. |
+| **Place of interest** | Somewhere guests need to get to for one event: a venue (such as the stadium or the IBC), train station, airport, or other. |
 | **Client map link** | A private web page showing one client a chosen shortlist, with availability and travel times. |
 
 ---

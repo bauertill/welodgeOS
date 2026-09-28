@@ -14,7 +14,7 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 const placeInput = z.object({
   eventId: z.string(),
   name: z.string().min(1, "Give the place a name"),
-  category: z.enum(["VENUE", "TRAIN_STATION", "AIRPORT", "IBC", "OTHER"]),
+  category: z.enum(["VENUE", "TRAIN_STATION", "AIRPORT", "OTHER"]),
   /** Stations: "RER A, M1". Free text, and only ever read back. */
   lines: z.string().optional(),
   address: z.string().optional(),

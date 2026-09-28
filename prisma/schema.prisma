@@ -86,8 +86,6 @@ enum PlaceCategory {
   VENUE
   TRAIN_STATION
   AIRPORT
-  /// International Broadcast Centre — where the broadcasters work.
-  IBC
   OTHER
 }
 

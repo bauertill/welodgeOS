@@ -117,8 +117,8 @@ async function main() {
             longitude: -118.2365,
           },
           {
-            name: "International Broadcast Centre",
-            category: "IBC",
+            name: "International Broadcast Centre (IBC)",
+            category: "VENUE",
             address: "Los Angeles Convention Center, 1201 S Figueroa St",
             latitude: 34.0403,
             longitude: -118.2696,
