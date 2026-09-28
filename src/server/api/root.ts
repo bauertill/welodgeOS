@@ -8,6 +8,7 @@ import { placeRouter } from "~/server/api/routers/place";
 import { propertyRouter } from "~/server/api/routers/property";
 import { providerRouter } from "~/server/api/routers/provider";
 import { reportingRouter } from "~/server/api/routers/reporting";
+import { salesRouter } from "~/server/api/routers/sales";
 import { scoutingRouter } from "~/server/api/routers/scouting";
 import { travelRouter } from "~/server/api/routers/travel";
 import { updateRouter } from "~/server/api/routers/update";
@@ -26,6 +27,7 @@ export const appRouter = createTRPCRouter({
   scouting: scoutingRouter,
   amenity: amenityRouter,
   clients: clientRouter,
+  sales: salesRouter,
   inventory: inventoryRouter,
   reporting: reportingRouter,
   travel: travelRouter,

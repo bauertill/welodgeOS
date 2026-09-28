@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
 import { ClientContactsCard, ClientDetailsCard } from "~/app/_components/client-crm";
+import { ClientSalesRequests } from "~/app/_components/sales-requests";
 import { UpdateThread } from "~/app/_components/update-thread";
 import { Card, PageHeader } from "~/app/_components/ui";
 import { clientCategoryLabels } from "~/lib/clients";
@@ -39,6 +40,8 @@ export default async function ClientPage({
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          <ClientSalesRequests clientId={client.id} />
+
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
               Updates

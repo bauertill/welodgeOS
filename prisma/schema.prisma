@@ -76,6 +76,7 @@ model Event {
   roomNights      RoomNight[]
   ledger          LedgerEntry[]
   propertyGroups  PropertyGroup[]
+  salesRequests   SalesRequest[]
 
   @@index([startDate])
 }
@@ -517,6 +518,7 @@ model User {
   messages      Message[]
   accountManaged ScoutingEntry[] @relation("AccountManager")
   clientsManaged  Client[]        @relation("ClientAccountManager")
+  salesRequests   SalesRequest[]  @relation("SalesRequestOwner")
   contactsManaged ClientContact[] @relation("ContactAccountManager")
 }
 
@@ -727,6 +729,7 @@ model Client {
   requests   RoomNightRequest[]
   updates    Update[]
   contacts   ClientContact[]
+  salesRequests SalesRequest[]
 
   @@unique([name])
 }
@@ -750,11 +753,93 @@ model ClientContact {
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   clientId String
 
+  salesRequests SalesRequest[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([clientId])
   @@index([email])
+}
+
+/// Where a sales request stands (doc §4.11). The first four are open, in the
+/// order a request moves through them; the rest close it.
+enum SalesRequestStage {
+  INITIAL_INTEREST
+  PROPOSAL_SENT
+  BLOCKED
+  SIGNED
+  RELEASED
+  NO_REPLY
+  LOST
+}
+
+/// A client's interest in accommodation, followed from the first enquiry to
+/// its end — signed, released, lost, or never answered (doc §4.11). Monday
+/// calls it a deal. It is the commercial conversation, not the rooms: a
+/// room-night's own "requested" is a different, per-night thing (§4.2).
+model SalesRequest {
+  id    String            @id @default(cuid())
+  stage SalesRequestStage @default(INITIAL_INTEREST)
+
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId String
+  /// The person at the client who asked, if known.
+  contact   ClientContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId String?
+  /// Empty for a request not tied to one of our events.
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventId String?
+  owner   User?   @relation("SalesRequestOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+
+  // The initial interest, as the client put it — free text, because requests
+  // arrive in every shape (doc §4.11).
+  description     String?
+  location        String?
+  rooms           String?
+  period          String?
+  budget          String?
+  prePost         String?
+  rateIncludes    String?
+  extraServices   String?
+
+  /// Who to chase, and when (doc §4.11).
+  followUpOn      DateTime? @db.Date
+  nextStep        String?
+
+  proposalSentOn  DateTime? @db.Date
+  blockedUntil    DateTime? @db.Date
+  /// Minor units, with an explicit currency (§4.5).
+  valueCents      Int?
+  valueCurrency   String?
+  /// When it closed — set on moving to a closing stage, cleared on reopening.
+  closedOn        DateTime? @db.Date
+
+  // Contracting details, for the lawyers (doc §4.11). Filled in by us today;
+  // by the client through a link later.
+  tradeName              String?
+  companyAddress         String?
+  vatNumber              String?
+  registrationNumber     String?
+  signatory1Name         String?
+  signatory1Designation  String?
+  signatory2Name         String?
+  signatory2Designation  String?
+  /// The people to deal with on the contract: name, job title, email, one per line.
+  contractContacts       String?
+  propertyNameAndAddress String?
+  paymentSchedule        String?
+  cancellationPolicy     String?
+  otherServices          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([eventId])
+  @@index([stage])
+  @@index([followUpOn])
 }
 
 /// A free-text post on a property or a client's history — a meeting note, a

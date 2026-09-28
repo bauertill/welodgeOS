@@ -14,6 +14,7 @@ export const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/events", label: "Events" },
   { href: "/clients", label: "Clients" },
+  { href: "/sales", label: "Sales requests" },
 ] as const;
 
 /** Sign-in lives inside the shell but without its navigation. */

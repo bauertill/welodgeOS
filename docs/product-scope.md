@@ -1121,6 +1121,89 @@ What has to happen first, outside the system: someone with access to Google Clou
 `welodge.net` switches on the Gmail service for We Lodge OS and allows it to ask for
 read-only mail access, kept to the Workspace (`docs/todos.md`).
 
+### 4.11 Sales requests — from first interest to signed
+
+> **Partly built.** Registering a request, its stages, follow-ups and contracting details,
+> the list, and each request's page exist. **The link for a client to fill in their own
+> contracting details is specified, not built**, and a request is not yet tied to the
+> room-nights it asks for (§12). Nothing has been imported from monday.com's *Sales
+> Requests* board (199 deals).
+
+**A sales request is a client's interest in accommodation, followed from the first enquiry
+to its end.** It replaces monday's *Sales Requests* board, which calls one a *deal*. It is
+registered the moment a client shares initial interest — before we know whether we can
+help — so that every enquiry is followed through: to completion, to a released block, or
+to the client never coming back. The list is how the team sees what is open, who to
+follow up with, and for whom we still need to find units.
+
+It is the commercial conversation, not the rooms. A room-night's own *Requested* (§4.2) is
+a soft claim on one particular night; a sales request is the whole enquiry those nights
+may come to belong to. Tying the two together is a later step (§12).
+
+**Where a request stands** — its *stage*:
+
+| Stage | Meaning |
+| --- | --- |
+| *Initial interest* | The client has asked. We are looking for units and preparing a proposal. Monday: *Discovery* |
+| *Proposal sent* | We have sent a proposal and are waiting for the answer |
+| *Blocked* | The client is holding rooms while they decide |
+| *Signed* | Closed: the client has signed |
+| *Released* | Closed: the client let their block go |
+| *No reply* | Closed: the client never came back to us |
+| *Lost* | Closed: the client went elsewhere or dropped the plan |
+
+The stage is changed by hand, with one click, in any direction: a released request can be
+reopened. Moving to *Proposal sent* dates the proposal today, unless a date is already
+there. Moving to a closing stage records the day it closed; reopening clears that. Nothing
+moves a request on its own — a block that has passed its date is not released by the
+system (§2.4).
+
+**What a request holds:**
+
+- **Who** — the client (an existing one, or a new one named on the spot, since enquiries
+  often come from companies we have never dealt with), the contact who asked (one of the
+  client's contacts, §4.10), the event (or none — not every enquiry is for one of our
+  events) and the account manager, who is whoever registers it unless they choose someone
+  else.
+- **The initial interest, as the client put it** — what they need, location and/or property,
+  number of rooms / room category / occupancy, period, budget or proposed rate, pre and
+  post, what the rate should include, and extra services. All free text: requests arrive in
+  every shape, from "30 rooms" to two pages of requirements, and forcing them into numbers
+  would lose what the client said.
+- **The follow-up** — the date to get back to the client, and the next step in words ("Look
+  for units near the Expo, then send a proposal").
+- **Dates and value** — when the proposal was sent, until when the client is blocked, and
+  what the request is worth if signed, with its currency (§4.5).
+- **Contracting details** — what the lawyers need to draw up the contract: the client's
+  trade name, company address, VAT number and registration number; the name and
+  designation of up to two signatories; the contact persons for the contract; and the
+  hotel or apartments and their address, the payment schedule, the cancellation policy,
+  and any other services with their rates. They are the fields of the Word form sent to
+  clients today (`client-contracting-details.docx`) and of monday's contracting columns.
+  They are kept on the request, not the client: a company can contract through a
+  different entity, or with different signatories, from one event to the next.
+
+Every change is recorded in the request's history, and registering one is also recorded on
+the client's.
+
+**The Sales requests page** lists open requests grouped by stage — *Initial interest*, then
+*Proposal sent*, then *Blocked* — each row showing the client and contact, the event, what
+they need, the period, the follow-up date and next step, the account manager and how many
+days the request has been open. Within a stage, the most pressing follow-up comes first.
+A follow-up due today or overdue shows in red, and a note above the list counts them, with
+a way to show only those. The list can show closed requests instead, or all of them, and
+be narrowed to one event, one account manager, or a search on client, contact or what they
+need. A client's own page lists that client's requests, with a way to register a new one.
+
+#### The client fills in their own contracting details — *specified, not built*
+
+Today the client is sent a Word document, fills it in, and someone types its contents into
+monday. Instead, a request will have a **private link** to send the client — like a client
+map link (§5.5), no sign-in needed, and switched off by a rep at any time. It opens a page
+with the contracting form, and what the client submits lands on the request, where the
+account manager checks it. The link shows nothing but that form: not the request, not our
+notes, not our prices.
+
 ---
 
 ## 5. Reporting and derived views
@@ -1773,6 +1856,10 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
+| §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
+| §4.11 Client fills in contracting details by link | **Specified, not built** | The details are typed in by us today |
+| §4.11 Request tied to its room-nights | **Not built** | A request does not yet show the nights it asked for, blocked or bought |
+| §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
 | §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |
