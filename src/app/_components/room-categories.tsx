@@ -22,6 +22,7 @@ type Category = {
   id: string;
   name: string;
   unitCount: number;
+  capacity: number;
   bedConfiguration: string | null;
   bedrooms: number | null;
   bathrooms: number | null;
@@ -63,6 +64,7 @@ export function RoomCategoryTable({
   categories,
   contracts,
   available,
+  hotel,
   onStatusChange,
 }: {
   scoutingEntryId: string;
@@ -71,6 +73,8 @@ export function RoomCategoryTable({
   categories: Category[];
   contracts: Contract[];
   available: (categoryId: string) => string;
+  /** Hotels give a bed configuration; apartments bedrooms and bathrooms (§3.2). */
+  hotel: boolean;
   onStatusChange: (categoryId: string, status: CategoryContractStatus) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
@@ -86,6 +90,8 @@ export function RoomCategoryTable({
           <thead className="bg-ink-50/60">
             <tr>
               <th className={th}>Room category</th>
+              <th className={th}>Contract</th>
+              <th className={th}>Available</th>
               <th className={th} title="What we pay the hotel per night, as contracted for this event. The indicative, Booking-style price is on the property's own page.">
                 Buying rate
               </th>
@@ -98,9 +104,6 @@ export function RoomCategoryTable({
               <th className={th}># of units</th>
               <th className={th}>Size</th>
               <th className={th}>Bed configuration</th>
-              <th className={th}>Notes</th>
-              <th className={th}>Contract</th>
-              <th className={th}>Available</th>
               <th className={th}>{""}</th>
             </tr>
           </thead>
@@ -122,6 +125,8 @@ export function RoomCategoryTable({
                   <EditRow
                     key={category.id}
                     scoutingEntryId={scoutingEntryId}
+                    propertyId={propertyId}
+                    hotel={hotel}
                     category={category}
                     contract={contract}
                     onDone={() => setEditing(null)}
@@ -131,6 +136,21 @@ export function RoomCategoryTable({
               return (
                 <tr key={category.id}>
                   <td className={`${td} text-ink-900 font-medium whitespace-nowrap`}>{category.name}</td>
+                  <td className={td}>
+                    <Select
+                      value={status}
+                      title={categoryContractStatusHints[status]}
+                      onChange={(e) => onStatusChange(category.id, e.target.value as CategoryContractStatus)}
+                      className="w-36 min-w-36 py-1 text-[12px]"
+                    >
+                      {categoryContractStatusOrder.map((option) => (
+                        <option key={option} value={option}>
+                          {categoryContractStatusLabels[option]}
+                        </option>
+                      ))}
+                    </Select>
+                  </td>
+                  <td className={`${td} text-ink-500 text-xs whitespace-nowrap`}>{available(category.id)}</td>
                   <td className={`${td} whitespace-nowrap`}>
                     {contract?.ratePerNightCents != null && contract.rateCurrency
                       ? formatMoney(contract.ratePerNightCents, contract.rateCurrency)
@@ -152,29 +172,13 @@ export function RoomCategoryTable({
                   <td className={td}>{category.unitCount}</td>
                   <td className={`${td} whitespace-nowrap`}>{category.size ?? "—"}</td>
                   <td className={td}>{beds ?? "—"}</td>
-                  <td className={`${td} max-w-56`}>{category.notes ?? "—"}</td>
-                  <td className={td}>
-                    <Select
-                      value={status}
-                      title={categoryContractStatusHints[status]}
-                      onChange={(e) => onStatusChange(category.id, e.target.value as CategoryContractStatus)}
-                      className="w-36 min-w-36 py-1 text-[12px]"
-                    >
-                      {categoryContractStatusOrder.map((option) => (
-                        <option key={option} value={option}>
-                          {categoryContractStatusLabels[option]}
-                        </option>
-                      ))}
-                    </Select>
-                  </td>
-                  <td className={`${td} text-ink-500 text-xs whitespace-nowrap`}>{available(category.id)}</td>
                   <td className={td}>
                     <button
                       type="button"
                       onClick={() => setEditing(category.id)}
                       className="text-brand-700 text-xs font-light hover:underline"
                     >
-                      Edit rate
+                      Edit
                     </button>
                   </td>
                 </tr>
@@ -184,13 +188,13 @@ export function RoomCategoryTable({
         </table>
       </div>
       <p className="text-ink-500 mt-2 text-xs font-light">
-        Rates, taxes and period are this event&apos;s. Units, size, bed configuration and notes are the
-        property&apos;s own —{" "}
+        Rates, taxes and period are this event&apos;s. The name, units, size, bed configuration and notes
+        are the property&apos;s own, the same on every event —{" "}
         <PendingLink
           href={`/properties/${propertyId}/edit?back=${encodeURIComponent(`/events/${eventId}`)}`}
           className="text-brand-700 hover:underline"
         >
-          change them on the property
+          add or remove room categories on the property
         </PendingLink>
         .
       </p>
@@ -198,19 +202,33 @@ export function RoomCategoryTable({
   );
 }
 
-/** One room category's rates and taxes for this event, edited in place. */
+/**
+ * One room category edited in place: its own details, which are the
+ * property's, and its rates and taxes for this event.
+ */
 function EditRow({
   scoutingEntryId,
+  propertyId,
+  hotel,
   category,
   contract,
   onDone,
 }: {
   scoutingEntryId: string;
+  propertyId: string;
+  hotel: boolean;
   category: Category;
   contract: Contract | undefined;
   onDone: () => void;
 }) {
   const utils = api.useUtils();
+  const [name, setName] = useState(category.name);
+  const [units, setUnits] = useState(String(category.unitCount));
+  const [size, setSize] = useState(category.size ?? "");
+  const [beds, setBeds] = useState(category.bedConfiguration ?? "");
+  const [bedrooms, setBedrooms] = useState(category.bedrooms?.toString() ?? "");
+  const [bathrooms, setBathrooms] = useState(category.bathrooms?.toString() ?? "");
+  const [notes, setNotes] = useState(category.notes ?? "");
   const [rate, setRate] = useState(
     contract?.ratePerNightCents != null ? (contract.ratePerNightCents / 100).toFixed(2) : "",
   );
@@ -228,16 +246,29 @@ function EditRow({
   const [period, setPeriod] = useState(contract?.applicablePeriod ?? "");
   const [problem, setProblem] = useState<string | null>(null);
 
+  const saveCategory = api.property.saveCategory.useMutation();
   const save = api.scouting.setCategoryTerms.useMutation({
     onSuccess: () => {
       void utils.scouting.listForEvent.invalidate();
       void utils.scouting.entry.invalidate();
+      void utils.property.invalidate();
       onDone();
     },
   });
+  const pending = saveCategory.isPending || save.isPending;
+  const error = saveCategory.error ?? save.error;
 
-  const submit = () => {
+  const submit = async () => {
     setProblem(null);
+    const number = (value: string) => (value.trim() ? Number(value.replace(",", ".")) : undefined);
+    if (!name.trim()) {
+      setProblem("Give the room category a name.");
+      return;
+    }
+    if ([units, bedrooms, bathrooms].some((value) => value.trim() && !Number.isFinite(number(value)))) {
+      setProblem("Units, bedrooms and bathrooms should be numbers.");
+      return;
+    }
     const rateNumber = rate.trim() ? Number(rate.replace(",", ".")) : null;
     const totNumber = tot.trim() ? Number(tot.replace(",", ".").replace("%", "")) : null;
     if (rateNumber !== null && (!Number.isFinite(rateNumber) || rateNumber < 0)) {
@@ -251,6 +282,34 @@ function EditRow({
     if (totNumber !== null && (!Number.isFinite(totNumber) || totNumber < 0 || totNumber > 100)) {
       setProblem("TOT should be a percentage between 0 and 100, like 15.");
       return;
+    }
+    // The category's own details first: if the property refuses them (fewer
+    // units than inventory already numbered), the rates are not saved either.
+    const same = (value: string, was: string | number | null) => value.trim() === (was?.toString() ?? "");
+    const unchanged =
+      same(name, category.name) &&
+      same(units, category.unitCount) &&
+      same(size, category.size) &&
+      same(notes, category.notes) &&
+      (hotel ? same(beds, category.bedConfiguration) : same(bedrooms, category.bedrooms) && same(bathrooms, category.bathrooms));
+    if (!unchanged) try {
+      await saveCategory.mutateAsync({
+        propertyId,
+        category: {
+          id: category.id,
+          name,
+          unitCount: Math.max(0, Math.round(number(units) ?? 0)),
+          capacity: category.capacity,
+          currency: category.currency,
+          bedConfiguration: hotel ? beds : undefined,
+          bedrooms: hotel ? undefined : number(bedrooms),
+          bathrooms: hotel ? undefined : number(bathrooms),
+          size,
+          notes,
+        },
+      });
+    } catch {
+      return; // shown below
     }
     save.mutate({
       scoutingEntryId,
@@ -272,8 +331,37 @@ function EditRow({
   // columns — there, a rate or its currency could be cut off.
   return (
     <tr>
-      <td colSpan={13} className="border-ink-200/40 bg-brand-50/40 border-b p-4">
-        <p className="text-ink-900 mb-3 text-[13px] font-medium">{category.name} — this event&apos;s rate and taxes</p>
+      <td colSpan={12} className="border-ink-200/40 bg-brand-50/40 border-b p-4">
+        <p className="text-ink-900 mb-3 text-[13px] font-medium">Room category — the property&apos;s, the same on every event</p>
+        <div className="grid max-w-4xl gap-3 sm:grid-cols-6">
+          <Field label="Name" className="sm:col-span-2">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Deluxe King" aria-label="Name" autoFocus />
+          </Field>
+          <Field label="# of units" className="sm:col-span-1">
+            <Input value={units} onChange={(e) => setUnits(e.target.value)} inputMode="numeric" aria-label="# of units" />
+          </Field>
+          <Field label="Size" className="sm:col-span-1">
+            <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="28 m²" aria-label="Size" />
+          </Field>
+          {hotel ? (
+            <Field label="Bed configuration" className="sm:col-span-2">
+              <Input value={beds} onChange={(e) => setBeds(e.target.value)} placeholder="1 King" aria-label="Bed configuration" />
+            </Field>
+          ) : (
+            <>
+              <Field label="Bedrooms" className="sm:col-span-1">
+                <Input value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} inputMode="numeric" aria-label="Bedrooms" />
+              </Field>
+              <Field label="Bathrooms" className="sm:col-span-1">
+                <Input value={bathrooms} onChange={(e) => setBathrooms(e.target.value)} inputMode="decimal" aria-label="Bathrooms" />
+              </Field>
+            </>
+          )}
+          <Field label="Notes" className="sm:col-span-6">
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Connecting rooms on request" aria-label="Notes" />
+          </Field>
+        </div>
+        <p className="text-ink-900 mt-5 mb-3 text-[13px] font-medium">This event&apos;s rate and taxes</p>
         <div className="grid max-w-4xl gap-3 sm:grid-cols-6">
           <Field label="Buying rate, per night" className="sm:col-span-2">
             {/* Widths are set on wrappers: the boxes themselves always fill
@@ -287,7 +375,6 @@ function EditRow({
                   placeholder="281.50"
                   inputMode="decimal"
                   aria-label="Buying rate"
-                  autoFocus
                 />
               </div>
               <div className="w-24 shrink-0">
@@ -327,14 +414,14 @@ function EditRow({
           </Field>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button type="button" disabled={save.isPending} onClick={submit}>
-            {save.isPending ? "Saving…" : "Save"}
+          <Button type="button" disabled={pending} onClick={() => void submit()}>
+            {pending ? "Saving…" : "Save"}
           </Button>
           <Button type="button" variant="ghost" onClick={onDone}>
             Cancel
           </Button>
-          {(problem ?? save.error) && (
-            <span className="text-xs text-[#c03654]">{problem ?? friendlyError(save.error)}</span>
+          {(problem ?? error) && (
+            <span className="text-xs text-[#c03654]">{problem ?? friendlyError(error)}</span>
           )}
         </div>
       </td>

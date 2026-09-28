@@ -535,7 +535,14 @@ export const propertyRouter = createTRPCRouter({
     .input(z.object({ propertyId: z.string(), category: categoryInput }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...fields } = input.category;
-      const data = { ...fields, name: fields.name.trim(), size: blank(fields.size), notes: blank(fields.notes) };
+      const data = {
+        ...fields,
+        name: fields.name.trim(),
+        // Left out means unchanged; sent empty means cleared.
+        bedConfiguration: fields.bedConfiguration === undefined ? undefined : blank(fields.bedConfiguration),
+        size: blank(fields.size),
+        notes: blank(fields.notes),
+      };
       if (id) {
         const highest = await ctx.db.roomSlot.findFirst({
           where: { categoryId: id },

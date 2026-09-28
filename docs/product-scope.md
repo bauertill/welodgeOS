@@ -550,15 +550,17 @@ Decluttering the map so our own pins stand out is a change made there, not here.
 > to be decided (§12).
 
 **Room categories on the tab.** Opening a property's row shows its room categories as a
-table in Monday's column order, with each category's contract status and rooms available
-after them. **Edit rate** on a row opens a full-width row of labelled fields beneath it — not boxes
-squeezed into the table's columns, where an amount or its currency could be cut off — and
-edits that category's **buying rate** — what we pay the
-hotel per night, as contracted — with its currency,
-what the rate includes (cleaning among it, with how often), TOT, other applicable tax and
-applicable period for this event, in place; a TOT that is not a percentage, or a rate that is not a number, is refused with the
-reason. Units, size, bed configuration and notes are the property's own and are changed on
-its form, which the table links to.
+table: the name, then each category's contract status and rooms available, then Monday's
+columns. **Edit** on a row opens a full-width row of labelled fields beneath it — not boxes
+squeezed into the table's columns, where an amount or its currency could be cut off — for
+the whole room category, in two parts. First the category itself, which is the property's
+and the same on every event: name, # of units, size, bed configuration (bedrooms and
+bathrooms for an apartment) and notes. Then this event's terms: the **buying rate** — what
+we pay the hotel per night, as contracted — with its currency, what the rate includes
+(cleaning among it, with how often), TOT, other applicable tax and applicable period. A TOT
+that is not a percentage, a rate or unit count that is not a number, or fewer units than
+the inventory already numbered, is refused with the reason, and then nothing is saved.
+Adding or removing a room category is done on the property.
 
 Below a property's room categories, **View history** opens the record of changes to this
 property on this event — status, terms, rates — and **Hide history** closes it; it is not
@@ -576,7 +578,8 @@ is stored. Without a Google key, or with one that does not have Google's Places 
 switched on, the panel says which, instead of showing nothing.
 
 **Editing a property where it stands.** On the property's own page, every card — *Where it
-is*, *Amenities*, *More about the property*, *Contracting details*, *Contacts* — has an
+is*, *Contacts* (right beneath it), *Amenities*, *More about the property*, *Contracting
+details* — has an
 **Edit** button in its corner that turns it into a small form of just that card's fields,
 saved on their own; the full Edit page still changes everything at once. *Room categories*
 has **Add room category** and an Edit on each row, for the name, rooms, sleeps, beds (or
@@ -741,7 +744,7 @@ property opened costs a few lookups, as travel times already do.
 #### Room categories
 
 Each property opens into its **room categories** — Monday's *subitems*, called room
-categories here as everywhere else in the system (§3.2). Columns, in Monday's order:
+categories here as everywhere else in the system (§3.2). Columns, in Monday's order after the name:
 
 | Column | Kind | Here |
 | --- | --- | --- |
@@ -753,7 +756,10 @@ categories here as everywhere else in the system (§3.2). Columns, in Monday's o
 | # of units | the property's | The number of rooms of the type (§3.2) |
 | Size | the property's | Free text, e.g. "28 m²" — *new* |
 | Bed configuration | the property's | §3.2 |
-| Notes | the property's | Free text — *new* |
+
+Contract status and rooms available come right after the name. A category's **notes**
+(free text, the property's) are not a column — they are read and changed under **Edit**, and
+on the property's own page.
 
 The per-event ones live with the category's contract status for that event (§3.5), so an
 LA28 rate never overwrites an EXPO 2030 rate for the same room type. The indicative,

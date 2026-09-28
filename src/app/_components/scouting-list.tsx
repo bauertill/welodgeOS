@@ -394,6 +394,7 @@ export function ScoutingList({
                         eventId={eventId}
                         categories={property.categories}
                         contracts={entry.categoryContracts}
+                        hotel={property.type === "HOTEL"}
                         available={(categoryId) => {
                           const position = availabilityByCategory.get(categoryId);
                           return position && position.slots > 0

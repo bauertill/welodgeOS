@@ -134,11 +134,12 @@ export default async function PropertyPage({
         <div className="space-y-5">
           <WhereItIsCard property={property} totalLabel={units ? `${units} rooms` : null} />
 
+          <ContactsCard property={property} />
+
           <AmenitiesCard property={property} amenities={amenities} />
 
           <MoreAboutCard property={property} backTo={cameFrom ? `/events/${cameFrom.event.id}` : undefined} />
           <ContractingCard property={property} />
-          <ContactsCard property={property} />
 
           {property.scoutedBy && (
             <p className="text-ink-500 text-xs font-light">
