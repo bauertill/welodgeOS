@@ -125,6 +125,8 @@ export type NightSnapshot = {
   sellCurrency: string | null;
   salesNotes: string | null;
   salesOwnerId: string | null;
+  /** Absent in entries written before requests held nights (doc §4.11). */
+  salesRequestId?: string | null;
 };
 
 /** Captures a night's current field values as a snapshot — call this with
@@ -151,6 +153,7 @@ export function snapshotNight(night: RoomNight, existed = true): NightSnapshot {
     sellCurrency: night.sellCurrency,
     salesNotes: night.salesNotes,
     salesOwnerId: night.salesOwnerId,
+    salesRequestId: night.salesRequestId,
   };
 }
 
@@ -174,6 +177,8 @@ export function snapshotToFields(snapshot: NightSnapshot) {
     sellCurrency: snapshot.sellCurrency,
     salesNotes: snapshot.salesNotes,
     salesOwnerId: snapshot.salesOwnerId,
+    // An older entry never recorded it, so undoing one leaves it as it is.
+    ...(snapshot.salesRequestId !== undefined && { salesRequestId: snapshot.salesRequestId }),
   };
 }
 

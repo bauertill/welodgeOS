@@ -62,6 +62,11 @@ const attributes = z.object({
   sellCurrency: z.string().length(3).optional(),
   salesOwnerId: z.string().optional(),
   salesNotes: z.string().optional(),
+  /**
+   * The client's sales request these nights belong to (doc §4.11). Left out,
+   * nights already tied to a request stay tied to it.
+   */
+  salesRequestId: z.string().optional(),
 });
 
 /**
@@ -218,6 +223,312 @@ async function addMissingNights(
     },
   });
   return created.length;
+}
+
+/** What one change to inventory says: which nights, what to do, and with what (doc §4.8). */
+export const changeInput = attributes.extend({
+  eventId: z.string(),
+  slotIds: z.array(z.string()).min(1, "Pick at least one room"),
+  checkIn: z.date(),
+  checkOut: z.date(),
+  action: z.enum(ACTIONS),
+  reason: z.string().optional(),
+  /**
+   * Extend from the sheet (§5.4): nights in the selection that are not
+   * in inventory yet are added first, as "nothing started", then the
+   * change applies to all of them — one step, all or nothing.
+   */
+  addMissing: z.boolean().optional(),
+});
+
+export type ChangeInput = z.infer<typeof changeInput>;
+
+/**
+ * Applies one change to a rectangle of room-nights, inside the caller's
+ * transaction: every rule checked night by night, all or nothing, and a
+ * ledger entry written (doc §4.8, §4.5.8). The stock sheet and a sales
+ * request (doc §4.11) both change inventory through here and nowhere else, so
+ * neither can apply a rule the other does not.
+ */
+export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId: string, input: ChangeInput) {
+      const { action, eventId, slotIds, checkIn, checkOut, reason } = input;
+
+      const nightCount = nightsBetween(checkIn, checkOut);
+      if (nightCount === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Check-out must be after check-in. A stay from 10-Jul to 11-Jul is one night; check-out day is never a night.",
+        });
+      }
+
+      const inRange = {
+        eventId,
+        slotId: { in: slotIds },
+        date: { gte: checkIn, lt: checkOut },
+      };
+      const expected = slotIds.length * nightCount;
+      const present = await tx.roomNight.findMany({
+        where: inRange,
+        select: { slotId: true, date: true },
+      });
+
+      // Extending: add whatever part of the selection is not in inventory yet.
+      let added = 0;
+      if (present.length !== expected) {
+        if (!input.addMissing) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Nothing was changed. ${expected - present.length} of the ${expected} room-nights you selected are not in this event's inventory yet. Bring them in first.`,
+          });
+        }
+        added = await addMissingNights(tx, {
+          eventId,
+          slotIds,
+          nights: eachNight(checkIn, checkOut),
+          present,
+          actorId: actorId,
+        });
+      }
+
+      const nights = await tx.roomNight.findMany({
+        where: inRange,
+        include: nightInclude,
+        orderBy: [{ slotId: "asc" }, { date: "asc" }],
+      });
+
+      const problems: Problem[] = [];
+      const client = input.clientId
+        ? await tx.client.findUnique({ where: { id: input.clientId } })
+        : null;
+      if (input.clientId && !client) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No such client." });
+      }
+      if (input.salesRequestId) {
+        if (action !== "REQUEST" && action !== "BLOCK" && action !== "SELL") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Only a request, a block or a sale is recorded against a sales request." });
+        }
+        const salesRequest = await tx.salesRequest.findUnique({
+          where: { id: input.salesRequestId },
+          select: { clientId: true, eventId: true },
+        });
+        // A client's nights only ever belong to that client's own request, for this event.
+        if (!salesRequest || salesRequest.clientId !== input.clientId || salesRequest.eventId !== eventId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Nothing was changed. That sales request is not this client's, for this event.",
+          });
+        }
+      }
+
+      const need = (value: unknown, message: string) => {
+        if (value === undefined || value === null || value === "") {
+          throw new TRPCError({ code: "BAD_REQUEST", message });
+        }
+      };
+
+      // --- Per-action validation ------------------------------------------
+
+      const acquisitionTo = acquisitionTarget[action];
+      const salesTo = salesTarget[action];
+
+      if (action === "TAKE_OPTION") {
+        // Invariant §4.5.4 — an option without a deadline is invalid.
+        need(
+          input.optionExpiry,
+          "An option needs a date it runs to. Without one it is invisible to every deadline report.",
+        );
+      }
+      if (action === "BLOCK") {
+        need(input.clientId, "Say which client is blocking these nights.");
+        // Invariant §4.5.4, and the change from the sheet recorded in §4.2:
+        // a block with no expiry is inventory frozen for free.
+        need(
+          input.blockExpiry,
+          "A block needs a date it runs to. A block with no deadline is inventory frozen for free, and invisible to every deadline report.",
+        );
+      }
+      if (action === "SELL" || action === "REQUEST" || action === "WITHDRAW_REQUEST") {
+        need(input.clientId, "Say which client this is for.");
+      }
+      if (action === "EXTEND_OPTION") need(input.optionExpiry, "Give the option's new date.");
+      if (action === "EXTEND_BLOCK") need(input.blockExpiry, "Give the block's new date.");
+      if (action === "REPRICE_BUY") {
+        need(input.buyPriceCents, "Give the price we pay per night.");
+        need(input.buyCurrency, "Say which currency that is in.");
+      }
+      if (action === "REPRICE_SELL") {
+        need(input.sellPriceCents, "Give the price the client pays per night.");
+        need(input.sellCurrency, "Say which currency that is in.");
+      }
+      if (action === "REASSIGN_ACQUISITION_OWNER") {
+        need(input.acquisitionOwnerId, "Pick the rep who takes over with the supplier.");
+      }
+      if (action === "REASSIGN_SALES_OWNER") {
+        need(input.salesOwnerId, "Pick the rep who takes over with the client.");
+      }
+
+      for (const night of nights) {
+        const where = describeRoom(night);
+        const fail = (reason: string) =>
+          problems.push({ room: where, date: night.date, reason });
+
+        if (acquisitionTo) {
+          const from = night.acquisitionState;
+          if (
+            from !== acquisitionTo &&
+            !allowedAcquisitionMoves[from].includes(acquisitionTo)
+          ) {
+            fail(
+              `cannot go from ${acquisitionLabels[from].toLowerCase()} to ${acquisitionLabels[acquisitionTo].toLowerCase()}.`,
+            );
+          }
+        }
+
+        if (salesTo) {
+          const from = night.salesState;
+          if (from !== salesTo && !allowedSalesMoves[from].includes(salesTo)) {
+            fail(
+              `cannot go from ${salesLabels[from].toLowerCase()} to ${salesLabels[salesTo].toLowerCase()}.`,
+            );
+          }
+          // Invariant §4.5.1 — at most one hard hold per room-night.
+          if (
+            (salesTo === "BLOCKED" || salesTo === "SOLD") &&
+            (night.salesState === "BLOCKED" || night.salesState === "SOLD") &&
+            night.clientId !== input.clientId
+          ) {
+            fail(
+              `already ${salesLabels[night.salesState].toLowerCase()} to ${night.client?.name ?? "another client"}. A night can carry only one client hold.`,
+            );
+          }
+        }
+
+        if (action === "RELEASE_HOLD" && night.salesState === "NONE") {
+          fail("no client hold to release.");
+        }
+        if (action === "CANCEL_SALE" && night.salesState !== "SOLD") {
+          fail("not sold, so there is no sale to cancel.");
+        }
+        if (action === "EXTEND_OPTION" && night.acquisitionState !== "OPTION") {
+          fail(
+            `${acquisitionLabels[night.acquisitionState].toLowerCase()}, so there is no option to extend.`,
+          );
+        }
+        if (action === "EXTEND_BLOCK" && night.salesState !== "BLOCKED") {
+          fail(
+            `${salesLabels[night.salesState].toLowerCase()}, so there is no block to extend.`,
+          );
+        }
+        if (
+          action === "REPRICE_SELL" &&
+          night.salesState !== "BLOCKED" &&
+          night.salesState !== "SOLD"
+        ) {
+          fail("no client holds it, so there is nothing to price.");
+        }
+        if (
+          action === "WITHDRAW_REQUEST" &&
+          !night.requests.some((request) => request.clientId === input.clientId)
+        ) {
+          fail(`${client?.name ?? "that client"} has no request on this night.`);
+        }
+      }
+
+      if (problems.length) refuse(problems);
+
+      // --- Apply ------------------------------------------------------------
+
+      const ids = nights.map((night) => night.id);
+      const axis = axisOf(action);
+      // A bulk operation rarely starts from one state, so the ledger records
+      // every state these nights were actually in.
+      const priorStates = [
+        ...new Set(
+          nights.map((night) =>
+            axis === "ACQUISITION"
+              ? acquisitionLabels[night.acquisitionState]
+              : salesLabels[night.salesState],
+          ),
+        ),
+      ].join(", ");
+
+      const data = buildUpdate(action, input);
+      const period = `${formatDay(checkIn)} – ${formatDay(checkOut)}`;
+      const rooms = `${slotIds.length} ${slotIds.length === 1 ? "room" : "rooms"}`;
+
+      // A request is a claim on a *different* table (`RoomNightRequest`), not
+      // a field on the night itself — nothing here to snapshot, so undo isn't
+      // offered for these two actions rather than only half-restoring state.
+      const isRequestAction = action === "REQUEST" || action === "WITHDRAW_REQUEST";
+      const beforeSnapshot: NightSnapshot[] | null = isRequestAction
+        ? null
+        : nights.map((night) => snapshotNight(night));
+
+      // A currency with no amount behind it is noise, so it only travels with
+      // a price (invariant §4.5.9).
+      const requestData = {
+        ...(input.salesRequestId !== undefined && { salesRequestId: input.salesRequestId }),
+        clientRef: input.clientRef?.trim() || null,
+        sellPriceCents: input.sellPriceCents ?? null,
+        sellCurrency: input.sellPriceCents ? (input.sellCurrency ?? null) : null,
+        notes: input.salesNotes?.trim() || null,
+        ownerId: input.salesOwnerId ?? null,
+      };
+
+      {
+        if (action === "REQUEST") {
+          // A request is a claim, not a hold — many clients may hold one on the
+          // same night, and asking twice is the same claim (doc §4.3).
+          await Promise.all(
+            ids.map((roomNightId) =>
+              tx.roomNightRequest.upsert({
+                where: {
+                  roomNightId_clientId: { roomNightId, clientId: input.clientId! },
+                },
+                update: requestData,
+                create: { roomNightId, clientId: input.clientId!, ...requestData },
+              }),
+            ),
+          );
+        } else if (action === "WITHDRAW_REQUEST") {
+          await tx.roomNightRequest.deleteMany({
+            where: { roomNightId: { in: ids }, clientId: input.clientId! },
+          });
+        } else {
+          await tx.roomNight.updateMany({ where: { id: { in: ids } }, data });
+          // A night that passes to another client — a cancelled sale taken by
+          // someone else — cannot stay tied to the first client's request.
+          if ((action === "BLOCK" || action === "SELL") && input.salesRequestId === undefined) {
+            await tx.roomNight.updateMany({
+              where: { id: { in: ids }, salesRequest: { clientId: { not: input.clientId } } },
+              data: { salesRequestId: null },
+            });
+          }
+        }
+
+        await tx.ledgerEntry.create({
+          data: {
+            eventId,
+            actorId: actorId,
+            axis,
+            fromState: priorStates,
+            toState: acquisitionTo
+              ? acquisitionLabels[acquisitionTo]
+              : salesTo
+                ? salesLabels[salesTo]
+                : null,
+            nightCount: ids.length,
+            summary: `${actionLabels[action]} — ${rooms} × ${nightCount} ${nightCount === 1 ? "night" : "nights"}, ${period}${client ? `, ${client.name}` : ""}.`,
+            reason: reason?.trim() || null,
+            undoable: !isRequestAction,
+            beforeSnapshot: beforeSnapshot ?? undefined,
+            nights: { connect: ids.map((id) => ({ id })) },
+          },
+        });
+      }
+
+      return { nights: ids.length, rooms: slotIds.length, added };
 }
 
 export const inventoryRouter = createTRPCRouter({
@@ -625,280 +936,11 @@ export const inventoryRouter = createTRPCRouter({
     ),
 
   applyChange: protectedProcedure
-    .input(
-      attributes.extend({
-        eventId: z.string(),
-        slotIds: z.array(z.string()).min(1, "Pick at least one room"),
-        checkIn: z.date(),
-        checkOut: z.date(),
-        action: z.enum(ACTIONS),
-        reason: z.string().optional(),
-        /**
-         * Extend from the sheet (§5.4): nights in the selection that are not
-         * in inventory yet are added first, as "nothing started", then the
-         * change applies to all of them — one step, all or nothing.
-         */
-        addMissing: z.boolean().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) =>
+    .input(changeInput)
+    .mutation(({ ctx, input }) =>
       // One transaction from start to finish, so a change that is refused
       // leaves no half-added nights behind.
-      ctx.db.$transaction(async (tx) => {
-      const { action, eventId, slotIds, checkIn, checkOut, reason } = input;
-
-      const nightCount = nightsBetween(checkIn, checkOut);
-      if (nightCount === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "Check-out must be after check-in. A stay from 10-Jul to 11-Jul is one night; check-out day is never a night.",
-        });
-      }
-
-      const inRange = {
-        eventId,
-        slotId: { in: slotIds },
-        date: { gte: checkIn, lt: checkOut },
-      };
-      const expected = slotIds.length * nightCount;
-      const present = await tx.roomNight.findMany({
-        where: inRange,
-        select: { slotId: true, date: true },
-      });
-
-      // Extending: add whatever part of the selection is not in inventory yet.
-      let added = 0;
-      if (present.length !== expected) {
-        if (!input.addMissing) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Nothing was changed. ${expected - present.length} of the ${expected} room-nights you selected are not in this event's inventory yet. Bring them in first.`,
-          });
-        }
-        added = await addMissingNights(tx, {
-          eventId,
-          slotIds,
-          nights: eachNight(checkIn, checkOut),
-          present,
-          actorId: ctx.session.user.id,
-        });
-      }
-
-      const nights = await tx.roomNight.findMany({
-        where: inRange,
-        include: nightInclude,
-        orderBy: [{ slotId: "asc" }, { date: "asc" }],
-      });
-
-      const problems: Problem[] = [];
-      const client = input.clientId
-        ? await tx.client.findUnique({ where: { id: input.clientId } })
-        : null;
-      if (input.clientId && !client) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "No such client." });
-      }
-
-      const need = (value: unknown, message: string) => {
-        if (value === undefined || value === null || value === "") {
-          throw new TRPCError({ code: "BAD_REQUEST", message });
-        }
-      };
-
-      // --- Per-action validation ------------------------------------------
-
-      const acquisitionTo = acquisitionTarget[action];
-      const salesTo = salesTarget[action];
-
-      if (action === "TAKE_OPTION") {
-        // Invariant §4.5.4 — an option without a deadline is invalid.
-        need(
-          input.optionExpiry,
-          "An option needs a date it runs to. Without one it is invisible to every deadline report.",
-        );
-      }
-      if (action === "BLOCK") {
-        need(input.clientId, "Say which client is blocking these nights.");
-        // Invariant §4.5.4, and the change from the sheet recorded in §4.2:
-        // a block with no expiry is inventory frozen for free.
-        need(
-          input.blockExpiry,
-          "A block needs a date it runs to. A block with no deadline is inventory frozen for free, and invisible to every deadline report.",
-        );
-      }
-      if (action === "SELL" || action === "REQUEST" || action === "WITHDRAW_REQUEST") {
-        need(input.clientId, "Say which client this is for.");
-      }
-      if (action === "EXTEND_OPTION") need(input.optionExpiry, "Give the option's new date.");
-      if (action === "EXTEND_BLOCK") need(input.blockExpiry, "Give the block's new date.");
-      if (action === "REPRICE_BUY") {
-        need(input.buyPriceCents, "Give the price we pay per night.");
-        need(input.buyCurrency, "Say which currency that is in.");
-      }
-      if (action === "REPRICE_SELL") {
-        need(input.sellPriceCents, "Give the price the client pays per night.");
-        need(input.sellCurrency, "Say which currency that is in.");
-      }
-      if (action === "REASSIGN_ACQUISITION_OWNER") {
-        need(input.acquisitionOwnerId, "Pick the rep who takes over with the supplier.");
-      }
-      if (action === "REASSIGN_SALES_OWNER") {
-        need(input.salesOwnerId, "Pick the rep who takes over with the client.");
-      }
-
-      for (const night of nights) {
-        const where = describeRoom(night);
-        const fail = (reason: string) =>
-          problems.push({ room: where, date: night.date, reason });
-
-        if (acquisitionTo) {
-          const from = night.acquisitionState;
-          if (
-            from !== acquisitionTo &&
-            !allowedAcquisitionMoves[from].includes(acquisitionTo)
-          ) {
-            fail(
-              `cannot go from ${acquisitionLabels[from].toLowerCase()} to ${acquisitionLabels[acquisitionTo].toLowerCase()}.`,
-            );
-          }
-        }
-
-        if (salesTo) {
-          const from = night.salesState;
-          if (from !== salesTo && !allowedSalesMoves[from].includes(salesTo)) {
-            fail(
-              `cannot go from ${salesLabels[from].toLowerCase()} to ${salesLabels[salesTo].toLowerCase()}.`,
-            );
-          }
-          // Invariant §4.5.1 — at most one hard hold per room-night.
-          if (
-            (salesTo === "BLOCKED" || salesTo === "SOLD") &&
-            (night.salesState === "BLOCKED" || night.salesState === "SOLD") &&
-            night.clientId !== input.clientId
-          ) {
-            fail(
-              `already ${salesLabels[night.salesState].toLowerCase()} to ${night.client?.name ?? "another client"}. A night can carry only one client hold.`,
-            );
-          }
-        }
-
-        if (action === "RELEASE_HOLD" && night.salesState === "NONE") {
-          fail("no client hold to release.");
-        }
-        if (action === "CANCEL_SALE" && night.salesState !== "SOLD") {
-          fail("not sold, so there is no sale to cancel.");
-        }
-        if (action === "EXTEND_OPTION" && night.acquisitionState !== "OPTION") {
-          fail(
-            `${acquisitionLabels[night.acquisitionState].toLowerCase()}, so there is no option to extend.`,
-          );
-        }
-        if (action === "EXTEND_BLOCK" && night.salesState !== "BLOCKED") {
-          fail(
-            `${salesLabels[night.salesState].toLowerCase()}, so there is no block to extend.`,
-          );
-        }
-        if (
-          action === "REPRICE_SELL" &&
-          night.salesState !== "BLOCKED" &&
-          night.salesState !== "SOLD"
-        ) {
-          fail("no client holds it, so there is nothing to price.");
-        }
-        if (
-          action === "WITHDRAW_REQUEST" &&
-          !night.requests.some((request) => request.clientId === input.clientId)
-        ) {
-          fail(`${client?.name ?? "that client"} has no request on this night.`);
-        }
-      }
-
-      if (problems.length) refuse(problems);
-
-      // --- Apply ------------------------------------------------------------
-
-      const ids = nights.map((night) => night.id);
-      const axis = axisOf(action);
-      // A bulk operation rarely starts from one state, so the ledger records
-      // every state these nights were actually in.
-      const priorStates = [
-        ...new Set(
-          nights.map((night) =>
-            axis === "ACQUISITION"
-              ? acquisitionLabels[night.acquisitionState]
-              : salesLabels[night.salesState],
-          ),
-        ),
-      ].join(", ");
-
-      const data = buildUpdate(action, input);
-      const period = `${formatDay(checkIn)} – ${formatDay(checkOut)}`;
-      const rooms = `${slotIds.length} ${slotIds.length === 1 ? "room" : "rooms"}`;
-
-      // A request is a claim on a *different* table (`RoomNightRequest`), not
-      // a field on the night itself — nothing here to snapshot, so undo isn't
-      // offered for these two actions rather than only half-restoring state.
-      const isRequestAction = action === "REQUEST" || action === "WITHDRAW_REQUEST";
-      const beforeSnapshot: NightSnapshot[] | null = isRequestAction
-        ? null
-        : nights.map((night) => snapshotNight(night));
-
-      // A currency with no amount behind it is noise, so it only travels with
-      // a price (invariant §4.5.9).
-      const requestData = {
-        clientRef: input.clientRef?.trim() || null,
-        sellPriceCents: input.sellPriceCents ?? null,
-        sellCurrency: input.sellPriceCents ? (input.sellCurrency ?? null) : null,
-        notes: input.salesNotes?.trim() || null,
-        ownerId: input.salesOwnerId ?? null,
-      };
-
-      {
-        if (action === "REQUEST") {
-          // A request is a claim, not a hold — many clients may hold one on the
-          // same night, and asking twice is the same claim (doc §4.3).
-          await Promise.all(
-            ids.map((roomNightId) =>
-              tx.roomNightRequest.upsert({
-                where: {
-                  roomNightId_clientId: { roomNightId, clientId: input.clientId! },
-                },
-                update: requestData,
-                create: { roomNightId, clientId: input.clientId!, ...requestData },
-              }),
-            ),
-          );
-        } else if (action === "WITHDRAW_REQUEST") {
-          await tx.roomNightRequest.deleteMany({
-            where: { roomNightId: { in: ids }, clientId: input.clientId! },
-          });
-        } else {
-          await tx.roomNight.updateMany({ where: { id: { in: ids } }, data });
-        }
-
-        await tx.ledgerEntry.create({
-          data: {
-            eventId,
-            actorId: ctx.session.user.id,
-            axis,
-            fromState: priorStates,
-            toState: acquisitionTo
-              ? acquisitionLabels[acquisitionTo]
-              : salesTo
-                ? salesLabels[salesTo]
-                : null,
-            nightCount: ids.length,
-            summary: `${actionLabels[action]} — ${rooms} × ${nightCount} ${nightCount === 1 ? "night" : "nights"}, ${period}${client ? `, ${client.name}` : ""}.`,
-            reason: reason?.trim() || null,
-            undoable: !isRequestAction,
-            beforeSnapshot: beforeSnapshot ?? undefined,
-            nights: { connect: ids.map((id) => ({ id })) },
-          },
-        });
-      }
-
-      return { nights: ids.length, rooms: slotIds.length, added };
-      }, { timeout: 30_000 }),
+      ctx.db.$transaction((tx) => applyInventoryChange(tx, ctx.session.user.id, input), { timeout: 30_000 }),
     ),
 
   /**
@@ -1353,12 +1395,15 @@ function buildUpdate(
         sellCurrency: input.sellPriceCents ? (input.sellCurrency ?? null) : null,
         salesOwnerId: input.salesOwnerId ?? null,
         salesNotes: input.salesNotes?.trim() || null,
+        ...(input.salesRequestId !== undefined && { salesRequestId: input.salesRequestId }),
       };
 
     case "RELEASE_HOLD":
+      // The hold is gone, so it belongs to no request any more.
       return {
         salesState: "NONE" as const,
         clientId: null,
+        salesRequestId: null,
         clientRef: null,
         blockExpiry: null,
         dueDate: null,

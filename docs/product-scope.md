@@ -1024,6 +1024,11 @@ A refusal names the rooms, not each night separately: twenty-one identical lines
 room is a wall rather than an explanation, so consecutive nights failing for the same reason
 collapse into one line naming the range.
 
+There are two ways in, and one mutation behind both: the stock sheet, where the rectangle is
+selected by hand, and a sales request (§4.11), where the rep says a room category, a
+number of rooms and a stay and the system picks the rooms. Neither has a rule the other
+lacks.
+
 ### 4.9 The general audit trail
 
 The ledger (§4.7) only ever describes a room-night. Everything else that changes — a
@@ -1140,16 +1145,51 @@ It is the commercial conversation, not the rooms. A room-night's own *Requested*
 a soft claim on one particular night; a sales request is the whole enquiry those nights
 come to belong to.
 
-**The rooms behind a request.** A request's page shows the client's room-nights on the
-request's event — requested, blocked and sold — by property and room category: how many
-rooms, how many room-nights, from the first night to the last, and, for a block, the
-earliest date it runs out. The list shows each request's nights sold and blocked. None of
-it is stored on the request: it is worked out from the inventory (§4.2) each time, so it
-cannot disagree with the stock sheet. The link is the client and the event, which has two
-consequences worth knowing. A request with no event shows no rooms. And if a client has
-two requests open for the same event — a second phase, say — both show the same rooms;
-telling them apart would mean choosing the request each time rooms are blocked or sold,
-which is not asked for today.
+**Selling from the request: its rooms are the inventory.** A request's page has a **Rooms**
+card, and it is where the rooms for that request are requested, blocked and sold — in the
+event's inventory itself, not in a copy of it. There is no separate step of going to the
+stock sheet and doing it again.
+
+- **+ Add rooms** takes a room category of the event, how many rooms, check-in and
+  check-out, and what to do: *Request* (a soft claim that locks nothing, §4.3), *Block*
+  (with the date it runs to, which is required, §4.2) or *Sell*, with the price per night
+  to the client and the client's reference if there is one. Before anything is done it
+  says how many of that category's rooms are free for every night of the stay, how many of
+  those we have bought, and — if fewer are bought than asked for — that blocking or selling
+  them sells ahead of what we hold and makes us short (§4.4).
+- **The system picks the rooms**: ones free for the whole stay — in inventory every night,
+  and held by no other client — bought ones first, then the lowest room numbers. The
+  message afterwards names them (*"Blocked 4 rooms (#1, #2, #3, #4) — 32 room-nights"*). A
+  room this client already holds on any of those nights is not picked again. If not enough
+  are free, nothing is done, and it says how many are.
+- **Each row of the card** is one room category in one state — requested, blocked, sold or
+  cancelled — with how many rooms and room-nights, the stay from first check-in to last
+  check-out, the price per night, and what the rooms come to in all. The row moves the
+  rooms on: a request is **blocked**, **sold** or **withdrawn**; a block is **sold**,
+  **extended** or **released**; a sale is **cancelled**. A sale keeps the block's price,
+  reference and account manager unless a new price is given. A request that becomes a
+  block or a sale is withdrawn as a request at the same time, so a night is not both.
+- **After a block or a sale**, the card offers to move the request on — *Mark the request
+  Blocked*, *Mark the request Signed* — with one click. It never does so itself: the stage
+  is still the rep's call (above).
+- **Every one of these goes through the inventory's own rules** (§4.3–§4.5): one hard hold
+  per night, the moves the sales axis allows, a block needing its date. It is written to
+  the event's ledger like any change on the stock sheet (§4.7), undone there the same way
+  — an undo puts the rooms back on the request they were on — and recorded in the
+  request's own history as well.
+
+**Nights know their request.** A blocked or sold room-night, and a client's request on a
+night, carry which of the client's sales requests they belong to — always one of that
+client's own, for that event; anything else is refused. So a client with two requests for
+one event — a second phase, say — sees each one's own rooms. On the stock sheet, requesting,
+blocking or selling for a client asks which of their open requests for the event it is for,
+and picks it when there is only one; it can be left as none. Releasing a block unties it
+from the request; a cancelled sale stays on it, as the client stays on the night (§4.2).
+Where a client has holds or requests on the event that belong to no request — made on the
+stock sheet before this, or left as none — the card says how many and offers to **tie them
+to this request**; that is written to the ledger too. The list of requests shows each one's
+nights sold and blocked, counted from the nights themselves: nothing about the rooms is
+stored on the request, so it cannot disagree with the stock sheet.
 
 **Where a request stands** — its *stage*:
 
@@ -1882,7 +1922,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
-| §4.11 Rooms behind a request | **Built** | The client's requested, blocked and sold room-nights on the request's event, by property and category, from the inventory. Two requests from one client for one event show the same rooms |
+| §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |

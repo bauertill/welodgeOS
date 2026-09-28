@@ -10,7 +10,7 @@ import { Manager } from "~/app/_components/client-list";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Card, EmptyState } from "~/app/_components/ui";
-import { daysUntil, dayKey, today } from "~/lib/dates";
+import { addDays, daysUntil, dayKey, today } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import {
   closedStages,
@@ -886,88 +886,529 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
   );
 }
 
-const roomStateLabels = { SOLD: "Sold", BLOCKED: "Blocked", REQUESTED: "Requested" } as const;
+const roomStateLabels = { SOLD: "Sold", BLOCKED: "Blocked", REQUESTED: "Requested", CANCELLED: "Cancelled" } as const;
 const roomStateStyles = {
   SOLD: "bg-[#e3f8ee] text-[#0a7a47]",
   BLOCKED: "bg-brand-50 text-brand-800",
   REQUESTED: "bg-[#fff4e0] text-[#a15c00]",
+  CANCELLED: "bg-ink-50 text-ink-500",
 } as const;
 
+type RoomRow = NonNullable<RouterOutputs["sales"]["rooms"]>["rows"][number];
+type RoomAction = "BLOCK" | "SELL" | "WITHDRAW_REQUEST" | "EXTEND_BLOCK" | "RELEASE_HOLD" | "CANCEL_SALE";
+
+/** What can be done to a row of a request's rooms, in the business's words. */
+const rowActions: Record<RoomRow["state"], { action: RoomAction; label: string }[]> = {
+  REQUESTED: [
+    { action: "BLOCK", label: "Block" },
+    { action: "SELL", label: "Sell" },
+    { action: "WITHDRAW_REQUEST", label: "Withdraw" },
+  ],
+  BLOCKED: [
+    { action: "SELL", label: "Sell" },
+    { action: "EXTEND_BLOCK", label: "Extend" },
+    { action: "RELEASE_HOLD", label: "Release" },
+  ],
+  SOLD: [{ action: "CANCEL_SALE", label: "Cancel sale" }],
+  CANCELLED: [],
+};
+
+/** The stage a request has reached once its rooms are blocked or sold — offered, never made. */
+const stageAfter = { BLOCK: "BLOCKED", SELL: "SIGNED" } as const;
+
+/** Re-reads the rooms, and resolves once the table shows the change — so "done" is never said before it is. */
+function useRoomsSaved() {
+  const saved = useSaved();
+  const utils = api.useUtils();
+  return async () => {
+    void utils.sales.availability.invalidate();
+    void utils.inventory.invalidate();
+    saved();
+    await utils.sales.rooms.invalidate();
+  };
+}
+
 /**
- * The rooms behind the request (doc §4.11): this client's room-nights on the
- * request's event, as the inventory has them right now.
+ * The rooms behind the request (doc §4.11): what is requested, blocked and
+ * sold for it in the event's inventory — added and moved on from here, through
+ * the inventory's own rules.
  */
 function RoomsCard({ request }: { request: FullRequest }) {
   const rooms = api.sales.rooms.useQuery({ id: request.id });
+  const [adding, setAdding] = useState(false);
+  const [done, setDone] = useState<{ text: string; offer: SalesRequestStage | null } | null>(null);
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2 align-top text-[13px] font-light";
   const data = rooms.data;
+
+  const finished = (text: string, action: RoomAction | "REQUEST") => {
+    const next = action === "BLOCK" || action === "SELL" ? stageAfter[action] : null;
+    const ahead = next && salesStageOrder.indexOf(next) > salesStageOrder.indexOf(request.stage) && !isClosed(request.stage);
+    setDone({ text, offer: ahead ? next : null });
+  };
+
   return (
     <Card>
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="text-ink-900 text-[15px] font-medium">Rooms</h2>
-        {data && (
-          <Link href={`/events/${data.eventId}/inventory`} className="text-brand-700 text-[13px] font-light hover:underline">
-            Open the event&apos;s inventory
-          </Link>
-        )}
+        <div className="flex items-baseline gap-4">
+          {data && !adding && (
+            <button type="button" onClick={() => { setAdding(true); setDone(null); }} className="text-brand-700 text-[13px] font-medium hover:underline">
+              + Add rooms
+            </button>
+          )}
+          {data && (
+            <Link href={`/events/${data.eventId}/inventory`} className="text-brand-700 text-[13px] font-light hover:underline">
+              Inventory
+            </Link>
+          )}
+        </div>
       </div>
+
+      {done && <Done done={done} request={request} onClose={() => setDone(null)} />}
+
+      {adding && data && (
+        <AddRooms
+          request={request}
+          onCancel={() => setAdding(false)}
+          onDone={(text, action) => {
+            setAdding(false);
+            finished(text, action);
+          }}
+        />
+      )}
+
       {rooms.isLoading ? (
         <p className="text-ink-500 text-sm font-light">…</p>
       ) : data === null ? (
-        <p className="text-ink-500 text-sm font-light">Choose the event under Details to see the rooms the client has asked for, blocked or bought.</p>
-      ) : !data || data.rows.length === 0 ? (
-        <p className="text-ink-500 text-sm font-light">
-          No rooms for {request.client.name} on {request.event?.name} yet. They appear here once rooms are requested, blocked or
-          sold to the client in the event&apos;s inventory.
-        </p>
-      ) : (
+        <p className="text-ink-500 text-sm font-light">Choose the event under Details to request, block or sell rooms for this request.</p>
+      ) : !data ? null : (
         <>
-          <div className="border-ink-200/60 overflow-x-auto rounded-lg border">
-            <table className="w-full text-left">
-              <thead className="bg-ink-50/60">
-                <tr>
-                  <th className={th}>Where</th>
-                  <th className={th}>Status</th>
-                  <th className={th}>Rooms</th>
-                  <th className={th}>Nights</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((row) => (
-                  <tr key={`${row.propertyId}-${row.categoryName}-${row.state}`}>
-                    <td className={`${td} text-ink-900`}>
-                      <Link href={`/properties/${row.propertyId}`} className="hover:text-brand-700">
-                        {row.propertyName}
-                      </Link>
-                      <span className="text-ink-500 block text-xs">{row.categoryName}</span>
-                    </td>
-                    <td className={td}>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${roomStateStyles[row.state]}`}>{roomStateLabels[row.state]}</span>
-                      {row.blockExpiry && (
-                        <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">until {formatDate(row.blockExpiry)}</span>
-                      )}
-                    </td>
-                    <td className={`${td} whitespace-nowrap`}>
-                      {row.rooms}
-                      <span className="text-ink-500 block text-xs">{row.nights} room-nights</span>
-                    </td>
-                    <td className={`${td} whitespace-nowrap`}>
-                      {row.from.getTime() === row.to.getTime() ? formatDate(row.from) : formatRange(row.from, row.to)}
-                    </td>
+          {data.rows.length === 0 ? (
+            !adding && (
+              <p className="text-ink-500 text-sm font-light">
+                No rooms on this request yet. <strong className="font-medium">+ Add rooms</strong> requests, blocks or sells them in
+                the event&apos;s inventory, straight from here.
+              </p>
+            )
+          ) : (
+            <div className="border-ink-200/60 overflow-x-auto rounded-lg border">
+              <table className="w-full text-left">
+                <thead className="bg-ink-50/60">
+                  <tr>
+                    <th className={th}>Where</th>
+                    <th className={th}>Status</th>
+                    <th className={th}>Rooms</th>
+                    <th className={th}>Stay</th>
+                    <th className={th}>Price</th>
+                    <th className={th}>{""}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-ink-500 mt-2 text-xs font-light">
-            Every room-night {request.client.name} has on {request.event?.name}, from the inventory. &ldquo;Nights&rdquo; runs from the
-            first night to the last; there may be gaps between. If the client has more than one request for this event, each
-            shows the same rooms.
-          </p>
+                </thead>
+                <tbody>
+                  {data.rows.map((row) => (
+                    <RoomRowView key={`${row.categoryId}-${row.state}`} row={row} request={request} td={td} onDone={finished} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {data.loose > 0 && <LooseRooms request={request} count={data.loose} />}
         </>
       )}
     </Card>
+  );
+}
+
+function Done({ done, request, onClose }: { done: { text: string; offer: SalesRequestStage | null }; request: FullRequest; onClose: () => void }) {
+  const saved = useSaved();
+  const setStage = api.sales.setStage.useMutation({ onSuccess: () => { saved(); onClose(); } });
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-[#e3f8ee] px-3 py-2 text-[13px] text-[#0a7a47]">
+      <span>{done.text}</span>
+      {done.offer && (
+        <button
+          type="button"
+          disabled={setStage.isPending}
+          onClick={() => setStage.mutate({ id: request.id, stage: done.offer! })}
+          className="font-medium hover:underline"
+        >
+          Mark the request {salesStageLabels[done.offer]}
+        </button>
+      )}
+      <button type="button" onClick={onClose} className="ml-auto text-xs font-light hover:underline">
+        Close
+      </button>
+    </div>
+  );
+}
+
+function RoomRowView({
+  row,
+  request,
+  td,
+  onDone,
+}: {
+  row: RoomRow;
+  request: FullRequest;
+  td: string;
+  onDone: (text: string, action: RoomAction) => void;
+}) {
+  const [acting, setActing] = useState<RoomAction | null>(null);
+  const price = row.price ? `${formatMoney(row.price.cents, row.price.currency)} / night` : row.state === "CANCELLED" ? "—" : "Not priced";
+  return (
+    <>
+      <tr>
+        <td className={`${td} text-ink-900`}>
+          <Link href={`/properties/${row.propertyId}`} className="hover:text-brand-700">
+            {row.propertyName}
+          </Link>
+          <span className="text-ink-500 block text-xs">{row.categoryName}</span>
+        </td>
+        <td className={td}>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${roomStateStyles[row.state]}`}>{roomStateLabels[row.state]}</span>
+          {row.blockExpiry && <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">until {formatDate(row.blockExpiry)}</span>}
+        </td>
+        <td className={`${td} whitespace-nowrap`}>
+          {row.rooms}
+          <span className="text-ink-500 block text-xs">{row.nights} room-nights</span>
+        </td>
+        <td className={`${td} whitespace-nowrap`}>{row.from.getTime() === row.to.getTime() ? formatDate(row.from) : formatRange(row.from, addDays(row.to, 1))}</td>
+        <td className={`${td} whitespace-nowrap`}>
+          {price}
+          {row.value && row.state !== "REQUESTED" && (
+            <span className="text-ink-500 block text-xs">{formatMoney(row.value.cents, row.value.currency)} in all</span>
+          )}
+        </td>
+        <td className={`${td} whitespace-nowrap`}>
+          {rowActions[row.state].map((option) => (
+            <button
+              key={option.action}
+              type="button"
+              onClick={() => setActing(acting === option.action ? null : option.action)}
+              className={`mr-3 text-xs hover:underline ${option.action === "RELEASE_HOLD" || option.action === "CANCEL_SALE" || option.action === "WITHDRAW_REQUEST" ? "text-[#c03654]" : "text-brand-700 font-medium"}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </td>
+      </tr>
+      {acting && (
+        <tr>
+          <td colSpan={6} className="border-ink-200/40 bg-brand-50/40 border-b p-3">
+            <ChangeRooms
+              row={row}
+              request={request}
+              action={acting}
+              onCancel={() => setActing(null)}
+              onDone={(text) => {
+                setActing(null);
+                onDone(text, acting);
+              }}
+            />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/** The small form for moving a row of rooms on: a price for a sale, a date for a block. */
+function ChangeRooms({
+  row,
+  request,
+  action,
+  onCancel,
+  onDone,
+}: {
+  row: RoomRow;
+  request: FullRequest;
+  action: RoomAction;
+  onCancel: () => void;
+  onDone: (text: string) => void;
+}) {
+  const refresh = useRoomsSaved();
+  const [blockExpiry, setBlockExpiry] = useState(row.blockExpiry ? dayKey(row.blockExpiry) : "");
+  const [price, setPrice] = useState(row.price ? (row.price.cents / 100).toFixed(2) : "");
+  const [currency, setCurrency] = useState(row.price?.currency ?? "USD");
+  const [problem, setProblem] = useState<string | null>(null);
+  const change = api.sales.changeRooms.useMutation({
+    onSuccess: async (outcome) => {
+      await refresh();
+      onDone(`${changeWords[action]} — ${outcome.nights} room-nights of ${row.categoryName}, ${row.propertyName}.`);
+    },
+  });
+  const needsPrice = action === "SELL" || action === "BLOCK";
+  const needsDate = action === "BLOCK" || action === "EXTEND_BLOCK";
+  const warning = {
+    RELEASE_HOLD: `Releases the client's block on these ${row.nights} room-nights. They become free for anyone.`,
+    CANCEL_SALE: `Cancels the sale of these ${row.nights} room-nights. They stay on record as cancelled and stop counting as sold.`,
+    WITHDRAW_REQUEST: `Withdraws the client's request for these ${row.nights} room-nights.`,
+  } as Partial<Record<RoomAction, string>>;
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setProblem(null);
+        const amount = price.trim() ? Number(price.replace(",", ".")) : null;
+        if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+          setProblem("The price should be a number, like 281.50.");
+          return;
+        }
+        change.mutate({
+          id: request.id,
+          categoryId: row.categoryId,
+          state: row.state as "REQUESTED" | "BLOCKED" | "SOLD",
+          action,
+          blockExpiry: needsDate ? blockExpiry : undefined,
+          ...(needsPrice && { sellPriceCents: amount === null ? null : Math.round(amount * 100), sellCurrency: currency }),
+        });
+      }}
+    >
+      {warning[action] && <p className="text-ink-700 w-full text-[13px] font-light">{warning[action]}</p>}
+      {needsDate && (
+        <div className="w-44">
+          <Field label={action === "EXTEND_BLOCK" ? "Block now runs to" : "Block runs to"}>
+            <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} required />
+          </Field>
+        </div>
+      )}
+      {needsPrice && (
+        <div className="w-64">
+          <Field label="Price per night, to the client">
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="350.00" aria-label="Price per night" />
+              </div>
+              <div className="w-24 shrink-0">
+                <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
+                  {["USD", "EUR", "CHF", "GBP"].map((code) => (
+                    <option key={code}>{code}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </Field>
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={change.isPending}>
+          {change.isPending ? "Working…" : confirmWords[action]}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      {(problem ?? change.error) && (
+        <p className="w-full text-xs whitespace-pre-line text-[#c03654]">{problem ?? friendlyError(change.error)}</p>
+      )}
+    </form>
+  );
+}
+
+const changeWords: Record<RoomAction, string> = {
+  BLOCK: "Blocked",
+  SELL: "Sold",
+  WITHDRAW_REQUEST: "Request withdrawn",
+  EXTEND_BLOCK: "Block extended",
+  RELEASE_HOLD: "Block released",
+  CANCEL_SALE: "Sale cancelled",
+};
+const confirmWords: Record<RoomAction, string> = {
+  BLOCK: "Block these rooms",
+  SELL: "Sell these rooms",
+  WITHDRAW_REQUEST: "Withdraw the request",
+  EXTEND_BLOCK: "Extend the block",
+  RELEASE_HOLD: "Release the block",
+  CANCEL_SALE: "Cancel the sale",
+};
+
+/**
+ * Request, block or sell rooms for this request: a room category, how many,
+ * which nights. The rooms themselves are chosen by the system — free for the
+ * whole stay, bought ones first.
+ */
+function AddRooms({
+  request,
+  onCancel,
+  onDone,
+}: {
+  request: FullRequest;
+  onCancel: () => void;
+  onDone: (text: string, action: "REQUEST" | "BLOCK" | "SELL") => void;
+}) {
+  const refresh = useRoomsSaved();
+  const options = api.sales.roomOptions.useQuery({ id: request.id });
+  const [categoryId, setCategoryId] = useState("");
+  const [count, setCount] = useState("1");
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [action, setAction] = useState<"REQUEST" | "BLOCK" | "SELL">("BLOCK");
+  const [blockExpiry, setBlockExpiry] = useState(request.blockedUntil ? dayKey(request.blockedUntil) : "");
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState("USD");
+  const [clientRef, setClientRef] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const datesOk = /^\d{4}-\d{2}-\d{2}$/.test(checkIn) && /^\d{4}-\d{2}-\d{2}$/.test(checkOut) && checkOut > checkIn;
+  const availability = api.sales.availability.useQuery(
+    { id: request.id, categoryId, checkIn, checkOut },
+    { enabled: Boolean(categoryId) && datesOk },
+  );
+  const add = api.sales.addRooms.useMutation({
+    onSuccess: async (outcome) => {
+      await refresh();
+      const label = options.data?.find((option) => option.id === categoryId)?.label ?? "";
+      onDone(
+        `${addWords[action]} ${outcome.rooms} ${outcome.rooms === 1 ? "room" : "rooms"} (#${outcome.slotNumbers.join(", #")}) — ${outcome.nights} room-nights, ${label}.`,
+        action,
+      );
+    },
+  });
+  const wanted = Number(count);
+  const free = availability.data?.free;
+
+  return (
+    <form
+      className="border-ink-200/60 bg-ink-50/40 mb-4 rounded-lg border p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setProblem(null);
+        if (!categoryId) return setProblem("Choose the room category.");
+        if (!Number.isInteger(wanted) || wanted < 1) return setProblem("Say how many rooms, like 6.");
+        if (!datesOk) return setProblem("Give a check-in and a check-out after it.");
+        if (action === "BLOCK" && !blockExpiry) return setProblem("A block needs a date it runs to.");
+        const amount = price.trim() ? Number(price.replace(",", ".")) : null;
+        if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return setProblem("The price should be a number, like 281.50.");
+        add.mutate({
+          id: request.id,
+          categoryId,
+          rooms: wanted,
+          checkIn,
+          checkOut,
+          action,
+          blockExpiry: action === "BLOCK" ? blockExpiry : undefined,
+          sellPriceCents: amount === null ? null : Math.round(amount * 100),
+          sellCurrency: currency,
+          clientRef,
+        });
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-6">
+        <Field label="Room category" className="sm:col-span-3">
+          <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">{options.data?.length === 0 ? "Nothing in this event's inventory yet" : "Choose…"}</option>
+            {(options.data ?? []).map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Rooms" className="sm:col-span-1">
+          <Input value={count} onChange={(e) => setCount(e.target.value)} inputMode="numeric" aria-label="Rooms" />
+        </Field>
+        <Field label="Check-in" className="sm:col-span-1">
+          <Input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+        </Field>
+        <Field label="Check-out" className="sm:col-span-1">
+          <Input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
+        </Field>
+      </div>
+
+      {categoryId && datesOk && availability.data && (
+        <p className={`mt-2 text-[13px] font-light ${free !== undefined && free < wanted ? "text-[#c03654]" : "text-ink-700"}`}>
+          {availability.data.free} of {availability.data.total} rooms are free for every night of the stay
+          {availability.data.free > 0 && ` — ${availability.data.freeBought} of them bought`}.
+          {availability.data.alreadyTheirs > 0 && ` ${availability.data.alreadyTheirs} are already this client's on some of those nights.`}
+          {availability.data.notInInventory > 0 && ` ${availability.data.notInInventory} are not in inventory for all those dates.`}
+          {free !== undefined && free >= wanted && availability.data.freeBought < wanted && action !== "REQUEST" && (
+            <span className="block text-[#a15c00]">
+              Fewer than {wanted} are bought: {action === "SELL" ? "selling" : "blocking"} them sells ahead of what we hold, and makes us short.
+            </span>
+          )}
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-ink-700 text-[13px] font-medium">Do</span>
+        {(["REQUEST", "BLOCK", "SELL"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setAction(option)}
+            aria-pressed={action === option}
+            title={addHints[option]}
+            className={`rounded-full border px-3 py-1 text-[12px] ${
+              action === option ? "border-brand-400 bg-brand-50 text-brand-800 font-medium" : "border-ink-200 text-ink-500 bg-white font-light"
+            }`}
+          >
+            {addLabels[option]}
+          </button>
+        ))}
+        <span className="text-ink-500 text-xs font-light">{addHints[action]}</span>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-6">
+        {action === "BLOCK" && (
+          <Field label="Block runs to" className="sm:col-span-2">
+            <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} />
+          </Field>
+        )}
+        <Field label="Price per night, to the client" className="sm:col-span-2">
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="350.00" aria-label="Price per night" />
+            </div>
+            <div className="w-24 shrink-0">
+              <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
+                {["USD", "EUR", "CHF", "GBP"].map((code) => (
+                  <option key={code}>{code}</option>
+                ))}
+              </Select>
+            </div>
+          </div>
+        </Field>
+        <Field label="Client reference" className="sm:col-span-2">
+          <Input value={clientRef} onChange={(e) => setClientRef(e.target.value)} placeholder="Their order number" />
+        </Field>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button type="submit" disabled={add.isPending}>
+          {add.isPending ? "Working…" : `${addLabels[action]} ${Number.isInteger(wanted) && wanted > 0 ? wanted : ""} ${wanted === 1 ? "room" : "rooms"}`}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      {(problem ?? add.error) && <p className="mt-2 text-xs whitespace-pre-line text-[#c03654]">{problem ?? friendlyError(add.error)}</p>}
+    </form>
+  );
+}
+
+const addLabels = { REQUEST: "Request", BLOCK: "Block", SELL: "Sell" } as const;
+const addWords = { REQUEST: "Requested", BLOCK: "Blocked", SELL: "Sold" } as const;
+const addHints = {
+  REQUEST: "A soft claim — locks nothing; other clients may ask for the same nights.",
+  BLOCK: "Holds the rooms for the client until the date you give.",
+  SELL: "The client has signed for these rooms.",
+} as const;
+
+/** The client's rooms on this event that belong to no request yet — made on the stock sheet, say. */
+function LooseRooms({ request, count }: { request: FullRequest; count: number }) {
+  const refresh = useRoomsSaved();
+  const tie = api.sales.tieLooseRooms.useMutation({ onSuccess: () => refresh() });
+  return (
+    <p className="bg-ink-50 text-ink-700 mt-3 rounded-lg px-3 py-2 text-[13px] font-light">
+      {request.client.name} has {count} more room-night{count === 1 ? "" : "s"} on {request.event?.name} that belong to no request —
+      blocked, sold or requested on the stock sheet.{" "}
+      <button type="button" disabled={tie.isPending} onClick={() => tie.mutate({ id: request.id })} className="text-brand-700 font-medium hover:underline">
+        {tie.isPending ? "Tying…" : "Tie them to this request"}
+      </button>
+      {tie.error && <span className="block text-xs text-[#c03654]">{friendlyError(tie.error)}</span>}
+    </p>
   );
 }
 

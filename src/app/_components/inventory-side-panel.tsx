@@ -24,6 +24,7 @@ import {
   salesTarget,
   type InventoryAction,
 } from "~/lib/inventory";
+import { isClosed, salesStageLabels } from "~/lib/sales";
 import { api } from "~/trpc/react";
 
 /** What the grid already knows about one selected, materialised room-night. */
@@ -146,6 +147,15 @@ export function InventorySidePanel({
   const [sellCurrency, setSellCurrency] = useState(single?.sellCurrency ?? "USD");
   const [salesOwnerId, setSalesOwnerId] = useState("");
   const [salesNotes, setSalesNotes] = useState("");
+  // Which of the client's sales requests these nights belong to (doc §4.11).
+  // "" means none; left untouched, it follows the client's only open request.
+  const [salesRequestId, setSalesRequestId] = useState<string | null>(null);
+  const forRequest = action === "REQUEST" || action === "BLOCK" || action === "SELL";
+  const clientRequests = api.sales.forClient.useQuery({ clientId }, { enabled: Boolean(clientId) && forRequest });
+  const openRequests = (clientRequests.data ?? []).filter(
+    (request) => request.event?.id === eventId && !isClosed(request.stage),
+  );
+  const chosenRequest = salesRequestId ?? (openRequests.length === 1 ? openRequests[0]!.id : "");
 
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -268,6 +278,7 @@ export function InventorySidePanel({
       sellCurrency,
       salesOwnerId: salesOwnerId || undefined,
       salesNotes: salesNotes.trim() || undefined,
+      salesRequestId: forRequest && chosenRequest ? chosenRequest : undefined,
     });
   };
 
@@ -518,6 +529,19 @@ export function InventorySidePanel({
                 value={blockExpiry}
                 onChange={(e) => setBlockExpiry(e.target.value)}
               />
+            </Field>
+          )}
+
+          {forRequest && clientId && openRequests.length > 0 && (
+            <Field label="Sales request" hint="Which of the client's requests these nights belong to — they then show on it.">
+              <Select value={chosenRequest} onChange={(e) => setSalesRequestId(e.target.value)}>
+                <option value="">None</option>
+                {openRequests.map((request) => (
+                  <option key={request.id} value={request.id}>
+                    {[salesStageLabels[request.stage], request.contact?.name, request.description?.slice(0, 50)].filter(Boolean).join(" · ")}
+                  </option>
+                ))}
+              </Select>
             </Field>
           )}
 

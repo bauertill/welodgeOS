@@ -3,8 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 
-import { parseDay, today } from "~/lib/dates";
-import { formatDate, formatMoney } from "~/lib/format";
+import { addDays, nightsBetween, parseDay, today } from "~/lib/dates";
+import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import {
   clientContractingKeys,
   contractingFields,
@@ -14,7 +14,9 @@ import {
   salesStageLabels,
 } from "~/lib/sales";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import { applyInventoryChange } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
+import { snapshotNight } from "~/server/inventory";
 
 /**
  * Sales requests (doc §4.11): a client's interest in accommodation, followed
@@ -126,6 +128,90 @@ async function checkContact(db: Prisma.TransactionClient, contactId: string | nu
   }
 }
 
+/** "2028-07-10", required. */
+const dayRequired = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Give the date");
+
+const roomVerbs = { REQUEST: "Rooms requested", BLOCK: "Rooms blocked", SELL: "Rooms sold" } as const;
+const changeVerbs = {
+  BLOCK: "Requested rooms blocked",
+  SELL: "Rooms sold",
+  WITHDRAW_REQUEST: "Request for rooms withdrawn",
+  EXTEND_BLOCK: "Block extended",
+  RELEASE_HOLD: "Block released",
+  CANCEL_SALE: "Sale cancelled",
+} as const;
+
+/**
+ * Every room of a category over a stay, and whether it could go to this
+ * client: in inventory every night, and held by no other client. A room this
+ * client already holds on any of those nights is theirs, not free.
+ */
+async function roomsFor(
+  db: Prisma.TransactionClient,
+  input: { eventId: string; categoryId: string; clientId: string; checkIn: Date; checkOut: Date },
+) {
+  const nightCount = nightsBetween(input.checkIn, input.checkOut);
+  const slots = await db.roomSlot.findMany({
+    where: { categoryId: input.categoryId },
+    orderBy: { slotNumber: "asc" },
+    select: {
+      id: true,
+      slotNumber: true,
+      roomNights: {
+        where: { eventId: input.eventId, date: { gte: input.checkIn, lt: input.checkOut } },
+        select: { salesState: true, clientId: true, acquisitionState: true },
+      },
+    },
+  });
+  const hard = (state: string) => state === "BLOCKED" || state === "SOLD";
+  return slots.map((slot) => {
+    const present = slot.roomNights.length === nightCount;
+    const heldByOther = slot.roomNights.some((night) => hard(night.salesState) && night.clientId !== input.clientId);
+    const theirs = slot.roomNights.some((night) => hard(night.salesState) && night.clientId === input.clientId);
+    return {
+      slotId: slot.id,
+      slotNumber: slot.slotNumber,
+      present,
+      theirs,
+      free: present && !heldByOther && !theirs,
+      bought: present && slot.roomNights.every((night) => night.acquisitionState === "BOUGHT"),
+    };
+  });
+}
+
+/**
+ * Nights as the rectangles the inventory changes in — rooms × a run of dates
+ * (doc §4.8). A request's rooms are usually one rectangle; where rooms arrive
+ * or leave on different days, each run is its own.
+ */
+function rectangles(nights: { slotId: string; date: Date }[]) {
+  const bySlot = new Map<string, Date[]>();
+  for (const night of nights) bySlot.set(night.slotId, [...(bySlot.get(night.slotId) ?? []), night.date]);
+  const runs = new Map<string, { slotIds: string[]; checkIn: Date; checkOut: Date }>();
+  for (const [slotId, dates] of bySlot) {
+    dates.sort((a, b) => a.getTime() - b.getTime());
+    let start = dates[0]!;
+    let end = dates[0]!;
+    const flush = () => {
+      const checkOut = addDays(end, 1);
+      const key = `${start.toISOString()}|${checkOut.toISOString()}`;
+      const run = runs.get(key) ?? { slotIds: [], checkIn: start, checkOut };
+      run.slotIds.push(slotId);
+      runs.set(key, run);
+    };
+    for (const date of dates.slice(1)) {
+      if (nightsBetween(end, date) === 1) end = date;
+      else {
+        flush();
+        start = date;
+        end = date;
+      }
+    }
+    flush();
+  }
+  return [...runs.values()];
+}
+
 export const salesRouter = createTRPCRouter({
   /**
    * The Sales requests page (doc §4.11): open ones by default, filtered by
@@ -164,33 +250,29 @@ export const salesRouter = createTRPCRouter({
         take: 500,
         include,
       });
-      // The client's hard holds on the request's event, counted from the
-      // room-nights themselves (doc §4.11) — never stored on the request.
-      const eventIds = [...new Set(requests.map((request) => request.eventId).filter((id): id is string => Boolean(id)))];
-      const counts = eventIds.length
+      // The nights held for each request, counted from the room-nights
+      // themselves (doc §4.11) — never stored on the request.
+      const counts = requests.length
         ? await ctx.db.roomNight.groupBy({
-            by: ["eventId", "clientId", "salesState"],
-            where: {
-              eventId: { in: eventIds },
-              clientId: { in: [...new Set(requests.map((request) => request.clientId))] },
-              salesState: { in: ["BLOCKED", "SOLD"] },
-            },
+            by: ["salesRequestId", "salesState"],
+            where: { salesRequestId: { in: requests.map((request) => request.id) }, salesState: { in: ["BLOCKED", "SOLD"] } },
             _count: { _all: true },
           })
         : [];
-      const count = (request: (typeof requests)[number], state: "BLOCKED" | "SOLD") =>
-        counts.find((row) => row.eventId === request.eventId && row.clientId === request.clientId && row.salesState === state)?._count._all ?? 0;
+      const count = (id: string, state: "BLOCKED" | "SOLD") =>
+        counts.find((row) => row.salesRequestId === id && row.salesState === state)?._count._all ?? 0;
       return requests.map((request) => ({
         ...request,
-        nightsBlocked: request.eventId ? count(request, "BLOCKED") : 0,
-        nightsSold: request.eventId ? count(request, "SOLD") : 0,
+        nightsBlocked: count(request.id, "BLOCKED"),
+        nightsSold: count(request.id, "SOLD"),
       }));
     }),
 
   /**
-   * The rooms behind a request (doc §4.11): the client's requested, blocked
-   * and sold room-nights on the request's event, by property and room
-   * category, worked out from the inventory each time it is asked.
+   * The rooms behind a request (doc §4.11): the room-nights held for it and
+   * the nights it has asked about, by property, room category and state,
+   * worked out from the inventory each time it is asked. Also counts the
+   * client's holds and requests on the event that belong to no request yet.
    */
   rooms: protectedProcedure
     .input(z.object({ id: z.string() }))
@@ -200,40 +282,68 @@ export const salesRouter = createTRPCRouter({
         select: { clientId: true, eventId: true },
       });
       if (!request.eventId) return null;
-      const where = { eventId: request.eventId };
-      const category = { select: { name: true, property: { select: { id: true, name: true } } } } as const;
-      const [held, requested] = await Promise.all([
+      const category = { select: { id: true, name: true, property: { select: { id: true, name: true } } } } as const;
+      const [held, requested, looseHolds, looseRequests] = await Promise.all([
         ctx.db.roomNight.findMany({
-          where: { ...where, clientId: request.clientId, salesState: { in: ["BLOCKED", "SOLD"] } },
-          select: { date: true, slotId: true, salesState: true, blockExpiry: true, slot: { select: { category } } },
+          where: { salesRequestId: input.id },
+          select: {
+            date: true,
+            slotId: true,
+            salesState: true,
+            blockExpiry: true,
+            sellPriceCents: true,
+            sellCurrency: true,
+            slot: { select: { category } },
+          },
         }),
         ctx.db.roomNightRequest.findMany({
-          where: { clientId: request.clientId, roomNight: where },
-          select: { roomNight: { select: { date: true, slotId: true, slot: { select: { category } } } } },
+          where: { salesRequestId: input.id },
+          select: {
+            sellPriceCents: true,
+            sellCurrency: true,
+            roomNight: { select: { date: true, slotId: true, slot: { select: { category } } } },
+          },
+        }),
+        ctx.db.roomNight.count({
+          where: {
+            eventId: request.eventId,
+            clientId: request.clientId,
+            salesState: { in: ["BLOCKED", "SOLD"] },
+            salesRequestId: null,
+          },
+        }),
+        ctx.db.roomNightRequest.count({
+          where: { clientId: request.clientId, roomNight: { eventId: request.eventId }, salesRequestId: null },
         }),
       ]);
+      type State = "REQUESTED" | "BLOCKED" | "SOLD" | "CANCELLED";
       type Row = {
+        categoryId: string;
         propertyId: string;
         propertyName: string;
         categoryName: string;
-        state: "REQUESTED" | "BLOCKED" | "SOLD";
+        state: State;
         nights: number;
         rooms: Set<string>;
         from: Date;
         to: Date;
         blockExpiry: Date | null;
+        prices: Set<string>;
+        valueCents: number;
+        currency: string | null;
       };
       const rows = new Map<string, Row>();
       const add = (
-        night: { date: Date; slotId: string; slot: { category: { name: string; property: { id: string; name: string } } } },
-        state: Row["state"],
-        blockExpiry: Date | null = null,
+        night: { date: Date; slotId: string; slot: { category: { id: string; name: string; property: { id: string; name: string } } } },
+        state: State,
+        extra: { blockExpiry?: Date | null; sellPriceCents: number | null; sellCurrency: string | null },
       ) => {
         const { category } = night.slot;
-        const key = `${category.property.id}|${category.name}|${state}`;
+        const key = `${category.id}|${state}`;
         const row =
           rows.get(key) ??
           ({
+            categoryId: category.id,
             propertyId: category.property.id,
             propertyName: category.property.name,
             categoryName: category.name,
@@ -243,25 +353,345 @@ export const salesRouter = createTRPCRouter({
             from: night.date,
             to: night.date,
             blockExpiry: null,
+            prices: new Set<string>(),
+            valueCents: 0,
+            currency: null,
           } satisfies Row);
         row.nights += 1;
         row.rooms.add(night.slotId);
         if (night.date < row.from) row.from = night.date;
         if (night.date > row.to) row.to = night.date;
         // The earliest a block runs out is the one to watch.
-        if (blockExpiry && (!row.blockExpiry || blockExpiry < row.blockExpiry)) row.blockExpiry = blockExpiry;
+        if (extra.blockExpiry && (!row.blockExpiry || extra.blockExpiry < row.blockExpiry)) row.blockExpiry = extra.blockExpiry;
+        row.prices.add(extra.sellPriceCents !== null && extra.sellCurrency ? `${extra.sellPriceCents} ${extra.sellCurrency}` : "");
+        if (extra.sellPriceCents !== null && extra.sellCurrency) {
+          row.valueCents += extra.sellPriceCents;
+          row.currency = extra.sellCurrency;
+        }
         rows.set(key, row);
       };
-      for (const night of held) add(night, night.salesState as "BLOCKED" | "SOLD", night.blockExpiry);
-      for (const { roomNight } of requested) add(roomNight, "REQUESTED");
-      const order = { SOLD: 0, BLOCKED: 1, REQUESTED: 2 } as const;
+      for (const night of held) {
+        if (night.salesState === "BLOCKED" || night.salesState === "SOLD" || night.salesState === "CANCELLED") {
+          add(night, night.salesState, night);
+        }
+      }
+      for (const claim of requested) add(claim.roomNight, "REQUESTED", claim);
+      const order = { SOLD: 0, BLOCKED: 1, REQUESTED: 2, CANCELLED: 3 } as const;
       return {
         eventId: request.eventId,
+        loose: looseHolds + looseRequests,
         rows: [...rows.values()]
           .sort((a, b) => a.propertyName.localeCompare(b.propertyName) || a.categoryName.localeCompare(b.categoryName) || order[a.state] - order[b.state])
-          .map(({ rooms, ...row }) => ({ ...row, rooms: rooms.size })),
+          .map(({ rooms, prices, valueCents, currency, ...row }) => {
+            // One price for every night is offered again when the rooms move on;
+            // a mix is not guessed at.
+            const [only] = prices.size === 1 ? [...prices] : [""];
+            const [cents, code] = only ? only.split(" ") : [];
+            return {
+              ...row,
+              rooms: rooms.size,
+              price: cents && code ? { cents: Number(cents), currency: code } : null,
+              // A value only means something when every night is priced in one currency.
+              value: currency && !prices.has("") && new Set([...prices].map((p) => p.split(" ")[1])).size === 1 ? { cents: valueCents, currency } : null,
+            };
+          }),
       };
     }),
+
+  /** The room categories an event has in inventory, for adding rooms to a request. */
+  roomOptions: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const request = await ctx.db.salesRequest.findUniqueOrThrow({ where: { id: input.id }, select: { eventId: true } });
+      if (!request.eventId) return [];
+      const slots = await ctx.db.roomNight.groupBy({ by: ["slotId"], where: { eventId: request.eventId } });
+      const categories = await ctx.db.roomCategory.findMany({
+        where: { slots: { some: { id: { in: slots.map((slot) => slot.slotId) } } } },
+        select: { id: true, name: true, property: { select: { name: true } } },
+        orderBy: [{ property: { name: "asc" } }, { sortOrder: "asc" }],
+      });
+      return categories.map((category) => ({ id: category.id, label: `${category.property.name} · ${category.name}` }));
+    }),
+
+  /**
+   * How many rooms of a category could be given to this request for the whole
+   * stay — in inventory every night, and held by no other client — and how
+   * many of those we have bought.
+   */
+  availability: protectedProcedure
+    .input(z.object({ id: z.string(), categoryId: z.string(), checkIn: dayRequired, checkOut: dayRequired }))
+    .query(async ({ ctx, input }) => {
+      const request = await ctx.db.salesRequest.findUniqueOrThrow({ where: { id: input.id }, select: { clientId: true, eventId: true } });
+      if (!request.eventId) return null;
+      const checkIn = parseDay(input.checkIn);
+      const checkOut = parseDay(input.checkOut);
+      if (checkOut <= checkIn) return null;
+      const rooms = await roomsFor(ctx.db, { eventId: request.eventId, categoryId: input.categoryId, clientId: request.clientId, checkIn, checkOut });
+      return {
+        total: rooms.length,
+        free: rooms.filter((room) => room.free).length,
+        freeBought: rooms.filter((room) => room.free && room.bought).length,
+        alreadyTheirs: rooms.filter((room) => room.theirs).length,
+        notInInventory: rooms.filter((room) => !room.present).length,
+      };
+    }),
+
+  /**
+   * Request, block or sell rooms for this request, straight into the event's
+   * inventory (doc §4.11). The rooms are picked for the rep — free for every
+   * night of the stay, bought ones first, lowest room numbers first — and the
+   * change goes through the same rules, ledger and undo as the stock sheet.
+   */
+  addRooms: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        categoryId: z.string(),
+        rooms: z.number().int().min(1).max(500),
+        checkIn: dayRequired,
+        checkOut: dayRequired,
+        action: z.enum(["REQUEST", "BLOCK", "SELL"]),
+        blockExpiry: day,
+        sellPriceCents: z.number().int().min(0).nullable().optional(),
+        sellCurrency: z.string().length(3).optional(),
+        clientRef: z.string().max(200).optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(
+        async (tx) => {
+          const request = await tx.salesRequest.findUniqueOrThrow({
+            where: { id: input.id },
+            select: { clientId: true, eventId: true, ownerId: true },
+          });
+          if (!request.eventId) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — rooms belong to an event." });
+          }
+          const checkIn = parseDay(input.checkIn);
+          const checkOut = parseDay(input.checkOut);
+          if (checkOut <= checkIn) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Check-out must be after check-in; check-out day is never a night." });
+          }
+          const rooms = await roomsFor(tx, { eventId: request.eventId, categoryId: input.categoryId, clientId: request.clientId, checkIn, checkOut });
+          const free = rooms
+            .filter((room) => room.free)
+            .sort((a, b) => Number(b.bought) - Number(a.bought) || a.slotNumber - b.slotNumber);
+          if (free.length < input.rooms) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Nothing was changed. Only ${free.length} of these rooms ${free.length === 1 ? "is" : "are"} free for every night of the stay${
+                rooms.some((room) => !room.present) ? " (some are not in inventory for all those dates)" : ""
+              }. Ask for fewer, or split the dates.`,
+            });
+          }
+          const chosen = free.slice(0, input.rooms);
+          const outcome = await applyInventoryChange(tx, ctx.session.user.id, {
+            eventId: request.eventId,
+            slotIds: chosen.map((room) => room.slotId),
+            checkIn,
+            checkOut,
+            action: input.action,
+            clientId: request.clientId,
+            salesRequestId: input.id,
+            blockExpiry: input.blockExpiry ? parseDay(input.blockExpiry) : undefined,
+            sellPriceCents: input.sellPriceCents ?? undefined,
+            sellCurrency: input.sellPriceCents != null ? input.sellCurrency : undefined,
+            clientRef: input.clientRef,
+            salesOwnerId: request.ownerId ?? undefined,
+          });
+          const category = await tx.roomCategory.findUniqueOrThrow({
+            where: { id: input.categoryId },
+            select: { name: true, property: { select: { name: true } } },
+          });
+          await logAudit(tx, {
+            actorId: ctx.session.user.id,
+            entity: "SalesRequest",
+            entityId: input.id,
+            summary: `${roomVerbs[input.action]}: ${input.rooms} × ${category.name}, ${category.property.name}, ${formatRange(checkIn, checkOut)}`,
+            changes: `Rooms #${chosen.map((room) => room.slotNumber).sort((a, b) => a - b).join(", #")} · ${outcome.nights} room-nights`,
+          });
+          return { ...outcome, slotNumbers: chosen.map((room) => room.slotNumber).sort((a, b) => a - b) };
+        },
+        { timeout: 30_000 },
+      ),
+    ),
+
+  /**
+   * Move a request's rooms on, a room category at a time (doc §4.11): a
+   * request becomes a block or a sale, a block becomes a sale, is extended or
+   * released, a sale is cancelled. Applied through the inventory's own rules,
+   * one ledger entry per run of dates.
+   */
+  changeRooms: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        categoryId: z.string(),
+        state: z.enum(["REQUESTED", "BLOCKED", "SOLD"]),
+        action: z.enum(["BLOCK", "SELL", "WITHDRAW_REQUEST", "EXTEND_BLOCK", "RELEASE_HOLD", "CANCEL_SALE"]),
+        blockExpiry: day,
+        sellPriceCents: z.number().int().min(0).nullable().optional(),
+        sellCurrency: z.string().length(3).optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(
+        async (tx) => {
+          const allowed = {
+            REQUESTED: ["BLOCK", "SELL", "WITHDRAW_REQUEST"],
+            BLOCKED: ["SELL", "EXTEND_BLOCK", "RELEASE_HOLD"],
+            SOLD: ["CANCEL_SALE"],
+          } as const;
+          if (!(allowed[input.state] as readonly string[]).includes(input.action)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "That cannot be done to these rooms." });
+          }
+          const request = await tx.salesRequest.findUniqueOrThrow({
+            where: { id: input.id },
+            select: { clientId: true, eventId: true, ownerId: true },
+          });
+          if (!request.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "This request has no event." });
+          const eventId = request.eventId;
+
+          // The nights in question, with what a sale would otherwise wipe.
+          const nights =
+            input.state === "REQUESTED"
+              ? (
+                  await tx.roomNightRequest.findMany({
+                    where: { salesRequestId: input.id, roomNight: { slot: { categoryId: input.categoryId } } },
+                    select: {
+                      clientRef: true,
+                      sellPriceCents: true,
+                      sellCurrency: true,
+                      notes: true,
+                      roomNight: { select: { slotId: true, date: true } },
+                    },
+                  })
+                ).map((claim) => ({
+                  slotId: claim.roomNight.slotId,
+                  date: claim.roomNight.date,
+                  clientRef: claim.clientRef,
+                  sellPriceCents: claim.sellPriceCents,
+                  sellCurrency: claim.sellCurrency,
+                  salesNotes: claim.notes,
+                  dueDate: null as Date | null,
+                  salesOwnerId: request.ownerId,
+                }))
+              : await tx.roomNight.findMany({
+                  where: { salesRequestId: input.id, salesState: input.state, slot: { categoryId: input.categoryId } },
+                  select: {
+                    slotId: true,
+                    date: true,
+                    clientRef: true,
+                    sellPriceCents: true,
+                    sellCurrency: true,
+                    salesNotes: true,
+                    dueDate: true,
+                    salesOwnerId: true,
+                  },
+                });
+          if (nights.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "There are no such rooms on this request any more." });
+
+          let applied = 0;
+          for (const rect of rectangles(nights)) {
+            const these = nights.filter((night) => rect.slotIds.includes(night.slotId) && night.date >= rect.checkIn && night.date < rect.checkOut);
+            const same = <K extends keyof (typeof these)[number]>(key: K) => {
+              const values = new Set(these.map((night) => String(night[key] instanceof Date ? (night[key] as Date).toISOString() : night[key])));
+              return values.size === 1 ? these[0]![key] : undefined;
+            };
+            const priceGiven = input.sellPriceCents !== undefined;
+            const outcome = await applyInventoryChange(tx, ctx.session.user.id, {
+              eventId,
+              slotIds: rect.slotIds,
+              checkIn: rect.checkIn,
+              checkOut: rect.checkOut,
+              action: input.action,
+              clientId: request.clientId,
+              ...((input.action === "BLOCK" || input.action === "SELL") && { salesRequestId: input.id }),
+              blockExpiry: input.blockExpiry ? parseDay(input.blockExpiry) : undefined,
+              // A sale keeps what the block said unless told otherwise; a mix
+              // across nights is not guessed at.
+              sellPriceCents: priceGiven ? (input.sellPriceCents ?? undefined) : ((same("sellPriceCents") as number | null) ?? undefined),
+              sellCurrency: priceGiven ? input.sellCurrency : ((same("sellCurrency") as string | null) ?? undefined),
+              clientRef: (same("clientRef") as string | null) ?? undefined,
+              salesNotes: (same("salesNotes") as string | null) ?? undefined,
+              dueDate: (same("dueDate") as Date | null) ?? undefined,
+              salesOwnerId: (same("salesOwnerId") as string | null) ?? request.ownerId ?? undefined,
+            });
+            applied += outcome.nights;
+            // A request that became a block or a sale is not also still a request.
+            if (input.state === "REQUESTED" && input.action !== "WITHDRAW_REQUEST") {
+              await applyInventoryChange(tx, ctx.session.user.id, {
+                eventId,
+                slotIds: rect.slotIds,
+                checkIn: rect.checkIn,
+                checkOut: rect.checkOut,
+                action: "WITHDRAW_REQUEST",
+                clientId: request.clientId,
+                reason: "Became a block or a sale on the sales request",
+              });
+            }
+          }
+          const category = await tx.roomCategory.findUniqueOrThrow({
+            where: { id: input.categoryId },
+            select: { name: true, property: { select: { name: true } } },
+          });
+          await logAudit(tx, {
+            actorId: ctx.session.user.id,
+            entity: "SalesRequest",
+            entityId: input.id,
+            summary: `${changeVerbs[input.action]}: ${category.name}, ${category.property.name} — ${applied} room-nights`,
+          });
+          return { nights: applied };
+        },
+        { timeout: 60_000 },
+      ),
+    ),
+
+  /**
+   * Tie the client's holds and requests on the event that belong to no request
+   * yet — made on the stock sheet, or before requests held nights — to this one.
+   */
+  tieLooseRooms: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const request = await tx.salesRequest.findUniqueOrThrow({ where: { id: input.id }, select: { clientId: true, eventId: true } });
+        if (!request.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "This request has no event." });
+        const loose = await tx.roomNight.findMany({
+          where: { eventId: request.eventId, clientId: request.clientId, salesState: { in: ["BLOCKED", "SOLD"] }, salesRequestId: null },
+        });
+        const holds = await tx.roomNight.updateMany({
+          where: { id: { in: loose.map((night) => night.id) } },
+          data: { salesRequestId: input.id },
+        });
+        const claims = await tx.roomNightRequest.updateMany({
+          where: { clientId: request.clientId, roomNight: { eventId: request.eventId }, salesRequestId: null },
+          data: { salesRequestId: input.id },
+        });
+        if (loose.length) {
+          // A change to a room-night is never unrecorded (§4.5.8).
+          await tx.ledgerEntry.create({
+            data: {
+              eventId: request.eventId,
+              actorId: ctx.session.user.id,
+              axis: "SALES",
+              nightCount: loose.length,
+              summary: `Tied ${loose.length} room-nights to a sales request.`,
+              undoable: true,
+              beforeSnapshot: loose.map((night) => snapshotNight(night)),
+              nights: { connect: loose.map((night) => ({ id: night.id })) },
+            },
+          });
+        }
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "SalesRequest",
+          entityId: input.id,
+          summary: `Tied the client's rooms on this event to this request: ${holds.count} held room-nights, ${claims.count} requested`,
+        });
+        return { holds: holds.count, requests: claims.count };
+      }),
+    ),
 
   /** A client's requests, for its own page. */
   forClient: protectedProcedure

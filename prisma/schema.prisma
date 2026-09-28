@@ -842,6 +842,10 @@ model SalesRequest {
   /// When the client last sent the form.
   contractingSubmittedAt DateTime?
 
+  /// The room-nights held for this request, and the nights it has asked about.
+  nights        RoomNight[]
+  nightRequests RoomNightRequest[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -960,6 +964,12 @@ model RoomNight {
   salesOwner   User?   @relation("SalesOwner", fields: [salesOwnerId], references: [id], onDelete: SetNull)
   salesOwnerId String?
 
+  /// The sales request this hold belongs to (doc §4.11) — always one of the
+  /// holding client's own. Cleared when the hold is released; kept on a
+  /// cancelled sale, as the client is.
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -973,6 +983,7 @@ model RoomNight {
   @@index([eventId, optionExpiry])
   @@index([eventId, blockExpiry])
   @@index([clientId])
+  @@index([salesRequestId])
 }
 
 /// A soft, non-exclusive claim by one client on one room-night (doc §4.3).
@@ -995,11 +1006,16 @@ model RoomNightRequest {
   owner   User?   @relation("RequestOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   ownerId String?
 
+  /// The sales request this claim belongs to (doc §4.11), one of the client's own.
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId String?
+
   createdAt DateTime @default(now())
 
   /// One request per client per night — asking twice is the same claim.
   @@unique([roomNightId, clientId])
   @@index([clientId])
+  @@index([salesRequestId])
 }
 
 /// An immutable record of one change, written by every mutation that touches a
