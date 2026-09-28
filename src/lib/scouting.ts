@@ -205,18 +205,3 @@ export const groupColours: Record<GroupColour, { label: string; hex: string }> =
 };
 
 export const groupColourOrder = Object.keys(groupColours) as GroupColour[];
-
-/** Colours for the status and type mix bars in a group's header. */
-export const scoutingStatusColours: Record<SelectableScoutingStatus | "CONTRACTED", string> = {
-  PROSPECT: "#b8b8b8",
-  CONTACTED: "#c69eee",
-  SHORTLISTED: "#8b5cf6",
-  REJECTED: "#db4b68",
-  CONTRACTED: "#12b878",
-};
-
-export const propertyTypeColours: Record<PropertyType, string> = {
-  HOTEL: "#f28b82",
-  APARTMENT: "#8e7cc3",
-  APARTHOTEL: "#e0c341",
-};

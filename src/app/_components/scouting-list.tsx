@@ -299,10 +299,13 @@ export function ScoutingList({
                     )}
                   </Td>
                   <Td>
+                    {/* An event is in one country, so the country is left out
+                        here: the area, then the town (doc §3.9). */}
                     {property.area && <span className="block">{property.area}</span>}
-                    <span className={property.area ? "text-ink-500 text-xs font-light" : ""}>
-                      {[property.city, property.country].filter(Boolean).join(", ") || (property.area ? "" : "—")}
-                    </span>
+                    {property.city && property.city !== property.area && (
+                      <span className={property.area ? "text-ink-500 text-xs font-light" : ""}>{property.city}</span>
+                    )}
+                    {!property.area && !property.city && "—"}
                   </Td>
                   <Td>{units || "—"}</Td>
                   <Td>

@@ -569,8 +569,8 @@ it, with a link to edit the property or open its full page. Editing the property
 panel brings the rep back to the event's Properties tab when they save, not to the
 property's own page; and a link says "Opening…" the moment it is clicked, so a page that
 takes a moment to load never looks as though the click did nothing. The row itself shows the
-provider beside the type, the account manager, and the area above the city; each group's
-header shows its account managers.
+provider beside the type, the account manager, and the area above the town — without the
+country, since an event is always in one country.
 
 **What it replaces.** On Monday each event is a board: properties sorted into colour-coded
 groups, each property a row with some fifty columns — much of it what contracting a hotel
@@ -592,9 +592,10 @@ so a hotel's details are entered once and reused on every event, and the stock s
 - **Groups are independent of status.** A group is how the team chooses to sort its work;
   the status (§3.5) is a fact about the pursuit. A "Proposal received" group can hold
   properties of any status, as on Monday.
-- **Each group's header summarises it**: "38 properties / 55 room categories", who the
-  account managers are, and two thin coloured bars showing the mix of statuses and of
-  property types in the group. Groups can be collapsed.
+- **Each group's header** gives its name, in its colour, and how many properties it holds
+  — "38 properties". Nothing else: a count of room categories and bars for the mix of
+  statuses and types were tried and dropped as noise. Account managers are shown on each
+  property's row. Groups can be collapsed.
 
 #### The property row
 
@@ -1637,10 +1638,10 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
-| §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group shows its properties / room categories and status and type mix bars, and collapses. A property's group is chosen in its row |
+| §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity |
-| §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row and the group header |
+| §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: rate per night and currency, rate include, TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
 | §3.9 Nearby dining and convenience store | **Built, not yet seen working** | Built to Google's Places service and tested only without a key (the laptop has none); needs Places switched on for the live key. Travel times to the event's places of interest also shown in the side panel |

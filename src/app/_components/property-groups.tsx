@@ -1,26 +1,14 @@
 "use client";
 
-import type { GroupColour, PropertyType, ScoutingStatus } from "generated/prisma";
+import type { GroupColour } from "generated/prisma";
 import { useState } from "react";
 
 import { Button, FormError, Input } from "~/app/_components/form";
-import {
-  groupColourOrder,
-  groupColours,
-  propertyTypeColours,
-  propertyTypeLabels,
-  scoutingStatusColours,
-  scoutingStatusLabels,
-} from "~/lib/scouting";
+import { groupColourOrder, groupColours } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
 type Group = { id: string; eventId: string; name: string; colour: GroupColour };
 type Person = { id: string; name: string | null; email: string | null };
-type Entry = {
-  status: ScoutingStatus;
-  property: { type: PropertyType; categories: unknown[] };
-  accountManager: Person | null;
-};
 
 /** A colleague as two initials in a circle, named on hover. */
 export function Initials({ person }: { person: Person }) {
@@ -42,9 +30,8 @@ export function Initials({ person }: { person: Person }) {
 }
 
 /**
- * A group's header on the Properties tab (doc §3.9): its name in its colour,
- * how many properties and room categories it holds, and the mix of statuses
- * and property types as two thin bars. "No group" gets the same header, with
+ * A group's header on the Properties tab (doc §3.9): its name in its colour
+ * and how many properties it holds. "No group" gets the same header, with
  * nothing to edit.
  */
 export function GroupHeader({
@@ -56,7 +43,8 @@ export function GroupHeader({
   isLast,
 }: {
   group: Group | null;
-  entries: Entry[];
+  /** Only counted: the header says how many properties the group holds. */
+  entries: readonly unknown[];
   collapsed: boolean;
   onToggle: () => void;
   isFirst: boolean;
@@ -64,7 +52,6 @@ export function GroupHeader({
 }) {
   const colour = group ? groupColours[group.colour].hex : "#6b7280";
   const [editing, setEditing] = useState(false);
-  const categories = entries.reduce((sum, entry) => sum + entry.property.categories.length, 0);
 
   return (
     <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -88,40 +75,8 @@ export function GroupHeader({
         </span>
       </button>
       <span className="text-ink-500 text-[13px] font-light">
-        {entries.length} {entries.length === 1 ? "property" : "properties"} / {categories}{" "}
-        {categories === 1 ? "room category" : "room categories"}
+        {entries.length} {entries.length === 1 ? "property" : "properties"}
       </span>
-
-      {managers(entries).length > 0 && (
-        <span className="flex -space-x-2" aria-label="Account managers">
-          {managers(entries).map((person) => (
-            <Initials key={person.id} person={person} />
-          ))}
-        </span>
-      )}
-
-      {entries.length > 0 && (
-        <div className="flex items-center gap-3">
-          <MixBar
-            label="Status"
-            parts={tally(entries.map((entry) => entry.status)).map(([status, count]) => ({
-              key: status,
-              label: scoutingStatusLabels[status as keyof typeof scoutingStatusLabels] ?? "Contracted",
-              colour: scoutingStatusColours[status as keyof typeof scoutingStatusColours],
-              count,
-            }))}
-          />
-          <MixBar
-            label="Type"
-            parts={tally(entries.map((entry) => entry.property.type)).map(([type, count]) => ({
-              key: type,
-              label: propertyTypeLabels[type as PropertyType],
-              colour: propertyTypeColours[type as PropertyType],
-              count,
-            }))}
-          />
-        </div>
-      )}
 
       {group && (
         <GroupMenu
@@ -133,41 +88,6 @@ export function GroupHeader({
         />
       )}
     </div>
-  );
-}
-
-/** The group's account managers, each once. */
-function managers(entries: Entry[]) {
-  const seen = new Map<string, Person>();
-  for (const entry of entries) if (entry.accountManager) seen.set(entry.accountManager.id, entry.accountManager);
-  return [...seen.values()];
-}
-
-function tally(values: string[]) {
-  const counts = new Map<string, number>();
-  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-}
-
-/** A thin bar split by share, with the numbers on hover. */
-function MixBar({
-  label,
-  parts,
-}: {
-  label: string;
-  parts: { key: string; label: string; colour: string; count: number }[];
-}) {
-  const total = parts.reduce((sum, part) => sum + part.count, 0);
-  const summary = parts.map((part) => `${part.count} ${part.label.toLowerCase()}`).join(", ");
-  return (
-    <span className="flex items-center gap-1.5" title={`${label}: ${summary}`}>
-      <span className="text-ink-500 text-[11px] font-light">{label}</span>
-      <span className="flex h-2.5 w-24 overflow-hidden rounded-full" role="img" aria-label={`${label}: ${summary}`}>
-        {parts.map((part) => (
-          <span key={part.key} style={{ width: `${(part.count / total) * 100}%`, background: part.colour }} />
-        ))}
-      </span>
-    </span>
   );
 }
 
