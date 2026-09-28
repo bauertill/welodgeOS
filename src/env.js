@@ -22,6 +22,11 @@ export const env = createEnv({
     // Google Routes API, for travel times (doc §3.8). Never sent to the
     // browser. Not used yet.
     GOOGLE_MAPS_SERVER_KEY: z.string().optional(),
+    // Who the development-only sign-in button signs you in as, so each
+    // person working on the code is themselves locally. Unused outside
+    // development: that sign-in does not exist there.
+    DEV_USER_EMAIL: z.string().email().optional(),
+    DEV_USER_NAME: z.string().optional(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -55,6 +60,8 @@ export const env = createEnv({
     GOOGLE_MAPS_SERVER_KEY: process.env.GOOGLE_MAPS_SERVER_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
+    DEV_USER_EMAIL: process.env.DEV_USER_EMAIL,
+    DEV_USER_NAME: process.env.DEV_USER_NAME,
     NODE_ENV: process.env.NODE_ENV,
   },
   /**
