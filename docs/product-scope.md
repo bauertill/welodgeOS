@@ -1050,6 +1050,72 @@ each show their own history; a scouting entry's row on the Properties tab shows 
 own status history and the status history of every one of its category contracts, merged
 into one list, since both are edited in the same place.
 
+### 4.10 Clients and their contacts — the sales CRM
+
+> **Partly built.** Clients with their details and contacts, and search by company or by
+> person, exist. **The Gmail link below is specified, not built** — it needs Google
+> switched on first (§12). Nothing has been imported from monday.com: the CRM starts
+> empty, as agreed, and an import is to be decided.
+
+This replaces the team's monday.com CRM. **A client and a company are the same thing.**
+There is one list: a broadcaster we are still courting and a federation that has bought
+three hundred room-nights are both clients. A lead becomes a customer by being sold to,
+not by being moved to another list, so its contacts, its history and its bookings stay on
+one page throughout.
+
+**A client** has a name, a short name for the stock sheet, a **category** — *Broadcaster*,
+*Federation / NOC*, *Sponsor*, *Event organiser*, *Agency*, *Corporate* or *Other* — an
+**account manager** (the colleague who looks after it), its general phone, general email
+and website, and notes. Each is changed with **Edit** on the client's *About the client*
+card, and each change is recorded in the client's history.
+
+**A contact** is a person at a client: name, title, email, mobile, phone, **type** — *Lead*,
+*Qualified lead*, *Customer*, *Partner* or *Other*, which is where that person stands with
+us — **priority** (*High*, *Medium*, *Low*), their own account manager, and comments. A
+client has any number; they are added, changed and removed in the *Contacts* table on the
+client's page, and the history says which was added, changed or removed and what changed.
+A person belongs to one client: someone who moves company is removed from one and added to
+the other.
+
+**Searching.** The Clients page searches as you type, in two views:
+
+- **Companies** finds a client by its own name, short name, general email or website —
+  *or by anyone who works there*: searching "Michelle" finds Network Ten Paramount, with
+  "Michelle Marchingo, Production Manager" written under its name, so it is plain why it
+  matched.
+- **People** lists everyone at every client, found by name, email, title or number, or by
+  their company's name, each with the company they are at.
+
+Up to 300 results show at a time; a search narrows them.
+
+The category, type and priority lists are a first draft taken from the monday board; they
+are expected to change once the team has used them.
+
+#### Emails from Gmail — *specified, not built*
+
+In monday, a client's page shows every email the team has sent to or received from its
+people. We Lodge OS will do the same:
+
+- **Each colleague connects their own Gmail**, once, with *Connect Gmail* on their profile,
+  and can disconnect at any time. Nobody's mailbox is read without them connecting it.
+  Connecting asks Google for permission to *read* mail only; nothing is sent, deleted or
+  changed in anyone's mailbox.
+- **Only emails with a known contact are brought in**: an email is shown on a client's page
+  when one of its senders or recipients is the email address of one of that client's
+  contacts. Nothing else in anyone's mailbox is read into the system. An email with a new
+  person at the company appears once that person is added as a contact.
+- **Who can see them**: everyone who signs in, like everything else in the system (§2.5) —
+  monday's *Can view: Everyone*. Whether a colleague may keep their emails to themselves
+  (*Only me*) is an open question (§9).
+- **Where**: newest first on the client's page, each saying who sent it to whom and when,
+  opening to the full text; and on the contact, just that person's emails.
+- **Writing emails from the system** (monday's *New email*) is not part of this. Replies are
+  written in Gmail as today, and appear here once sent.
+
+What has to happen first, outside the system: someone with access to Google Cloud for
+`welodge.net` switches on the Gmail service for We Lodge OS and allows it to ask for
+read-only mail access, kept to the Workspace (`docs/todos.md`).
+
 ---
 
 ## 5. Reporting and derived views
@@ -1520,6 +1586,10 @@ reported per currency), taxes and tourist levies, commission splits, deposit sch
     already wired up (magic-link sign-in, §2.5) — or is the visual highlight the intended
     behaviour going forward? Left as a visual tag only until this is answered, since it is
     the smaller and fully reversible choice.
+12. **Keeping one's emails private (§4.10).** Once Gmail is connected, should a colleague
+    be able to keep the emails from their mailbox to themselves (monday's *Can view: Only
+    me*), or does everyone see every email with a client? Specified as *everyone*, the
+    same as everything else in the system, until this is answered.
 
 ---
 
@@ -1694,6 +1764,10 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Nearby dining and convenience store | **Built, not yet seen working** | Built to Google's Places service and tested only without a key (the laptop has none); needs Places switched on for the live key. Travel times to the event's places of interest also shown in the side panel |
 | §3.9 Monday import | **Not built** | Decided later, as agreed |
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
+| §4.10 Clients and contacts | **Built** | Category, account manager, general phone, email and website; contacts with title, email, mobile, phone, type, priority, account manager and comments, added, edited and removed on the client's page; every change in the client's history |
+| §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
+| §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
+| §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
 | §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |

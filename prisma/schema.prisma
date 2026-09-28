@@ -516,6 +516,8 @@ model User {
   conversations ConversationMember[]
   messages      Message[]
   accountManaged ScoutingEntry[] @relation("AccountManager")
+  clientsManaged  Client[]        @relation("ClientAccountManager")
+  contactsManaged ClientContact[] @relation("ContactAccountManager")
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
@@ -673,6 +675,34 @@ enum LedgerAxis {
 
 /// A B2B buyer: a federation, broadcaster, sponsor or event team. Clients are
 /// global, not per-event — the same federation comes back for the next Games.
+/// What kind of organisation a client is (doc §4.10).
+enum ClientCategory {
+  BROADCASTER
+  FEDERATION
+  SPONSOR
+  EVENT_ORGANISER
+  AGENCY
+  CORPORATE
+  OTHER
+}
+
+/// Where a person at a client stands with us (doc §4.10).
+enum ContactType {
+  LEAD
+  QUALIFIED_LEAD
+  CUSTOMER
+  PARTNER
+  OTHER
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+/// A company we sell to, or hope to — a lead is a client that has not bought
+/// yet, not a separate kind of record (doc §4.10).
 model Client {
   id        String  @id @default(cuid())
   name      String
@@ -680,14 +710,51 @@ model Client {
   shortName String?
   notes     String?
 
+  category ClientCategory?
+  /// The colleague who looks after this client.
+  accountManager   User?   @relation("ClientAccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
+  accountManagerId String?
+  /// The company's general line, inbox and website — a person's own are on
+  /// their contact.
+  phone   String?
+  email   String?
+  website String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   roomNights RoomNight[]
   requests   RoomNightRequest[]
   updates    Update[]
+  contacts   ClientContact[]
 
   @@unique([name])
+}
+
+/// A person at a client (doc §4.10). Their email address is what links
+/// emails to them once Gmail is connected, so it is kept as typed, trimmed.
+model ClientContact {
+  id       String       @id @default(cuid())
+  name     String
+  title    String?
+  email    String?
+  mobile   String?
+  phone    String?
+  type     ContactType?
+  priority Priority?
+  comments String?
+
+  accountManager   User?   @relation("ContactAccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
+  accountManagerId String?
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([email])
 }
 
 /// A free-text post on a property or a client's history — a meeting note, a

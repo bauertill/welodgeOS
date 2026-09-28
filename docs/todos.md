@@ -136,6 +136,19 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       powers as the person who built it. Worth deciding whether that's
       acceptable or blocking.
 
+- [ ] **Switch on Gmail for the client emails** (`product-scope.md` §4.10) —
+      needs someone with access to Google Cloud for `welodge.net` (Till). In
+      the same Google Cloud project as the sign-in: enable the **Gmail API**,
+      and on the consent screen (still **Internal**) add the read-only scope
+      `https://www.googleapis.com/auth/gmail.readonly`. Because the screen is
+      Internal, Google does not need to review the app. On the sign-in's
+      OAuth client, add the authorised redirect address
+      `https://os.welodge.net/api/gmail/callback` (and
+      `http://localhost:3000/api/gmail/callback` for building it locally).
+      Nothing to paste or set: the connection reuses `AUTH_GOOGLE_ID` /
+      `AUTH_GOOGLE_SECRET`.
+      The code for it is not written yet.
+
 ## 3. Phase 3 — Operations
 
 Not started. This is the third of the three phases described in

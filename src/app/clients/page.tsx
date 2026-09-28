@@ -14,7 +14,7 @@ export default async function ClientsPage() {
     <>
       <PageHeader
         title="Clients"
-        subtitle="Who we sell room-nights to. A client is global — the same buyer comes back for the next event."
+        subtitle="The companies we sell room-nights to, or hope to, and the people there. A client is global — the same buyer comes back for the next event."
       />
       <ClientList />
     </>
