@@ -550,8 +550,8 @@ Decluttering the map so our own pins stand out is a change made there, not here.
 > to be decided (§12).
 
 **Room categories on the tab.** Opening a property's row shows its room categories as a
-table: the name, then each category's contract status and rooms available, then Monday's
-columns. **Edit** on a row opens a full-width row of labelled fields beneath it — not boxes
+table: the name, then its # of units, contract status and rooms still available, then
+Monday's other columns. **Edit** on a row opens a full-width row of labelled fields beneath it — not boxes
 squeezed into the table's columns, where an amount or its currency could be cut off — for
 the whole room category, in two parts. First the category itself, which is the property's
 and the same on every event: name, # of units, size, bed configuration (bedrooms and
@@ -748,16 +748,17 @@ categories here as everywhere else in the system (§3.2). Columns, in Monday's o
 
 | Column | Kind | Here |
 | --- | --- | --- |
+| # of units | the property's | The number of rooms of the type (§3.2) — shown straight after the name |
 | Buying rate | per event | What we pay the hotel per night, as contracted for this event: amount and currency (never a float, §4.5) — *new*. Monday calls it *Rate per night* |
 | Rate include | per event | A dropdown of items to tick — Breakfast, Wi-Fi, Taxes, Parking, Cleaning — and a line for anything else, e.g. "TOT & TMD". Ticking **Cleaning** asks how often: *Daily*, *Weekly*, or *Other*, said in words ("Every 3 days"); it is refused until one is chosen, and unticked means cleaning is not included. Read back as one line: "Breakfast, Wi-Fi, Weekly cleaning, TOT & TMD" — *new* |
 | TOT | per event | *Transient Occupancy Tax* — the US city hotel tax on the room rate — as a percentage, e.g. 15.00% — *new*. Spelled out on hover and when editing |
 | Other applicable tax | per event | Free text, e.g. "TMD: 6.25 USD (ADR 200–…)" — *new* |
 | Applicable period | per event | Free text — *new* |
-| # of units | the property's | The number of rooms of the type (§3.2) |
 | Size | the property's | Free text, e.g. "28 m²" — *new* |
 | Bed configuration | the property's | §3.2 |
 
-Contract status and rooms available come right after the name. A category's **notes**
+The # of units, contract status and rooms available come right after the name, in that
+order. A category's **notes**
 (free text, the property's) are not a column — they are read and changed under **Edit**, and
 on the property's own page.
 

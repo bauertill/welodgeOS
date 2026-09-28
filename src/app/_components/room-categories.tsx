@@ -90,6 +90,7 @@ export function RoomCategoryTable({
           <thead className="bg-ink-50/60">
             <tr>
               <th className={th}>Room category</th>
+              <th className={th}># of units</th>
               <th className={th}>Contract</th>
               <th className={th}>Available</th>
               <th className={th} title="What we pay the hotel per night, as contracted for this event. The indicative, Booking-style price is on the property's own page.">
@@ -101,7 +102,6 @@ export function RoomCategoryTable({
               </th>
               <th className={th}>Other applicable tax</th>
               <th className={th}>Applicable period</th>
-              <th className={th}># of units</th>
               <th className={th}>Size</th>
               <th className={th}>Bed configuration</th>
               <th className={th}>{""}</th>
@@ -136,6 +136,7 @@ export function RoomCategoryTable({
               return (
                 <tr key={category.id}>
                   <td className={`${td} text-ink-900 font-medium whitespace-nowrap`}>{category.name}</td>
+                  <td className={td}>{category.unitCount}</td>
                   <td className={td}>
                     <Select
                       value={status}
@@ -169,7 +170,6 @@ export function RoomCategoryTable({
                   <td className={`${td} whitespace-nowrap`}>{percent(contract?.totBasisPoints ?? null) ?? "—"}</td>
                   <td className={`${td} max-w-56`}>{contract?.otherTaxes ?? "—"}</td>
                   <td className={`${td} max-w-44`}>{contract?.applicablePeriod ?? "—"}</td>
-                  <td className={td}>{category.unitCount}</td>
                   <td className={`${td} whitespace-nowrap`}>{category.size ?? "—"}</td>
                   <td className={td}>{beds ?? "—"}</td>
                   <td className={td}>
