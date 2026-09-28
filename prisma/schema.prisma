@@ -398,6 +398,21 @@ model PropertyGroup {
   @@index([eventId])
 }
 
+/// What a room category's rate can include (doc §3.9).
+enum RateInclusion {
+  BREAKFAST
+  WIFI
+  TAXES
+  PARKING
+}
+
+/// How often a room is cleaned when the rate includes cleaning (doc §3.9).
+enum Cleaning {
+  DAILY
+  WEEKLY
+  OTHER
+}
+
 model CategoryContract {
   id     String                 @id @default(cuid())
   status CategoryContractStatus @default(IN_NEGOTIATION)
@@ -407,7 +422,13 @@ model CategoryContract {
   /// Minor units, with an explicit currency (§4.5): never a float.
   ratePerNightCents Int?
   rateCurrency      String?
-  rateIncludes      String?
+  /// What the rate includes, from a fixed list, plus anything else in words.
+  rateIncludes      RateInclusion[] @default([])
+  rateIncludesOther String?
+  /// Set when the rate includes cleaning, saying how often; OTHER is said in
+  /// cleaningOther. Empty means cleaning is not included.
+  cleaning          Cleaning?
+  cleaningOther     String?
   /// TOT as hundredths of a percent: 15.00% is 1500.
   totBasisPoints    Int?
   otherTaxes        String?

@@ -1,8 +1,10 @@
 import type {
   CategoryContractStatus,
+  Cleaning,
   GroupColour,
   PlaceCategory,
   PropertyType,
+  RateInclusion,
   ScoutingStatus,
 } from "generated/prisma";
 
@@ -63,6 +65,49 @@ export const categoryContractStatusOrder: CategoryContractStatus[] = [
   "IN_CONTRACTING",
   "CONTRACTED",
 ];
+
+/** What a room category's rate can include (doc §3.9), in the order offered. */
+export const rateInclusionLabels: Record<RateInclusion, string> = {
+  BREAKFAST: "Breakfast",
+  WIFI: "Wi-Fi",
+  TAXES: "Taxes",
+  PARKING: "Parking",
+};
+
+export const rateInclusionOrder: RateInclusion[] = ["BREAKFAST", "WIFI", "TAXES", "PARKING"];
+
+/** How often the room is cleaned, when the rate includes cleaning (doc §3.9). */
+export const cleaningLabels: Record<Cleaning, string> = {
+  DAILY: "Daily",
+  WEEKLY: "Weekly",
+  OTHER: "Other",
+};
+
+export const cleaningOrder: Cleaning[] = ["DAILY", "WEEKLY", "OTHER"];
+
+/** "Weekly cleaning", or "Cleaning: every 3 days" for the words given. */
+export function describeCleaning(cleaning: Cleaning | null, other: string | null) {
+  if (!cleaning) return null;
+  if (cleaning === "OTHER") return other?.trim() ? `Cleaning: ${other.trim()}` : "Cleaning";
+  return `${cleaningLabels[cleaning]} cleaning`;
+}
+
+/**
+ * "Breakfast, Wi-Fi, Weekly cleaning, TOT & TMD" — the ticked items, then
+ * cleaning if included, then anything said in words.
+ */
+export function describeRateIncludes(
+  list: RateInclusion[],
+  other: string | null,
+  cleaning: Cleaning | null = null,
+  cleaningOther: string | null = null,
+) {
+  const items = rateInclusionOrder.filter((item) => list.includes(item)).map((item) => rateInclusionLabels[item]);
+  const clean = describeCleaning(cleaning, cleaningOther);
+  if (clean) items.push(clean);
+  if (other?.trim()) items.push(other.trim());
+  return items.length ? items.join(", ") : null;
+}
 
 export const propertyTypeLabels: Record<PropertyType, string> = {
   HOTEL: "Hotel",

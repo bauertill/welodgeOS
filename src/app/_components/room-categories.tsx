@@ -1,15 +1,20 @@
 "use client";
 
-import type { CategoryContractStatus } from "generated/prisma";
-import { useState } from "react";
+import type { CategoryContractStatus, Cleaning, RateInclusion } from "generated/prisma";
+import { useEffect, useRef, useState } from "react";
 
-import { Button, Field, friendlyError, Input, Select } from "~/app/_components/form";
+import { Button, Field, friendlyError, Input, Label, Select } from "~/app/_components/form";
 import { PendingLink } from "~/app/_components/pending-link";
 import { formatMoney } from "~/lib/format";
 import {
   categoryContractStatusHints,
   categoryContractStatusLabels,
   categoryContractStatusOrder,
+  cleaningLabels,
+  cleaningOrder,
+  describeRateIncludes,
+  rateInclusionLabels,
+  rateInclusionOrder,
 } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
@@ -30,7 +35,10 @@ type Contract = {
   status: CategoryContractStatus;
   ratePerNightCents: number | null;
   rateCurrency: string | null;
-  rateIncludes: string | null;
+  rateIncludes: RateInclusion[];
+  rateIncludesOther: string | null;
+  cleaning: Cleaning | null;
+  cleaningOther: string | null;
   totBasisPoints: number | null;
   otherTaxes: string | null;
   applicablePeriod: string | null;
@@ -128,7 +136,16 @@ export function RoomCategoryTable({
                       ? formatMoney(contract.ratePerNightCents, contract.rateCurrency)
                       : "—"}
                   </td>
-                  <td className={td}>{contract?.rateIncludes ?? "—"}</td>
+                  <td className={`${td} max-w-56`}>
+                    {(contract &&
+                      describeRateIncludes(
+                        contract.rateIncludes,
+                        contract.rateIncludesOther,
+                        contract.cleaning,
+                        contract.cleaningOther,
+                      )) ??
+                      "—"}
+                  </td>
                   <td className={`${td} whitespace-nowrap`}>{percent(contract?.totBasisPoints ?? null) ?? "—"}</td>
                   <td className={`${td} max-w-56`}>{contract?.otherTaxes ?? "—"}</td>
                   <td className={`${td} max-w-44`}>{contract?.applicablePeriod ?? "—"}</td>
@@ -198,7 +215,12 @@ function EditRow({
     contract?.ratePerNightCents != null ? (contract.ratePerNightCents / 100).toFixed(2) : "",
   );
   const [currency, setCurrency] = useState(contract?.rateCurrency ?? category.currency ?? "USD");
-  const [includes, setIncludes] = useState(contract?.rateIncludes ?? "");
+  const [includes, setIncludes] = useState<RateInclusion[]>(contract?.rateIncludes ?? []);
+  const [includesOther, setIncludesOther] = useState(contract?.rateIncludesOther ?? "");
+  // Ticking Cleaning comes before choosing how often, so the tick is kept apart.
+  const [cleaningIncluded, setCleaningIncluded] = useState(contract?.cleaning != null);
+  const [cleaning, setCleaning] = useState<Cleaning | "">(contract?.cleaning ?? "");
+  const [cleaningOther, setCleaningOther] = useState(contract?.cleaningOther ?? "");
   const [tot, setTot] = useState(
     contract?.totBasisPoints != null ? (contract.totBasisPoints / 100).toFixed(2) : "",
   );
@@ -222,6 +244,10 @@ function EditRow({
       setProblem("The buying rate should be a number, like 281.50.");
       return;
     }
+    if (cleaningIncluded && !cleaning) {
+      setProblem("Choose how often the room is cleaned, or untick Cleaning.");
+      return;
+    }
     if (totNumber !== null && (!Number.isFinite(totNumber) || totNumber < 0 || totNumber > 100)) {
       setProblem("TOT should be a percentage between 0 and 100, like 15.");
       return;
@@ -233,6 +259,9 @@ function EditRow({
       ratePerNightCents: rateNumber === null ? null : Math.round(rateNumber * 100),
       rateCurrency: rateNumber === null ? null : currency,
       rateIncludes: includes,
+      rateIncludesOther: includesOther,
+      cleaning: cleaningIncluded && cleaning ? cleaning : null,
+      cleaningOther,
       totBasisPoints: totNumber === null ? null : Math.round(totNumber * 100),
       otherTaxes,
       applicablePeriod: period,
@@ -270,9 +299,23 @@ function EditRow({
               </div>
             </div>
           </Field>
-          <Field label="Rate include" className="sm:col-span-2">
-            <Input value={includes} onChange={(e) => setIncludes(e.target.value)} placeholder="TOT & TMD" aria-label="Rate include" />
-          </Field>
+          {/* Not a Field: a label around the list would tick the first item
+              on any click inside it. */}
+          <div className="sm:col-span-2">
+            <Label>Rate include</Label>
+            <RateIncludesPicker
+              value={includes}
+              onChange={setIncludes}
+              other={includesOther}
+              onOtherChange={setIncludesOther}
+              cleaningIncluded={cleaningIncluded}
+              onCleaningIncludedChange={setCleaningIncluded}
+              cleaning={cleaning}
+              onCleaningChange={setCleaning}
+              cleaningOther={cleaningOther}
+              onCleaningOtherChange={setCleaningOther}
+            />
+          </div>
           <Field label="TOT (Transient Occupancy Tax), %" className="sm:col-span-2" hint="The city's hotel tax on the room rate — about 14–16% in Los Angeles.">
             <Input value={tot} onChange={(e) => setTot(e.target.value)} placeholder="15.00" inputMode="decimal" aria-label="TOT %" />
           </Field>
@@ -296,5 +339,134 @@ function EditRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+/**
+ * What the rate includes: a dropdown of items to tick — cleaning among them,
+ * which then asks how often — and a line for anything the list does not have.
+ * The button reads back what is ticked.
+ */
+function RateIncludesPicker({
+  value,
+  onChange,
+  other,
+  onOtherChange,
+  cleaningIncluded,
+  onCleaningIncludedChange,
+  cleaning,
+  onCleaningChange,
+  cleaningOther,
+  onCleaningOtherChange,
+}: {
+  value: RateInclusion[];
+  onChange: (value: RateInclusion[]) => void;
+  other: string;
+  onOtherChange: (other: string) => void;
+  cleaningIncluded: boolean;
+  onCleaningIncludedChange: (included: boolean) => void;
+  cleaning: Cleaning | "";
+  onCleaningChange: (cleaning: Cleaning | "") => void;
+  cleaningOther: string;
+  onCleaningOtherChange: (other: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  // Closes when clicking anywhere else, as a dropdown does.
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (box.current && !box.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const toggle = (item: RateInclusion) =>
+    onChange(value.includes(item) ? value.filter((chosen) => chosen !== item) : [...value, item]);
+  const summary =
+    describeRateIncludes(value, other, cleaningIncluded && cleaning ? cleaning : null, cleaningOther) ??
+    (cleaningIncluded ? "Cleaning" : null);
+
+  return (
+    <div ref={box} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label="Rate include"
+        className="border-ink-200 focus:border-brand-400 focus:ring-brand-400/20 flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2 text-left text-sm font-light outline-none focus:ring-4"
+      >
+        <span className={`truncate ${summary ? "" : "text-ink-400"}`}>{summary ?? "Choose what is included"}</span>
+        <span className="text-ink-500 text-xs" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div className="border-ink-200 absolute z-20 mt-1 w-full min-w-56 rounded-lg border bg-white p-3 shadow-lg">
+          <div className="space-y-2">
+            {rateInclusionOrder.map((item) => (
+              <label key={item} className="flex items-center gap-2 text-sm font-light">
+                <input
+                  type="checkbox"
+                  className="accent-brand-400 h-4 w-4"
+                  checked={value.includes(item)}
+                  onChange={() => toggle(item)}
+                />
+                {rateInclusionLabels[item]}
+              </label>
+            ))}
+            <label className="flex items-center gap-2 text-sm font-light">
+              <input
+                type="checkbox"
+                className="accent-brand-400 h-4 w-4"
+                checked={cleaningIncluded}
+                onChange={() => onCleaningIncludedChange(!cleaningIncluded)}
+              />
+              Cleaning
+            </label>
+            {cleaningIncluded && (
+              <div className="border-ink-200/60 ml-6 space-y-2 border-l pl-3">
+                <p className="text-ink-500 text-xs font-light">How often?</p>
+                {cleaningOrder.map((option) => (
+                  <label key={option} className="flex items-center gap-2 text-sm font-light">
+                    <input
+                      type="radio"
+                      name="cleaning"
+                      className="accent-brand-400 h-4 w-4"
+                      checked={cleaning === option}
+                      onChange={() => onCleaningChange(option)}
+                    />
+                    {cleaningLabels[option]}
+                  </label>
+                ))}
+                {cleaning === "OTHER" && (
+                  <Input
+                    value={cleaningOther}
+                    onChange={(e) => onCleaningOtherChange(e.target.value)}
+                    placeholder="Every 3 days"
+                    aria-label="Cleaning, in words"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+          <div className="mt-3">
+            <Input
+              value={other}
+              onChange={(e) => onOtherChange(e.target.value)}
+              placeholder="Anything else, e.g. TOT & TMD"
+              aria-label="Rate include, other"
+            />
+          </div>
+          <div className="mt-2 text-right">
+            <button type="button" onClick={() => setOpen(false)} className="text-brand-700 text-xs hover:underline">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { GroupColour } from "generated/prisma";
+import { Cleaning, GroupColour, RateInclusion } from "generated/prisma";
 import { z } from "zod";
 
 import { categoryContractStatusLabels, scoutingStatusLabels } from "~/lib/scouting";
@@ -104,7 +104,10 @@ export const scoutingRouter = createTRPCRouter({
         categoryId: z.string(),
         ratePerNightCents: z.number().int().min(0).nullable(),
         rateCurrency: z.string().length(3).nullable(),
-        rateIncludes: z.string().max(2000),
+        rateIncludes: z.array(z.nativeEnum(RateInclusion)),
+        rateIncludesOther: z.string().max(2000),
+        cleaning: z.nativeEnum(Cleaning).nullable(),
+        cleaningOther: z.string().max(2000),
         totBasisPoints: z.number().int().min(0).max(10000).nullable(),
         otherTaxes: z.string().max(2000),
         applicablePeriod: z.string().max(2000),
@@ -120,7 +123,11 @@ export const scoutingRouter = createTRPCRouter({
         ratePerNightCents: terms.ratePerNightCents,
         // A currency with no amount behind it is noise (§4.5).
         rateCurrency: terms.ratePerNightCents === null ? null : terms.rateCurrency,
-        rateIncludes: text(terms.rateIncludes),
+        rateIncludes: [...new Set(terms.rateIncludes)],
+        rateIncludesOther: text(terms.rateIncludesOther),
+        cleaning: terms.cleaning,
+        // Words for the cleaning only mean something when it is "Other".
+        cleaningOther: terms.cleaning === "OTHER" ? text(terms.cleaningOther) : null,
         totBasisPoints: terms.totBasisPoints,
         otherTaxes: text(terms.otherTaxes),
         applicablePeriod: text(terms.applicablePeriod),

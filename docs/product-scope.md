@@ -555,8 +555,8 @@ after them. **Edit rate** on a row opens a full-width row of labelled fields ben
 squeezed into the table's columns, where an amount or its currency could be cut off — and
 edits that category's **buying rate** — what we pay the
 hotel per night, as contracted — with its currency,
-what the rate includes, TOT, other applicable tax and applicable period for this event, in
-place; a TOT that is not a percentage, or a rate that is not a number, is refused with the
+what the rate includes (cleaning among it, with how often), TOT, other applicable tax and
+applicable period for this event, in place; a TOT that is not a percentage, or a rate that is not a number, is refused with the
 reason. Units, size, bed configuration and notes are the property's own and are changed on
 its form, which the table links to.
 
@@ -746,7 +746,7 @@ categories here as everywhere else in the system (§3.2). Columns, in Monday's o
 | Column | Kind | Here |
 | --- | --- | --- |
 | Buying rate | per event | What we pay the hotel per night, as contracted for this event: amount and currency (never a float, §4.5) — *new*. Monday calls it *Rate per night* |
-| Rate include | per event | Free text, e.g. "TOT & TMD" — *new* |
+| Rate include | per event | A dropdown of items to tick — Breakfast, Wi-Fi, Taxes, Parking, Cleaning — and a line for anything else, e.g. "TOT & TMD". Ticking **Cleaning** asks how often: *Daily*, *Weekly*, or *Other*, said in words ("Every 3 days"); it is refused until one is chosen, and unticked means cleaning is not included. Read back as one line: "Breakfast, Wi-Fi, Weekly cleaning, TOT & TMD" — *new* |
 | TOT | per event | *Transient Occupancy Tax* — the US city hotel tax on the room rate — as a percentage, e.g. 15.00% — *new*. Spelled out on hover and when editing |
 | Other applicable tax | per event | Free text, e.g. "TMD: 6.25 USD (ADR 200–…)" — *new* |
 | Applicable period | per event | Free text — *new* |
@@ -1682,7 +1682,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each card of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
-| §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include, TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
+| §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
 | §3.9 Nearby dining and convenience store | **Built, not yet seen working** | Built to Google's Places service and tested only without a key (the laptop has none); needs Places switched on for the live key. Travel times to the event's places of interest also shown in the side panel |
 | §3.9 Monday import | **Not built** | Decided later, as agreed |

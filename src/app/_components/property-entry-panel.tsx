@@ -1,5 +1,6 @@
 "use client";
 
+import type { Cleaning, RateInclusion } from "generated/prisma";
 import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
@@ -8,7 +9,7 @@ import { formatDuration, formatKm, TravelTimes } from "~/app/_components/travel-
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { termTextFields } from "~/lib/contracting";
 import { dayKey, parseDay } from "~/lib/dates";
-import { propertyTypeLabels } from "~/lib/scouting";
+import { describeRateIncludes, propertyTypeLabels } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
 type TermKey = (typeof termTextFields)[number]["key"];
@@ -263,7 +264,14 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
  * says the same thing. Only ever a draft — the rep edits and saves it.
  */
 function draftFromCategories(data: {
-  categoryContracts: { categoryId: string; applicablePeriod: string | null; rateIncludes: string | null }[];
+  categoryContracts: {
+    categoryId: string;
+    applicablePeriod: string | null;
+    rateIncludes: RateInclusion[];
+    rateIncludesOther: string | null;
+    cleaning: Cleaning | null;
+    cleaningOther: string | null;
+  }[];
   property: { categories: { id: string; name: string }[] };
 }) {
   const draft = (pick: (contract: (typeof data.categoryContracts)[number]) => string | null) => {
@@ -282,7 +290,7 @@ function draftFromCategories(data: {
   };
   return {
     applicablePeriod: draft((contract) => contract.applicablePeriod),
-    ratesInclude: draft((contract) => contract.rateIncludes),
+    ratesInclude: draft((contract) => describeRateIncludes(contract.rateIncludes, contract.rateIncludesOther, contract.cleaning, contract.cleaningOther)),
   };
 }
 
