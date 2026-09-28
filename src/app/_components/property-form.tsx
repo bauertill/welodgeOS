@@ -19,6 +19,7 @@ import {
   propertyDetailFields,
   propertyServiceFields,
 } from "~/lib/contracting";
+import { LocationPreview } from "~/app/_components/location-preview";
 import { normalizePropertyName } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
@@ -460,6 +461,14 @@ export function PropertyForm({
               placeholder="e.g. -118.4790"
             />
           </Field>
+
+          <div className="sm:col-span-2">
+            <LocationPreview
+              latitude={values.latitude}
+              longitude={values.longitude}
+              onMove={(latitude, longitude) => setValues((current) => ({ ...current, latitude, longitude }))}
+            />
+          </div>
 
           <Field label="Website">
             <Input

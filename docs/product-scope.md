@@ -571,6 +571,11 @@ full form's: a room category with inventory booked against it cannot be removed,
 room count cannot drop below the highest room number already in use; a number that is not a
 number is refused with the reason.
 
+**Checking a location on a map.** Wherever coordinates are entered — a place of interest,
+a property's form, the *Where it is* card — a small Google map shows a pin on them as soon
+as both are there, following as they are typed or looked up from the address, so a wrong
+spot is plain before it is saved. Dragging the pin corrects the coordinates.
+
 **The video on the Properties tab.** A property's video is sent to clients often, so the
 tab has a **Video** column: *Open* plays it, *Copy link* puts the link on the clipboard to
 paste into an email.

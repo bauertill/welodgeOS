@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Select } from "~/app/_components/form";
+import { LocationPreview } from "~/app/_components/location-preview";
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { ProviderPicker } from "~/app/_components/property-form";
 import { Card, Pill, Table, Td, Th } from "~/app/_components/ui";
@@ -124,6 +125,7 @@ function FieldsEditor({
   values,
   onDone,
   extra,
+  after,
   extraValues,
 }: {
   propertyId: string;
@@ -133,6 +135,8 @@ function FieldsEditor({
   onDone: () => void;
   /** Anything that is not a plain box (the provider picker). */
   extra?: (set: (key: string, value: string) => void, draft: Record<string, string>) => React.ReactNode;
+  /** Anything to show after the boxes (the map for coordinates). */
+  after?: (set: (key: string, value: string) => void, draft: Record<string, string>) => React.ReactNode;
   extraValues?: Record<string, string | null>;
 }) {
   const saved = useSaved();
@@ -188,6 +192,7 @@ function FieldsEditor({
           </Field>
         ))}
       </div>
+      {after && <div className="mt-3">{after(set, draft)}</div>}
       <SaveRow pending={patch.isPending} onCancel={onDone} error={problem ?? friendlyError(patch.error)} />
     </form>
   );
@@ -223,6 +228,16 @@ export function WhereItIsCard({ property, totalLabel }: { property: PropertyForC
             { key: "phone", label: "Phone" },
             { key: "website", label: "Website", placeholder: "https://…" },
           ]}
+          after={(set, draft) => (
+            <LocationPreview
+              latitude={draft.latitude ?? ""}
+              longitude={draft.longitude ?? ""}
+              onMove={(latitude, longitude) => {
+                set("latitude", latitude);
+                set("longitude", longitude);
+              }}
+            />
+          )}
         />
       )}
     >

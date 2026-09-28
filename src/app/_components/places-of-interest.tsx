@@ -20,6 +20,7 @@ import {
   placeCategoryOrder,
   placeCategoryPlurals,
 } from "~/lib/scouting";
+import { LocationPreview } from "~/app/_components/location-preview";
 import { api } from "~/trpc/react";
 
 type Draft = {
@@ -360,6 +361,16 @@ function PlaceFields({
           required
         />
       </Field>
+
+      <div className="sm:col-span-2">
+        <LocationPreview
+          latitude={draft.latitude}
+          longitude={draft.longitude}
+          // Both at once: two separate sets would each start from the old
+          // draft, and the second would undo the first.
+          onMove={(latitude, longitude) => setDraft({ ...draft, latitude, longitude })}
+        />
+      </div>
 
       <Field label="Notes" className="sm:col-span-2">
         <Textarea
