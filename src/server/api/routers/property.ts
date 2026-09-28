@@ -415,6 +415,173 @@ export const propertyRouter = createTRPCRouter({
       });
     }),
 
+  // --- Editing one card of the property's page in place (doc §3.9) -----------
+  // Each saves only what its card shows, so editing contacts can never touch
+  // room categories, and the same rules apply as on the full form.
+
+  /** Save some of the property's own fields — whichever the card edited. */
+  patch: protectedProcedure
+    .input(
+      propertyInput
+        .omit({ amenityIds: true, categories: true, contacts: true })
+        .partial()
+        .extend({
+          id: z.string(),
+          // The full form's optional numbers, clearable from a card.
+          latitude: z.number().min(-90).max(90).nullable().optional(),
+          longitude: z.number().min(-180).max(180).nullable().optional(),
+          yearBuilt: z.number().int().min(1000).max(2100).nullable().optional(),
+          totalRooms: z.number().int().min(0).nullable().optional(),
+          stars: z.number().int().min(1).max(5).nullable().optional(),
+        }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...fields } = input;
+      // Coordinates travel as a pair: both, or neither.
+      if (fields.latitude !== undefined || fields.longitude !== undefined) {
+        const hasLatitude = fields.latitude !== undefined && fields.latitude !== null;
+        const hasLongitude = fields.longitude !== undefined && fields.longitude !== null;
+        if (hasLatitude !== hasLongitude) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Give both a latitude and a longitude, or neither — one on its own cannot be put on the map.",
+          });
+        }
+      }
+      if (fields.name !== undefined) {
+        const duplicate = await ctx.db.property.findFirst({
+          where: { id: { not: id }, name: { equals: fields.name.trim(), mode: "insensitive" } },
+          select: { id: true },
+        });
+        if (duplicate) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot add duplicate property — a property with this name already exists." });
+        }
+      }
+      // Only the keys the card sent are written; text is trimmed, and emptied
+      // text is cleared rather than left as it was.
+      const data: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(fields)) {
+        if (value === undefined) continue;
+        data[key] = (textKeys as readonly string[]).includes(key) ? blank(value as string) : value;
+      }
+      if ("providerId" in data) data.providerId = data.providerId || null;
+
+      return ctx.db.$transaction(async (tx) => {
+        const before = await tx.property.findUniqueOrThrow({ where: { id } });
+        const updated = await tx.property.update({ where: { id }, data });
+        await logFieldChanges(
+          tx,
+          { actorId: ctx.session.user.id, entity: "Property", entityId: id, summary: "Updated" },
+          before,
+          updated,
+          [
+            { key: "name", label: "Name" },
+            { key: "address", label: "Address" },
+            { key: "city", label: "City" },
+            { key: "country", label: "Country" },
+            { key: "stars", label: "Stars" },
+            { key: "totalRooms", label: "Total rooms" },
+            { key: "website", label: "Website" },
+            { key: "phone", label: "Phone" },
+            { key: "notes", label: "Notes" },
+            { key: "yearBuilt", label: "Year built" },
+            { key: "providerId", label: "Provider" },
+            ...propertyDetailFields,
+            ...propertyServiceFields,
+            ...contractingFields,
+          ],
+        );
+        return updated;
+      });
+    }),
+
+  setAmenities: protectedProcedure
+    .input(z.object({ id: z.string(), amenityIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      const updated = await ctx.db.property.update({
+        where: { id: input.id },
+        data: { amenities: { set: input.amenityIds.map((amenityId) => ({ id: amenityId })) } },
+      });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: input.id, summary: "Amenities updated" });
+      return updated;
+    }),
+
+  setContacts: protectedProcedure
+    .input(z.object({ id: z.string(), contacts: z.array(contactInput) }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        await tx.propertyContact.deleteMany({ where: { propertyId: input.id } });
+        await tx.propertyContact.createMany({
+          data: input.contacts
+            .filter((contact) => contact.name.trim())
+            .map((contact) => ({
+              propertyId: input.id,
+              name: contact.name.trim(),
+              role: blank(contact.role),
+              email: blank(contact.email),
+              phone: blank(contact.phone),
+            })),
+        });
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Property", entityId: input.id, summary: "Contacts updated" });
+      }),
+    ),
+
+  /**
+   * Add a room category, or change one, from the property's page. The same
+   * rule as the full form: a room count cannot drop below the highest room
+   * number already in inventory (invariant §4.5.3).
+   */
+  saveCategory: protectedProcedure
+    .input(z.object({ propertyId: z.string(), category: categoryInput }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...fields } = input.category;
+      const data = { ...fields, name: fields.name.trim(), size: blank(fields.size), notes: blank(fields.notes) };
+      if (id) {
+        const highest = await ctx.db.roomSlot.findFirst({
+          where: { categoryId: id },
+          orderBy: { slotNumber: "desc" },
+          select: { slotNumber: true },
+        });
+        if (highest && data.unitCount < highest.slotNumber) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `"${data.name}" already has inventory numbered up to #${highest.slotNumber}, so it cannot be reduced to ${data.unitCount} rooms.`,
+          });
+        }
+        const updated = await ctx.db.roomCategory.update({ where: { id }, data });
+        await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: input.propertyId, summary: "Room categories updated" });
+        return updated;
+      }
+      const last = await ctx.db.roomCategory.aggregate({
+        where: { propertyId: input.propertyId },
+        _max: { sortOrder: true },
+      });
+      const created = await ctx.db.roomCategory.create({
+        data: { ...data, propertyId: input.propertyId, sortOrder: (last._max.sortOrder ?? -1) + 1 },
+      });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: input.propertyId, summary: "Room categories updated" });
+      return created;
+    }),
+
+  /** Remove a room category — refused while inventory is booked against it. */
+  removeCategory: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const category = await ctx.db.roomCategory.findUniqueOrThrow({
+        where: { id: input.id },
+        include: { slots: { include: { _count: { select: { roomNights: true } } } } },
+      });
+      const nights = category.slots.reduce((sum, slot) => sum + slot._count.roomNights, 0);
+      if (nights > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `"${category.name}" cannot be removed: ${nights} room-nights of inventory are booked against it. Release them first, or leave the category in place.`,
+        });
+      }
+      await ctx.db.roomCategory.delete({ where: { id: input.id } });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: category.propertyId, summary: "Room categories updated" });
+    }),
+
   remove: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {

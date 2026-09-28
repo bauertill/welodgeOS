@@ -335,6 +335,9 @@ export function ScoutingList({
                     </div>
                   </Td>
                   <Td>
+                    <VideoLink url={property.videoUrl} />
+                  </Td>
+                  <Td>
                     <Select
                       value={entry.status}
                       title={scoutingStatusHints[entry.status]}
@@ -383,7 +386,7 @@ export function ScoutingList({
 
                 {categoryOpen && hasCategories && (
                   <tr>
-                    <Td colSpan={venues.length > 0 ? 9 : 8}>
+                    <Td colSpan={venues.length > 0 ? 10 : 9}>
                       <RoomCategoryTable
                         scoutingEntryId={entry.id}
                         propertyId={property.id}
@@ -573,6 +576,7 @@ export function ScoutingList({
                   <Th>Rooms</Th>
                   {venues.length > 0 && <Th>To venue</Th>}
                   <Th>Amenities</Th>
+                  <Th>Video</Th>
                   <Th>Status</Th>
                   <Th>Group</Th>
                   <Th>{""}</Th>
@@ -601,6 +605,35 @@ export function ScoutingList({
         property itself stays in the library for other events.
       </p>
     </div>
+  );
+}
+
+/**
+ * A property's video, which the team sends to clients often (doc §3.9): open
+ * it, or copy its link to paste into an email.
+ */
+function VideoLink({ url }: { url: string | null }) {
+  const [copied, setCopied] = useState(false);
+  if (!url) return <span className="text-ink-500">—</span>;
+  const href = /^https?:\/\//.test(url) ? url : `https://${url}`;
+  return (
+    <span className="flex flex-col items-start gap-1 whitespace-nowrap">
+      <a href={href} target="_blank" rel="noreferrer" className="text-brand-700 text-[13px] font-light hover:underline">
+        Open ↗
+      </a>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(href).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          });
+        }}
+        className="text-ink-500 hover:text-brand-700 text-[11px] font-light"
+      >
+        {copied ? "Copied" : "Copy link"}
+      </button>
+    </span>
   );
 }
 

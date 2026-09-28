@@ -561,6 +561,20 @@ the closest convenience store within 5 km, closest first, each with its drive ti
 is stored. Without a Google key, or with one that does not have Google's Places service
 switched on, the panel says which, instead of showing nothing.
 
+**Editing a property where it stands.** On the property's own page, every card — *Where it
+is*, *Amenities*, *More about the property*, *Contracting details*, *Contacts* — has an
+**Edit** button in its corner that turns it into a small form of just that card's fields,
+saved on their own; the full Edit page still changes everything at once. *Room categories*
+has **Add room category** and an Edit on each row, for the name, rooms, sleeps, beds (or
+bedrooms and bathrooms), size, notes and indicative price, and Remove. The rules are the
+full form's: a room category with inventory booked against it cannot be removed, and its
+room count cannot drop below the highest room number already in use; a number that is not a
+number is refused with the reason.
+
+**The video on the Properties tab.** A property's video is sent to clients often, so the
+tab has a **Video** column: *Open* plays it, *Copy link* puts the link on the clipboard to
+paste into an email.
+
 **Opening a property.** On the Properties tab, a property's name opens its full page, and
 the page's back link returns to this event's tab. Beside the name, **Quick view** opens a
 side panel instead, without leaving the tab: the terms agreed for this event at the top, editable and saved on
@@ -1647,7 +1661,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
-| §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity |
+| §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each card of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include, TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |

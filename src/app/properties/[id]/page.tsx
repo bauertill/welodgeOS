@@ -3,18 +3,16 @@ import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
 import { DeleteProperty } from "~/app/_components/delete-property";
-import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import {
-  Card,
-  PageHeader,
-  Pill,
-  ScoutingStatusBadge,
-  Table,
-  Td,
-  Th,
-} from "~/app/_components/ui";
+  AmenitiesCard,
+  ContactsCard,
+  ContractingCard,
+  MoreAboutCard,
+  RoomCategoriesCard,
+  WhereItIsCard,
+} from "~/app/_components/property-cards";
+import { Card, PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
-import { formatMoneyRange } from "~/lib/format";
 import { propertyTypeLabels, totalUnits } from "~/lib/scouting";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
@@ -30,7 +28,7 @@ export default async function PropertyPage({
   if (!session?.user) redirect("/signin");
 
   const { id } = await params;
-  const property = await api.property.byId({ id });
+  const [property, amenities] = await Promise.all([api.property.byId({ id }), api.amenity.list()]);
   if (!property) notFound();
 
   // Opened from an event's Properties tab: "back" goes to that event. Only an
@@ -39,7 +37,6 @@ export default async function PropertyPage({
   const cameFrom = property.scoutingEntries.find((entry) => back === `/events/${entry.event.id}`);
   const editHref = `/properties/${property.id}/edit${cameFrom ? `?back=${encodeURIComponent(back!)}` : ""}`;
 
-  const hasBedConfiguration = property.type === "HOTEL";
   const units = totalUnits(property.categories) || property.totalRooms || 0;
 
   return (
@@ -85,70 +82,7 @@ export default async function PropertyPage({
             <UpdateThread propertyId={property.id} />
           </Card>
 
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              {hasBedConfiguration ? "Room categories" : "Unit types"}
-            </h2>
-
-            {property.categories.length === 0 ? (
-              <p className="text-ink-500 text-sm font-light">
-                No categories recorded.
-                {property.totalRooms
-                  ? ` The property has ${property.totalRooms} in total.`
-                  : ""}
-              </p>
-            ) : (
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Category</Th>
-                    <Th>{hasBedConfiguration ? "Rooms" : "Units"}</Th>
-                    <Th>Sleeps</Th>
-                    <Th>{hasBedConfiguration ? "Beds" : "Bed / bath"}</Th>
-                    <Th>Price per night</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {property.categories.map((category) => (
-                    <tr key={category.id}>
-                      <Td>
-                        <span className="font-medium">{category.name}</span>
-                      </Td>
-                      <Td>{category.unitCount || "—"}</Td>
-                      <Td>{category.capacity}</Td>
-                      <Td>
-                        {hasBedConfiguration
-                          ? (category.bedConfiguration ?? "—")
-                          : [
-                              category.bedrooms !== null
-                                ? `${category.bedrooms} bed`
-                                : null,
-                              category.bathrooms !== null
-                                ? `${category.bathrooms} bath`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ") || "—"}
-                      </Td>
-                      <Td>
-                        {formatMoneyRange(
-                          category.indicativePriceMinCents,
-                          category.indicativePriceMaxCents,
-                          category.currency,
-                        )}
-                        {(category.indicativePriceMinCents !== null ||
-                          category.indicativePriceMaxCents !== null) && (
-                          <span className="text-ink-500 block text-xs font-light">
-                            Indicative
-                          </span>
-                        )}
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            )}
-          </Card>
+          <RoomCategoriesCard property={property} />
 
           {property.notes && (
             <Card>
@@ -198,69 +132,13 @@ export default async function PropertyPage({
         </div>
 
         <div className="space-y-5">
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Where it is
-            </h2>
-            <dl className="space-y-2 text-sm font-light">
-              <Row label="Address" value={property.address} />
-              <Row label="Area" value={property.area} />
-              <Row
-                label="City"
-                value={
-                  [property.city, property.country].filter(Boolean).join(", ") ||
-                  null
-                }
-              />
-              <Row
-                label="Coordinates"
-                value={
-                  property.latitude !== null && property.longitude !== null
-                    ? `${property.latitude.toFixed(5)}, ${property.longitude.toFixed(5)}`
-                    : null
-                }
-              />
-              <Row label="Total" value={units ? `${units} rooms` : null} />
-              <Row label="Phone" value={property.phone} />
-              <Row label="Website" value={property.website} />
-            </dl>
-          </Card>
+          <WhereItIsCard property={property} totalLabel={units ? `${units} rooms` : null} />
 
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Amenities
-            </h2>
-            {property.amenities.length === 0 ? (
-              <p className="text-ink-500 text-sm font-light">None recorded.</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {property.amenities.map((amenity) => (
-                  <Pill key={amenity.id}>{amenity.label}</Pill>
-                ))}
-              </div>
-            )}
-          </Card>
+          <AmenitiesCard property={property} amenities={amenities} />
 
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              More about the property
-            </h2>
-            <PropertyFacts property={property} backTo={cameFrom ? `/events/${cameFrom.event.id}` : undefined} />
-          </Card>
-
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Contracting details
-            </h2>
-            <ContractingDetails property={property} />
-          </Card>
-
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Contacts
-            </h2>
-            <ContactList property={property} />
-          </Card>
+          <MoreAboutCard property={property} backTo={cameFrom ? `/events/${cameFrom.event.id}` : undefined} />
+          <ContractingCard property={property} />
+          <ContactsCard property={property} />
 
           {property.scoutedBy && (
             <p className="text-ink-500 text-xs font-light">
@@ -273,11 +151,3 @@ export default async function PropertyPage({
   );
 }
 
-function Row({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div className="flex gap-3">
-      <dt className="text-ink-500 w-28 shrink-0">{label}</dt>
-      <dd className="text-ink-900 min-w-0 break-words">{value ?? "—"}</dd>
-    </div>
-  );
-}

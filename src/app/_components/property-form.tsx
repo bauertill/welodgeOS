@@ -867,7 +867,7 @@ export function PropertyForm({
 }
 
 /** Choose the property's provider, or add a new one without leaving the form. */
-function ProviderPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+export function ProviderPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const utils = api.useUtils();
   const providers = api.provider.list.useQuery();
   const [adding, setAdding] = useState(false);
