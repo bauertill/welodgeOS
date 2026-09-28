@@ -545,7 +545,10 @@ Decluttering the map so our own pins stand out is a change made there, not here.
 than leaving the page: the terms agreed for this event at the top, editable and saved on
 this event only, then the contracting details that apply (the property's own, or its
 provider's, said so), its contacts and its provider's, and the rest of what is known about
-it, with a link to edit the property or open its full page. The row itself shows the
+it, with a link to edit the property or open its full page. Editing the property from the
+panel brings the rep back to the event's Properties tab when they save, not to the
+property's own page; and a link says "Opening…" the moment it is clicked, so a page that
+takes a moment to load never looks as though the click did nothing. The row itself shows the
 provider beside the type, the account manager, and the area above the city; each group's
 header shows its account managers.
 

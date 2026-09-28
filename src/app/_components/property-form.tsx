@@ -124,12 +124,15 @@ export function PropertyForm({
   existingNames,
   /** When set, the new property is added straight to this event's list. */
   addToEventId,
+  /** Where to go after saving, when the form was opened from somewhere else. */
+  returnTo,
 }: {
   initial: PropertyFormValues;
   amenities: { id: string; label: string }[];
   /** Every property's name, for real-time duplicate detection (doc §3.1). */
   existingNames: { id: string; name: string }[];
   addToEventId?: string;
+  returnTo?: string;
 }) {
   const router = useRouter();
   const [values, setValues] = useState(initial);
@@ -192,7 +195,7 @@ export function PropertyForm({
       );
       return;
     }
-    router.push(`/properties/${propertyId}`);
+    router.push(returnTo ?? `/properties/${propertyId}`);
     router.refresh();
   };
 

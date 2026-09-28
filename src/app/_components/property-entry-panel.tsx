@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
+import { PendingLink } from "~/app/_components/pending-link";
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { termTextFields } from "~/lib/contracting";
 import { dayKey, parseDay } from "~/lib/dates";
@@ -183,9 +183,12 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
             <section>
               <div className="mb-3 flex items-baseline justify-between gap-3">
                 <h3 className="text-ink-900 text-[15px] font-medium">Contracting details</h3>
-                <Link href={`/properties/${property.id}/edit`} className="text-brand-700 text-[13px] font-light hover:underline">
+                <PendingLink
+                  href={`/properties/${property.id}/edit?back=${encodeURIComponent(`/events/${entry.data.eventId}`)}`}
+                  className="text-brand-700 text-[13px] font-light hover:underline"
+                >
                   Edit property
-                </Link>
+                </PendingLink>
               </div>
               <ContractingDetails property={property} />
             </section>
@@ -198,12 +201,12 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
             <section>
               <h3 className="text-ink-900 mb-3 text-[15px] font-medium">About the property</h3>
               <PropertyFacts property={property} />
-              <Link
+              <PendingLink
                 href={`/properties/${property.id}`}
                 className="text-brand-700 mt-3 inline-block text-[13px] font-light hover:underline"
               >
                 Open the property&apos;s page
-              </Link>
+              </PendingLink>
             </section>
           </div>
         )}

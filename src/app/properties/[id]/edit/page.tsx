@@ -14,13 +14,19 @@ const str = (value: number | null | undefined) =>
 
 export default async function EditPropertyPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ back?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
 
   const { id } = await params;
+  // Opened from an event's Properties tab: go back there, not to the property.
+  // Only an event page is accepted, so the link cannot send anyone elsewhere.
+  const { back } = await searchParams;
+  const returnTo = back && /^\/events\/[A-Za-z0-9]+$/.test(back) ? back : undefined;
   const [property, amenities, existingNames] = await Promise.all([
     api.property.byId({ id }),
     api.amenity.list(),
@@ -32,11 +38,16 @@ export default async function EditPropertyPage({
   return (
     <>
       <PageHeader
-        back={{ href: `/properties/${property.id}`, label: property.name }}
+        back={
+          returnTo
+            ? { href: returnTo, label: "Back to the event's properties" }
+            : { href: `/properties/${property.id}`, label: property.name }
+        }
         title={`Edit ${property.name}`}
       />
 
       <PropertyForm
+        returnTo={returnTo}
         amenities={amenities}
         existingNames={existingNames}
         initial={{
