@@ -541,8 +541,9 @@ Decluttering the map so our own pins stand out is a change made there, not here.
 > side panel** are built; **room category rates and taxes, "Fill from room categories", and
 > the Google lookups for dining and shops** are not yet. §12 says exactly which is which.
 
-**Opening a property.** On the Properties tab, a property's name opens a side panel rather
-than leaving the page: the terms agreed for this event at the top, editable and saved on
+**Opening a property.** On the Properties tab, a property's name opens its full page, and
+the page's back link returns to this event's tab. Beside the name, **Quick view** opens a
+side panel instead, without leaving the tab: the terms agreed for this event at the top, editable and saved on
 this event only, then the contracting details that apply (the property's own, or its
 provider's, said so), its contacts and its provider's, and the rest of what is known about
 it, with a link to edit the property or open its full page. Editing the property from the

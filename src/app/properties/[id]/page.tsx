@@ -21,8 +21,10 @@ import { api } from "~/trpc/server";
 
 export default async function PropertyPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ back?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
@@ -31,6 +33,12 @@ export default async function PropertyPage({
   const property = await api.property.byId({ id });
   if (!property) notFound();
 
+  // Opened from an event's Properties tab: "back" goes to that event. Only an
+  // event this property is actually on is accepted.
+  const { back } = await searchParams;
+  const cameFrom = property.scoutingEntries.find((entry) => back === `/events/${entry.event.id}`);
+  const editHref = `/properties/${property.id}/edit${cameFrom ? `?back=${encodeURIComponent(back!)}` : ""}`;
+
   const hasBedConfiguration = property.type === "HOTEL";
   const units = totalUnits(property.categories) || property.totalRooms || 0;
 
@@ -38,12 +46,14 @@ export default async function PropertyPage({
     <>
       <PageHeader
         back={
-          property.scoutingEntries[0]
-            ? {
-                href: `/events/${property.scoutingEntries[0].event.id}`,
-                label: property.scoutingEntries[0].event.name,
-              }
-            : { href: "/events", label: "All events" }
+          cameFrom
+            ? { href: `/events/${cameFrom.event.id}`, label: cameFrom.event.name }
+            : property.scoutingEntries[0]
+              ? {
+                  href: `/events/${property.scoutingEntries[0].event.id}`,
+                  label: property.scoutingEntries[0].event.name,
+                }
+              : { href: "/events", label: "All events" }
         }
         title={property.name}
         subtitle={[
@@ -56,7 +66,7 @@ export default async function PropertyPage({
         action={
           <div className="flex items-start gap-2">
             <Link
-              href={`/properties/${property.id}/edit`}
+              href={editHref}
               className="border-ink-200 text-ink-700 hover:bg-ink-50 inline-flex rounded-full border bg-white px-5 py-2.5 text-[13px] font-light transition-colors"
             >
               Edit

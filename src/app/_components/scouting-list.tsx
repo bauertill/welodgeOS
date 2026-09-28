@@ -31,6 +31,7 @@ import {
   groupColours,
   type SelectableScoutingStatus,
 } from "~/lib/scouting";
+import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { GroupHeader, Initials, NewGroup } from "~/app/_components/property-groups";
 import { api } from "~/trpc/react";
@@ -240,14 +241,22 @@ export function ScoutingList({
                         </svg>
                       </button>
                       <div>
-                        <button
-                          type="button"
-                          onClick={() => setOpenEntry(entry.id)}
-                          className="hover:text-brand-700 text-left font-medium"
-                          title="Open this property's terms and details"
-                        >
-                          {property.name}
-                        </button>
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <PendingLink
+                            href={`/properties/${property.id}?back=${encodeURIComponent(`/events/${eventId}`)}`}
+                            className="hover:text-brand-700 font-medium"
+                          >
+                            {property.name}
+                          </PendingLink>
+                          <button
+                            type="button"
+                            onClick={() => setOpenEntry(entry.id)}
+                            className="border-ink-200 text-ink-500 hover:border-brand-400 hover:text-brand-700 rounded-full border px-2 py-0.5 text-[11px] font-light whitespace-nowrap transition-colors"
+                            title="This event's terms, contracting details and contacts, without leaving the page"
+                          >
+                            Quick view
+                          </button>
+                        </span>
                         <span className="text-ink-500 block text-xs font-light">
                           {property.provider ? `${property.provider.name} · ` : ""}
                           {propertyTypeLabels[property.type]}
