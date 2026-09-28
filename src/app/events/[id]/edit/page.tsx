@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
 import { EventForm } from "~/app/_components/event-form";
+import { PlacesOfInterest } from "~/app/_components/places-of-interest";
 import { Card, PageHeader } from "~/app/_components/ui";
 import { dayKey } from "~/lib/dates";
 import { auth } from "~/server/auth";
@@ -39,6 +40,12 @@ export default async function EditEventPage({
           status: event.status,
         }}
       />
+
+      {/* Part of setting the event up (doc §3.7): the Properties tab only
+          measures to these. */}
+      <div id="places" className="mt-5 scroll-mt-6">
+        <PlacesOfInterest eventId={event.id} />
+      </div>
 
       <div className="mt-5">
         <Card>

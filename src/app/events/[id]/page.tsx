@@ -3,7 +3,6 @@ import { notFound, redirect } from "next/navigation";
 
 import { AddToList } from "~/app/_components/add-to-list";
 import { EventTabs } from "~/app/_components/event-tabs";
-import { PlacesOfInterest } from "~/app/_components/places-of-interest";
 import {
   ScoutingList,
   ScoutingStatusKey,
@@ -63,11 +62,22 @@ export default async function EventPropertiesPage({
 
       <EventTabs eventId={event.id} />
 
-      <ScoutingList eventId={event.id} places={places} amenities={amenities} />
+      <p className="text-ink-500 mb-4 text-[13px] font-light">
+        {places.length === 0 ? (
+          <>No places of interest yet, so distances and travel times cannot be measured. </>
+        ) : (
+          <>
+            Distances are measured to:{" "}
+            <span className="text-ink-700">{places.map((place) => place.name).join(", ")}</span>
+            {" · "}
+          </>
+        )}
+        <Link href={`/events/${event.id}/edit#places`} className="text-brand-700 hover:underline">
+          {places.length === 0 ? "Add places of interest" : "Change places of interest"}
+        </Link>
+      </p>
 
-      <div className="mt-8">
-        <PlacesOfInterest eventId={event.id} />
-      </div>
+      <ScoutingList eventId={event.id} places={places} amenities={amenities} />
 
       <Card className="mt-8">
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
