@@ -23,6 +23,8 @@ const categoryInput = z.object({
   indicativePriceMinCents: z.number().int().min(0).optional(),
   indicativePriceMaxCents: z.number().int().min(0).optional(),
   currency: z.string().length(3).default("USD"),
+  size: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
 });
 
 const contactInput = z.object({
@@ -219,6 +221,8 @@ export const propertyRouter = createTRPCRouter({
             categories: {
               create: categories.map(({ id: _unused, ...category }, index) => ({
                 ...category,
+                size: blank(category.size),
+                notes: blank(category.notes),
                 sortOrder: index,
               })),
             },
@@ -338,7 +342,9 @@ export const propertyRouter = createTRPCRouter({
         await tx.propertyContact.deleteMany({ where: { propertyId: id } });
 
         for (const [index, category] of categories.entries()) {
-          const { id: categoryId, ...data } = category;
+          const { id: categoryId, ...fields } = category;
+          // An emptied size or note is cleared, not left as it was.
+          const data = { ...fields, size: blank(fields.size), notes: blank(fields.notes) };
           if (categoryId) {
             await tx.roomCategory.update({
               where: { id: categoryId },

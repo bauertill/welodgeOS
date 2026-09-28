@@ -82,6 +82,8 @@ export default async function EditPropertyPage({
                 ? ""
                 : String(category.indicativePriceMaxCents / 100),
             currency: category.currency,
+            size: category.size ?? "",
+            notes: category.notes ?? "",
           })),
           contacts: property.contacts.map((contact) => ({
             name: contact.name,

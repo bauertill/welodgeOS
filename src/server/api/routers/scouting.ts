@@ -39,8 +39,10 @@ export const scoutingRouter = createTRPCRouter({
       where: { id: input.id },
       include: {
         accountManager: { select: { id: true, name: true, email: true } },
+        categoryContracts: true,
         property: {
           include: {
+            categories: { orderBy: { sortOrder: "asc" } },
             contacts: { orderBy: { name: "asc" } },
             amenities: { orderBy: { sortOrder: "asc" } },
             provider: { include: { contacts: { orderBy: { name: "asc" } } } },
@@ -87,6 +89,54 @@ export const scoutingRouter = createTRPCRouter({
         summary: "Terms updated",
       });
       return updated;
+    }),
+
+  /**
+   * The rates and taxes agreed for one room category on this event (doc
+   * §3.9). Stored beside the category's contract status for this event, so
+   * another event's rates for the same room type are never touched. A
+   * category with no contract row yet gets one, still "in negotiation".
+   */
+  setCategoryTerms: protectedProcedure
+    .input(
+      z.object({
+        scoutingEntryId: z.string(),
+        categoryId: z.string(),
+        ratePerNightCents: z.number().int().min(0).nullable(),
+        rateCurrency: z.string().length(3).nullable(),
+        rateIncludes: z.string().max(2000),
+        totBasisPoints: z.number().int().min(0).max(10000).nullable(),
+        otherTaxes: z.string().max(2000),
+        applicablePeriod: z.string().max(2000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { scoutingEntryId, categoryId, ...terms } = input;
+      const text = (value: string) => (value.trim() ? value.trim() : null);
+      if (terms.ratePerNightCents !== null && !terms.rateCurrency) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Say which currency the rate is in." });
+      }
+      const data = {
+        ratePerNightCents: terms.ratePerNightCents,
+        // A currency with no amount behind it is noise (§4.5).
+        rateCurrency: terms.ratePerNightCents === null ? null : terms.rateCurrency,
+        rateIncludes: text(terms.rateIncludes),
+        totBasisPoints: terms.totBasisPoints,
+        otherTaxes: text(terms.otherTaxes),
+        applicablePeriod: text(terms.applicablePeriod),
+      };
+      const saved = await ctx.db.categoryContract.upsert({
+        where: { scoutingEntryId_categoryId: { scoutingEntryId, categoryId } },
+        update: data,
+        create: { scoutingEntryId, categoryId, ...data },
+      });
+      await logAudit(ctx.db, {
+        actorId: ctx.session.user.id,
+        entity: "ScoutingEntry",
+        entityId: scoutingEntryId,
+        summary: "Room category rates updated",
+      });
+      return saved;
     }),
 
   // --- Groups on the Properties tab (doc §3.9) --------------------------------

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { PendingLink } from "~/app/_components/pending-link";
+import { formatDuration, formatKm, TravelTimes } from "~/app/_components/travel-times";
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { termTextFields } from "~/lib/contracting";
 import { dayKey, parseDay } from "~/lib/dates";
@@ -137,6 +138,42 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
                 </Select>
               </Field>
 
+              {(() => {
+                const drafts = draftFromCategories(entry.data);
+                if (!drafts.applicablePeriod && !drafts.ratesInclude) return null;
+                return (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="px-4 py-1.5"
+                      onClick={() => {
+                        const overwriting = (["applicablePeriod", "ratesInclude"] as const).filter(
+                          (key) => drafts[key] && terms[key].trim() && terms[key].trim() !== drafts[key],
+                        );
+                        if (
+                          overwriting.length > 0 &&
+                          !window.confirm("Replace what is already written in Applicable period and Rates include?")
+                        ) {
+                          return;
+                        }
+                        edited();
+                        setTerms({
+                          ...terms,
+                          applicablePeriod: drafts.applicablePeriod || terms.applicablePeriod,
+                          ratesInclude: drafts.ratesInclude || terms.ratesInclude,
+                        });
+                      }}
+                    >
+                      Fill from room categories
+                    </Button>
+                    <span className="text-ink-500 text-xs font-light">
+                      Drafts the two boxes below from the room categories&apos; periods and what their rates include — edit from there.
+                    </span>
+                  </div>
+                );
+              })()}
+
               {termTextFields.map((field) => (
                 <Field key={field.key} label={field.label} hint={"hint" in field ? field.hint : undefined}>
                   <Textarea
@@ -199,6 +236,11 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
             </section>
 
             <section>
+              <h3 className="text-ink-900 mb-3 text-[15px] font-medium">Getting around</h3>
+              <GettingAround propertyId={property.id} eventId={entry.data.eventId} />
+            </section>
+
+            <section>
               <h3 className="text-ink-900 mb-3 text-[15px] font-medium">About the property</h3>
               <PropertyFacts property={property} />
               <PendingLink
@@ -212,5 +254,113 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
         )}
       </aside>
     </>
+  );
+}
+
+/**
+ * A first draft of the property's contracting text from its room categories
+ * (doc §3.9): one line per category, or a single line when every category
+ * says the same thing. Only ever a draft — the rep edits and saves it.
+ */
+function draftFromCategories(data: {
+  categoryContracts: { categoryId: string; applicablePeriod: string | null; rateIncludes: string | null }[];
+  property: { categories: { id: string; name: string }[] };
+}) {
+  const draft = (pick: (contract: (typeof data.categoryContracts)[number]) => string | null) => {
+    const lines = data.property.categories
+      .map((category) => {
+        const contract = data.categoryContracts.find((c) => c.categoryId === category.id);
+        const value = contract ? pick(contract)?.trim() : null;
+        return value ? { name: category.name, value } : null;
+      })
+      .filter((line): line is { name: string; value: string } => line !== null);
+    if (lines.length === 0) return "";
+    const same = lines.every((line) => line.value === lines[0]!.value);
+    // The same wording for every category that has one is said once.
+    if (same && lines.length === data.property.categories.length) return lines[0]!.value;
+    return lines.map((line) => `${line.name}: ${line.value}`).join("\n");
+  };
+  return {
+    applicablePeriod: draft((contract) => contract.applicablePeriod),
+    ratesInclude: draft((contract) => contract.rateIncludes),
+  };
+}
+
+/**
+ * Travel times to the event's places of interest — the IBC, the stadium —
+ * and the nearest dining and convenience store, all by Google, when the panel
+ * opens, and none of it stored (doc §3.8, §3.9).
+ */
+function GettingAround({ propertyId, eventId }: { propertyId: string; eventId: string }) {
+  const places = api.place.listForEvent.useQuery({ eventId });
+  const nearby = api.travel.nearby.useQuery({ propertyId }, { staleTime: 0 });
+
+  const drive = (place: { name: string; car: { seconds: number; metres: number } | null }) => (
+    <li key={place.name} className="flex items-baseline justify-between gap-3 text-[13px] font-light">
+      <span className="text-ink-900 min-w-0 truncate">{place.name}</span>
+      <span className="text-ink-500 shrink-0">
+        {place.car ? `${formatDuration(place.car.seconds)} by car · ${formatKm(place.car.metres)}` : "drive not available"}
+      </span>
+    </li>
+  );
+
+  return (
+    <div className="space-y-5">
+      {places.data && (
+        <TravelTimes
+          propertyId={propertyId}
+          eventId={eventId}
+          places={places.data.map((place) => ({
+            id: place.id,
+            name: place.name,
+            category: place.category,
+            lines: place.lines,
+            latitude: place.latitude,
+            longitude: place.longitude,
+          }))}
+        />
+      )}
+
+      <div>
+        <h4 className="text-ink-500 mb-2 text-[11px] font-medium tracking-wider uppercase">Nearby</h4>
+        {nearby.isPending ? (
+          <p className="text-ink-500 text-xs font-light">Asking Google…</p>
+        ) : nearby.isError || !nearby.data ? (
+          <p className="text-ink-500 text-xs font-light">Nearby places are not available right now.</p>
+        ) : nearby.data.status === "no-location" ? (
+          <p className="text-ink-500 text-xs font-light">
+            Add the property&apos;s coordinates and the nearest dining and convenience store appear here.
+          </p>
+        ) : nearby.data.status === "no-key" ? (
+          <p className="text-ink-500 text-xs font-light">
+            Google is not set up here, so nearby places cannot be looked up.
+          </p>
+        ) : nearby.data.status !== "ok" ? (
+          <p className="text-ink-500 text-xs font-light">
+            Google would not look up nearby places — the Places service may need switching on for our Google key.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <p className="text-ink-700 mb-1 text-xs font-medium">Dining options</p>
+              {nearby.data.dining.length ? (
+                <ul className="space-y-1">{nearby.data.dining.map(drive)}</ul>
+              ) : (
+                <p className="text-ink-500 text-xs font-light">None within 5 km.</p>
+              )}
+            </div>
+            <div>
+              <p className="text-ink-700 mb-1 text-xs font-medium">Closest convenience store</p>
+              {nearby.data.convenienceStore ? (
+                <ul>{drive(nearby.data.convenienceStore)}</ul>
+              ) : (
+                <p className="text-ink-500 text-xs font-light">None within 5 km.</p>
+              )}
+            </div>
+            <p className="text-ink-500 text-[10px] font-light">Found by Google, closest first. Car times ignore live traffic.</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

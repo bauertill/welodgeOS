@@ -535,11 +535,30 @@ Decluttering the map so our own pins stand out is a change made there, not here.
 
 ### 3.9 The accommodation overview — the Properties tab
 
-> **Partly built.** This section is the agreed structure for replacing the team's
-> Monday.com "Accommodation Overview" board with the event's Properties tab. **Groups,
-> providers, the property's own fields and contracting details, the per-event terms and the
-> side panel** are built; **room category rates and taxes, "Fill from room categories", and
-> the Google lookups for dining and shops** are not yet. §12 says exactly which is which.
+> **Built.** This section is the agreed structure for replacing the team's Monday.com
+> "Accommodation Overview" board with the event's Properties tab, and all of it now exists
+> — groups, providers, property details and contracting details, per-event terms, the side
+> panel, room category rates and taxes, and the Google lookups. The Monday import is still
+> to be decided (§12).
+
+**Room categories on the tab.** Opening a property's row shows its room categories as a
+table in Monday's column order, with each category's contract status and rooms available
+after them. **Edit rate** on a row edits that category's rate per night (with its currency),
+what the rate includes, TOT, other applicable tax and applicable period for this event, in
+place; a TOT that is not a percentage, or a rate that is not a number, is refused with the
+reason. Units, size, bed configuration and notes are the property's own and are changed on
+its form, which the table links to.
+
+**Fill from room categories.** In the side panel, this button drafts *Applicable period* and
+*Rates include* from the room categories — one line per category ("King Room: 10 Jul – 31
+Jul 2028"), or a single line when every category says the same — and asks before
+replacing anything already written. The rep edits the draft and saves it.
+
+**Getting around.** The side panel lists the travel times to the event's places of interest
+by bike, car and public transport (§3.8), then **Nearby**: the three closest restaurants and
+the closest convenience store within 5 km, closest first, each with its drive time. Nothing
+is stored. Without a Google key, or with one that does not have Google's Places service
+switched on, the panel says which, instead of showing nothing.
 
 **Opening a property.** On the Properties tab, a property's name opens its full page, and
 the page's back link returns to this event's tab. Beside the name, **Quick view** opens a
@@ -1613,7 +1632,10 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Providers | **Built** | A page listing them (Providers, in the menu) and one per provider with its contracting details, contacts and properties. Chosen on a property's form, or added from there. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row and the group header |
-| §3.9 Room category rates, "Fill from room categories", dining and shops | **Specified, not built** | Rate per night, rate include, TOT, other tax and applicable period per event; size and notes per category; the button drafting the property's contracting text; Google's nearest restaurants and convenience store |
+| §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: rate per night and currency, rate include, TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
+| §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
+| §3.9 Nearby dining and convenience store | **Built, not yet seen working** | Built to Google's Places service and tested only without a key (the laptop has none); needs Places switched on for the live key. Travel times to the event's places of interest also shown in the side panel |
+| §3.9 Monday import | **Not built** | Decided later, as agreed |
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |

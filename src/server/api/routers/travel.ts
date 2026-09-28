@@ -158,7 +158,95 @@ async function legsForMode(
   return legs;
 }
 
+const PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby";
+
+type NearbyPlace = { name: string; car: Leg };
+
+/**
+ * The nearest places of one kind around a point, closest first, from Google's
+ * Places service (doc §3.9). Null when Google will not answer — the key may
+ * not have Places switched on — so the panel can say so.
+ */
+async function nearest(
+  type: "restaurant" | "convenience_store",
+  count: number,
+  from: Coordinates,
+  key: string,
+): Promise<{ name: string; location: Coordinates }[] | null> {
+  const response = await fetch(PLACES_NEARBY_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": "places.displayName,places.location",
+    },
+    body: JSON.stringify({
+      includedTypes: [type],
+      maxResultCount: count,
+      rankPreference: "DISTANCE",
+      locationRestriction: { circle: { center: from, radius: 5000 } },
+    }),
+  });
+  if (!response.ok) {
+    console.error(
+      `[travel] Google refused the nearby ${type} search: ${response.status} ${await response.text().catch(() => "")}`,
+    );
+    return null;
+  }
+  const body = (await response.json()) as {
+    places?: { displayName?: { text?: string }; location?: Coordinates }[];
+  };
+  return (body.places ?? [])
+    .filter((place) => place.location)
+    .map((place) => ({ name: place.displayName?.text ?? "Unnamed", location: place.location! }));
+}
+
 export const travelRouter = createTRPCRouter({
+  /**
+   * The nearest restaurants and the nearest convenience store to a property,
+   * with the drive to each (doc §3.9) — Monday's "Distance to dining options
+   * by car" and "Closest convenience store by car". Like travel times, asked
+   * for when the property is opened and never stored.
+   */
+  nearby: protectedProcedure
+    .input(z.object({ propertyId: z.string() }))
+    .query(
+      async ({
+        ctx,
+        input,
+      }): Promise<
+        | { status: "no-location" | "no-key" | "refused" }
+        | { status: "ok"; dining: NearbyPlace[]; convenienceStore: NearbyPlace | null }
+      > => {
+        const property = await ctx.db.property.findUniqueOrThrow({
+          where: { id: input.propertyId },
+          select: { latitude: true, longitude: true },
+        });
+        if (property.latitude === null || property.longitude === null) return { status: "no-location" };
+        const key = env.GOOGLE_MAPS_SERVER_KEY;
+        if (!key) return { status: "no-key" };
+
+        const from = { latitude: property.latitude, longitude: property.longitude };
+        const [restaurants, stores] = await Promise.all([
+          nearest("restaurant", 3, from, key),
+          nearest("convenience_store", 1, from, key),
+        ]);
+        if (restaurants === null && stores === null) return { status: "refused" };
+
+        const found = [...(restaurants ?? []), ...(stores ?? [])];
+        const drives = found.length
+          ? await legsForMode("DRIVE", from, found.map((place) => place.location), key)
+          : [];
+        const withDrive = found.map((place, index) => ({ name: place.name, car: drives[index] ?? null }));
+        const diningCount = restaurants?.length ?? 0;
+        return {
+          status: "ok",
+          dining: withDrive.slice(0, diningCount),
+          convenienceStore: withDrive[diningCount] ?? null,
+        };
+      },
+    ),
+
   /**
    * Every place of interest on this event, with how long it takes to reach
    * each from this property. Places are read here rather than taken from the

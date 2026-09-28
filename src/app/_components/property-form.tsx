@@ -34,6 +34,8 @@ type CategoryDraft = {
   priceMin: string;
   priceMax: string;
   currency: string;
+  size: string;
+  notes: string;
 };
 
 type ContactDraft = {
@@ -83,6 +85,8 @@ const emptyCategory = (type: PropertyType): CategoryDraft => ({
   priceMin: "",
   priceMax: "",
   currency: "USD",
+  size: "",
+  notes: "",
 });
 
 const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
@@ -180,8 +184,14 @@ export function PropertyForm({
   });
 
   const addToList = api.scouting.add.useMutation();
+  const utils = api.useUtils();
 
   const onDone = (propertyId: string) => {
+    // The Properties tab keeps its own copy of every property on the list; a
+    // saved edit must show there straight away, not after the next reload.
+    void utils.scouting.invalidate();
+    void utils.property.invalidate();
+    void utils.provider.invalidate();
     if (addToEventId) {
       addToList.mutate(
         { eventId: addToEventId, propertyId },
@@ -255,6 +265,8 @@ export function PropertyForm({
           ? Math.round((num(category.priceMax) ?? 0) * 100)
           : undefined,
         currency: category.currency.trim().toUpperCase() || "USD",
+        size: category.size.trim(),
+        notes: category.notes.trim(),
       }));
 
     const payload = {
@@ -596,6 +608,22 @@ export function PropertyForm({
                     </option>
                   ))}
                 </Select>
+              </Field>
+
+              <Field label="Size">
+                <Input
+                  value={category.size}
+                  onChange={(e) => setCategory(index, { size: e.target.value })}
+                  placeholder="28 m²"
+                />
+              </Field>
+
+              <Field label="Notes" className="sm:col-span-2">
+                <Input
+                  value={category.notes}
+                  onChange={(e) => setCategory(index, { notes: e.target.value })}
+                  placeholder="King suite with separate living room"
+                />
               </Field>
 
               <div className="flex items-end sm:col-span-1">

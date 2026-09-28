@@ -18,7 +18,6 @@ import {
 } from "~/app/_components/ui";
 import { formatMoney } from "~/lib/format";
 import {
-  categoryContractStatusHints,
   categoryContractStatusLabels,
   categoryContractStatusOrder,
   cheapestCategory,
@@ -33,6 +32,7 @@ import {
 } from "~/lib/scouting";
 import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
+import { RoomCategoryTable } from "~/app/_components/room-categories";
 import { GroupHeader, Initials, NewGroup } from "~/app/_components/property-groups";
 import { api } from "~/trpc/react";
 
@@ -379,49 +379,26 @@ export function ScoutingList({
                 {categoryOpen && hasCategories && (
                   <tr>
                     <Td colSpan={venues.length > 0 ? 10 : 9}>
-                      <div className="ml-5 space-y-2">
-                        {property.categories.map((category) => {
-                          const position = availabilityByCategory.get(category.id);
-                          return (
-                            <div
-                              key={category.id}
-                              className="flex flex-wrap items-center gap-3"
-                            >
-                              <span className="text-ink-900 w-40 shrink-0 text-[13px] font-medium">
-                                {category.name}
-                              </span>
-                              <span className="text-ink-500 w-20 shrink-0 text-xs font-light">
-                                {category.unitCount} rooms
-                              </span>
-                              <Select
-                                value={contractStatus(category.id)}
-                                title={
-                                  categoryContractStatusHints[contractStatus(category.id)]
-                                }
-                                onChange={(e) =>
-                                  setCategoryStatusMutation.mutate({
-                                    scoutingEntryId: entry.id,
-                                    categoryId: category.id,
-                                    status: e.target.value as CategoryContractStatus,
-                                  })
-                                }
-                                className="w-40 py-1.5 text-[13px]"
-                              >
-                                {categoryContractStatusOrder.map((option) => (
-                                  <option key={option} value={option}>
-                                    {categoryContractStatusLabels[option]}
-                                  </option>
-                                ))}
-                              </Select>
-                              <span className="text-ink-500 text-xs font-light">
-                                {position && position.slots > 0
-                                  ? `${position.genuinelyFree} available`
-                                  : "Not in inventory yet"}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <RoomCategoryTable
+                        scoutingEntryId={entry.id}
+                        propertyId={property.id}
+                        eventId={eventId}
+                        categories={property.categories}
+                        contracts={entry.categoryContracts}
+                        available={(categoryId) => {
+                          const position = availabilityByCategory.get(categoryId);
+                          return position && position.slots > 0
+                            ? `${position.genuinelyFree} available`
+                            : "Not in inventory yet";
+                        }}
+                        onStatusChange={(categoryId, status) =>
+                          setCategoryStatusMutation.mutate({
+                            scoutingEntryId: entry.id,
+                            categoryId,
+                            status,
+                          })
+                        }
+                      />
                       <div className="border-ink-200/60 mt-3 ml-5 border-t pt-3">
                         <ScoutingActivityLog scoutingEntryId={entry.id} />
                       </div>

@@ -227,6 +227,10 @@ model RoomCategory {
 
   sortOrder Int @default(0)
 
+  /// The room's size, as written, e.g. "28 m²" (doc §3.9).
+  size  String?
+  notes String?
+
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   propertyId String
 
@@ -399,6 +403,17 @@ model PropertyGroup {
 model CategoryContract {
   id     String                 @id @default(cuid())
   status CategoryContractStatus @default(IN_NEGOTIATION)
+
+  // The rates and taxes agreed for this room category on this event (doc
+  // §3.9) — an LA28 rate never overwrites an EXPO 2030 one.
+  /// Minor units, with an explicit currency (§4.5): never a float.
+  ratePerNightCents Int?
+  rateCurrency      String?
+  rateIncludes      String?
+  /// TOT as hundredths of a percent: 15.00% is 1500.
+  totBasisPoints    Int?
+  otherTaxes        String?
+  applicablePeriod  String?
 
   scoutingEntry   ScoutingEntry @relation(fields: [scoutingEntryId], references: [id], onDelete: Cascade)
   scoutingEntryId String
