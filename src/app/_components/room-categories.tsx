@@ -3,7 +3,7 @@
 import type { CategoryContractStatus } from "generated/prisma";
 import { useState } from "react";
 
-import { Button, friendlyError, Input, Select } from "~/app/_components/form";
+import { Button, Field, friendlyError, Input, Select } from "~/app/_components/form";
 import { PendingLink } from "~/app/_components/pending-link";
 import { formatMoney } from "~/lib/format";
 import {
@@ -82,7 +82,9 @@ export function RoomCategoryTable({
                 Buying rate
               </th>
               <th className={th}>Rate include</th>
-              <th className={th}>TOT</th>
+              <th className={th} title="Transient Occupancy Tax — the city's hotel tax on the room rate, as a percentage">
+                TOT
+              </th>
               <th className={th}>Other applicable tax</th>
               <th className={th}>Applicable period</th>
               <th className={th}># of units</th>
@@ -237,38 +239,55 @@ function EditRow({
     });
   };
 
-  const td = "border-ink-200/40 border-b bg-brand-50/40 px-2 py-2 align-top";
+  // A full-width row of labelled fields, not boxes squeezed into the table's
+  // columns — there, a rate or its currency could be cut off.
   return (
     <tr>
-      <td className={`${td} text-ink-900 pt-3 text-[13px] font-medium whitespace-nowrap`}>{category.name}</td>
-      <td className={td}>
-        <div className="flex gap-1">
-          <Input value={rate} onChange={(e) => setRate(e.target.value)} placeholder="281.50" inputMode="decimal" className="w-24 py-1 text-[13px]" aria-label="Buying rate" autoFocus />
-          <Select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-20 py-1 text-[12px]" aria-label="Currency">
-            {(CURRENCIES.includes(currency) ? CURRENCIES : [currency, ...CURRENCIES]).map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </Select>
+      <td colSpan={13} className="border-ink-200/40 bg-brand-50/40 border-b p-4">
+        <p className="text-ink-900 mb-3 text-[13px] font-medium">{category.name} — this event&apos;s rate and taxes</p>
+        <div className="grid max-w-4xl gap-3 sm:grid-cols-6">
+          <Field label="Buying rate, per night" className="sm:col-span-2">
+            {/* Widths are set on wrappers: the boxes themselves always fill
+                whatever holds them, so the currency could otherwise crowd
+                out the amount. */}
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <Input
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                  placeholder="281.50"
+                  inputMode="decimal"
+                  aria-label="Buying rate"
+                  autoFocus
+                />
+              </div>
+              <div className="w-24 shrink-0">
+                <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
+                  {(CURRENCIES.includes(currency) ? CURRENCIES : [currency, ...CURRENCIES]).map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </Field>
+          <Field label="Rate include" className="sm:col-span-2">
+            <Input value={includes} onChange={(e) => setIncludes(e.target.value)} placeholder="TOT & TMD" aria-label="Rate include" />
+          </Field>
+          <Field label="TOT (Transient Occupancy Tax), %" className="sm:col-span-2" hint="The city's hotel tax on the room rate — about 14–16% in Los Angeles.">
+            <Input value={tot} onChange={(e) => setTot(e.target.value)} placeholder="15.00" inputMode="decimal" aria-label="TOT %" />
+          </Field>
+          <Field label="Other applicable tax" className="sm:col-span-3">
+            <Input value={otherTaxes} onChange={(e) => setOtherTaxes(e.target.value)} placeholder="TMD: 6.25 USD (ADR 200–300)" aria-label="Other applicable tax" />
+          </Field>
+          <Field label="Applicable period" className="sm:col-span-3">
+            <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="10 Jul – 31 Jul 2028" aria-label="Applicable period" />
+          </Field>
         </div>
-      </td>
-      <td className={td}>
-        <Input value={includes} onChange={(e) => setIncludes(e.target.value)} placeholder="TOT & TMD" className="w-32 py-1 text-[13px]" aria-label="Rate include" />
-      </td>
-      <td className={td}>
-        <Input value={tot} onChange={(e) => setTot(e.target.value)} placeholder="15.00" inputMode="decimal" className="w-20 py-1 text-[13px]" aria-label="TOT %" />
-      </td>
-      <td className={td}>
-        <Input value={otherTaxes} onChange={(e) => setOtherTaxes(e.target.value)} placeholder="TMD: 6.25 USD (ADR 200–…)" className="w-52 py-1 text-[13px]" aria-label="Other applicable tax" />
-      </td>
-      <td className={td}>
-        <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="10 Jul – 31 Jul 2028" className="w-40 py-1 text-[13px]" aria-label="Applicable period" />
-      </td>
-      <td className={td} colSpan={6}>
-        <div className="flex items-center gap-2 pt-0.5">
-          <Button type="button" className="px-4 py-1.5" disabled={save.isPending} onClick={submit}>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button type="button" disabled={save.isPending} onClick={submit}>
             {save.isPending ? "Saving…" : "Save"}
           </Button>
-          <Button type="button" variant="ghost" className="px-2 py-1.5" onClick={onDone}>
+          <Button type="button" variant="ghost" onClick={onDone}>
             Cancel
           </Button>
           {(problem ?? save.error) && (
@@ -276,7 +295,6 @@ function EditRow({
           )}
         </div>
       </td>
-      <td className={td} />
     </tr>
   );
 }

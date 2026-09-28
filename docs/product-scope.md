@@ -551,7 +551,9 @@ Decluttering the map so our own pins stand out is a change made there, not here.
 
 **Room categories on the tab.** Opening a property's row shows its room categories as a
 table in Monday's column order, with each category's contract status and rooms available
-after them. **Edit rate** on a row edits that category's **buying rate** — what we pay the
+after them. **Edit rate** on a row opens a full-width row of labelled fields beneath it — not boxes
+squeezed into the table's columns, where an amount or its currency could be cut off — and
+edits that category's **buying rate** — what we pay the
 hotel per night, as contracted — with its currency,
 what the rate includes, TOT, other applicable tax and applicable period for this event, in
 place; a TOT that is not a percentage, or a rate that is not a number, is refused with the
@@ -741,7 +743,7 @@ categories here as everywhere else in the system (§3.2). Columns, in Monday's o
 | --- | --- | --- |
 | Buying rate | per event | What we pay the hotel per night, as contracted for this event: amount and currency (never a float, §4.5) — *new*. Monday calls it *Rate per night* |
 | Rate include | per event | Free text, e.g. "TOT & TMD" — *new* |
-| TOT | per event | A percentage, e.g. 15.00% — *new* |
+| TOT | per event | *Transient Occupancy Tax* — the US city hotel tax on the room rate — as a percentage, e.g. 15.00% — *new*. Spelled out on hover and when editing |
 | Other applicable tax | per event | Free text, e.g. "TMD: 6.25 USD (ADR 200–…)" — *new* |
 | Applicable period | per event | Free text — *new* |
 | # of units | the property's | The number of rooms of the type (§3.2) |
