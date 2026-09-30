@@ -229,8 +229,8 @@ can be *Do not disturb* with no status, or *Active* while *At lunch*.
   it; a newcomer sees the whole history, including what was said before they joined. Anyone
   can leave a group, and then no longer sees it.
 
-A message is text only. Like an update (§2.6), **its sender can edit it, and nobody can
-delete it.** On your own messages an *Edit* link appears when you point at the message — and
+A message is text, a GIF, or both. Like an update (§2.6), **its sender can edit the text,
+and nobody can delete a message.** On your own messages an *Edit* link appears when you point at the message — and
 always on a touch screen, which cannot point. The message is changed where it stands, in
 its place in the conversation, and shows *Edited* beside its time; pointing at that says
 when. Every earlier wording is kept, but not shown anywhere yet. An edit is not a new
@@ -238,6 +238,41 @@ message: nobody is told, it plays no chime and makes nothing unread. You can onl
 message in a conversation you are still in. A
 message counts as unread for a member until they have had the conversation open on screen;
 your own messages are never unread to you.
+
+**Reacting, replying, emoji and GIFs.** Pointing at a message — or always, on a touch
+screen — shows a small bar beside it, as Google Chat does:
+
+- **Three quick reactions**: the three you react with most, or 👍 ❤️ 😂 until you have
+  favourites of your own. One click reacts; the reaction shows under the message with how
+  many gave it, and pointing at it says who. Clicking a reaction you gave takes it back;
+  clicking one somebody else gave adds yours. Anyone in the conversation can react to any
+  message in it, their own included. A reaction is not a message: it plays no chime and
+  makes nothing unread.
+- **More reactions** opens the full emoji picker: a search, the ones you use most, every
+  emoji by category, skin tones, and **We Lodge emoji** — the team's own.
+- **Reply** quotes the message: the box says *Replying to …* until the reply is sent (or ✕
+  is clicked), and the reply shows the quoted message above it — whose, and its first
+  lines. Clicking the quote scrolls to the original and marks it for a moment. A reply can
+  only answer a message in the same conversation.
+
+**The team's own emoji.** *+ Add a We Lodge emoji*, at the foot of the picker, takes a
+picture and a short name — two to 32 letters, numbers, dashes or underscores, like
+*welodge* or *la28*. The picture is shrunk to a small square in the browser before it is
+saved, so it is a few kilobytes and is kept in the database itself; no file storage is
+needed. Names are unique. Everyone can then react with it. They are for reactions only:
+a message is words, so the emoji button beside the box puts ordinary emoji into the text
+but not the team's own. They cannot be removed yet.
+
+**Emoji in a message.** The ☺︎ button beside the box opens the same picker, and puts the
+chosen emoji where the cursor is.
+
+**GIFs.** The *GIF* button beside the box opens GIFs from GIPHY: trending ones, a few quick
+searches (*thank you*, *wow*, *oops*…) and a search box. Clicking one sends it at once — as
+a reply, if one is being written. Only the link is stored; the picture is shown from
+GIPHY, and only GIPHY's own addresses are accepted, never one typed in. GIFs are limited
+to GIPHY's *PG-13* rating. The search runs on our server, so the GIPHY key is never sent to
+anyone's browser; without a key the GIF button says so (`docs/todos.md`). The conversation
+list shows a GIF as *GIF*.
 
 **What chat is deliberately not, yet** — each of these is a separate piece of work, not an
 oversight:
@@ -1898,6 +1933,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |
 | §2.7 Status in your own words | **Built** | Emoji and up to 64 characters, six ready-made ones, and a choice of when it stops showing — including a custom date and time, or never |
 | §2.7 Chat | **Built** | Private conversations and named groups, text only, with unread counts. Checks for new messages every few seconds rather than instantly. The sender can edit a message, which then shows *Edited*; earlier wordings are kept but not shown. No deleting |
+| §2.7 Reactions, replies, emoji | **Built** | Quick reactions (your three most used), the full emoji picker with search and skin tones, the team's own emoji (added by anyone, kept in the database, not yet removable), quote replies that jump to the original, emoji in the text |
+| §2.7 GIFs | **Built, needs a key** | GIPHY search and trending, sent as a link, PG-13. Needs `GIPHY_API_KEY` on the live site (`docs/todos.md`) |
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |

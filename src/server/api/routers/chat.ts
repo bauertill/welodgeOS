@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { env } from "~/env";
 import { customStatusOf, directKey, presenceOf } from "~/lib/team";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import type { db as Db } from "~/server/db";
@@ -10,9 +11,11 @@ import type { db as Db } from "~/server/db";
  * named groups. Unlike everything else in the system, a conversation is only
  * visible to its members — every procedure here checks membership first.
  *
- * Messages are text only and, like Updates (§2.6), can be edited by their
- * author — keeping the wording they replaced — but never deleted. There is no live connection: an open conversation asks for new
- * messages every few seconds (see `threadPollMs`).
+ * A message is text, a GIF, or both, and can quote the message it answers.
+ * Colleagues react with emoji, the team's own among them. Like Updates
+ * (§2.6), a message can be edited by its author — keeping the wording it
+ * replaced — but never deleted. There is no live connection: an open
+ * conversation asks for new messages every few seconds (see `threadPollMs`).
  */
 
 const memberSelect = {
@@ -138,7 +141,16 @@ export const chatRouter = createTRPCRouter({
         where: { conversationId: input.conversationId },
         orderBy: { createdAt: "desc" },
         take: 300,
-        include: { author: { select: { id: true, name: true, email: true } } },
+        include: {
+          author: { select: { id: true, name: true, email: true } },
+          replyTo: {
+            select: { id: true, body: true, gifUrl: true, author: { select: { id: true, name: true, email: true } } },
+          },
+          reactions: {
+            orderBy: { createdAt: "asc" },
+            select: { emoji: true, userId: true, user: { select: { name: true, email: true } } },
+          },
+        },
       });
       return latest.reverse();
     }),
@@ -224,16 +236,52 @@ export const chatRouter = createTRPCRouter({
     }),
 
   send: protectedProcedure
-    .input(z.object({ conversationId: z.string(), body: z.string().max(10_000) }))
+    .input(
+      z.object({
+        conversationId: z.string(),
+        body: z.string().max(10_000),
+        /** The message this one answers, quoted above it. */
+        replyToId: z.string().optional(),
+        gif: z
+          .object({
+            url: z.string().url().max(2000),
+            width: z.number().int().min(1).max(4000),
+            height: z.number().int().min(1).max(4000),
+            title: z.string().max(300).optional(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       await requireMember(ctx.db, input.conversationId, userId);
       const body = input.body.trim();
-      if (!body) {
+      if (!body && !input.gif) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "A message needs some text." });
       }
+      // Only GIPHY's own pictures: a message never points at an address someone typed in.
+      if (input.gif && !isGiphyAddress(input.gif.url)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "That GIF did not come from the GIF picker." });
+      }
+      if (input.replyToId) {
+        const original = await ctx.db.message.findUnique({ where: { id: input.replyToId }, select: { conversationId: true } });
+        if (original?.conversationId !== input.conversationId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "You can only answer a message in this conversation." });
+        }
+      }
       const message = await ctx.db.message.create({
-        data: { body, conversationId: input.conversationId, authorId: userId },
+        data: {
+          body,
+          conversationId: input.conversationId,
+          authorId: userId,
+          replyToId: input.replyToId ?? null,
+          ...(input.gif && {
+            gifUrl: input.gif.url,
+            gifWidth: input.gif.width,
+            gifHeight: input.gif.height,
+            gifTitle: input.gif.title?.trim() || null,
+          }),
+        },
       });
       // Your own message is, by definition, read.
       await ctx.db.conversationMember.update({
@@ -253,12 +301,13 @@ export const chatRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       const body = input.body.trim();
-      if (!body) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "A message needs some text." });
-      }
       const message = await ctx.db.message.findUnique({ where: { id: input.messageId } });
       if (!message) {
         throw new TRPCError({ code: "NOT_FOUND", message: "This message no longer exists." });
+      }
+      // A GIF may stand on its own; words without one may not be emptied.
+      if (!body && !message.gifUrl) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A message needs some text." });
       }
       await requireMember(ctx.db, message.conversationId, userId);
       if (message.authorId !== userId) {
@@ -299,4 +348,136 @@ export const chatRouter = createTRPCRouter({
         data: { lastReadAt: newest.createdAt },
       });
     }),
+
+  // --- Reactions, the team's own emoji, and GIFs (doc §2.7) -------------------
+
+  /**
+   * React to a message with an emoji — or take the reaction back, if you had
+   * already given that one. Anyone in the conversation can react to anything
+   * in it, their own messages included.
+   */
+  react: protectedProcedure
+    .input(z.object({ messageId: z.string(), emoji: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const message = await ctx.db.message.findUnique({ where: { id: input.messageId }, select: { conversationId: true } });
+      if (!message) throw new TRPCError({ code: "NOT_FOUND", message: "This message no longer exists." });
+      await requireMember(ctx.db, message.conversationId, userId);
+      if (input.emoji.startsWith("custom:")) {
+        const exists = await ctx.db.customEmoji.findUnique({ where: { id: input.emoji.slice("custom:".length) } });
+        if (!exists) throw new TRPCError({ code: "BAD_REQUEST", message: "That emoji no longer exists." });
+      } else if ([...input.emoji].length > 12 || !isEmoji(input.emoji)) {
+        // An emoji is a picture, not words.
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Choose an emoji from the picker." });
+      }
+      const key = { messageId_userId_emoji: { messageId: input.messageId, userId, emoji: input.emoji } };
+      const existing = await ctx.db.messageReaction.findUnique({ where: key });
+      if (existing) {
+        await ctx.db.messageReaction.delete({ where: key });
+        return { reacted: false };
+      }
+      await ctx.db.messageReaction.create({ data: { messageId: input.messageId, userId, emoji: input.emoji } });
+      return { reacted: true };
+    }),
+
+  /** The three emoji you react with most, for the quick row beside a message. */
+  myQuickReactions: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db.messageReaction.groupBy({
+      by: ["emoji"],
+      where: { userId: ctx.session.user.id },
+      _count: { _all: true },
+      orderBy: { _count: { emoji: "desc" } },
+      take: 3,
+    });
+    const mine = rows.map((row) => row.emoji);
+    // Until you have favourites of your own, everyone's usual ones.
+    return [...mine, ...["👍", "❤️", "😂"].filter((emoji) => !mine.includes(emoji))].slice(0, 3);
+  }),
+
+  /** The team's own emoji, for the picker and for drawing reactions. */
+  customEmoji: protectedProcedure.query(({ ctx }) =>
+    ctx.db.customEmoji.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, image: true, createdById: true },
+    }),
+  ),
+
+  /** Add an emoji of the team's own: a short name and a small picture. */
+  addCustomEmoji: protectedProcedure
+    .input(
+      z.object({
+        name: z
+          .string()
+          .trim()
+          .toLowerCase()
+          .regex(/^[a-z0-9_-]{2,32}$/, "Use 2 to 32 letters, numbers, - or _, with no spaces — like welodge or la28."),
+        // Shrunk to a small square in the browser before it is sent.
+        image: z
+          .string()
+          .max(80_000, "That picture is too large — try a simpler one.")
+          .regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "That is not a picture the system can use."),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const taken = await ctx.db.customEmoji.findUnique({ where: { name: input.name } });
+      if (taken) throw new TRPCError({ code: "BAD_REQUEST", message: `There is already an emoji called :${input.name}:.` });
+      return ctx.db.customEmoji.create({
+        data: { name: input.name, image: input.image, createdById: ctx.session.user.id },
+        select: { id: true, name: true, image: true, createdById: true },
+      });
+    }),
+
+  /**
+   * GIFs from GIPHY, searched on our server so the key stays there: trending
+   * ones when nothing is typed. Only links come back; nothing is stored.
+   */
+  gifs: protectedProcedure
+    .input(z.object({ q: z.string().max(100).default("") }))
+    .query(async ({ input }) => {
+      const key = env.GIPHY_API_KEY;
+      if (!key) return { configured: false as const, gifs: [] };
+      const q = input.q.trim();
+      const url = new URL(`https://api.giphy.com/v1/gifs/${q ? "search" : "trending"}`);
+      url.searchParams.set("api_key", key);
+      url.searchParams.set("limit", "24");
+      url.searchParams.set("rating", "pg-13");
+      if (q) url.searchParams.set("q", q);
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        throw new TRPCError({ code: "BAD_GATEWAY", message: "GIPHY did not answer. Try again in a moment." });
+      }
+      const json = (await response.json()) as {
+        data: { id: string; title: string; images: { fixed_width: { url: string; width: string; height: string } } }[];
+      };
+      return {
+        configured: true as const,
+        gifs: json.data
+          .map((gif) => ({
+            id: gif.id,
+            title: gif.title,
+            url: gif.images.fixed_width.url,
+            width: Number(gif.images.fixed_width.width),
+            height: Number(gif.images.fixed_width.height),
+          }))
+          .filter((gif) => isGiphyAddress(gif.url)),
+      };
+    }),
 });
+
+/** A single emoji as the picker gives it — skin tones, flags and keycaps included — and never words. */
+function isEmoji(text: string) {
+  return (
+    /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u.test(text) &&
+    /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|[\uFE0F\u200D\u20E3\u{E0020}-\u{E007F}#*0-9])+$/u.test(text)
+  );
+}
+
+/** GIPHY's own picture addresses, and nothing else. */
+function isGiphyAddress(address: string) {
+  try {
+    const url = new URL(address);
+    return url.protocol === "https:" && /^(media\d*|i)\.giphy\.com$/.test(url.hostname);
+  } catch {
+    return false;
+  }
+}

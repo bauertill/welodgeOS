@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { EmojiGlyph, EmojiPicker, Floating, GifPicker, ReactionChips } from "~/app/_components/chat-extras";
 import { Dialog } from "~/app/_components/dialog";
 import { Button, Field, FormError, Input, Textarea } from "~/app/_components/form";
 import { Avatar, PresenceDot } from "~/app/_components/team-directory";
@@ -273,7 +274,7 @@ function ConversationRow({
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-ink-500 truncate text-xs font-light">
-              {last ? `${lastAuthor}${last.body}` : "No messages yet"}
+              {last ? `${lastAuthor}${last.body || (last.gifUrl ? "GIF" : "")}` : "No messages yet"}
             </span>
             <UnreadBadge count={conversation.unread} />
           </div>
@@ -294,6 +295,8 @@ function GroupMark() {
   );
 }
 
+type ThreadMessage = RouterOutputs["chat"]["messages"][number];
+
 function Thread({ id, myId }: { id: string; myId: string }) {
   const router = useRouter();
   const utils = api.useUtils();
@@ -305,6 +308,25 @@ function Thread({ id, myId }: { id: string; myId: string }) {
   const [body, setBody] = useState("");
   const [showMembers, setShowMembers] = useState(false);
   const [editing, setEditing] = useState<{ messageId: string; body: string } | null>(null);
+  // The message being answered, shown above the box until sent or dismissed.
+  const [replyingTo, setReplyingTo] = useState<ThreadMessage | null>(null);
+  // At most one floating panel at a time: a message's reactions, or the box's emoji or GIFs.
+  const [panel, setPanel] = useState<
+    { kind: "react"; messageId: string; anchor: HTMLElement } | { kind: "emoji" | "gif"; anchor: HTMLElement } | null
+  >(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const custom = api.chat.customEmoji.useQuery(undefined, { staleTime: 60_000 });
+  const quick = api.chat.myQuickReactions.useQuery(undefined, { staleTime: 60_000 });
+  const react = api.chat.react.useMutation({
+    onSuccess: () => {
+      void utils.chat.messages.invalidate({ conversationId: id });
+      void utils.chat.myQuickReactions.invalidate();
+    },
+  });
+  const toggleReaction = (messageId: string, emoji: string) => {
+    if (emoji) react.mutate({ messageId, emoji });
+  };
   const edit = api.chat.edit.useMutation({
     onSuccess: () => {
       setEditing(null);
@@ -324,8 +346,9 @@ function Thread({ id, myId }: { id: string; myId: string }) {
     },
   });
   const send = api.chat.send.useMutation({
-    onSuccess: () => {
-      setBody("");
+    onSuccess: (_, sent) => {
+      if (!sent.gif) setBody("");
+      setReplyingTo(null);
       void utils.chat.messages.invalidate({ conversationId: id });
       void utils.chat.conversations.invalidate();
     },
@@ -360,7 +383,31 @@ function Thread({ id, myId }: { id: string; myId: string }) {
   const title = conversationTitle(conversation.data, myId);
   const otherMember = conversation.data.members.find((member) => member.id !== myId);
   const submit = () => {
-    if (body.trim() && !send.isPending) send.mutate({ conversationId: id, body });
+    if (body.trim() && !send.isPending) send.mutate({ conversationId: id, body, replyToId: replyingTo?.id });
+  };
+  /** Puts an emoji where the cursor is in the box, and the cursor after it. */
+  const insertEmoji = (emoji: string) => {
+    if (!emoji || emoji.startsWith("custom:")) {
+      // The team's own emoji are for reactions: they are pictures, and a message is words.
+      return;
+    }
+    const field = box.current;
+    const start = field?.selectionStart ?? body.length;
+    const end = field?.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + emoji + body.slice(end);
+    setBody(next);
+    requestAnimationFrame(() => {
+      field?.focus();
+      field?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  };
+  /** Scrolls to the quoted message and marks it for a moment, if it is on screen. */
+  const showOriginal = (messageId: string) => {
+    const target = document.getElementById(`message-${messageId}`);
+    if (!target) return;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    setFlash(messageId);
+    setTimeout(() => setFlash((current) => (current === messageId ? null : current)), 1600);
   };
 
   return (
@@ -427,7 +474,13 @@ function Thread({ id, myId }: { id: string; myId: string }) {
           const showAuthor =
             conversation.data.isGroup && !mine && previous?.author?.id !== message.author?.id;
           return (
-            <div key={message.id} className={`group flex flex-col ${mine ? "items-end" : "items-start"}`}>
+            <div
+              key={message.id}
+              id={`message-${message.id}`}
+              className={`group relative flex flex-col rounded-lg transition-colors ${mine ? "items-end" : "items-start"} ${
+                flash === message.id ? "bg-brand-50" : ""
+              }`}
+            >
               {showAuthor && (
                 <span className="text-ink-500 mb-0.5 px-1 text-[11px] font-medium">
                   {message.author ? personName(message.author) : "Former colleague"}
@@ -467,14 +520,91 @@ function Thread({ id, myId }: { id: string; myId: string }) {
                   </div>
                 </div>
               ) : (
-                <div
-                  className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm font-light break-words whitespace-pre-line ${
-                    mine ? "bg-brand-400 text-white" : "bg-ink-50 text-ink-900"
-                  }`}
-                >
-                  {message.body}
+                <div className={`flex max-w-[80%] items-center gap-1 ${mine ? "flex-row-reverse" : ""}`}>
+                  <div className="min-w-0">
+                    {message.replyTo && (
+                      <button
+                        type="button"
+                        onClick={() => showOriginal(message.replyTo!.id)}
+                        className={`mb-1 block w-full max-w-md rounded-xl border-l-4 px-3 py-1.5 text-left text-xs font-light ${
+                          mine ? "border-brand-300 bg-brand-50 text-ink-700" : "border-ink-300 bg-white text-ink-700 ring-1 ring-ink-200/60"
+                        }`}
+                        title="Show the message this answers"
+                      >
+                        <span className="text-ink-900 block font-medium">
+                          {message.replyTo.author ? personName(message.replyTo.author) : "Former colleague"}
+                        </span>
+                        <span className="line-clamp-2">{message.replyTo.body || (message.replyTo.gifUrl ? "GIF" : "")}</span>
+                      </button>
+                    )}
+                    {message.gifUrl && message.gifWidth && message.gifHeight && (
+                      // eslint-disable-next-line @next/next/no-img-element -- GIPHY's own animated picture, shown from GIPHY
+                      <img
+                        src={message.gifUrl}
+                        alt={message.gifTitle ?? "GIF"}
+                        width={message.gifWidth}
+                        height={message.gifHeight}
+                        className={`h-auto max-w-[260px] rounded-2xl ${message.body ? "mb-1" : ""}`}
+                      />
+                    )}
+                    {message.body && (
+                      <div
+                        className={`rounded-2xl px-3.5 py-2 text-sm font-light break-words whitespace-pre-line ${
+                          mine ? "bg-brand-400 text-white" : "bg-ink-50 text-ink-900"
+                        }`}
+                      >
+                        {message.body}
+                      </div>
+                    )}
+                  </div>
+                  {/* Beside the message on hover, as in Google Chat; always there on a touch screen. */}
+                  <div className="border-ink-200/60 flex shrink-0 items-center gap-0.5 self-start rounded-full border bg-white px-1 py-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                    {(quick.data ?? ["👍", "❤️", "😂"]).map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => toggleReaction(message.id, emoji)}
+                        className="hover:bg-ink-50 rounded-full px-1 py-0.5"
+                        aria-label={`React with ${
+                          emoji.startsWith("custom:")
+                            ? `:${custom.data?.find((item) => `custom:${item.id}` === emoji)?.name ?? "emoji"}:`
+                            : emoji
+                        }`}
+                      >
+                        <EmojiGlyph emoji={emoji} custom={custom.data ?? []} size={16} />
+                      </button>
+                    ))}
+                    <span className="bg-ink-200/80 mx-0.5 h-4 w-px" aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={(e) => setPanel({ kind: "react", messageId: message.id, anchor: e.currentTarget })}
+                      className="text-ink-500 hover:bg-ink-50 hover:text-ink-900 rounded-full px-1.5 py-0.5 text-[13px]"
+                      aria-label="More reactions"
+                      title="React"
+                    >
+                      ☺︎+
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReplyingTo(message);
+                        box.current?.focus();
+                      }}
+                      className="text-ink-500 hover:bg-ink-50 hover:text-ink-900 rounded-full px-1.5 py-0.5 text-[13px]"
+                      aria-label="Quote and reply"
+                      title="Reply"
+                    >
+                      ↩
+                    </button>
+                  </div>
                 </div>
               )}
+              <ReactionChips
+                reactions={message.reactions}
+                myId={myId}
+                custom={custom.data ?? []}
+                onToggle={(emoji) => toggleReaction(message.id, emoji)}
+              />
               <span className="text-ink-500 mt-0.5 flex items-center gap-1.5 px-1 text-[10px] font-light">
                 {formatMoment(message.createdAt)}
                 {message.editedAt && (
@@ -501,6 +631,19 @@ function Thread({ id, myId }: { id: string; myId: string }) {
         <div ref={bottom} />
       </div>
 
+      {replyingTo && (
+        <div className="border-ink-200/60 bg-ink-50/60 flex items-start gap-3 border-t px-4 py-2">
+          <div className="border-brand-400 min-w-0 flex-1 border-l-4 pl-3">
+            <p className="text-ink-900 text-xs font-medium">
+              Replying to {replyingTo.author ? personName(replyingTo.author) : "a former colleague"}
+            </p>
+            <p className="text-ink-500 line-clamp-1 text-xs font-light">{replyingTo.body || (replyingTo.gifUrl ? "GIF" : "")}</p>
+          </div>
+          <button type="button" onClick={() => setReplyingTo(null)} className="text-ink-400 hover:text-ink-700 text-sm" aria-label="Stop replying">
+            ✕
+          </button>
+        </div>
+      )}
       <form
         className="border-ink-200/60 flex items-end gap-2 border-t p-3"
         onSubmit={(e) => {
@@ -509,6 +652,7 @@ function Thread({ id, myId }: { id: string; myId: string }) {
         }}
       >
         <Textarea
+          ref={box}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={(e) => {
@@ -518,15 +662,63 @@ function Thread({ id, myId }: { id: string; myId: string }) {
             }
           }}
           rows={1}
-          placeholder="Write a message — Enter sends, Shift+Enter for a new line"
+          placeholder={replyingTo ? "Write your reply" : "Write a message — Enter sends, Shift+Enter for a new line"}
           className="max-h-40 resize-none"
           aria-label="Message"
         />
+        <button
+          type="button"
+          onClick={(e) => setPanel({ kind: "emoji", anchor: e.currentTarget })}
+          className="text-ink-500 hover:text-brand-700 hover:bg-ink-50 shrink-0 rounded-full px-2 py-2 text-lg leading-none"
+          aria-label="Emoji"
+          title="Emoji"
+        >
+          ☺︎
+        </button>
+        <button
+          type="button"
+          onClick={(e) => setPanel({ kind: "gif", anchor: e.currentTarget })}
+          className="text-ink-500 hover:text-brand-700 hover:border-brand-400 border-ink-300 shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
+          aria-label="GIF"
+          title="GIF"
+        >
+          GIF
+        </button>
         <Button type="submit" disabled={!body.trim() || send.isPending}>
           Send
         </Button>
       </form>
       {send.error && <p className="px-4 pb-3 text-xs text-[#c03654]">{send.error.message}</p>}
+
+      {panel && (
+        <Floating
+          anchor={panel.anchor}
+          width={panel.kind === "gif" ? 380 : 352}
+          height={panel.kind === "gif" ? 420 : 470}
+          onClose={() => setPanel(null)}
+        >
+          {panel.kind === "gif" ? (
+            <GifPicker
+              onPick={(gif) => {
+                setPanel(null);
+                send.mutate({ conversationId: id, body: "", gif, replyToId: replyingTo?.id });
+              }}
+            />
+          ) : (
+            <EmojiPicker
+              custom={custom.data ?? []}
+              onPick={(emoji) => {
+                if (panel.kind === "react") {
+                  toggleReaction(panel.messageId, emoji);
+                  setPanel(null);
+                } else {
+                  insertEmoji(emoji);
+                }
+              }}
+            />
+          )}
+        </Floating>
+      )}
 
       {showMembers && (
         <AddPeopleDialog

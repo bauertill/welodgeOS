@@ -149,6 +149,14 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       `AUTH_GOOGLE_SECRET`.
       The code for it is not written yet.
 
+- [ ] **A GIPHY key for GIFs in chat** (`product-scope.md` §2.7). Anyone can
+      get one, free: sign up at https://developers.giphy.com, *Create an App*,
+      choose **API** (not SDK), and copy the key. It goes on the Vercel project
+      as `GIPHY_API_KEY` (Production), and in a laptop's `.env` to try GIFs
+      locally. It is only ever used on our server. A new key starts as a *beta*
+      key with a limit on searches per hour, plenty for a team; GIPHY asks for
+      an upgrade request only for public apps.
+
 ## 3. Phase 3 — Operations
 
 Not started. This is the third of the three phases described in

@@ -516,6 +516,8 @@ model User {
   customStatusUntil DateTime?
   conversations ConversationMember[]
   messages      Message[]
+  reactions     MessageReaction[]
+  customEmoji   CustomEmoji[]
   accountManaged ScoutingEntry[] @relation("AccountManager")
   clientsManaged  Client[]        @relation("ClientAccountManager")
   salesRequests   SalesRequest[]  @relation("SalesRequestOwner")
@@ -584,16 +586,30 @@ model ConversationMember {
 }
 
 /**
- * One chat message. Text only for now. Its author can edit it — the earlier
- * wording is kept in `MessageRevision` — but nobody can delete it.
+ * One chat message: text, a GIF, or both. Its author can edit the text — the
+ * earlier wording is kept in `MessageRevision` — but nobody can delete it.
  */
 model Message {
   id        String   @id @default(cuid())
+  /// Empty for a message that is only a GIF.
   body      String
   createdAt DateTime @default(now())
   // Set when the author last changed the text (doc §2.7).
   editedAt  DateTime?
   revisions MessageRevision[]
+
+  /// The message this one quotes and answers (doc §2.7), in the same conversation.
+  replyTo   Message?  @relation("Replies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replyToId String?
+  replies   Message[] @relation("Replies")
+
+  /// A GIF from GIPHY, shown from GIPHY's own address — nothing is stored but the link.
+  gifUrl    String?
+  gifWidth  Int?
+  gifHeight Int?
+  gifTitle  String?
+
+  reactions MessageReaction[]
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
@@ -602,6 +618,39 @@ model Message {
   authorId String?
 
   @@index([conversationId, createdAt])
+}
+
+/**
+ * One colleague's reaction to a message (doc §2.7): an emoji, or one of the
+ * team's own. Reacting with the same one again takes it back.
+ */
+model MessageReaction {
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  /// The emoji itself ("👍"), or "custom:<id>" for one of the team's own.
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@id([messageId, userId, emoji])
+  @@index([userId])
+}
+
+/**
+ * An emoji the team made (doc §2.7): a name and a small picture, kept in the
+ * database itself — it is a few kilobytes, so no file storage is needed.
+ */
+model CustomEmoji {
+  id        String   @id @default(cuid())
+  /// Lower case, no spaces: "welodge", "la28".
+  name      String   @unique
+  /// A small square PNG, as a data address.
+  image     String
+  createdAt DateTime @default(now())
+
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
 }
 
 /** A wording a chat message had before its author edited it — kept, never shown yet. */
