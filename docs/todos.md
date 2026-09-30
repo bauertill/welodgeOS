@@ -156,6 +156,8 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       locally. It is only ever used on our server. A new key starts as a *beta*
       key with a limit on searches per hour, plenty for a team; GIPHY asks for
       an upgrade request only for public apps.
+      *2026-09-30:* Brandon has a key and it works locally; it still has to be
+      added to the Vercel project (someone with Vercel access — Till).
 
 ## 3. Phase 3 — Operations
 
