@@ -1,5 +1,6 @@
 "use client";
 
+import { keepPreviousData } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Combobox } from "~/app/_components/combobox";
@@ -58,6 +59,27 @@ export function InventoryGrid({
     if (restored) writeWindow(eventId, checkIn, checkOut, defaultCheckIn, defaultCheckOut);
   }, [restored, eventId, checkIn, checkOut, defaultCheckIn, defaultCheckOut]);
   const isEventWindow = checkIn === defaultCheckIn && checkOut === defaultCheckOut;
+
+  // What is in the two date boxes, which becomes the window only once it is a
+  // real date and has stopped changing for a moment. The browser's calendar
+  // changes the date with every month arrow; applying each of those at once
+  // reloaded the sheet under the open calendar and closed it, so a day in
+  // another month could never be clicked (Ami's review, 2026-10-01).
+  const [checkInBox, setCheckInBox] = useState(checkIn);
+  const [checkOutBox, setCheckOutBox] = useState(checkOut);
+  useEffect(() => setCheckInBox(checkIn), [checkIn]);
+  useEffect(() => setCheckOutBox(checkOut), [checkOut]);
+  useEffect(() => {
+    // A year still being typed ("0002") is not a date yet.
+    const real = (value: string) => /^(19|20|21)\d{2}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(parseDay(value).getTime());
+    if (!real(checkInBox) || !real(checkOutBox) || checkOutBox <= checkInBox) return;
+    if (checkInBox === checkIn && checkOutBox === checkOut) return;
+    const timer = setTimeout(() => {
+      setCheckIn(checkInBox);
+      setCheckOut(checkOutBox);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [checkInBox, checkOutBox, checkIn, checkOut]);
 
   const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -167,7 +189,9 @@ export function InventoryGrid({
     clientId: clientId || undefined,
     checkIn: parseDay(checkIn),
     checkOut: parseDay(checkOut),
-  }, { enabled: restored });
+    // The last sheet stays on screen while the next one loads, so nothing —
+    // an open calendar least of all — disappears from under the pointer.
+  }, { enabled: restored, placeholderData: keepPreviousData });
   const clients = api.clients.list.useQuery();
   // What is available over the window in view (doc §5.4): whole rooms held
   // by us and not sold on every night of it. Only a sale takes a room — a
@@ -182,7 +206,7 @@ export function InventoryGrid({
       checkIn: parseDay(checkIn),
       checkOut: parseDay(checkOut),
     },
-    { enabled: restored },
+    { enabled: restored, placeholderData: keepPreviousData },
   );
 
   const toggleSet = (
@@ -614,16 +638,18 @@ export function InventoryGrid({
           <div className="w-40">
             <Input
               type="date"
-              value={checkIn}
-              onChange={(e) => setCheckIn(e.target.value)}
+              value={checkInBox}
+              onChange={(e) => setCheckInBox(e.target.value)}
+              aria-label="From"
             />
           </div>
           <span className="text-ink-400">–</span>
           <div className="w-40">
             <Input
               type="date"
-              value={checkOut}
-              onChange={(e) => setCheckOut(e.target.value)}
+              value={checkOutBox}
+              onChange={(e) => setCheckOutBox(e.target.value)}
+              aria-label="Until"
             />
           </div>
         </div>

@@ -1538,6 +1538,14 @@ kept on the rep's own computer, not a setting shared with colleagues. *Back to e
 appears beside the window whenever it differs from the event's, and choosing it forgets the
 remembered one.
 
+**Changing the dates.** A new date takes effect once it has stopped changing for half a
+second and is a whole date, and the sheet stays on screen while it reloads. So the
+browser's calendar can be used as it is meant to: its month arrows move a month at a time
+without closing it, and the day wanted can then be clicked, however many months away. A
+year still being typed is ignored until it is complete. (From Ami's review, 2026-10-01:
+each month arrow used to reload the sheet and close the calendar, so only whole-month jumps
+were possible.)
+
 Editing happens by highlighting a rectangle of cells — a set of rooms crossed with a
 contiguous range of days — which opens a panel scoped to exactly that selection.
 
