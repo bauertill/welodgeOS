@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { EventsPanel } from "~/app/_components/events-panel";
+import { SalesPanel } from "~/app/_components/sales-panel";
 
 // Properties has no standalone section — a property belongs to the event(s)
 // it is scouted for, so it is browsed and managed from inside an event's own
@@ -13,9 +14,13 @@ import { EventsPanel } from "~/app/_components/events-panel";
 export const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/events", label: "Events" },
-  { href: "/clients", label: "Clients" },
-  { href: "/sales", label: "Sales requests" },
 ] as const;
+
+/**
+ * The sales side (doc §4.10, §4.11) is one menu item that opens a panel, as
+ * Events does: its Requests and Clients pages live under these paths.
+ */
+const salesPaths = ["/sales", "/clients"];
 
 /**
  * Pages opened by people outside We Lodge — a client filling in their
@@ -40,6 +45,7 @@ export function useIsAuthRoute() {
 export function Nav() {
   const pathname = usePathname();
   const [eventsOpen, setEventsOpen] = useState(false);
+  const [salesOpen, setSalesOpen] = useState(false);
 
   if (pathname.startsWith("/signin") || pathname.startsWith("/signout"))
     return null;
@@ -89,9 +95,21 @@ export function Nav() {
             </Link>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => setSalesOpen(true)}
+          aria-current={salesPaths.some((path) => pathname.startsWith(path)) ? "page" : undefined}
+          aria-haspopup="dialog"
+          aria-expanded={salesOpen}
+          className={itemStyles(salesPaths.some((path) => pathname.startsWith(path)))}
+        >
+          Sales
+        </button>
       </nav>
 
       {eventsOpen && <EventsPanel onClose={() => setEventsOpen(false)} />}
+      {salesOpen && <SalesPanel onClose={() => setSalesOpen(false)} />}
     </>
   );
 }

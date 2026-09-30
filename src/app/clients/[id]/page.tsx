@@ -24,7 +24,7 @@ export default async function ClientPage({
   return (
     <>
       <PageHeader
-        back={{ href: "/clients", label: "All clients" }}
+        back={{ href: "/clients", label: "Clients" }}
         title={client.name}
         subtitle={
           [client.shortName, client.category ? clientCategoryLabels[client.category] : null]

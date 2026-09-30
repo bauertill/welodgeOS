@@ -1082,6 +1082,11 @@ client's page, and the history says which was added, changed or removed and what
 A person belongs to one client: someone who moves company is removed from one and added to
 the other.
 
+**Where it lives.** **Sales** in the menu opens a panel, as *Events* does, with two pages:
+**Requests** — the sales requests (§4.11), with how many are open — and **Clients**, the
+clients and the people there. When follow-ups are due or overdue, the panel says how many
+at the top, and it has a way to register a new sales request.
+
 **Searching.** The Clients page searches as you type, in two views:
 
 - **Companies** finds a client by its own name, short name, general email or website —
