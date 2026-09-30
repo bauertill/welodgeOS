@@ -666,24 +666,27 @@ function Thread({ id, myId }: { id: string; myId: string }) {
           className="max-h-40 resize-none"
           aria-label="Message"
         />
-        <button
-          type="button"
-          onClick={(e) => setPanel({ kind: "emoji", anchor: e.currentTarget })}
-          className="text-ink-500 hover:text-brand-700 hover:bg-ink-50 shrink-0 rounded-full px-2 py-2 text-lg leading-none"
-          aria-label="Emoji"
-          title="Emoji"
-        >
-          ☺︎
-        </button>
-        <button
-          type="button"
-          onClick={(e) => setPanel({ kind: "gif", anchor: e.currentTarget })}
-          className="text-ink-500 hover:text-brand-700 hover:border-brand-400 border-ink-300 shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
-          aria-label="GIF"
-          title="GIF"
-        >
-          GIF
-        </button>
+        {/* Level with each other and with Send, on the box's first line, however tall the box grows. */}
+        <div className="flex h-10 shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => setPanel({ kind: "emoji", anchor: e.currentTarget })}
+            className="text-ink-500 hover:text-brand-700 hover:bg-ink-50 flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none"
+            aria-label="Emoji"
+            title="Emoji"
+          >
+            ☺︎
+          </button>
+          <button
+            type="button"
+            onClick={(e) => setPanel({ kind: "gif", anchor: e.currentTarget })}
+            className="text-ink-500 hover:text-brand-700 hover:border-brand-400 border-ink-300 flex h-6 items-center rounded-md border px-1.5 text-[10px] font-semibold tracking-wide"
+            aria-label="GIF"
+            title="GIF"
+          >
+            GIF
+          </button>
+        </div>
         <Button type="submit" disabled={!body.trim() || send.isPending}>
           Send
         </Button>
