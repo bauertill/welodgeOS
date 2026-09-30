@@ -116,3 +116,11 @@ forget, at the worst moment.
 The live system is at https://os.welodge.net. Pushing to `master` deploys it, so
 a merge reaches real users without further ceremony. The old address,
 https://welodge-os.vercel.app, redirects there.
+
+**Changes go to `staging` first, never straight to `master`.** Pushing to
+`staging` deploys https://staging.welodge.net, which runs on a copy of the live
+database, so a migration is rehearsed on real data before it reaches the team.
+Once it has been checked there, `staging` is merged into `master` through a
+pull request; `master` is protected and only merges when the build check in
+`.github/workflows/check.yml` passes. Staging's data is real client and supplier
+data: never run `pnpm run db:seed` against it.

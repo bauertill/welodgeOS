@@ -116,10 +116,29 @@ used to reach any other part of the system, and a rep can switch it off at any t
 
 The system is a website, not something anyone installs. It runs at
 **https://os.welodge.net**, hosted on Vercel, with its database (PostgreSQL, hosted by
-Neon) in Vercel's `we-lodge` account. Changes reach the live site by being pushed to the
-`master` branch, which builds and deploys on its own. It answered at
-`welodge-os.vercel.app` until 2026-09-24; that address now redirects to this one, so older
-links and bookmarks still arrive.
+Neon) in Vercel's `we-lodge` account. It answered at `welodge-os.vercel.app` until
+2026-09-24; that address now redirects to this one, so older links and bookmarks still
+arrive.
+
+**Every change passes through staging first.** A second copy of the system runs at
+**https://staging.welodge.net**, built from the `staging` branch, with its own database.
+A change is pushed to `staging`, checked there, and only then merged into `master`, which
+is what reaches the live site. Staging exists so that a change — and above all a change
+to the database's structure — is tried on real data before the team depends on it.
+
+- **Staging's database is a copy of the live one**, taken with Neon's branching. That is
+  deliberate: a database change rehearsed on invented demo data proves little. It follows
+  that staging holds real client and supplier data, and is treated with the same care —
+  the demo reset (`pnpm run db:seed`) is never run against it.
+- **Staging drifts, and is reset rather than repaired.** Whatever is entered on staging
+  stays on staging; nothing flows back to the live system. When staging's data has gone
+  stale or a rehearsal has left it in a bad state, it is reset from the live database in
+  Neon, which throws away everything done on staging since.
+- **Signing in works the same way on both**: the same Google Workspace accounts, but a
+  separate session — being signed in to one does not sign you in to the other.
+- **Every change is built automatically before it deploys** (GitHub Actions): the code is
+  type-checked and built against an empty database, which also proves every migration
+  applies from scratch. A change that fails this cannot be merged into `master`.
 
 Magic-link sign-in by email is built and deliberately switched off: at launch nobody
 outside the Workspace needs an account. It becomes available again by configuring an email
@@ -1927,6 +1946,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Roles and permissions | **Not built** | Every signed-in user has full access to everything — see §9, open question 5 |
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
+| §2.5 Staging | **Being set up** | https://staging.welodge.net, from the `staging` branch, on a copy of the live database. The Vercel environment and address exist; its database copy, settings, DNS record and Google sign-in address are outstanding — see `docs/todos.md` §1 |
 | §2.6 Updates | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. No deleting. No notification is sent — see §9 |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |

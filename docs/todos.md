@@ -6,7 +6,7 @@ build next and what to fix in what already exists. Update it as things get
 done or the plan changes. It is not meant to be exhaustive of every polish
 item, only what someone would need to know to decide what to work on next.
 
-Last reviewed: 2026-09-24.
+Last reviewed: 2026-09-30.
 
 ---
 
@@ -19,7 +19,8 @@ other work, so We Lodge owns the project and is billed for it directly. The
 database is a Neon Postgres instance provisioned through Vercel's marketplace.
 
 - [x] **Pick a host.** Vercel, We Lodge team. The GitHub repo is connected, so
-      every push to `master` deploys to the live site automatically; the Vercel
+      every push to `master` deploys to the live site automatically (and, since
+      2026-09-30, every push to `staging` to staging.welodge.net); the Vercel
       CLI is not needed for routine changes.
 - [x] **Provision a production database.** Neon Postgres, created through the
       Vercel marketplace, which sets `DATABASE_URL` on the project itself. The
@@ -63,10 +64,56 @@ database is a Neon Postgres instance provisioned through Vercel's marketplace.
 - [x] **Confirm the dev sign-in bypass is actually inert in production.**
       Verified against the live deployment on 2026-09-06: `POST` to
       `/api/dev-login` returns `404 Not found` and sets no session cookie.
-- [ ] **Add CI.** Unchanged — nothing runs `pnpm run typecheck` or
-      `pnpm run build` before a merge. This now matters more than it did: with
-      `master` wired to the live site, a broken merge reaches production
-      directly.
+- [x] **Add CI** — done 2026-09-30. `.github/workflows/check.yml` type-checks
+      and builds every pull request and every push to `staging` and `master`,
+      against a throwaway Postgres, so it also proves the migrations apply to
+      an empty database. `master` is protected on GitHub: nothing merges into
+      it unless that check passes.
+- [ ] **Staging at https://staging.welodge.net** — started 2026-09-30. The
+      route is `staging` branch → staging.welodge.net → merge into `master` →
+      os.welodge.net (`product-scope.md` §2.5). Done so far:
+  - A Vercel **custom environment** called *Staging* (the team is on Pro),
+    which follows the `staging` branch. It is not the same as Vercel's
+    *Preview*: Preview variables do not reach it, every setting it needs is
+    set on it by name.
+  - `staging.welodge.net` added to the project and assigned to Staging.
+    Vercel's own login wall does not apply to it, because the project's
+    Deployment Protection already exempts custom domains; the Google sign-in
+    is the door, as on the live site.
+
+  Still to do, in this order (each needs a login only Till has):
+  1. **Copy the live database (Neon).** Vercel → We Lodge → Storage → the
+     Neon database → *Open in Neon* → Branches → *Create branch*, named
+     `staging`, from `main`, with current data. Copy its **pooled**
+     connection string.
+  2. **Set Staging's settings (Vercel).** Project → Settings → Environment
+     Variables, environment **Staging**:
+     - `DATABASE_URL` = the staging connection string from step 1 — never the
+       live one.
+     - `AUTH_SECRET` = a fresh value (`npx auth secret`), not production's.
+     - `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`,
+       `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`: open each existing entry, *Edit*, and
+       tick Staging as well. The Google ones are stored as sensitive, so they
+       cannot be read back and retyped — extending the existing entry is the
+       way.
+  3. **DNS (Cloudflare).** On `welodge.net`: a `CNAME` named `staging`,
+     target `9940483e22583f55.vercel-dns-017.com`, **proxy off — DNS only**,
+     for the same reasons as `os` above.
+  4. **Google Cloud.** Add
+     `https://staging.welodge.net/api/auth/callback/google` to the OAuth
+     client's authorized redirect URIs, and `staging.welodge.net/*` to the
+     Maps browser key's website restrictions.
+  5. **Redeploy staging** (Vercel → Deployments → the latest `staging` one →
+     *Redeploy*, or any push to `staging`) and sign in on
+     staging.welodge.net. Until steps 1–2 are done, a staging build fails at
+     the migration step for want of a database — harmlessly: nothing is
+     deployed, and the live site is untouched.
+- [x] **Checked 2026-09-30: branch deploys cannot reach the live database.**
+      `DATABASE_URL` is set for Production only. The Neon integration's other
+      variables (`POSTGRES_URL`, `PGHOST` and friends) *are* set for Preview
+      and point at the live database, but the app reads only `DATABASE_URL`.
+      Anyone who ever makes the app read one of the others would reopen that
+      door.
 - [ ] **Decide on backups and monitoring.** Now a real question rather than a
       hypothetical one. Neon keeps its own point-in-time history, but nobody
       has chosen a retention window, and nothing alerts anyone if the site
