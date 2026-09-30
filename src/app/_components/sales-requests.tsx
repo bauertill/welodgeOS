@@ -1156,6 +1156,10 @@ function ChangeRooms({
           setProblem("The price should be a number, like 281.50.");
           return;
         }
+        if (needsPrice && amount === null) {
+          setProblem(`Give the price per night — rooms ${action === "BLOCK" ? "blocked" : "sold"} for a client need their agreed price.`);
+          return;
+        }
         change.mutate({
           id: request.id,
           categoryId: row.categoryId,
@@ -1176,7 +1180,7 @@ function ChangeRooms({
       )}
       {needsPrice && (
         <div className="w-64">
-          <Field label="Price per night, to the client">
+          <Field label="Price per night — required">
             <div className="flex gap-2">
               <div className="min-w-0 flex-1">
                 <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="350.00" aria-label="Price per night" />
@@ -1279,6 +1283,9 @@ function AddRooms({
         if (!Number.isInteger(wanted) || wanted < 1) return setProblem("Say how many rooms, like 6.");
         if (!datesOk) return setProblem("Give a check-in and a check-out after it.");
         if (action === "BLOCK" && !blockExpiry) return setProblem("A block needs a date it runs to.");
+        if (action !== "REQUEST" && !price.trim()) {
+          return setProblem(`Give the price per night — rooms ${action === "BLOCK" ? "blocked" : "sold"} for a client need their agreed price.`);
+        }
         const amount = price.trim() ? Number(price.replace(",", ".")) : null;
         if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return setProblem("The price should be a number, like 281.50.");
         add.mutate({
@@ -1356,7 +1363,7 @@ function AddRooms({
             <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} />
           </Field>
         )}
-        <Field label="Price per night, to the client" className="sm:col-span-2">
+        <Field label={action === "REQUEST" ? "Price per night, to the client" : "Price per night — required"} className="sm:col-span-2">
           <div className="flex gap-2">
             <div className="min-w-0 flex-1">
               <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="350.00" aria-label="Price per night" />

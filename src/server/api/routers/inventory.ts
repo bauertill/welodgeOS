@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Prisma } from "generated/prisma";
 
 import { addDays, dayKey, eachNight, nightsBetween } from "~/lib/dates";
-import { formatDay } from "~/lib/format";
+import { formatDay, formatMoney } from "~/lib/format";
 import {
   acquisitionLabels,
   acquisitionTarget,
@@ -11,6 +11,8 @@ import {
   allowedAcquisitionMoves,
   allowedSalesMoves,
   salesLabels,
+  needsBuyPrice,
+  needsSellPrice,
   salesTarget,
   type InventoryAction,
 } from "~/lib/inventory";
@@ -22,6 +24,7 @@ import {
   axisOf,
   describeRoom,
   flatten,
+  type LoadedNight,
   type NightSnapshot,
   nightInclude,
   snapshotNight,
@@ -46,22 +49,27 @@ import {
 const ACTIONS = Object.keys(actionLabels) as [InventoryAction, ...InventoryAction[]];
 
 /** Everything an action might need. Which of these are required is per action. */
+/**
+ * Everything an action might need. Which of these are required is per action.
+ * A detail left out keeps what each night already has; `null` clears it on
+ * purpose (doc §4.8) — so adding a note never wipes a price.
+ */
 const attributes = z.object({
-  supplierRef: z.string().optional(),
+  supplierRef: z.string().nullable().optional(),
   optionExpiry: z.date().optional(),
-  buyPriceCents: z.number().int().min(0).optional(),
+  buyPriceCents: z.number().int().min(0).nullable().optional(),
   buyCurrency: z.string().length(3).optional(),
-  acquisitionOwnerId: z.string().optional(),
-  acquisitionNotes: z.string().optional(),
+  acquisitionOwnerId: z.string().nullable().optional(),
+  acquisitionNotes: z.string().nullable().optional(),
 
   clientId: z.string().optional(),
-  clientRef: z.string().optional(),
+  clientRef: z.string().nullable().optional(),
   blockExpiry: z.date().optional(),
-  dueDate: z.date().optional(),
-  sellPriceCents: z.number().int().min(0).optional(),
+  dueDate: z.date().nullable().optional(),
+  sellPriceCents: z.number().int().min(0).nullable().optional(),
   sellCurrency: z.string().length(3).optional(),
-  salesOwnerId: z.string().optional(),
-  salesNotes: z.string().optional(),
+  salesOwnerId: z.string().nullable().optional(),
+  salesNotes: z.string().nullable().optional(),
   /**
    * The client's sales request these nights belong to (doc §4.11). Left out,
    * nights already tied to a request stay tied to it.
@@ -368,6 +376,48 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         need(input.salesOwnerId, "Pick the rep who takes over with the client.");
       }
 
+      // A night bought, blocked or sold without its price is a payment
+      // nobody can plan for (doc §4.1, §4.2). Left empty is fine only where
+      // every night already carries one — for the same client, on the sales side.
+      if (needsBuyPrice.includes(action)) {
+        const priced =
+          input.buyPriceCents != null ||
+          (input.buyPriceCents === undefined && nights.every((night) => night.buyPriceCents !== null));
+        if (!priced) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Give the price we pay per night. A night marked bought needs its price, so what we owe the supplier is known.",
+          });
+        }
+      }
+      if (needsSellPrice.includes(action)) {
+        const priced =
+          input.sellPriceCents != null ||
+          (input.sellPriceCents === undefined &&
+            nights.every((night) => night.sellPriceCents !== null && night.clientId === input.clientId));
+        if (!priced) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Give the price the client pays per night. A night ${action === "BLOCK" ? "blocked" : "sold"} for a client needs its agreed price.`,
+          });
+        }
+      }
+      if (action === "UPDATE_SUPPLIER_DETAILS" || action === "UPDATE_CLIENT_DETAILS") {
+        const keys =
+          action === "UPDATE_SUPPLIER_DETAILS"
+            ? (["supplierRef", "buyPriceCents", "acquisitionOwnerId", "acquisitionNotes"] as const)
+            : (["clientRef", "dueDate", "sellPriceCents", "salesOwnerId", "salesNotes"] as const);
+        if (keys.every((key) => input[key] === undefined)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Nothing to change — fill in what should change. Everything left empty stays as it is." });
+        }
+        if (input.buyPriceCents === null) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A price cannot be taken off here. Give the new price instead." });
+        }
+        if (action === "UPDATE_CLIENT_DETAILS" && input.sellPriceCents === null) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A price cannot be taken off here. Give the new price instead." });
+        }
+      }
+
       for (const night of nights) {
         const where = describeRoom(night);
         const fail = (reason: string) =>
@@ -421,11 +471,15 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           );
         }
         if (
-          action === "REPRICE_SELL" &&
+          (action === "REPRICE_SELL" || action === "UPDATE_CLIENT_DETAILS") &&
           night.salesState !== "BLOCKED" &&
           night.salesState !== "SOLD"
         ) {
-          fail("no client holds it, so there is nothing to price.");
+          fail(
+            action === "REPRICE_SELL"
+              ? "no client holds it, so there is nothing to price."
+              : "no client holds it, so there are no client details to change.",
+          );
         }
         if (
           action === "WITHDRAW_REQUEST" &&
@@ -469,11 +523,10 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
       // a price (invariant §4.5.9).
       const requestData = {
         ...(input.salesRequestId !== undefined && { salesRequestId: input.salesRequestId }),
-        clientRef: input.clientRef?.trim() || null,
-        sellPriceCents: input.sellPriceCents ?? null,
-        sellCurrency: input.sellPriceCents ? (input.sellCurrency ?? null) : null,
-        notes: input.salesNotes?.trim() || null,
-        ownerId: input.salesOwnerId ?? null,
+        clientRef: keepText(input.clientRef),
+        ...keepPrice(input.sellPriceCents, input.sellCurrency, "sellPriceCents", "sellCurrency"),
+        notes: keepText(input.salesNotes),
+        ownerId: input.salesOwnerId,
       };
 
       {
@@ -487,7 +540,14 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
                   roomNightId_clientId: { roomNightId, clientId: input.clientId! },
                 },
                 update: requestData,
-                create: { roomNightId, clientId: input.clientId!, ...requestData },
+                create: {
+                  roomNightId,
+                  clientId: input.clientId!,
+                  ...requestData,
+                  clientRef: requestData.clientRef ?? null,
+                  notes: requestData.notes ?? null,
+                  ownerId: requestData.ownerId ?? null,
+                },
               }),
             ),
           );
@@ -497,6 +557,21 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           });
         } else {
           await tx.roomNight.updateMany({ where: { id: { in: ids } }, data });
+          // A night passing to another client does not keep the last client's
+          // reference, price, notes or rep: what was not given is cleared there.
+          if (action === "BLOCK" || action === "SELL") {
+            const passed = nights.filter((night) => night.clientId !== input.clientId).map((night) => night.id);
+            const reset = {
+              ...(input.clientRef === undefined && { clientRef: null }),
+              ...(input.dueDate === undefined && { dueDate: null }),
+              ...(input.sellPriceCents === undefined && { sellPriceCents: null, sellCurrency: null }),
+              ...(input.salesOwnerId === undefined && { salesOwnerId: null }),
+              ...(input.salesNotes === undefined && { salesNotes: null }),
+            };
+            if (passed.length && Object.keys(reset).length) {
+              await tx.roomNight.updateMany({ where: { id: { in: passed } }, data: reset });
+            }
+          }
           // A night that passes to another client — a cancelled sale taken by
           // someone else — cannot stay tied to the first client's request.
           if ((action === "BLOCK" || action === "SELL") && input.salesRequestId === undefined) {
@@ -507,11 +582,18 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           }
         }
 
+        // What the change did, field by field — so an overwrite says what it overwrote.
+        const after = isRequestAction
+          ? []
+          : await tx.roomNight.findMany({ where: { id: { in: ids } }, include: nightInclude });
+        const details = isRequestAction ? null : describeChanges(nights, after);
+
         await tx.ledgerEntry.create({
           data: {
             eventId,
             actorId: actorId,
             axis,
+            details,
             fromState: priorStates,
             toState: acquisitionTo
               ? acquisitionLabels[acquisitionTo]
@@ -884,6 +966,7 @@ export const inventoryRouter = createTRPCRouter({
           createdAt: true,
           summary: true,
           reason: true,
+          details: true,
           fromState: true,
           nightCount: true,
           undoable: true,
@@ -1339,6 +1422,73 @@ export const inventoryRouter = createTRPCRouter({
  * What each action writes. Attribute-only actions touch nothing but their own
  * fields, so a re-price never quietly moves a state.
  */
+/** Left out keeps what the night has; empty or null clears it on purpose (doc §4.8). */
+function keepText(value: string | null | undefined) {
+  if (value === undefined) return undefined;
+  return value?.trim() || null;
+}
+
+/** A price and its currency travel together (invariant §4.5.9): given, cleared, or left as they are. */
+function keepPrice<C extends string, K extends string>(
+  cents: number | null | undefined,
+  currency: string | undefined,
+  centsKey: C,
+  currencyKey: K,
+): Partial<Record<C, number | null> & Record<K, string | null>> {
+  if (cents === undefined) return {};
+  return { [centsKey]: cents, [currencyKey]: cents === null ? null : (currency ?? null) } as Partial<
+    Record<C, number | null> & Record<K, string | null>
+  >;
+}
+
+/**
+ * One line per field and value that a change altered — "Sell price: US$ 450.00
+ * → US$ 480.00 (21 room-nights)" — for the ledger (doc §4.7). The status itself
+ * is already in the entry's from/to; these are the details beside it.
+ */
+function describeChanges(before: LoadedNight[], after: LoadedNight[]) {
+  const person = (user: { name: string | null; email: string | null } | null) => user?.name ?? user?.email ?? null;
+  const money = (cents: number | null, currency: string | null) =>
+    cents === null ? null : currency ? formatMoney(cents, currency) : String(cents / 100);
+  const note = (text: string | null) => (text ? `“${text.length > 60 ? `${text.slice(0, 57)}…` : text}”` : null);
+  const date = (value: Date | null) => (value ? formatDay(value) : null);
+  const fields: { label: string; read: (night: LoadedNight) => string | null }[] = [
+    { label: "Supplier reference", read: (night) => night.supplierRef },
+    { label: "Option runs to", read: (night) => date(night.optionExpiry) },
+    { label: "Buy price", read: (night) => money(night.buyPriceCents, night.buyCurrency) },
+    { label: "Supplier notes", read: (night) => note(night.acquisitionNotes) },
+    { label: "Supplier-side rep", read: (night) => person(night.acquisitionOwner) },
+    { label: "Client", read: (night) => night.client?.name ?? null },
+    { label: "Client reference", read: (night) => night.clientRef },
+    { label: "Block runs to", read: (night) => date(night.blockExpiry) },
+    { label: "Due date", read: (night) => date(night.dueDate) },
+    { label: "Sell price", read: (night) => money(night.sellPriceCents, night.sellCurrency) },
+    { label: "Client notes", read: (night) => note(night.salesNotes) },
+    { label: "Client-side rep", read: (night) => person(night.salesOwner) },
+  ];
+  const was = new Map(before.map((night) => [night.id, night]));
+  const counts = new Map<string, { order: number; line: string; count: number }>();
+  for (const night of after) {
+    const old = was.get(night.id);
+    if (!old) continue;
+    fields.forEach((field, order) => {
+      const from = field.read(old);
+      const to = field.read(night);
+      if (from === to) return;
+      const line = `${field.label}: ${from ?? "—"} → ${to ?? "—"}`;
+      const entry = counts.get(line) ?? { order, line, count: 0 };
+      entry.count += 1;
+      counts.set(line, entry);
+    });
+  }
+  if (counts.size === 0) return null;
+  const lines = [...counts.values()]
+    .sort((a, b) => a.order - b.order || b.count - a.count)
+    .map((entry) => `${entry.line} (${entry.count} room-night${entry.count === 1 ? "" : "s"})`);
+  const shown = lines.slice(0, 15);
+  return [...shown, ...(lines.length > shown.length ? [`…and ${lines.length - shown.length} more changes`] : [])].join("\n");
+}
+
 function buildUpdate(
   action: InventoryAction,
   input: z.infer<typeof attributes>,
@@ -1352,13 +1502,30 @@ function buildUpdate(
     case "BUY":
       return {
         acquisitionState: acquisitionTo,
-        supplierRef: input.supplierRef?.trim() || null,
         // Only an option carries an expiry; buying clears the clock.
         optionExpiry: acquisitionTo === "OPTION" ? input.optionExpiry : null,
-        buyPriceCents: input.buyPriceCents ?? null,
-        buyCurrency: input.buyPriceCents ? (input.buyCurrency ?? null) : null,
-        acquisitionOwnerId: input.acquisitionOwnerId ?? null,
-        acquisitionNotes: input.acquisitionNotes?.trim() || null,
+        // The rest keeps what each night has unless given (doc §4.8).
+        supplierRef: keepText(input.supplierRef),
+        ...keepPrice(input.buyPriceCents, input.buyCurrency, "buyPriceCents", "buyCurrency"),
+        acquisitionOwnerId: input.acquisitionOwnerId,
+        acquisitionNotes: keepText(input.acquisitionNotes),
+      };
+
+    case "UPDATE_SUPPLIER_DETAILS":
+      return {
+        supplierRef: keepText(input.supplierRef),
+        ...keepPrice(input.buyPriceCents, input.buyCurrency, "buyPriceCents", "buyCurrency"),
+        acquisitionOwnerId: input.acquisitionOwnerId,
+        acquisitionNotes: keepText(input.acquisitionNotes),
+      };
+
+    case "UPDATE_CLIENT_DETAILS":
+      return {
+        clientRef: keepText(input.clientRef),
+        dueDate: input.dueDate,
+        ...keepPrice(input.sellPriceCents, input.sellCurrency, "sellPriceCents", "sellCurrency"),
+        salesOwnerId: input.salesOwnerId,
+        salesNotes: keepText(input.salesNotes),
       };
 
     case "ABANDON":
@@ -1387,14 +1554,16 @@ function buildUpdate(
       return {
         salesState: salesTo,
         clientId: input.clientId,
-        clientRef: input.clientRef?.trim() || null,
         // Only a block carries an expiry; signing clears the clock.
         blockExpiry: salesTo === "BLOCKED" ? input.blockExpiry : null,
-        dueDate: input.dueDate ?? null,
-        sellPriceCents: input.sellPriceCents ?? null,
-        sellCurrency: input.sellPriceCents ? (input.sellCurrency ?? null) : null,
-        salesOwnerId: input.salesOwnerId ?? null,
-        salesNotes: input.salesNotes?.trim() || null,
+        // The rest keeps what each night has unless given (doc §4.8); a night
+        // passing to another client is cleared of the last one's after this.
+        clientRef: keepText(input.clientRef),
+        // A sale has no decision left to chase (doc §4.2).
+        dueDate: salesTo === "SOLD" ? null : input.dueDate,
+        ...keepPrice(input.sellPriceCents, input.sellCurrency, "sellPriceCents", "sellCurrency"),
+        salesOwnerId: input.salesOwnerId,
+        salesNotes: keepText(input.salesNotes),
         ...(input.salesRequestId !== undefined && { salesRequestId: input.salesRequestId }),
       };
 

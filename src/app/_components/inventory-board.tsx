@@ -117,6 +117,12 @@ export function InventoryBoard({
                           {entry.reason}
                         </span>
                       )}
+                      {entry.details && (
+                        // What the change did to prices, references, notes and dates (doc §4.7).
+                        <span className="text-ink-700 mt-1 block text-xs font-light whitespace-pre-line">
+                          {entry.details}
+                        </span>
+                      )}
                     </Td>
                     <Td>
                       <span className="text-ink-500 text-xs font-light">

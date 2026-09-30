@@ -864,6 +864,11 @@ stateDiagram-v2
 Required attributes: `supplierRef`, `optionExpiry` (mandatory in `OPTION`),
 `buyPriceCents`, `currency`, `owner` (the We Lodge rep), `notes`.
 
+**A night cannot be marked bought without its price.** *Buy* is refused until the price per
+night is given — or, left empty, only where every night selected already carries one — so
+what we owe the supplier is always known, and a payments view can rely on it. (From Ami's
+review, 2026-09-30.)
+
 ### 4.2 The sales axis (demand)
 
 ```mermaid
@@ -889,6 +894,12 @@ stateDiagram-v2
 
 Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`),
 `sellPriceCents`, `currency`, `owner`, `notes`, `dueDate`.
+
+**A block or a sale needs the agreed price.** *Block* and *Sell* are refused until the price
+per night to the client is given — or, left empty, only where every night already carries
+that same client's price, as when a block becomes a sale. This holds on the stock sheet and
+on a sales request alike (§4.11). A request (soft) does not need one. (From Ami's review,
+2026-09-30.)
 
 **`dueDate` is the client's decision deadline while the hold is still open** — asked for
 only when blocking, never when selling. `SOLD` means the client has already signed; there is
@@ -1036,7 +1047,12 @@ there is no screen for changing them yet.
 ### 4.7 Ledger and ownership
 
 Every room-night change appends an immutable entry: `timestamp`, `actor` (the We Lodge
-rep), `axis`, `from`, `to`, `affected nights`, `reason/note`. This gives the "We Lodge Rep"
+rep), `axis`, `from`, `to`, `affected nights`, `reason/note` — and **what it did to the
+details**, field by field and value by value, with how many room-nights each: *"Sell price:
+US$ 450.00 → €500.00 (6 room-nights)"*, *"Client notes: — → "Late arrival" (9 room-nights)"*.
+So where a sold period is overwritten with different prices, "What changed" says exactly
+which prices were replaced by which. Entries written before this was recorded say only
+what they always said. This gives the "We Lodge Rep"
 and "Inserted Date" columns of the spreadsheet a real home, and makes "who promised this
 and when" answerable.
 
@@ -1073,6 +1089,21 @@ references, and **split/merge a hold**, which waits on open question 3 — wheth
 an object in its own right. Splitting a hold is nonetheless already possible through the
 same primitive: release the client's hold on some rooms and sell on others, in two
 operations. What is missing is doing it as one act with one ledger entry.
+
+**A detail left empty keeps what each night has.** Applying a change to a stretch of nights
+touches only what the change is about and what is filled in: selling nights again with just
+a note leaves their prices, references and managers as they were, even where they differ
+from night to night. A detail is removed only when it is cleared on purpose — emptied in a
+box that showed it. One exception keeps the record honest: when a night passes to a
+**different client** (a cancelled sale taken by someone else), the previous client's
+reference, price, due date, manager and notes do not carry over to the new one.
+
+**Updating a detail without disturbing the rest.** *Update supplier details* and *Update
+client details* change only what is filled in — a note, a price, a reference, a manager —
+across the whole selection, and never the status. The client side only applies to nights a
+client holds. Filling in nothing is refused, since there would be nothing to change. (From
+Ami's review, 2026-09-30: adding a note to a long sold stay used to mean re-entering it
+and overwriting prices that varied by date.)
 
 A refusal names the rooms, not each night separately: twenty-one identical lines for one
 room is a wall rather than an explanation, so consecutive nights failing for the same reason
@@ -1433,10 +1464,13 @@ out sooner and so needs attention sooner.
   after 25 Jul" — rather than presenting the edge of the window as the day the guest
   arrives. This is judged from the night on either side of the window, so a stay that really
   begins on the first day shown says so plainly.
-- **Something needing attention is marked**, with a red or amber "!" in the label: the same
-  judgement as §4.4 — sold without having secured it, an option that is running out — taken
-  from the worst night in the block, so grouping never hides a problem. The *Look out for*
-  counts above the sheet count these blocks as issues (see above).
+- **Something needing attention is marked**, with a red or amber "!" in the label **and a
+  thick outline round the whole booking** — amber for a warning, red for urgent or critical:
+  the same judgement as §4.4 — sold without having secured it, an option or a block that is
+  running out — taken from the worst night in the block, so grouping never hides a problem.
+  A deadline inside the urgent window says so in words: *"The block runs out today (30
+  Sep)"*. The *Look out for* counts above the sheet count these blocks as issues (see
+  above).
 - **Hovering over a block summarises it**, without clicking anything: who it is for, the
   **Sales** position (sold, blocked, requested, no client) and the **Acquisition** position
   (bought, option, in progress) as two separate lines, any clients who have asked for it,
@@ -1455,6 +1489,11 @@ hotel still collapsed, and each room type the same once opened. It is always wri
 carries no dates: in practice every room checks in and out on different days, so there is
 no single period to name. There is no total across hotels above the sheet; added up, it
 said nothing a rep could act on.
+
+**Urgent and critical are said loudly.** Whenever anything is urgent or critical, a red
+banner sits above the sheet — *"3 room-nights need attention now — 1 critical, 2 urgent"* —
+with *Show only those*. (From Ami's review, 2026-09-30: the counts alone did not feel
+critical.)
 
 **Look out for — issues, not nights.** Above the sheet the §4.4 severities are counted
 as **issues**: one client at one hotel with the same problem over the same stay is one
@@ -1500,7 +1539,18 @@ appears beside the window whenever it differs from the event's, and choosing it 
 remembered one.
 
 Editing happens by highlighting a rectangle of cells — a set of rooms crossed with a
-contiguous range of days — which opens a panel scoped to exactly that selection. **The last
+contiguous range of days — which opens a panel scoped to exactly that selection.
+
+**The panel shows what is already recorded** on those nights, under *Recorded now*: each
+side's status, and every detail — buy price, option date, supplier reference, Accommodation
+Manager, supplier notes; client, sell price, block date, due date, client reference, Sales
+Manager, client notes — as the one value the nights share, or *varies* where they differ.
+Every box below starts filled in with what the nights share, so amending an entry starts
+from what is there rather than from nothing; a box where the nights differ starts empty and
+says so, and left empty keeps each night's own (§4.8). Choosing a different client empties
+the client's boxes. Pointing at a booking on the sheet shows its price per night, client
+notes and supplier notes as well. (From Ami's review, 2026-09-30: notes could be written
+but never read back.) **The last
 day highlighted is the check-out day**, as a stay is written everywhere else: highlighting
 10 Jul to 31 Jul selects check-in 10 Jul, check-out 31 Jul, 21 nights, and changes those 21
 nights. That day is drawn lighter and marked CO in the selection, and the counter while
@@ -1995,6 +2045,10 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.6 Deadline dashboard | **Built** | Everything expiring, soonest first, grouped by property and client, with value at stake |
 | §4.6 Calendar reminders | **Not built** | Needs Google credentials and a scheduled job. The dashboard carries the same aggregation |
 | §4.7 Ledger and ownership | **Built** | One entry per bulk operation, linked to every night it touched; an owner per axis |
+| §4.7 Details in the ledger | **Built** | Each change records what it did to prices, references, dates, managers and notes, field by field, shown under the entry in "What changed" |
+| §4.8 Empty keeps, update details only | **Built** | A detail left empty keeps each night's own; *Update supplier details* / *Update client details* change only what is filled in; a night passing to another client does not keep the last one's details |
+| §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
+| §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
 | §4.9 General audit trail | **Built** | Scouting status, contract status, and property/client/event edits — no undo, and no field-level diff of nested categories/contacts |

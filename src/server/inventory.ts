@@ -76,6 +76,8 @@ export function flatten(night: LoadedNight): NightRecord {
     buyPriceCents: night.buyPriceCents,
     buyCurrency: night.buyCurrency,
     acquisitionOwner: person(night.acquisitionOwner),
+    acquisitionOwnerId: night.acquisitionOwnerId,
+    acquisitionNotes: night.acquisitionNotes,
 
     salesState: night.salesState,
     clientId: night.clientId,
@@ -86,6 +88,8 @@ export function flatten(night: LoadedNight): NightRecord {
     sellPriceCents: night.sellPriceCents,
     sellCurrency: night.sellCurrency,
     salesOwner: person(night.salesOwner),
+    salesOwnerId: night.salesOwnerId,
+    salesNotes: night.salesNotes,
 
     requestedBy: night.requests.map((request) => ({
       id: request.clientId,
@@ -201,6 +205,7 @@ export function axisOf(action: InventoryAction): LedgerAxis {
     case "EXTEND_OPTION":
     case "REPRICE_BUY":
     case "REASSIGN_ACQUISITION_OWNER":
+    case "UPDATE_SUPPLIER_DETAILS":
       return "ACQUISITION";
     default:
       return "SALES";

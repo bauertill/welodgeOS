@@ -1088,6 +1088,11 @@ model LedgerEntry {
   summary    String
   /// Why, in the actor's words. Optional but asked for on every action.
   reason     String?
+  /// What the change did to the nights' details, one line per field and
+  /// value — "Sell price: US$ 450.00 → US$ 480.00 (21 room-nights)" — so an
+  /// overwrite says exactly what it overwrote (doc §4.7). Empty on entries
+  /// written before this was recorded.
+  details    String?
   nightCount Int
 
   /// Every affected night's mutable fields, exactly as they were *before*

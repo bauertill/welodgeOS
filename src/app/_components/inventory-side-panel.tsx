@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AcquisitionState, SalesState } from "generated/prisma";
 
 import {
@@ -20,6 +20,8 @@ import {
   actionGroups,
   actionHints,
   actionLabels,
+  needsBuyPrice,
+  needsSellPrice,
   salesLabels,
   salesTarget,
   type InventoryAction,
@@ -35,6 +37,9 @@ export type SelectedCell = {
   optionExpiry: Date | null;
   buyPriceCents: number | null;
   buyCurrency: string | null;
+  acquisitionOwner: string | null;
+  acquisitionOwnerId: string | null;
+  acquisitionNotes: string | null;
   salesState: SalesState;
   clientId: string | null;
   clientName: string | null;
@@ -43,7 +48,31 @@ export type SelectedCell = {
   dueDate: Date | null;
   sellPriceCents: number | null;
   sellCurrency: string | null;
+  salesOwner: string | null;
+  salesOwnerId: string | null;
+  salesNotes: string | null;
 };
+
+/**
+ * One detail across the selected nights: the value they all share, or that
+ * they differ. What is shared is filled in for editing; what differs is left
+ * empty, and left empty keeps each night's own (doc §4.8).
+ */
+type Shared = { same: true; value: string } | { same: false; count: number };
+
+function shared(cells: SelectedCell[], read: (cell: SelectedCell) => string): Shared {
+  const values = new Set(cells.map(read));
+  if (values.size <= 1) return { same: true, value: [...values][0] ?? "" };
+  return { same: false, count: values.size };
+}
+
+/** What to send for one detail: left as it was → nothing (kept); emptied → cleared; else the new value. */
+function changed(current: string, start: string): string | null | undefined {
+  if (current.trim() === start.trim()) return undefined;
+  return current.trim() === "" ? null : current;
+}
+
+const priceText = (cents: number | null) => (cents === null ? "" : String(cents / 100));
 
 const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
@@ -125,28 +154,62 @@ export function InventorySidePanel({
   const [action, setAction] = useState<InventoryAction>(defaultAction);
   const [reason, setReason] = useState("");
 
-  const [supplierRef, setSupplierRef] = useState(single?.supplierRef ?? "");
-  const [optionExpiry, setOptionExpiry] = useState("");
-  const [buyPrice, setBuyPrice] = useState(
-    single?.buyPriceCents ? String(single.buyPriceCents / 100) : "",
-  );
-  const [buyCurrency, setBuyCurrency] = useState(single?.buyCurrency ?? "USD");
-  const [acquisitionOwnerId, setAcquisitionOwnerId] = useState("");
-  const [acquisitionNotes, setAcquisitionNotes] = useState("");
+  // What every selected night already says, detail by detail — the starting
+  // point of each box, so what is recorded shows and only changes are sent.
+  const known = dateRangeEdited ? [] : cells;
+  const start = {
+    supplierRef: shared(known, (cell) => cell.supplierRef ?? ""),
+    buyPrice: shared(known, (cell) => priceText(cell.buyPriceCents)),
+    buyCurrency: shared(known, (cell) => cell.buyCurrency ?? ""),
+    acquisitionOwnerId: shared(known, (cell) => cell.acquisitionOwnerId ?? ""),
+    acquisitionNotes: shared(known, (cell) => cell.acquisitionNotes ?? ""),
+    clientId: shared(known, (cell) => cell.clientId ?? ""),
+    clientRef: shared(known, (cell) => cell.clientRef ?? ""),
+    dueDate: shared(known, (cell) => (cell.dueDate ? dayKey(cell.dueDate) : "")),
+    sellPrice: shared(known, (cell) => priceText(cell.sellPriceCents)),
+    sellCurrency: shared(known, (cell) => cell.sellCurrency ?? ""),
+    salesOwnerId: shared(known, (cell) => cell.salesOwnerId ?? ""),
+    salesNotes: shared(known, (cell) => cell.salesNotes ?? ""),
+  };
+  const initial = (detail: Shared) => (detail.same ? detail.value : "");
 
-  const [clientId, setClientId] = useState(single?.clientId ?? "");
-  const [clientRef, setClientRef] = useState(single?.clientRef ?? "");
+  const [supplierRef, setSupplierRef] = useState(initial(start.supplierRef));
+  const [optionExpiry, setOptionExpiry] = useState("");
+  const [buyPrice, setBuyPrice] = useState(initial(start.buyPrice));
+  const [buyCurrency, setBuyCurrency] = useState(initial(start.buyCurrency) || "USD");
+  const [acquisitionOwnerId, setAcquisitionOwnerId] = useState(initial(start.acquisitionOwnerId));
+  const [acquisitionNotes, setAcquisitionNotes] = useState(initial(start.acquisitionNotes));
+
+  const [clientId, setClientId] = useState(initial(start.clientId));
+  const [clientRef, setClientRef] = useState(initial(start.clientRef));
   const [addingClient, setAddingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [newClientShortName, setNewClientShortName] = useState("");
   const [blockExpiry, setBlockExpiry] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [sellPrice, setSellPrice] = useState(
-    single?.sellPriceCents ? String(single.sellPriceCents / 100) : "",
-  );
-  const [sellCurrency, setSellCurrency] = useState(single?.sellCurrency ?? "USD");
-  const [salesOwnerId, setSalesOwnerId] = useState("");
-  const [salesNotes, setSalesNotes] = useState("");
+  const [dueDate, setDueDate] = useState(initial(start.dueDate));
+  const [sellPrice, setSellPrice] = useState(initial(start.sellPrice));
+  const [sellCurrency, setSellCurrency] = useState(initial(start.sellCurrency) || "USD");
+  const [salesOwnerId, setSalesOwnerId] = useState(initial(start.salesOwnerId));
+  const [salesNotes, setSalesNotes] = useState(initial(start.salesNotes));
+  // The client's details only carry over while it is the same client: for
+  // another one, the boxes start empty (and the server clears the last one's).
+  const sameClient = start.clientId.same && Boolean(start.clientId.value) && start.clientId.value === clientId;
+  const clientStart = (detail: Shared) => (sameClient ? initial(detail) : "");
+  // Switching to another client empties its boxes; switching back refills them.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    setClientRef(clientStart(start.clientRef));
+    setDueDate(clientStart(start.dueDate));
+    setSellPrice(clientStart(start.sellPrice));
+    setSellCurrency(clientStart(start.sellCurrency) || "USD");
+    setSalesOwnerId(clientStart(start.salesOwnerId));
+    setSalesNotes(clientStart(start.salesNotes));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when it becomes, or stops being, the same client
+  }, [sameClient]);
   // Which of the client's sales requests these nights belong to (doc §4.11).
   // "" means none; left untouched, it follows the client's only open request.
   const [salesRequestId, setSalesRequestId] = useState<string | null>(null);
@@ -221,8 +284,18 @@ export function InventorySidePanel({
     );
 
   const shows = (field: string) => actionFields[action].includes(field);
-  const cents = (value: string) =>
-    value.trim() ? Math.round(Number(value) * 100) : undefined;
+  const nullableDay = (value: string | null | undefined) => (value === undefined ? undefined : value === null ? null : parseDay(value));
+  /** A price and its currency: sent only when either changed, and cleared together. */
+  const price = (side: "buy" | "sell", amount: string, currency: string, startAmount: string, startCurrency: string) => {
+    const cents = side === "buy" ? "buyPriceCents" : "sellPriceCents";
+    const code = side === "buy" ? "buyCurrency" : "sellCurrency";
+    if (amount.trim() === startAmount.trim() && (!amount.trim() || currency === (startCurrency || currency))) return {};
+    if (!amount.trim()) return { [cents]: null };
+    return { [cents]: Math.round(Number(amount) * 100), [code]: currency };
+  };
+  /** What a box says while the selected nights differ on it. */
+  const varies = (detail: Shared) =>
+    !detail.same ? `Varies across these nights (${detail.count} different) — leave empty to keep each night's own` : undefined;
 
   const groups = tab === "acquisition" ? [actionGroups[0]!] : actionGroups.slice(1);
 
@@ -248,7 +321,7 @@ export function InventorySidePanel({
       if (
         activeCount > 0 &&
         !window.confirm(
-          `${activeCount} of the ${totalNights} room-nights you selected already have an entry for this period. Update ${activeCount === 1 ? "it" : "them"} anyway?`,
+          `${activeCount} of the ${totalNights} room-nights you selected already have an entry for this period. Update ${activeCount === 1 ? "it" : "them"} anyway? Details you leave as they are keep what each night has.`,
         )
       ) {
         return;
@@ -264,20 +337,18 @@ export function InventorySidePanel({
       // Extending from the sheet: nights not in inventory yet are added first.
       addMissing: true,
       reason: reason.trim() || undefined,
-      supplierRef: supplierRef.trim() || undefined,
+      supplierRef: changed(supplierRef, initial(start.supplierRef)),
       optionExpiry: optionExpiry ? parseDay(optionExpiry) : undefined,
-      buyPriceCents: cents(buyPrice),
-      buyCurrency,
-      acquisitionOwnerId: acquisitionOwnerId || undefined,
-      acquisitionNotes: acquisitionNotes.trim() || undefined,
+      ...price("buy", buyPrice, buyCurrency, initial(start.buyPrice), initial(start.buyCurrency)),
+      acquisitionOwnerId: changed(acquisitionOwnerId, initial(start.acquisitionOwnerId)),
+      acquisitionNotes: changed(acquisitionNotes, initial(start.acquisitionNotes)),
       clientId: clientId || undefined,
-      clientRef: clientRef.trim() || undefined,
+      clientRef: changed(clientRef, clientStart(start.clientRef)),
       blockExpiry: blockExpiry ? parseDay(blockExpiry) : undefined,
-      dueDate: dueDate ? parseDay(dueDate) : undefined,
-      sellPriceCents: cents(sellPrice),
-      sellCurrency,
-      salesOwnerId: salesOwnerId || undefined,
-      salesNotes: salesNotes.trim() || undefined,
+      dueDate: nullableDay(changed(dueDate, clientStart(start.dueDate))),
+      ...price("sell", sellPrice, sellCurrency, clientStart(start.sellPrice), clientStart(start.sellCurrency)),
+      salesOwnerId: changed(salesOwnerId, clientStart(start.salesOwnerId)),
+      salesNotes: changed(salesNotes, clientStart(start.salesNotes)),
       salesRequestId: forRequest && chosenRequest ? chosenRequest : undefined,
     });
   };
@@ -359,39 +430,7 @@ export function InventorySidePanel({
           </button>
         </div>
 
-        {!dateRangeEdited && cells.length > 1 && (
-          <div className="border-ink-200/60 mb-4 rounded-lg border p-3 text-xs font-light">
-            <p className="text-ink-700">
-              Supplier: {tally(cells.map((c) => c.acquisitionState), acquisitionLabels)}
-            </p>
-            <p className="text-ink-700 mt-1">
-              Client: {tally(cells.map((c) => c.salesState), salesLabels)}
-            </p>
-          </div>
-        )}
-
-        {single && (
-          <div className="border-ink-200/60 mb-4 rounded-lg border p-3 text-xs font-light">
-            <p className="text-ink-700">
-              {acquisitionLabels[single.acquisitionState]}
-              {single.buyPriceCents !== null && single.buyCurrency
-                ? ` · ${formatMoney(single.buyPriceCents, single.buyCurrency)}`
-                : ""}
-            </p>
-            <p className="text-ink-700 mt-1">
-              {salesLabels[single.salesState]}
-              {single.clientName ? ` · ${single.clientName}` : ""}
-              {single.sellPriceCents !== null && single.sellCurrency
-                ? ` · ${formatMoney(single.sellPriceCents, single.sellCurrency)}`
-                : ""}
-            </p>
-            {single.blockExpiry && (
-              <p className="text-ink-500 mt-1">
-                Block runs to {formatDay(single.blockExpiry)}
-              </p>
-            )}
-          </div>
-        )}
+        {!dateRangeEdited && cells.length > 0 && <Recorded cells={cells} />}
 
         {allUntouched && (
           <Button
@@ -502,7 +541,7 @@ export function InventorySidePanel({
 
           {shows("supplierRef") && (
             <Field label="Supplier reference" hint="Their contract or booking number.">
-              <Input value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} />
+              <Input value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder={varies(start.supplierRef)} />
             </Field>
           )}
 
@@ -547,7 +586,7 @@ export function InventorySidePanel({
 
           {shows("clientRef") && (
             <Field label="Client reference" hint="Their order or contract number.">
-              <Input value={clientRef} onChange={(e) => setClientRef(e.target.value)} />
+              <Input value={clientRef} onChange={(e) => setClientRef(e.target.value)} placeholder={sameClient ? varies(start.clientRef) : undefined} />
             </Field>
           )}
 
@@ -562,7 +601,14 @@ export function InventorySidePanel({
           )}
 
           {shows("buyPrice") && (
-            <Field label="We pay, per night">
+            <Field
+              label={needsBuyPrice.includes(action) ? "We pay, per night — required" : "We pay, per night"}
+              hint={
+                needsBuyPrice.includes(action)
+                  ? "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
+                  : undefined
+              }
+            >
               <div className="flex gap-2">
                 <Input
                   type="number"
@@ -570,6 +616,8 @@ export function InventorySidePanel({
                   min={0}
                   value={buyPrice}
                   onChange={(e) => setBuyPrice(e.target.value)}
+                  placeholder={varies(start.buyPrice) ? "Varies — leave empty to keep" : undefined}
+                  title={varies(start.buyPrice)}
                 />
                 <Select
                   value={buyCurrency}
@@ -585,7 +633,14 @@ export function InventorySidePanel({
           )}
 
           {shows("sellPrice") && (
-            <Field label="Client pays, per night">
+            <Field
+              label={needsSellPrice.includes(action) ? "Client pays, per night — required" : "Client pays, per night"}
+              hint={
+                needsSellPrice.includes(action)
+                  ? "The agreed price. Left empty, it is only accepted where every night already has this client's price."
+                  : undefined
+              }
+            >
               <div className="flex gap-2">
                 <Input
                   type="number"
@@ -593,6 +648,8 @@ export function InventorySidePanel({
                   min={0}
                   value={sellPrice}
                   onChange={(e) => setSellPrice(e.target.value)}
+                  placeholder={sameClient && varies(start.sellPrice) ? "Varies — leave empty to keep" : undefined}
+                  title={sameClient ? varies(start.sellPrice) : undefined}
                 />
                 <Select
                   value={sellCurrency}
@@ -645,6 +702,7 @@ export function InventorySidePanel({
                 rows={2}
                 value={acquisitionNotes}
                 onChange={(e) => setAcquisitionNotes(e.target.value)}
+                placeholder={varies(start.acquisitionNotes)}
               />
             </Field>
           )}
@@ -655,6 +713,7 @@ export function InventorySidePanel({
                 rows={2}
                 value={salesNotes}
                 onChange={(e) => setSalesNotes(e.target.value)}
+                placeholder={sameClient ? varies(start.salesNotes) : undefined}
               />
             </Field>
           )}
@@ -696,5 +755,62 @@ export function InventorySidePanel({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * What is recorded on the selected nights right now (doc §5.4): the status on
+ * each side, and every detail — prices, references, dates, managers, notes —
+ * as the one value they share, or as varying where they differ.
+ */
+function Recorded({ cells }: { cells: SelectedCell[] }) {
+  const line = (label: string, read: (cell: SelectedCell) => string | null) => {
+    const values = [...new Set(cells.map(read))];
+    const known = values.filter((value): value is string => Boolean(value));
+    if (known.length === 0) return null;
+    const text =
+      values.length === 1
+        ? known[0]!
+        : known.length === 1
+          ? `${known[0]} on some nights, nothing on others`
+          : `varies — ${known.length} different`;
+    return (
+      <div key={label} className="flex gap-2">
+        <dt className="text-ink-500 w-32 shrink-0">{label}</dt>
+        <dd className="text-ink-900 min-w-0 break-words whitespace-pre-line">{text}</dd>
+      </div>
+    );
+  };
+  const money = (cents: number | null, currency: string | null) =>
+    cents !== null && currency ? formatMoney(cents, currency) : null;
+  const day = (value: Date | null) => (value ? formatDay(value) : null);
+  return (
+    <div className="border-ink-200/60 mb-4 space-y-3 rounded-lg border p-3 text-xs font-light">
+      <p className="text-ink-500 text-[10px] font-medium tracking-wider uppercase">Recorded now</p>
+      <dl className="space-y-1">
+        <div className="flex gap-2">
+          <dt className="text-ink-500 w-32 shrink-0">Supplier side</dt>
+          <dd className="text-ink-900">{tally(cells.map((cell) => cell.acquisitionState), acquisitionLabels)}</dd>
+        </div>
+        {line("Buy price", (cell) => money(cell.buyPriceCents, cell.buyCurrency))}
+        {line("Option runs to", (cell) => day(cell.optionExpiry))}
+        {line("Supplier ref.", (cell) => cell.supplierRef)}
+        {line("Accommodation Mgr", (cell) => cell.acquisitionOwner)}
+        {line("Supplier notes", (cell) => cell.acquisitionNotes)}
+      </dl>
+      <dl className="border-ink-200/60 space-y-1 border-t pt-3">
+        <div className="flex gap-2">
+          <dt className="text-ink-500 w-32 shrink-0">Client side</dt>
+          <dd className="text-ink-900">{tally(cells.map((cell) => cell.salesState), salesLabels)}</dd>
+        </div>
+        {line("Client", (cell) => cell.clientName)}
+        {line("Sell price", (cell) => money(cell.sellPriceCents, cell.sellCurrency))}
+        {line("Block runs to", (cell) => day(cell.blockExpiry))}
+        {line("Due", (cell) => day(cell.dueDate))}
+        {line("Client ref.", (cell) => cell.clientRef)}
+        {line("Sales Manager", (cell) => cell.salesOwner)}
+        {line("Client notes", (cell) => cell.salesNotes)}
+      </dl>
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { Input } from "~/app/_components/form";
 import { InventorySidePanel, type SelectedCell } from "~/app/_components/inventory-side-panel";
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
+import { formatMoney } from "~/lib/format";
 import { acquisitionLabels, salesLabels } from "~/lib/inventory";
 import { severityLabels, type Severity } from "~/lib/position";
 import { blockKind, buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
@@ -508,6 +509,35 @@ export function InventoryGrid({
             Nothing to look out for in this window — every cell is clear.
           </p>
         ) : (
+          <>
+          {(issues.has(4) || issues.has(3)) && (() => {
+            // Critical and urgent are said loudly, above everything else.
+            const critical = issues.get(4)?.keys.size ?? 0;
+            const urgent = issues.get(3)?.keys.size ?? 0;
+            const worst = critical ? 4 : 3;
+            return (
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border-2 border-[#c03654] bg-[#fde8ec] px-4 py-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#c03654] text-sm font-bold text-white" aria-hidden="true">
+                  !
+                </span>
+                <p className="min-w-0 flex-1 text-[13px] text-[#8e1f36]">
+                  <span className="font-semibold">
+                    {critical + urgent} room-night{critical + urgent === 1 ? " needs" : "s need"} attention now
+                  </span>
+                  {" — "}
+                  {[critical ? `${critical} critical` : null, urgent ? `${urgent} urgent` : null].filter(Boolean).join(", ")}.
+                  <span className="block text-xs font-light">Outlined in red on the sheet. Point at one to see why.</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIssueFilter(issueFilter === worst ? null : worst)}
+                  className="rounded-full bg-[#c03654] px-4 py-1.5 text-[13px] font-medium text-white hover:bg-[#a52b46]"
+                >
+                  {issueFilter === worst ? "Show everything" : "Show only those"}
+                </button>
+              </div>
+            );
+          })()}
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <span className="text-ink-500 text-[13px] font-light">Look out for:</span>
             {levels.map((level) => {
@@ -540,6 +570,7 @@ export function InventoryGrid({
               </button>
             )}
           </div>
+          </>
         );
       })()}
 
@@ -790,10 +821,15 @@ export function InventoryGrid({
                                               } ${edge.top && edge.right ? "rounded-tr-md" : ""} ${
                                                 edge.bottom && edge.left ? "rounded-bl-md" : ""
                                               } ${edge.bottom && edge.right ? "rounded-br-md" : ""} ${
-                                                // An outline round the whole block, not every night.
-                                                outlined(block.kind)
-                                                  ? `${edge.top ? "border-t" : ""} ${edge.bottom ? "border-b" : ""} ${edge.left ? "border-l" : ""} ${edge.right ? "border-r" : ""}`
-                                                  : ""
+                                                // An outline round the whole block, not every night —
+                                                // thick and coloured where it needs attention.
+                                                block.severity >= 2
+                                                  ? `${edge.top ? "border-t-2" : ""} ${edge.bottom ? "border-b-2" : ""} ${edge.left ? "border-l-2" : ""} ${edge.right ? "border-r-2" : ""} ${
+                                                      block.severity >= 3 ? "border-[#c03654]!" : "border-[#e0a02a]!"
+                                                    }`
+                                                  : outlined(block.kind)
+                                                    ? `${edge.top ? "border-t" : ""} ${edge.bottom ? "border-b" : ""} ${edge.left ? "border-l" : ""} ${edge.right ? "border-r" : ""}`
+                                                    : ""
                                               }`}
                                             />
                                           ) : null}
@@ -879,6 +915,23 @@ export function InventoryGrid({
             const date = dates[b.labelDate];
             const cell = row && date ? cells[`${row.slotId}|${dayKey(date)}`] : undefined;
             return cell?.position;
+          })()}
+          recorded={(() => {
+            // Every night of the booking, for its notes and prices (doc §5.4).
+            const b = blocks[hovered.block]!;
+            const nights = b.runs.flatMap((run) =>
+              dates.slice(run.from, run.to + 1).map((date) => cells[`${visibleRows[run.row]!.slotId}|${dayKey(date)}`]),
+            );
+            const distinct = (read: (cell: NonNullable<(typeof nights)[number]>) => string | null) => [
+              ...new Set(nights.map((cell) => (cell ? read(cell) : null)).filter((value): value is string => Boolean(value))),
+            ];
+            return {
+              salesNotes: distinct((cell) => cell.salesNotes),
+              supplierNotes: distinct((cell) => cell.acquisitionNotes),
+              sellPrices: distinct((cell) =>
+                cell.sellPriceCents !== null && cell.sellCurrency ? formatMoney(cell.sellPriceCents, cell.sellCurrency) : null,
+              ),
+            };
           })()}
           checkOutDay={hovered.checkOutDay}
           continuesBefore={continues[hovered.block]?.before ?? false}
@@ -1089,6 +1142,7 @@ function BlockSummary({
   dates,
   rooms,
   detail,
+  recorded,
   checkOutDay,
   continuesBefore,
   continuesAfter,
@@ -1099,6 +1153,7 @@ function BlockSummary({
   dates: Date[];
   rooms: { slotNumber: number; categorySize: number }[];
   detail?: { headline: string; detail: string | null; flags: string[] };
+  recorded: { salesNotes: string[]; supplierNotes: string[]; sellPrices: string[] };
   checkOutDay?: Date;
   continuesBefore: boolean;
   continuesAfter: boolean;
@@ -1165,6 +1220,26 @@ function BlockSummary({
         <dd className="text-ink-900">
           {plural(numbers.length, "room", "rooms")} of {rooms[0]?.categorySize ?? numbers.length} · {roomList}
         </dd>
+        {hasClient(block.kind) && recorded.sellPrices.length > 0 && (
+          <>
+            <dt className="text-ink-500">Client pays</dt>
+            <dd className="text-ink-900">
+              {recorded.sellPrices.length === 1 ? `${recorded.sellPrices[0]} a night` : `varies — ${recorded.sellPrices.join(", ")}`}
+            </dd>
+          </>
+        )}
+        {recorded.salesNotes.length > 0 && (
+          <>
+            <dt className="text-ink-500">Client notes</dt>
+            <dd className="text-ink-900 whitespace-pre-line">{recorded.salesNotes.join("\n")}</dd>
+          </>
+        )}
+        {recorded.supplierNotes.length > 0 && (
+          <>
+            <dt className="text-ink-500">Supplier notes</dt>
+            <dd className="text-ink-900 whitespace-pre-line">{recorded.supplierNotes.join("\n")}</dd>
+          </>
+        )}
       </dl>
       {!block.uniform && (
         <p className="text-ink-500 mt-2 font-light">Not every room checks in and out on the same day.</p>
@@ -1208,7 +1283,12 @@ function Legend() {
         Check-out day
       </span>
       <span className="flex items-center gap-1.5">
-        <AttentionMark severity={3} /> Needs attention — hover for why
+        <span className="inline-block h-3 w-5 rounded-sm border-2 border-[#e0a02a] bg-white" />
+        <AttentionMark severity={2} /> Warning
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-5 rounded-sm border-2 border-[#c03654] bg-white" />
+        <AttentionMark severity={3} /> Urgent or critical — point at it for why
       </span>
     </div>
   );

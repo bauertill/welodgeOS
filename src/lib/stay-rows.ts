@@ -29,6 +29,8 @@ export type NightRecord = {
   buyPriceCents: number | null;
   buyCurrency: string | null;
   acquisitionOwner: string | null;
+  acquisitionOwnerId: string | null;
+  acquisitionNotes: string | null;
 
   salesState: SalesState;
   clientId: string | null;
@@ -39,6 +41,8 @@ export type NightRecord = {
   sellPriceCents: number | null;
   sellCurrency: string | null;
   salesOwner: string | null;
+  salesOwnerId: string | null;
+  salesNotes: string | null;
 
   /** Clients with a soft request on this night (doc §4.3). */
   requestedBy: { id: string; name: string }[];
