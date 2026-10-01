@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Manager } from "~/app/_components/client-list";
+import { contractHref, newContractHref } from "~/lib/finance";
 import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
@@ -1495,7 +1496,7 @@ function RequestContractPicker({ request, value, onChange }: { request: FullRequ
     return (
       <p className="w-full text-[13px] font-light text-[#c03654]">
         A sale needs the client&apos;s contract, and {request.client.name} has none for {request.event?.name} yet.{" "}
-        <Link href={`/finances/contracts/new?request=${request.id}`} className="text-brand-700 font-medium hover:underline">
+        <Link href={newContractHref(request.event?.id ?? "", `?request=${request.id}`)} className="text-brand-700 font-medium hover:underline">
           Add the contract
         </Link>
       </p>
@@ -1527,7 +1528,7 @@ function ContractCard({ request }: { request: FullRequest }) {
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="text-ink-900 text-[15px] font-medium">Contract</h2>
         {request.event && (
-          <Link href={`/finances/contracts/new?request=${request.id}`} className="text-brand-700 text-[13px] font-light hover:underline">
+          <Link href={newContractHref(request.event?.id ?? "", `?request=${request.id}`)} className="text-brand-700 text-[13px] font-light hover:underline">
             + New contract
           </Link>
         )}
@@ -1542,7 +1543,7 @@ function ContractCard({ request }: { request: FullRequest }) {
         <ul className="space-y-2">
           {rows.map((contract) => (
             <li key={contract.id} className="text-sm">
-              <Link href={`/finances/contracts/${contract.id}`} className="hover:text-brand-700 font-medium">
+              <Link href={contractHref(contract.event.id, contract.id)} className="hover:text-brand-700 font-medium">
                 {contract.name}
               </Link>
               <span className={`block text-xs font-light ${contract.missing.length ? "text-[#c03654]" : "text-ink-500"}`}>

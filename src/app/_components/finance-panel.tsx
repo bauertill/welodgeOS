@@ -35,7 +35,7 @@ export function FinancePanel({ onClose }: { onClose: () => void }) {
         <div className="border-ink-200/60 flex items-start justify-between gap-3 border-b p-5">
           <div>
             <h2 className="text-ink-900 text-[15px] font-medium">Finances</h2>
-            <p className="text-ink-500 mt-0.5 text-xs font-light">What we owe and are owed, and what can still be given back, from every contract.</p>
+            <p className="text-ink-500 mt-0.5 text-xs font-light">What we owe and are owed, and what can still be given back — across every event.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-ink-400 hover:text-ink-700">
             ✕
@@ -57,19 +57,12 @@ export function FinancePanel({ onClose }: { onClose: () => void }) {
               "Deadlines with suppliers and with clients",
               s && s.cutoffs > 0 ? `${plural(s.cutoffs, "cut-off", "cut-offs")} within 30 days or passed` : null,
             )}
-            {row(
-              "/finances/contracts",
-              "Contracts",
-              "Every signed contract, with its terms",
-              s && s.incomplete > 0 ? `${plural(s.incomplete, "contract is", "contracts are")} missing terms` : null,
-            )}
           </ul>
         </div>
-        <div className="border-ink-200/60 border-t p-5">
-          <Link href="/finances/contracts/new" onClick={onClose} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
-            + New contract
-          </Link>
-        </div>
+        <p className="border-ink-200/60 text-ink-500 border-t p-5 text-xs font-light">
+          Contracts are kept with their event, on its <strong className="font-medium">Contracts</strong> tab
+          {s && s.incomplete > 0 ? ` — ${plural(s.incomplete, "contract is", "contracts are")} still missing terms` : ""}.
+        </p>
       </div>
     </>,
     document.body,

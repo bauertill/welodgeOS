@@ -1894,8 +1894,17 @@ requesting need no contract — nothing has been signed yet. A sales request sho
 contracts and adds one already filled in with the client, the event and the request's value
 as its total.
 
-**The Finances section** — *Finances* in the menu, a panel like *Events* and *Sales* —
-holds three pages:
+**Contracts live with their event.** Every contract — supplier and client side alike — is
+for one event, always, so each event has a **Contracts** tab beside Properties, Inventory,
+Deadlines and Position. It shows the event's contracts, its payments and its cancellation
+deadlines, three views of one tab; *+ New contract* there adds one for that event, which
+is set and cannot be changed. A contract's own page sits under its event, and its back link
+returns to the tab. A contract added from a sales request, or on the stock sheet while
+buying or selling, belongs to that event in the same way. (2026-10-01.)
+
+**The Finances section** — *Finances* in the menu, a panel like *Events* and *Sales* — is
+the view **across every event**, for whoever pays and chases invoices without opening each
+event in turn:
 
 - **Payments**, *To suppliers* and *From clients*: every open payment from every contract,
   soonest first, with what it is for, its share and amount, its status (changed right in
@@ -1903,11 +1912,9 @@ holds three pages:
   a line above sums each per currency. Paid ones are under *Paid*.
 - **Cancellations**, *With suppliers* and *With clients*: every cut-off still open, soonest
   first, ticked off as they are dealt with.
-- **Contracts**: every contract, by event, with its total and whether its terms are
-  complete.
-
-The panel says how many payments are due within a week or overdue, how many cut-offs fall
-within 30 days, and how many contracts are missing terms. Every change to a contract, its
+Each row names its event and opens the contract. The panel says how many payments are due
+within a week or overdue, how many cut-offs fall within 30 days, and how many contracts are
+missing terms — those are found on each event's Contracts tab. Every change to a contract, its
 payments and its deadlines is in the contract's history.
 
 ---
@@ -2176,7 +2183,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
-| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the Finances section with Payments, Cancellations and Contracts; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
+| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs, kept on each event's Contracts tab; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy needs the hotel's supplier contract and Sell the client's contract, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |

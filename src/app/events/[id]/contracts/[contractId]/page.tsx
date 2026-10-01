@@ -7,16 +7,17 @@ import { partyLabels } from "~/lib/finance";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
-export default async function ContractPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContractPage({ params }: { params: Promise<{ id: string; contractId: string }> }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
-  const { id } = await params;
-  const contract = await api.finance.contract({ id });
-  if (!contract) notFound();
+  const { id, contractId } = await params;
+  const contract = await api.finance.contract({ id: contractId });
+  // A contract is found under its own event only.
+  if (!contract || contract.event.id !== id) notFound();
   return (
     <>
       <PageHeader
-        back={{ href: "/finances/contracts", label: "Contracts" }}
+        back={{ href: `/events/${contract.event.id}/contracts`, label: `${contract.event.name} · Contracts` }}
         title={contract.name}
         subtitle={`${partyLabels[contract.party]} contract · ${contract.property?.name ?? contract.client?.name ?? ""} · ${contract.event.name}`}
       />

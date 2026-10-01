@@ -16,6 +16,7 @@ const tabs = [
   { slug: "inventory", label: "Inventory", hint: "What we hold and what we promised" },
   { slug: "deadlines", label: "Deadlines", hint: "What runs out soon" },
   { slug: "position", label: "Position", hint: "Where we are exposed" },
+  { slug: "contracts", label: "Contracts", hint: "What we signed, what falls due, and what can still be given back" },
 ] as const;
 
 export function EventTabs({ eventId }: { eventId: string }) {

@@ -21,6 +21,8 @@ import {
   paymentStatusLabels,
   paymentStatusOrder,
   paymentStatusStyles,
+  contractHref,
+  newContractHref,
   percent,
 } from "~/lib/finance";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -110,10 +112,11 @@ function Totals({ rows }: { rows: { cents: number | null; currency: string | nul
 // --- Payments -----------------------------------------------------------------------
 
 /** Money we owe suppliers, or clients owe us, soonest first (doc §7.1). */
-export function PaymentsBoard() {
+export function PaymentsBoard({ eventId: fixedEvent }: { eventId?: string } = {}) {
   const [party, setParty] = useState<ContractParty>("SUPPLIER");
   const [show, setShow] = useState<"open" | "settled" | "all">("open");
-  const [eventId, setEventId] = useState("");
+  const [chosenEvent, setEventId] = useState("");
+  const eventId = fixedEvent ?? chosenEvent;
   const utils = api.useUtils();
   const payments = api.finance.payments.useQuery({ party, show, eventId: eventId || undefined }, { placeholderData: keepPreviousData });
   const setStatus = api.finance.setPaymentStatus.useMutation({ onSuccess: () => void utils.finance.invalidate() });
@@ -139,7 +142,7 @@ export function PaymentsBoard() {
             <option value="all">All</option>
           </Select>
         </div>
-        <EventFilter value={eventId} onChange={setEventId} />
+        {!fixedEvent && <EventFilter value={eventId} onChange={setEventId} />}
       </div>
 
       {(overdue.length > 0 || soon.length > 0) && (
@@ -172,7 +175,7 @@ export function PaymentsBoard() {
               <tr>
                 <th className={th}>Due</th>
                 <th className={th}>{party === "SUPPLIER" ? "Supplier" : "Client"}</th>
-                <th className={th}>Event</th>
+                {!fixedEvent && <th className={th}>Event</th>}
                 <th className={th}>Payment</th>
                 <th className={th}>Share</th>
                 <th className={th}>Amount</th>
@@ -187,12 +190,12 @@ export function PaymentsBoard() {
                     <DueIn on={row.dueOn} settled={isSettled(row.status)} />
                   </td>
                   <td className={`${td} text-ink-900`}>
-                    <Link href={`/finances/contracts/${row.contract.id}`} className="hover:text-brand-700 font-medium">
+                    <Link href={contractHref(row.contract.event.id, row.contract.id)} className="hover:text-brand-700 font-medium">
                       {row.counterparty}
                     </Link>
                     <span className="text-ink-500 block text-xs">{row.contract.name}</span>
                   </td>
-                  <td className={`${td} whitespace-nowrap`}>{row.contract.event.name}</td>
+                  {!fixedEvent && <td className={`${td} whitespace-nowrap`}>{row.contract.event.name}</td>}
                   <td className={`${td} max-w-72`}>
                     <span className="line-clamp-2">{row.description}</span>
                     {row.beneficiary && <span className="text-ink-500 block text-xs">To {row.beneficiary}</span>}
@@ -245,10 +248,11 @@ export function PaymentsBoard() {
 // --- Cancellations --------------------------------------------------------------------
 
 /** Cut-offs by which rooms may be given back — ours with suppliers, clients' with us (doc §7.1). */
-export function CancellationsBoard() {
+export function CancellationsBoard({ eventId: fixedEvent }: { eventId?: string } = {}) {
   const [party, setParty] = useState<ContractParty>("SUPPLIER");
   const [show, setShow] = useState<"open" | "handled" | "all">("open");
-  const [eventId, setEventId] = useState("");
+  const [chosenEvent, setEventId] = useState("");
+  const eventId = fixedEvent ?? chosenEvent;
   const utils = api.useUtils();
   const rows = api.finance.cancellations.useQuery({ party, show, eventId: eventId || undefined }, { placeholderData: keepPreviousData });
   const handled = api.finance.setHandled.useMutation({ onSuccess: () => void utils.finance.invalidate() });
@@ -272,7 +276,7 @@ export function CancellationsBoard() {
             <option value="all">All</option>
           </Select>
         </div>
-        <EventFilter value={eventId} onChange={setEventId} />
+        {!fixedEvent && <EventFilter value={eventId} onChange={setEventId} />}
       </div>
 
       {data.length === 0 && !rows.isLoading ? (
@@ -287,7 +291,7 @@ export function CancellationsBoard() {
               <tr>
                 <th className={th}>Cut-off</th>
                 <th className={th}>{party === "SUPPLIER" ? "Supplier" : "Client"}</th>
-                <th className={th}>Event</th>
+                {!fixedEvent && <th className={th}>Event</th>}
                 <th className={th}>Kind</th>
                 <th className={th}>Share</th>
                 <th className={th}>Applies to</th>
@@ -303,12 +307,12 @@ export function CancellationsBoard() {
                     <DueIn on={row.cutoffOn} settled={row.handledOn !== null} />
                   </td>
                   <td className={`${td} text-ink-900`}>
-                    <Link href={`/finances/contracts/${row.contract.id}`} className="hover:text-brand-700 font-medium">
+                    <Link href={contractHref(row.contract.event.id, row.contract.id)} className="hover:text-brand-700 font-medium">
                       {row.counterparty}
                     </Link>
                     <span className="text-ink-500 block text-xs">{row.contract.name}</span>
                   </td>
-                  <td className={`${td} whitespace-nowrap`}>{row.contract.event.name}</td>
+                  {!fixedEvent && <td className={`${td} whitespace-nowrap`}>{row.contract.event.name}</td>}
                   <td className={td} title={cancellationKindHints[row.kind]}>
                     {cancellationKindLabels[row.kind]}
                   </td>
@@ -347,14 +351,10 @@ export function CancellationsBoard() {
 
 // --- Contracts ------------------------------------------------------------------------
 
-/** Every contract, flagging the ones still missing their terms. */
-export function ContractsList() {
+/** An event's contracts, flagging the ones still missing their terms. */
+export function ContractsList({ eventId }: { eventId: string }) {
   const [party, setParty] = useState<ContractParty | "">("");
-  const [eventId, setEventId] = useState("");
-  const contracts = api.finance.contracts.useQuery(
-    { party: party || undefined, eventId: eventId || undefined },
-    { placeholderData: keepPreviousData },
-  );
+  const contracts = api.finance.contracts.useQuery({ party: party || undefined, eventId }, { placeholderData: keepPreviousData });
   const rows = contracts.data ?? [];
   return (
     <div className="space-y-5">
@@ -368,10 +368,12 @@ export function ContractsList() {
             { value: "CLIENT", label: "Clients" },
           ]}
         />
-        <EventFilter value={eventId} onChange={setEventId} />
+        <Link href={newContractHref(eventId)} className="bg-brand-400 hover:bg-brand-500 ml-auto rounded-full px-5 py-2.5 text-[13px] font-medium text-white">
+          + New contract
+        </Link>
       </div>
       {rows.length === 0 && !contracts.isLoading ? (
-        <EmptyState title="No contracts yet" description="Add one with + New contract, or from a sales request." />
+        <EmptyState title="No contracts for this event yet" description="Add one with + New contract — or from a sales request, for a client." />
       ) : (
         <div className="border-ink-200/60 overflow-x-auto rounded-xl border bg-white">
           <table className="w-full text-left">
@@ -379,7 +381,6 @@ export function ContractsList() {
               <tr>
                 <th className={th}>Contract</th>
                 <th className={th}>With</th>
-                <th className={th}>Event</th>
                 <th className={th}>Total</th>
                 <th className={th}>Terms</th>
                 <th className={th}>PDF</th>
@@ -389,13 +390,12 @@ export function ContractsList() {
               {rows.map((contract) => (
                 <tr key={contract.id}>
                   <td className={`${td} text-ink-900`}>
-                    <Link href={`/finances/contracts/${contract.id}`} className="hover:text-brand-700 font-medium">
+                    <Link href={contractHref(contract.event.id, contract.id)} className="hover:text-brand-700 font-medium">
                       {contract.name}
                     </Link>
                     <span className="text-ink-500 block text-xs">{partyLabels[contract.party]}</span>
                   </td>
                   <td className={td}>{contract.property?.name ?? contract.client?.name ?? "—"}</td>
-                  <td className={`${td} whitespace-nowrap`}>{contract.event.name}</td>
                   <td className={`${td} whitespace-nowrap`}>{money(contract.totalCents, contract.currency)}</td>
                   <td className={td}>
                     {contract.missing.length ? (
@@ -433,13 +433,13 @@ export function ContractsList() {
 export function NewContractForm({
   preset,
 }: {
-  preset?: { party?: ContractParty; eventId?: string; clientId?: string; propertyId?: string; salesRequestId?: string; totalCents?: number | null; currency?: string | null };
+  /** The event it is for — always set, as a contract is added from its event. */
+  preset: { party?: ContractParty; eventId: string; eventName: string; clientId?: string; propertyId?: string; salesRequestId?: string; totalCents?: number | null; currency?: string | null };
 }) {
   const router = useRouter();
   const utils = api.useUtils();
-  const events = api.event.list.useQuery();
   const [party, setParty] = useState<ContractParty>(preset?.party ?? "SUPPLIER");
-  const [eventId, setEventId] = useState(preset?.eventId ?? "");
+  const eventId = preset?.eventId ?? "";
   const [withId, setWithId] = useState(preset?.clientId ?? preset?.propertyId ?? "");
   const [name, setName] = useState("");
   const [documentUrl, setDocumentUrl] = useState("");
@@ -451,7 +451,7 @@ export function NewContractForm({
   const create = api.finance.createContract.useMutation({
     onSuccess: (contract) => {
       void utils.finance.invalidate();
-      router.push(`/finances/contracts/${contract.id}`);
+      router.push(contractHref(contract.eventId, contract.id));
     },
   });
 
@@ -490,14 +490,8 @@ export function NewContractForm({
           />
         </Field>
         <Field label="Event">
-          <Select value={eventId} onChange={(e) => setEventId(e.target.value)}>
-            <option value="">Choose…</option>
-            {(events.data ?? []).map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name}
-              </option>
-            ))}
-          </Select>
+          {/* A contract is always for an event: the one it is added from. */}
+          <p className="text-ink-900 py-2 text-sm">{preset.eventName}</p>
         </Field>
         <div className="sm:col-span-2">
           <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">{party === "SUPPLIER" ? "Hotel" : "Client"}</span>

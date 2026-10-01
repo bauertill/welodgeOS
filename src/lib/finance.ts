@@ -96,3 +96,7 @@ export function missingTerms(contract: {
   if (!contract.documentUrl) missing.push("the signed PDF");
   return missing;
 }
+
+/** Where a contract lives: under its event, on the event's Contracts tab (doc §7.1). */
+export const contractHref = (eventId: string, contractId: string) => `/events/${eventId}/contracts/${contractId}`;
+export const newContractHref = (eventId: string, query = "") => `/events/${eventId}/contracts/new${query}`;
