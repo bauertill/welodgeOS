@@ -11,7 +11,7 @@ import { api } from "~/trpc/react";
 type Scope = { propertyId: string; clientId?: undefined } | { clientId: string; propertyId?: undefined };
 
 /**
- * The Updates feed (doc §2.6): a running history of meeting notes and
+ * The Feedback feed (doc §2.6; called Updates until 2026-10-01): a running history of meeting notes and
  * feedback on a property or a client, with @mentions of colleagues. Newest
  * first, same convention as the inventory ledger; only the latest shows
  * until "View more" opens the rest. An author can edit their
@@ -50,7 +50,7 @@ export function UpdateThread(scope: Scope) {
           value={body}
           onChange={setBody}
           people={people.data ?? []}
-          placeholder="Write an update — @ to mention a colleague"
+          placeholder="Write feedback — @ to mention a colleague"
           // One line until something is typed, so an empty box takes no room.
           rows={body ? 3 : 1}
         />
@@ -65,7 +65,7 @@ export function UpdateThread(scope: Scope) {
             disabled={!body.trim() || post.isPending}
             onClick={() => post.mutate({ ...scope, body })}
           >
-            {post.isPending ? "Posting…" : "Post update"}
+            {post.isPending ? "Posting…" : "Post feedback"}
           </Button>
         </div>
         )}
@@ -144,13 +144,13 @@ export function UpdateThread(scope: Scope) {
                 onClick={() => setShowAll((current) => !current)}
                 className="text-brand-700 text-[13px] font-light hover:underline"
               >
-                {showAll ? "Show only the latest" : `View more — ${earlier} earlier ${earlier === 1 ? "update" : "updates"}`}
+                {showAll ? "Show only the latest" : `View more — ${earlier} earlier`}
               </button>
             </li>
           )}
         </ul>
       ) : (
-        <p className="text-ink-500 text-sm font-light">No updates yet.</p>
+        <p className="text-ink-500 text-sm font-light">No feedback yet.</p>
       )}
     </div>
   );

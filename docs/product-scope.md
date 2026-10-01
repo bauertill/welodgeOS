@@ -153,7 +153,10 @@ Magic-link sign-in by email is built and deliberately switched off: at launch no
 outside the Workspace needs an account. It becomes available again by configuring an email
 sender, without any code change. See `docs/todos.md` §2.
 
-### 2.6 Updates — a running history per property and client
+### 2.6 Feedback — a running history per property and client
+
+Called **Feedback** on screen (it was *Updates* until 2026-10-01); a single post is still
+referred to below as an update.
 
 A property or a client keeps a running, append-only feed of free-text posts — a meeting
 note, a call summary, feedback from the field — the same way `LedgerEntry` keeps a
@@ -186,7 +189,7 @@ a property's page and on a client's.
 
 ### 2.7 The team — profiles and internal chat
 
-Like Updates, this sits outside the three phases: it is about the people at We Lodge, not
+Like Feedback, this sits outside the three phases: it is about the people at We Lodge, not
 about room-nights. It is reached by hovering over (or clicking) **We Lodge AG** at the foot
 of the sidebar, which opens a small menu — *My profile*, *Team* and *Messages*. On a phone,
 where there is no sidebar, a *Team* link in the header leads to the same place. A count of
@@ -864,8 +867,8 @@ stack of cards:
 
 - Under the name, the events the property is on, each with its status, as links.
 - On the left, one card of tabs: **Quotations**, **Room categories** (or *Unit types*),
-  **Updates** and **Log**. The address remembers the tab, so a link can open one.
-  The Updates box is one line until something is typed into it.
+  **Feedback** and **Log**. The address remembers the tab, so a link can open one.
+  The Feedback box is one line until something is typed into it.
 - On the right, one **Details** panel instead of a card per subject: Notes, Where it is,
   Contacts, Amenities, More about the property and Contracting details, each a section
   that folds shut. The last two start shut, saying how many of their fields are filled.
@@ -2228,7 +2231,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
-| §2.6 Updates | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
+| §2.6 Feedback (was Updates) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
 | §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |
@@ -2253,7 +2256,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
-| §3.10 Quotations | **Built** | On the property's page, first of its tabs (Quotations, Room categories, Updates, Log), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 Quotations | **Built** | On the property's page, first of its tabs (Quotations, Room categories, Feedback, Log), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Feedback showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |

@@ -115,7 +115,7 @@ export default async function PropertyPage({
                 count: property.categories.length,
                 content: <RoomCategoriesCard property={property} bare />,
               },
-              { key: "updates", label: "Updates", content: <UpdateThread propertyId={property.id} /> },
+              { key: "feedback", label: "Feedback", content: <UpdateThread propertyId={property.id} /> },
               // Kept for the record, rarely read: a tab of its own, out of the way.
               { key: "log", label: "Log", content: <ActivityLog entity="Property" entityId={property.id} /> },
             ]}

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 /**
  * The working side of a property's page, as tabs rather than a stack of cards
- * (doc §3.10): Quotations first, then the room categories, the updates and the
+ * (doc §3.10): Quotations first, then the room categories, the feedback and the
  * activity. The address's #hash names the tab, so a link can open one —
  * the Properties tab's "2 quotations" opens #quotations.
  */
