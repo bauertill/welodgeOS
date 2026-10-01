@@ -361,7 +361,7 @@ export function InventorySidePanel({
     const known = dateRangeEdited ? [] : cells;
     needs("client", shows("client") && !clientId, "Say which client this is for.");
     needs("optionExpiry", shows("optionExpiry") && !optionExpiry, "Give the date the option runs to.");
-    needs("blockExpiry", shows("blockExpiry") && !blockExpiry, "Give the date the block runs to — a block without one is inventory frozen for free.");
+    needs("blockExpiry", shows("blockExpiry") && !blockExpiry, "Give the due date — a block without one is inventory frozen for free.");
     needs(
       "buyPrice",
       (needsBuyPrice.includes(action) || action === "REPRICE_BUY") &&
@@ -645,8 +645,8 @@ export function InventorySidePanel({
           {shows("blockExpiry") && (
             <div id="panel-field-blockExpiry">
               <Field
-                label="Block runs to"
-                hint="Required. A block with no deadline is inventory frozen for free."
+                label={action === "EXTEND_BLOCK" ? "New due date" : "Due date"}
+                hint="Required. The date the client must decide by — a block without one is inventory frozen for free."
               >
                 <Input
                   type="date"
@@ -904,8 +904,9 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
         </div>
         {line("Client", (cell) => cell.clientName)}
         {line("Sell price", (cell) => money(cell.sellPriceCents, cell.sellCurrency))}
-        {line("Block runs to", (cell) => day(cell.blockExpiry))}
-        {line("Due", (cell) => day(cell.dueDate))}
+        {line("Due date", (cell) => day(cell.blockExpiry))}
+        {/* Only where it was recorded before there was one due date (2026-10-01). */}
+        {line("Payment due", (cell) => day(cell.dueDate))}
         {line("Client ref.", (cell) => cell.clientRef)}
         {line("Sales Manager", (cell) => cell.salesOwner)}
         {line("Client notes", (cell) => cell.salesNotes)}
@@ -923,7 +924,7 @@ function fieldOfMessage(message: string): PanelField | null {
   if (/price we pay/i.test(message)) return "buyPrice";
   if (/price the client pays/i.test(message)) return "sellPrice";
   if (/which client/i.test(message)) return "client";
-  if (/block needs a date|block's new date/i.test(message)) return "blockExpiry";
+  if (/due date/i.test(message)) return "blockExpiry";
   if (/option needs a date|option's new date/i.test(message)) return "optionExpiry";
   if (/takes over with the supplier/i.test(message)) return "acquisitionOwner";
   if (/takes over with the client/i.test(message)) return "salesOwner";

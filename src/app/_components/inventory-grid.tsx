@@ -1268,7 +1268,7 @@ function BlockSummary({
         )}
         {block.kind === "BLOCKED" && recorded.blockExpiries.length > 0 && (
           <>
-            <dt className="text-ink-500">Block runs to</dt>
+            <dt className="text-ink-500">Due date</dt>
             <dd className="text-ink-900">
               <Culprit level={recorded.causes.blockExpiry}>{recorded.blockExpiries.join(", ")}</Culprit>
             </dd>
@@ -1276,7 +1276,7 @@ function BlockSummary({
         )}
         {block.kind === "BLOCKED" && recorded.dueDates.length > 0 && (
           <>
-            <dt className="text-ink-500">Due</dt>
+            <dt className="text-ink-500">Payment due</dt>
             <dd className="text-ink-900">
               <Culprit level={recorded.causes.dueDate}>{recorded.dueDates.join(", ")}</Culprit>
             </dd>

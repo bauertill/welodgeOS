@@ -29,8 +29,8 @@ import { api } from "~/trpc/react";
  */
 const kindLabels = {
   option: "Our option with the supplier",
-  block: "The client's block",
-  due: "The client's due date",
+  block: "The client's due date",
+  due: "Payment due (recorded earlier)",
 } as const;
 
 const urgencyCopy = {

@@ -353,14 +353,14 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         // a block with no expiry is inventory frozen for free.
         need(
           input.blockExpiry,
-          "A block needs a date it runs to. A block with no deadline is inventory frozen for free, and invisible to every deadline report.",
+          "Give the client's due date. A block without one is inventory frozen for free, and invisible to every deadline report.",
         );
       }
       if (action === "SELL" || action === "REQUEST" || action === "WITHDRAW_REQUEST") {
         need(input.clientId, "Say which client this is for.");
       }
       if (action === "EXTEND_OPTION") need(input.optionExpiry, "Give the option's new date.");
-      if (action === "EXTEND_BLOCK") need(input.blockExpiry, "Give the block's new date.");
+      if (action === "EXTEND_BLOCK") need(input.blockExpiry, "Give the new due date.");
       if (action === "REPRICE_BUY") {
         need(input.buyPriceCents, "Give the price we pay per night.");
         need(input.buyCurrency, "Say which currency that is in.");
@@ -1460,8 +1460,8 @@ function describeChanges(before: LoadedNight[], after: LoadedNight[]) {
     { label: "Supplier-side rep", read: (night) => person(night.acquisitionOwner) },
     { label: "Client", read: (night) => night.client?.name ?? null },
     { label: "Client reference", read: (night) => night.clientRef },
-    { label: "Block runs to", read: (night) => date(night.blockExpiry) },
-    { label: "Due date", read: (night) => date(night.dueDate) },
+    { label: "Due date", read: (night) => date(night.blockExpiry) },
+    { label: "Payment due", read: (night) => date(night.dueDate) },
     { label: "Sell price", read: (night) => money(night.sellPriceCents, night.sellCurrency) },
     { label: "Client notes", read: (night) => note(night.salesNotes) },
     { label: "Client-side rep", read: (night) => person(night.salesOwner) },

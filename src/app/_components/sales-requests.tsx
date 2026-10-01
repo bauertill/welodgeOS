@@ -737,7 +737,7 @@ function DetailsCard({ request }: { request: FullRequest }) {
         <Row label="Account manager" value={request.owner ? <Manager person={request.owner} /> : null} />
         <Row label="Registered" value={formatDate(request.createdAt)} />
         <Row label="Proposal sent on" value={request.proposalSentOn ? formatDate(request.proposalSentOn) : null} />
-        <Row label="Blocked until" value={request.blockedUntil ? formatDate(request.blockedUntil) : null} />
+        <Row label="Due date" value={request.blockedUntil ? formatDate(request.blockedUntil) : null} />
         <Row label="Value" value={request.valueCents !== null && request.valueCurrency ? formatMoney(request.valueCents, request.valueCurrency) : null} />
         {request.closedOn && <Row label="Closed on" value={formatDate(request.closedOn)} />}
         <Row label="Days open" value={String(daysOpen(request))} />
@@ -838,7 +838,7 @@ function DetailsEditor({
         <Field label="Proposal sent on">
           <Input type="date" value={values.proposalSentOn} onChange={(e) => set("proposalSentOn")(e.target.value)} />
         </Field>
-        <Field label="Blocked until">
+        <Field label="Due date">
           <Input type="date" value={values.blockedUntil} onChange={(e) => set("blockedUntil")(e.target.value)} />
         </Field>
       </div>
@@ -1066,7 +1066,7 @@ function RoomRowView({
         </td>
         <td className={td}>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${roomStateStyles[row.state]}`}>{roomStateLabels[row.state]}</span>
-          {row.blockExpiry && <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">until {formatDate(row.blockExpiry)}</span>}
+          {row.blockExpiry && <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">due {formatDate(row.blockExpiry)}</span>}
         </td>
         <td className={`${td} whitespace-nowrap`}>
           {row.rooms}
@@ -1173,7 +1173,7 @@ function ChangeRooms({
       {warning[action] && <p className="text-ink-700 w-full text-[13px] font-light">{warning[action]}</p>}
       {needsDate && (
         <div className="w-44">
-          <Field label={action === "EXTEND_BLOCK" ? "Block now runs to" : "Block runs to"}>
+          <Field label={action === "EXTEND_BLOCK" ? "New due date" : "Due date"}>
             <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} required />
           </Field>
         </div>
@@ -1282,7 +1282,7 @@ function AddRooms({
         if (!categoryId) return setProblem("Choose the room category.");
         if (!Number.isInteger(wanted) || wanted < 1) return setProblem("Say how many rooms, like 6.");
         if (!datesOk) return setProblem("Give a check-in and a check-out after it.");
-        if (action === "BLOCK" && !blockExpiry) return setProblem("A block needs a date it runs to.");
+        if (action === "BLOCK" && !blockExpiry) return setProblem("Give the client's due date — a block needs one.");
         if (action !== "REQUEST" && !price.trim()) {
           return setProblem(`Give the price per night — rooms ${action === "BLOCK" ? "blocked" : "sold"} for a client need their agreed price.`);
         }
@@ -1359,7 +1359,7 @@ function AddRooms({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-6">
         {action === "BLOCK" && (
-          <Field label="Block runs to" className="sm:col-span-2">
+          <Field label="Due date" className="sm:col-span-2">
             <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} />
           </Field>
         )}

@@ -43,7 +43,7 @@ export const salesLabels: Record<SalesState, string> = {
 export const salesHints: Record<SalesState, string> = {
   NONE: "No client interest on this night.",
   REQUESTED: "A client would like these nights. Soft and non-exclusive — others may ask too.",
-  BLOCKED: "The client holds the right to buy, until the block expires. Exclusive.",
+  BLOCKED: "The client holds the right to buy, until their due date. Exclusive.",
   SOLD: "The client has bought these nights. Exclusive.",
   CANCELLED: "Previously sold, then cancelled. Kept for the record; it no longer counts as sold.",
 };
@@ -98,12 +98,12 @@ export const actionHints: Record<InventoryAction, string> = {
   RELEASE: "Hand bought nights back to the supplier. The record is kept.",
   REQUEST: "A client has asked for these nights. Nothing is promised and others may ask too.",
   WITHDRAW_REQUEST: "That client is no longer asking for these nights.",
-  BLOCK: "One client holds these nights exclusively until a date we must give.",
+  BLOCK: "One client holds these nights exclusively until their due date.",
   SELL: "One client has committed to these nights.",
   RELEASE_HOLD: "The client's block or sale is lifted and the nights are free again.",
   CANCEL_SALE: "The sale is cancelled. The record is kept and the nights stop counting as sold.",
   EXTEND_OPTION: "Push out the date the supplier's option runs to.",
-  EXTEND_BLOCK: "Push out the date the client's block runs to.",
+  EXTEND_BLOCK: "Push out the client's due date.",
   REPRICE_BUY: "Change what we pay the supplier per night.",
   REPRICE_SELL: "Change what the client pays us per night.",
   REASSIGN_ACQUISITION_OWNER: "Change who is accountable for chasing the supplier.",
@@ -208,7 +208,8 @@ export const actionFields: Record<InventoryAction, string[]> = {
   REPRICE_BUY: ["buyPrice"],
   REASSIGN_ACQUISITION_OWNER: ["acquisitionOwner"],
 
-  BLOCK: ["client", "blockExpiry", "clientRef", "dueDate", "sellPrice", "salesOwner", "salesNotes"],
+  // One client deadline, the due date: the block's own date (doc §4.2).
+  BLOCK: ["client", "blockExpiry", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
   SELL: ["client", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
   RELEASE_HOLD: ["salesNotes"],
   CANCEL_SALE: ["salesNotes"],
@@ -216,7 +217,7 @@ export const actionFields: Record<InventoryAction, string[]> = {
   REPRICE_SELL: ["sellPrice"],
   REASSIGN_SALES_OWNER: ["salesOwner"],
   UPDATE_SUPPLIER_DETAILS: ["supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
-  UPDATE_CLIENT_DETAILS: ["clientRef", "dueDate", "sellPrice", "salesOwner", "salesNotes"],
+  UPDATE_CLIENT_DETAILS: ["clientRef", "sellPrice", "salesOwner", "salesNotes"],
 
   REQUEST: ["client", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
   WITHDRAW_REQUEST: ["client"],

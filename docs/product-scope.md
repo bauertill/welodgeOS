@@ -901,8 +901,8 @@ stateDiagram-v2
 | `SOLD` | The client has bought these room-nights — **exclusive** |
 | `CANCELLED` | Previously sold, cancelled (kept for audit, counts as not sold) |
 
-Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`),
-`sellPriceCents`, `currency`, `owner`, `notes`, `dueDate`.
+Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`, and
+shown everywhere as the **due date**), `sellPriceCents`, `currency`, `owner`, `notes`.
 
 **A block or a sale needs the agreed price.** *Block* and *Sell* are refused until the price
 per night to the client is given — or, left empty, only where every night already carries
@@ -910,10 +910,20 @@ that same client's price, as when a block becomes a sale. This holds on the stoc
 on a sales request alike (§4.11). A request (soft) does not need one. (From Ami's review,
 2026-09-30.)
 
-**`dueDate` is the client's decision deadline while the hold is still open** — asked for
-only when blocking, never when selling. `SOLD` means the client has already signed; there is
-no further decision to chase, so the sale form does not ask for one. (Resolves the open
-question this used to be — §9.)
+**A block has one deadline: the client's due date.** It is the date the client must decide
+by, the block's own date (`blockExpiry`) — required when blocking, the one the deadline
+warnings, the deadline dashboard and the coherence check with our option all run on, and
+moved by *Extend the block*. Everywhere it is shown it is called the **due date**: the
+stock sheet's panel and hover card, the sales request, the history and the warnings (*"The
+due date is today (30 Sep)"*, *"The due date passed on 13 Sep"*). `SOLD` means the client
+has signed; there is no decision left to chase.
+
+> **Change, 2026-10-01.** There used to be a second, optional date beside it — `dueDate`,
+> "payment or decision deadline" — asked for on the same form. Two dates for one deadline
+> was confusing, so it is no longer asked for. A value recorded before stays on the night,
+> shown as **Payment due** wherever there is one, and still counts as a deadline while the
+> night is blocked; it is simply never set again. (Resolves what was §9's open question on
+> which deadline the due date was.)
 
 Only `NONE`, `BLOCKED`, `SOLD` and `CANCELLED` are ever *stored* on a room-night: those are
 the hard hold, and a night has at most one. `REQUESTED` is never stored there — a request
@@ -1022,9 +1032,9 @@ never a silent write.
 
 ### 4.6 Deadlines
 
-Two clocks per night: `optionExpiry` (supplier side) and `blockExpiry` (client side), plus
-`dueDate` — the client's decision deadline while `BLOCKED` (§4.2). It has nothing to chase
-once `SOLD`, so it is not asked for there.
+Two clocks per night: `optionExpiry` (supplier side) and `blockExpiry` (client side — the
+client's **due date**, §4.2). A payment date recorded before 2026-10-01 (`dueDate`) still
+counts while the night is blocked, but is no longer asked for.
 
 - **Reminder window** — configurable, default 7 days out: severity ≥ 1, appears on the
   deadline dashboard.
@@ -1560,8 +1570,8 @@ contiguous range of days — which opens a panel scoped to exactly that selectio
 
 **The panel shows what is already recorded** on those nights, under *Recorded now*: each
 side's status, and every detail — buy price, option date, supplier reference, Accommodation
-Manager, supplier notes; client, sell price, block date, due date, client reference, Sales
-Manager, client notes — as the one value the nights share, or *varies* where they differ.
+Manager, supplier notes; client, sell price, due date, client reference, Sales Manager,
+client notes — as the one value the nights share, or *varies* where they differ.
 Every box below starts filled in with what the nights share, so amending an entry starts
 from what is there rather than from nothing; a box where the nights differ starts empty and
 says so, and left empty keeps each night's own (§4.8). Choosing a different client empties
@@ -1573,7 +1583,7 @@ nothing has started open on the first action, as before. (2026-10-01.) Pointing 
 notes and supplier notes as well. **The card points at the cause.** Where a booking needs attention,
 the fact that makes it so is highlighted in the warning's colour, with its "!": the
 supplier side when a client holds what we have not bought (*Acquisition: Nothing
-started*), or the date running out — the option, the block or the due date, which the card
+started*), or the date running out — our option or the client's due date, which the card
 lists whenever they apply. A booking blocked with nothing bought and an expired block has
 both marked. (2026-10-01.) **A problem is said where it is.** What is missing in the panel —
 the client, the price, a block or option date, the manager — is pointed out under that

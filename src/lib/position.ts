@@ -271,13 +271,14 @@ export function positionOf(
     if (urgency === "expired") {
       // The state is never changed automatically (doc §2.4) — it is flagged and
       // stays in the way until a human extends, converts or releases it.
-      flags.push(`${what} expired on ${formatDay(date)}`);
+      flags.push(`${what} ${cause === "optionExpiry" ? "expired" : "passed"} on ${formatDay(date)}`);
       deadlineSeverity = highest(deadlineSeverity, 2);
       blame(cause, 2);
     } else if (urgency === "urgent") {
       // Said in words, so a warning on the sheet explains itself.
       const days = daysUntil(date, today);
-      flags.push(`${what} runs out ${days <= 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`} (${formatDay(date)})`);
+      const when = days <= 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+      flags.push(cause === "optionExpiry" ? `${what} runs out ${when} (${formatDay(date)})` : `${what} is ${when} (${formatDay(date)})`);
       deadlineSeverity = highest(deadlineSeverity, 2);
       blame(cause, 2);
     } else if (urgency === "upcoming") {
@@ -287,13 +288,14 @@ export function positionOf(
   };
 
   read(optionDeadline, (w) => `Our option runs to ${w}`, "The option", "optionExpiry");
+  // The block's date is the client's due date — one deadline, one name (doc §4.2).
   read(
     blockDeadline,
-    (w) => `${night.clientName ?? "The client"}'s block runs to ${w}`,
-    "The block",
+    (w) => `${night.clientName ?? "The client"} is due ${w}`,
+    "The due date",
     "blockExpiry",
   );
-  read(dueDeadline, (w) => `Due ${w}`, "The due date", "dueDate");
+  read(dueDeadline, (w) => `Payment due ${w}`, "The payment date", "dueDate");
 
   // Invariant §4.5.5 — deadline coherence. If the client's block outlives our
   // option to supply it, we are promising something we may not be able to
@@ -307,7 +309,7 @@ export function positionOf(
     night.optionExpiry < night.blockExpiry
   ) {
     flags.push(
-      `The block runs to ${formatDay(night.blockExpiry)} but our option only runs to ${formatDay(night.optionExpiry)}`,
+      `The client is due ${formatDay(night.blockExpiry)} but our option only runs to ${formatDay(night.optionExpiry)}`,
     );
     coherenceSeverity = 2;
     blame("optionExpiry", 2);
