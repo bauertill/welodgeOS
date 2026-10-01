@@ -101,6 +101,12 @@ grants access, and removing them is what withdraws it — the system holds no se
 of who is allowed in. Anyone without a Workspace account cannot get in at all, which today
 means every supplier and every client.
 
+**Someone who is not signed in sees only the sign-in screen.** Any address on the site —
+the front page included — sends them there, and it shows the We Lodge logo, a *Continue
+with Google* button and nothing else: no menu, no description of what the system does or
+holds. A stranger who finds the address learns only that something here needs a We Lodge
+account.
+
 Two consequences worth stating plainly, because neither is obvious from a screen:
 
 - **Everyone who signs in sees everything.** There are no roles yet. A rep can read and
@@ -2005,6 +2011,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | --- | --- | --- |
 | §2.5 Google Workspace sign-in | **Built** | Live. A `@welodge.net` account is the only way in; first sign-in creates the user |
 | §2.5 Roles and permissions | **Not built** | Every signed-in user has full access to everything — see §9, open question 5 |
+| §2.5 Sign-in screen only for visitors | **Built** | Signed out, every address — the front page included — goes to the sign-in screen, which says nothing about what the system does |
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Being set up** | https://staging.welodge.net, from the `staging` branch, on a copy of the live database. The Vercel environment and address exist; its database copy, settings, DNS record and Google sign-in address are outstanding — see `docs/todos.md` §1 |

@@ -11,7 +11,6 @@ export const metadata: Metadata = {
     default: "We Lodge OS",
     template: "%s · We Lodge OS",
   },
-  description: "Accommodation and booking management for We Lodge AG.",
   // The brand mark alone — the wordmark is unreadable at this size — on the
   // white card it sits on in the sidebar. The .ico carries separately drawn
   // 16, 32 and 48px versions; browsers pick the one that fits.

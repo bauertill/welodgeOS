@@ -16,7 +16,7 @@ import { api } from "~/trpc/server";
 
 export default async function DashboardPage() {
   const session = await auth();
-  if (!session?.user) return <SignedOut />;
+  if (!session?.user) redirect("/signin");
 
   const [events, properties] = await Promise.all([
     api.event.list(),
@@ -132,39 +132,5 @@ export default async function DashboardPage() {
         </p>
       </Card>
     </>
-  );
-}
-
-function SignedOut() {
-  return (
-    <div className="mx-auto max-w-2xl py-16 text-center">
-      <p className="text-brand-400 text-xl font-semibold">We Lodge OS</p>
-      <h1 className="text-ink-900 mt-3 text-4xl font-bold">
-        Accommodation inventory for We Lodge AG
-      </h1>
-      <p className="text-ink-500 mx-auto mt-4 max-w-lg font-light">
-        Scout the properties worth contracting, hold what we buy and sell, and
-        prove the rooming lists will work — in one place.
-      </p>
-      <Link
-        href="/signin"
-        className="bg-brand-400 hover:bg-brand-500 mt-8 inline-block rounded-full px-8 py-3.5 text-[13px] font-light text-white transition-colors"
-      >
-        Sign in
-      </Link>
-
-      <div className="mt-14 grid gap-4 text-left sm:grid-cols-3">
-        {[
-          ["Properties", "The long list of hotels and apartments, on a map."],
-          ["Acquisition & sales", "What we hold, what we promised, where we are exposed."],
-          ["Operations", "Rooming lists checked against what we actually own."],
-        ].map(([title, copy]) => (
-          <Card key={title}>
-            <p className="text-ink-900 font-medium">{title}</p>
-            <p className="text-ink-500 mt-1 text-sm font-light">{copy}</p>
-          </Card>
-        ))}
-      </div>
-    </div>
   );
 }

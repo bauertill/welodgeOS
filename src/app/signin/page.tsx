@@ -34,7 +34,7 @@ export default async function SignInPage({
     <div className="mx-auto max-w-sm py-12">
       <h1 className="text-ink-900 text-2xl font-semibold">Sign in</h1>
       <p className="text-ink-500 mt-1 text-sm font-light">
-        Access to We Lodge OS is limited to We Lodge staff and partners.
+        With your We Lodge Google account.
       </p>
 
       {error && (
