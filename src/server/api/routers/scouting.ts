@@ -247,6 +247,8 @@ export const scoutingRouter = createTRPCRouter({
         amenityIds: z.array(z.string()).default([]),
         /** One chain's properties on this event (doc §3.9). */
         providerId: z.string().optional(),
+        /** Only the hotels that have sent a quotation (doc §3.10). */
+        hasQuotations: z.boolean().default(false),
       }),
     )
     .query(({ ctx, input }) =>
@@ -254,6 +256,7 @@ export const scoutingRouter = createTRPCRouter({
         where: {
           eventId: input.eventId,
           status: input.status,
+          ...(input.hasQuotations && { quotations: { some: {} } }),
           property: {
             type: input.type,
             providerId: input.providerId,
@@ -282,6 +285,7 @@ export const scoutingRouter = createTRPCRouter({
           // Absent for a category means "in negotiation" — see
           // `categoryContractStatusLabels` in ~/lib/scouting (doc §3.5).
           categoryContracts: true,
+          quotations: { select: { id: true, status: true } },
         },
       }),
     ),

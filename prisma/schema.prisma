@@ -242,6 +242,8 @@ model RoomCategory {
   categoryContracts CategoryContract[]
 
   @@index([propertyId])
+
+  quotationLines QuotationLine[]
 }
 
 /// A controlled vocabulary, shared by both property types, so amenities stay a
@@ -336,6 +338,8 @@ model ScoutingEntry {
 
   /// The per-category contract status underneath this entry (doc §3.5, §3.6).
   categoryContracts CategoryContract[]
+  /// The hotel's quotations for this event — several scenarios at once (doc §3.10).
+  quotations Quotation[]
 
   /// The group the team has sorted this property into on this event (doc
   /// §3.9). Empty means "No group". Deleting a group leaves its entries here.
@@ -449,6 +453,80 @@ model CategoryContract {
   @@index([scoutingEntryId])
 }
 
+// --- Quotations (doc §3.10) ------------------------------------------------------
+
+/// Where a quotation stands with us.
+enum QuotationStatus {
+  RECEIVED
+  ACCEPTED
+  DECLINED
+}
+
+/**
+ * One quotation from a hotel for an event — one scenario among several (doc
+ * §3.10): a group, periods and room categories with their rooms and rates, and
+ * the terms offered. It is what the hotel offered, kept apart from what the
+ * hotel is (its general details); an accepted one becomes the supplier contract.
+ */
+model Quotation {
+  id     String          @id @default(cuid())
+  status QuotationStatus @default(RECEIVED)
+  /// "Austria House staff", "Plan B — 20 rooms".
+  name   String
+
+  scoutingEntry   ScoutingEntry @relation(fields: [scoutingEntryId], references: [id], onDelete: Cascade)
+  scoutingEntryId String
+
+  receivedOn DateTime? @db.Date
+  /// Until when the hotel holds the offer.
+  validUntil DateTime? @db.Date
+  persons    Int?
+  /// Every line's rate is in this currency (§4.5).
+  currency   String
+  /// The terms offered, in the hotel's words — they become a contract's
+  /// structured payments and cut-offs once accepted (§7.1).
+  paymentTerms      String?
+  cancellationTerms String?
+  ratesInclude      String?
+  /// The quotation as received — a Google Drive link.
+  documentUrl String?
+  notes       String?
+
+  /// The supplier contract made from it, once accepted.
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  contractId String?
+
+  lines QuotationLine[]
+
+  addedBy   User?    @relation("QuotationAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+  addedById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scoutingEntryId])
+}
+
+/// One line of a quotation: rooms of one category, for one period, at one rate.
+model QuotationLine {
+  id          String    @id @default(cuid())
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationId String
+
+  category   RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String
+  /// The period, as a stay: first night to check-out day.
+  checkIn    DateTime @db.Date
+  checkOut   DateTime @db.Date
+  rooms      Int
+  /// Minor units, in the quotation's currency.
+  rateCents  Int
+  /// People per room, where the quote says.
+  occupancy  Int?
+  position   Int      @default(0)
+
+  @@index([quotationId])
+}
+
 // --- Contracts, payments and cancellation deadlines (doc §7.1) ---------------
 
 /// Who a contract is with: a hotel or provider we buy from, or a client we sell to.
@@ -517,6 +595,8 @@ model Contract {
 
   payments          ContractPayment[]
   cancellations     ContractCancellation[]
+  /// The quotation it was made from, if any (doc §3.10).
+  quotations        Quotation[]
   acquisitionNights RoomNight[]            @relation("AcquisitionContract")
   salesNights       RoomNight[]            @relation("SalesContract")
 
@@ -619,6 +699,7 @@ model User {
   sessions      Session[]
 
   scoutedProperties Property[]
+  quotationsAdded   Quotation[] @relation("QuotationAddedBy")
   scoutingEntries   ScoutingEntry[] @relation("AddedBy")
 
   acquisitionNights RoomNight[]        @relation("AcquisitionOwner")
