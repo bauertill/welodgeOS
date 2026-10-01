@@ -397,8 +397,8 @@ export function InventorySidePanel({
     };
     const known = dateRangeEdited ? [] : cells;
     needs("client", shows("client") && !clientId, "Say which client this is for.");
-    needs("optionExpiry", shows("optionExpiry") && !optionExpiry, "Give the date the option runs to.");
-    needs("blockExpiry", shows("blockExpiry") && !blockExpiry, "Give the due date — a block without one is inventory frozen for free.");
+    needs("optionExpiry", shows("optionExpiry") && !optionExpiry, "Give the option deadline.");
+    needs("blockExpiry", shows("blockExpiry") && !blockExpiry, "Give the client's deadline — a block without one is inventory frozen for free.");
     needs(
       "buyPrice",
       (needsBuyPrice.includes(action) || action === "REPRICE_BUY") &&
@@ -709,7 +709,7 @@ export function InventorySidePanel({
           {shows("optionExpiry") && (
             <div id="panel-field-optionExpiry">
               <Field
-                label="Option runs to"
+                label={action === "EXTEND_OPTION" ? "New option deadline" : "Option deadline"}
                 hint="Required. An option without a date is invisible to every deadline report."
               >
                 <Input
@@ -725,7 +725,7 @@ export function InventorySidePanel({
           {shows("blockExpiry") && (
             <div id="panel-field-blockExpiry">
               <Field
-                label={action === "EXTEND_BLOCK" ? "New due date" : "Due date"}
+                label={action === "EXTEND_BLOCK" ? "New deadline" : "Deadline"}
                 hint="Required. The date the client must decide by — a block without one is inventory frozen for free."
               >
                 <Input
@@ -773,7 +773,7 @@ export function InventorySidePanel({
           )}
 
           {shows("dueDate") && (
-            <Field label="Due date" hint="Payment or decision deadline.">
+            <Field label="Payment due" hint="Recorded before there was one deadline.">
               <Input
                 type="date"
                 value={dueDate}
@@ -1025,7 +1025,7 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
           <dd className="text-ink-900">{tally(cells.map((cell) => cell.acquisitionState), acquisitionLabels)}</dd>
         </div>
         {line("Buy price", (cell) => money(cell.buyPriceCents, cell.buyCurrency))}
-        {line("Option runs to", (cell) => day(cell.optionExpiry))}
+        {line("Option deadline", (cell) => day(cell.optionExpiry))}
         {line("Supplier ref.", (cell) => cell.supplierRef)}
         {line("Supplier contract", (cell) => cell.acquisitionContract)}
         {line("Accommodation Mgr", (cell) => cell.acquisitionOwner)}
@@ -1038,8 +1038,8 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
         </div>
         {line("Client", (cell) => cell.clientName)}
         {line("Sell price", (cell) => money(cell.sellPriceCents, cell.sellCurrency))}
-        {line("Due date", (cell) => day(cell.blockExpiry))}
-        {/* Only where it was recorded before there was one due date (2026-10-01). */}
+        {line("Deadline", (cell) => day(cell.blockExpiry))}
+        {/* Only where it was recorded before there was one deadline (2026-10-01). */}
         {line("Payment due", (cell) => day(cell.dueDate))}
         {line("Client ref.", (cell) => cell.clientRef)}
         {line("Client contract", (cell) => cell.salesContract)}
@@ -1071,7 +1071,8 @@ function fieldOfMessage(message: string): PanelField | null {
   if (/price we pay/i.test(message)) return "buyPrice";
   if (/price the client pays/i.test(message)) return "sellPrice";
   if (/which client/i.test(message)) return "client";
-  if (/due date/i.test(message)) return "blockExpiry";
+  if (/option deadline|option needs a date/i.test(message)) return "optionExpiry";
+  if (/deadline/i.test(message) && !/payment/i.test(message)) return "blockExpiry";
   if (/option needs a date|option's new date/i.test(message)) return "optionExpiry";
   if (/takes over with the supplier/i.test(message)) return "acquisitionOwner";
   if (/takes over with the client/i.test(message)) return "salesOwner";

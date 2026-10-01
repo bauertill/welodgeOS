@@ -10,7 +10,7 @@ import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui"
 import { addDays, dayKey, parseDay } from "~/lib/dates";
 import { formatDay, formatMoney } from "~/lib/format";
 import { acquisitionLabels, salesLabels } from "~/lib/inventory";
-import { severityLabels, type Cause, type Severity } from "~/lib/position";
+import { severityHints, severityLabels, type Cause, type Severity } from "~/lib/position";
 import { blockKind, buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
 import { api } from "~/trpc/react";
 
@@ -572,7 +572,7 @@ export function InventoryGrid({
                   key={level}
                   type="button"
                   aria-pressed={active}
-                  title={active ? "Show everything again" : `Show only the ${severityLabels[level].toLowerCase()} issues`}
+                  title={`${severityHints[level]} — ${active ? "click to show everything again" : `click to show only these`}`}
                   onClick={() => setIssueFilter(active ? null : level)}
                   className={`rounded-full transition-shadow ${
                     active ? "ring-ink-900 ring-2 ring-offset-2" : "hover:ring-ink-200 hover:ring-2 hover:ring-offset-1"
@@ -1301,7 +1301,7 @@ function BlockSummary({
         </dd>
         {recorded.optionExpiries.length > 0 && (
           <>
-            <dt className="text-ink-500">Option runs to</dt>
+            <dt className="text-ink-500">Option deadline</dt>
             <dd className="text-ink-900">
               <Culprit level={recorded.causes.optionExpiry}>{recorded.optionExpiries.join(", ")}</Culprit>
             </dd>
@@ -1309,7 +1309,7 @@ function BlockSummary({
         )}
         {block.kind === "BLOCKED" && recorded.blockExpiries.length > 0 && (
           <>
-            <dt className="text-ink-500">Due date</dt>
+            <dt className="text-ink-500">Deadline</dt>
             <dd className="text-ink-900">
               <Culprit level={recorded.causes.blockExpiry}>{recorded.blockExpiries.join(", ")}</Culprit>
             </dd>

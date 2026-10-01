@@ -739,7 +739,7 @@ function DetailsCard({ request }: { request: FullRequest }) {
         <Row label="Account manager" value={request.owner ? <Manager person={request.owner} /> : null} />
         <Row label="Registered" value={formatDate(request.createdAt)} />
         <Row label="Proposal sent on" value={request.proposalSentOn ? formatDate(request.proposalSentOn) : null} />
-        <Row label="Due date" value={request.blockedUntil ? formatDate(request.blockedUntil) : null} />
+        <Row label="Deadline" value={request.blockedUntil ? formatDate(request.blockedUntil) : null} />
         <Row label="Value" value={request.valueCents !== null && request.valueCurrency ? formatMoney(request.valueCents, request.valueCurrency) : null} />
         {request.closedOn && <Row label="Closed on" value={formatDate(request.closedOn)} />}
         <Row label="Days open" value={String(daysOpen(request))} />
@@ -840,7 +840,7 @@ function DetailsEditor({
         <Field label="Proposal sent on">
           <Input type="date" value={values.proposalSentOn} onChange={(e) => set("proposalSentOn")(e.target.value)} />
         </Field>
-        <Field label="Due date">
+        <Field label="Deadline">
           <Input type="date" value={values.blockedUntil} onChange={(e) => set("blockedUntil")(e.target.value)} />
         </Field>
       </div>
@@ -1069,7 +1069,7 @@ function RoomRowView({
         </td>
         <td className={td}>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${roomStateStyles[row.state]}`}>{roomStateLabels[row.state]}</span>
-          {row.blockExpiry && <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">due {formatDate(row.blockExpiry)}</span>}
+          {row.blockExpiry && <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">deadline {formatDate(row.blockExpiry)}</span>}
         </td>
         <td className={`${td} whitespace-nowrap`}>
           {row.rooms}
@@ -1183,7 +1183,7 @@ function ChangeRooms({
       {action === "SELL" && <RequestContractPicker request={request} value={contractId} onChange={setContractId} />}
       {needsDate && (
         <div className="w-44">
-          <Field label={action === "EXTEND_BLOCK" ? "New due date" : "Due date"}>
+          <Field label={action === "EXTEND_BLOCK" ? "New deadline" : "Deadline"}>
             <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} required />
           </Field>
         </div>
@@ -1307,7 +1307,7 @@ function AddRooms({
         if (!categoryId) return setProblem("Choose the room category.");
         if (!Number.isInteger(wanted) || wanted < 1) return setProblem("Say how many rooms, like 6.");
         if (!datesOk) return setProblem("Give a check-in and a check-out after it.");
-        if (action === "BLOCK" && !blockExpiry) return setProblem("Give the client's due date — a block needs one.");
+        if (action === "BLOCK" && !blockExpiry) return setProblem("Give the client's deadline — a block needs one.");
         if (periodsMode) {
           const wrong = periodProblem(periods, checkIn, checkOut);
           if (wrong) return setProblem(wrong);
@@ -1397,7 +1397,7 @@ function AddRooms({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-6">
         {action === "BLOCK" && (
-          <Field label="Due date" className="sm:col-span-2">
+          <Field label="Deadline" className="sm:col-span-2">
             <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} />
           </Field>
         )}

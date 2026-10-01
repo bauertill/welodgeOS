@@ -22,8 +22,23 @@ import { formatDay } from "~/lib/format";
 export const REMINDER_WINDOW_DAYS = 7;
 /** Inside this many days, a deadline is urgent. "Default 48 hours." */
 export const URGENCY_WINDOW_DAYS = 2;
+/**
+ * How far ahead the Deadlines page looks: this week and this month, the pace the
+ * work is planned at (2026-10-01). It shows what is coming; how worrying it is
+ * remains the two windows above.
+ */
+export const LOOKAHEAD_DAYS = 30;
 
 export type Severity = 0 | 1 | 2 | 3 | 4;
+
+/** What each level means, said where the level is shown. */
+export const severityHints: Record<Severity, string> = {
+  0: "Nothing to look out for.",
+  1: "Watch — worth knowing, nothing to do yet: a deadline 3 to 7 days away, our own stock still unsold, or a client asking about rooms we hold.",
+  2: "Warning — needs action soon: a deadline within 2 days or already passed, or a client blocking or sold nights we have not secured from the hotel.",
+  3: "Urgent — act now: sold to a client while we are still negotiating with the hotel.",
+  4: "Critical — act today: sold with nothing secured from the hotel, or a sale resting on an option about to run out.",
+};
 
 export const severityLabels: Record<Severity, string> = {
   0: "Clear",
@@ -271,14 +286,14 @@ export function positionOf(
     if (urgency === "expired") {
       // The state is never changed automatically (doc §2.4) — it is flagged and
       // stays in the way until a human extends, converts or releases it.
-      flags.push(`${what} ${cause === "optionExpiry" ? "expired" : "passed"} on ${formatDay(date)}`);
+      flags.push(`${what} passed on ${formatDay(date)}`);
       deadlineSeverity = highest(deadlineSeverity, 2);
       blame(cause, 2);
     } else if (urgency === "urgent") {
       // Said in words, so a warning on the sheet explains itself.
       const days = daysUntil(date, today);
       const when = days <= 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
-      flags.push(cause === "optionExpiry" ? `${what} runs out ${when} (${formatDay(date)})` : `${what} is ${when} (${formatDay(date)})`);
+      flags.push(`${what} is ${when} (${formatDay(date)})`);
       deadlineSeverity = highest(deadlineSeverity, 2);
       blame(cause, 2);
     } else if (urgency === "upcoming") {
@@ -287,12 +302,12 @@ export function positionOf(
     }
   };
 
-  read(optionDeadline, (w) => `Our option runs to ${w}`, "The option", "optionExpiry");
-  // The block's date is the client's due date — one deadline, one name (doc §4.2).
+  read(optionDeadline, (w) => `Option deadline ${w}`, "The option deadline", "optionExpiry");
+  // The block's date is the client's deadline — one deadline, one name (doc §4.2).
   read(
     blockDeadline,
-    (w) => `${night.clientName ?? "The client"} is due ${w}`,
-    "The due date",
+    (w) => `${night.clientName ?? "The client"}'s deadline ${w}`,
+    "The deadline",
     "blockExpiry",
   );
   read(dueDeadline, (w) => `Payment due ${w}`, "The payment date", "dueDate");
@@ -309,7 +324,7 @@ export function positionOf(
     night.optionExpiry < night.blockExpiry
   ) {
     flags.push(
-      `The client is due ${formatDay(night.blockExpiry)} but our option only runs to ${formatDay(night.optionExpiry)}`,
+      `The client's deadline is ${formatDay(night.blockExpiry)} but our option deadline is ${formatDay(night.optionExpiry)}, earlier`,
     );
     coherenceSeverity = 2;
     blame("optionExpiry", 2);

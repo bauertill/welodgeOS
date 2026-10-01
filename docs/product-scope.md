@@ -902,7 +902,7 @@ stateDiagram-v2
 | `CANCELLED` | Previously sold, cancelled (kept for audit, counts as not sold) |
 
 Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`, and
-shown everywhere as the **due date**), `sellPriceCents`, `currency`, `owner`, `notes`.
+shown everywhere as the client's **deadline**), `sellPriceCents`, `currency`, `owner`, `notes`.
 
 **A block or a sale needs the agreed price.** *Block* and *Sell* are refused until the price
 per night to the client is given — or, left empty, only where every night already carries
@@ -910,12 +910,12 @@ that same client's price, as when a block becomes a sale. This holds on the stoc
 on a sales request alike (§4.11). A request (soft) does not need one. (From Ami's review,
 2026-09-30.)
 
-**A block has one deadline: the client's due date.** It is the date the client must decide
+**A block has one deadline: the client's deadline.** It is the date the client must decide
 by, the block's own date (`blockExpiry`) — required when blocking, the one the deadline
 warnings, the deadline dashboard and the coherence check with our option all run on, and
-moved by *Extend the block*. Everywhere it is shown it is called the **due date**: the
+moved by *Extend the block*. Everywhere it is shown it is called the **deadline**: the
 stock sheet's panel and hover card, the sales request, the history and the warnings (*"The
-due date is today (30 Sep)"*, *"The due date passed on 13 Sep"*). `SOLD` means the client
+deadline is today (30 Sep)"*, *"The deadline passed on 13 Sep"*). `SOLD` means the client
 has signed; there is no decision left to chase.
 
 > **Change, 2026-10-01.** There used to be a second, optional date beside it — `dueDate`,
@@ -1032,18 +1032,34 @@ never a silent write.
 
 ### 4.6 Deadlines
 
-Two clocks per night: `optionExpiry` (supplier side) and `blockExpiry` (client side — the
-client's **due date**, §4.2). A payment date recorded before 2026-10-01 (`dueDate`) still
-counts while the night is blocked, but is no longer asked for.
+Two clocks per night, and **both are called deadlines** wherever they are shown: the
+**option deadline** (`optionExpiry`, supplier side — when our option with the hotel runs
+out) and the client's **deadline** (`blockExpiry`, client side, §4.2). A payment date
+recorded before 2026-10-01 (`dueDate`) still counts while the night is blocked, as
+*Payment due*, but is no longer asked for. (2026-10-01: "call it deadlines throughout".)
 
-- **Reminder window** — configurable, default 7 days out: severity ≥ 1, appears on the
-  deadline dashboard.
-- **Urgency window** — configurable, default 48 hours: severity escalates (amber → red).
-- **Expired** — the state is unchanged and the record is flagged `expired`. It stays in the
-  user's face until someone extends, converts or releases it.
+How worrying a deadline is follows two windows:
 
-The **deadline dashboard** is a first-class screen: everything expiring, soonest first,
-grouped by property and client, with the value at stake.
+- **Reminder window** — 7 days out: the night becomes *Watch* (severity 1).
+- **Urgency window** — 48 hours, today included: it becomes *Warning* (severity 2), and says
+  so in words: *"The deadline is today (30 Sep)"*.
+- **Passed** — the state is unchanged and the night stays a *Warning*, flagged *"The
+  deadline passed on 13 Sep"*, in the user's face until someone extends, converts or
+  releases it.
+
+**What the levels mean**, said on every level badge when pointed at and on the Deadlines
+page: *Watch* is worth knowing with nothing to do yet — a deadline 3 to 7 days away, our own
+stock unsold, a client asking about rooms we hold; *Warning* needs action soon — a deadline
+within 2 days or passed, or a client blocking or sold nights we have not secured; *Urgent*
+is act now — sold while still negotiating with the hotel; *Critical* is act today — sold
+with nothing secured, or a sale resting on an option about to run out.
+
+The **Deadlines page** (an event's *Deadlines* tab) is a first-class screen: every deadline
+**within the next month**, and every one already passed, soonest first, grouped by property
+and client, with the value at stake. The summary at its top counts them as **Already
+passed**, **This week** and **This month** — the pace the work is planned at (2026-10-01; it
+used to be *within 48 hours* and *this week*). Looking a month ahead changes only what is
+listed, not how worrying each one is: that is still the two windows above.
 
 **Calendar reminders (carried over).** The add-on's most-used feature is a scheduled job
 that writes option expiries into a shared Google Calendar. Keep it, with its aggregation
@@ -1115,7 +1131,7 @@ a note leaves their prices, references and managers as they were, even where the
 from night to night. A detail is removed only when it is cleared on purpose — emptied in a
 box that showed it. One exception keeps the record honest: when a night passes to a
 **different client** (a cancelled sale taken by someone else), the previous client's
-reference, price, due date, manager and notes do not carry over to the new one.
+reference, price, deadline, manager and notes do not carry over to the new one.
 
 **Different rates for different dates.** A stay often has a pre rate, the event rate and a
 post rate. Wherever a change takes a price per night — buying, an option, negotiating,
@@ -1273,7 +1289,7 @@ stock sheet and doing it again.
 
 - **+ Add rooms** takes a room category of the event, how many rooms, check-in and
   check-out, and what to do: *Request* (a soft claim that locks nothing, §4.3), *Block*
-  (with the date it runs to, which is required, §4.2) or *Sell*, with the price per night
+  (with the client's deadline, which is required, §4.2) or *Sell*, with the price per night
   to the client and the client's reference if there is one. Before anything is done it
   says how many of that category's rooms are free for every night of the stay, how many of
   those we have bought, and — if fewer are bought than asked for — that blocking or selling
@@ -1501,7 +1517,7 @@ out sooner and so needs attention sooner.
   (2026-10-01):
   the same judgement as §4.4 — sold without having secured it, an option or a block that is
   running out — taken from the worst night in the block, so grouping never hides a problem.
-  A deadline inside the urgent window says so in words: *"The block runs out today (30
+  A deadline inside the urgent window says so in words: *"The deadline is today (30
   Sep)"*. The *Look out for* counts above the sheet count these blocks as issues (see
   above).
 - **Hovering over a block summarises it**, without clicking anything: who it is for, the
@@ -1584,7 +1600,7 @@ contiguous range of days — which opens a panel scoped to exactly that selectio
 
 **The panel shows what is already recorded** on those nights, under *Recorded now*: each
 side's status, and every detail — buy price, option date, supplier reference, Accommodation
-Manager, supplier notes; client, sell price, due date, client reference, Sales Manager,
+Manager, supplier notes; client, sell price, deadline, client reference, Sales Manager,
 client notes — as the one value the nights share, or *varies* where they differ.
 Every box below starts filled in with what the nights share, so amending an entry starts
 from what is there rather than from nothing; a box where the nights differ starts empty and
@@ -1597,7 +1613,7 @@ nothing has started open on the first action, as before. (2026-10-01.) Pointing 
 notes and supplier notes as well. **The card points at the cause.** Where a booking needs attention,
 the fact that makes it so is highlighted in the warning's colour, with its "!": the
 supplier side when a client holds what we have not bought (*Acquisition: Nothing
-started*), or the date running out — our option or the client's due date, which the card
+started*), or the date running out — the option deadline or the client's deadline, which the card
 lists whenever they apply. A booking blocked with nothing bought and an expired block has
 both marked. (2026-10-01.) **A problem is said where it is.** What is missing in the panel —
 the client, the price, a block or option date, the manager — is pointed out under that

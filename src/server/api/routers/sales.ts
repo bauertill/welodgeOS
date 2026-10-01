@@ -114,7 +114,7 @@ const historyFields = [
   { key: "followUpOn", label: "Follow up on" },
   { key: "nextStep", label: "Next step" },
   { key: "proposalSentOn", label: "Proposal sent on" },
-  { key: "blockedUntil", label: "Due date" },
+  { key: "blockedUntil", label: "Deadline" },
   { key: "value", label: "Value" },
   ...interestFields.map(({ key, label }) => ({ key, label })),
   ...contractingFields.map(({ key, label }) => ({ key, label })),

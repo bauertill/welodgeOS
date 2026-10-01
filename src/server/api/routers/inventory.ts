@@ -351,7 +351,7 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         // Invariant §4.5.4 — an option without a deadline is invalid.
         need(
           input.optionExpiry,
-          "An option needs a date it runs to. Without one it is invisible to every deadline report.",
+          "Give the option deadline. An option without one is invisible to every deadline report.",
         );
       }
       if (action === "BLOCK") {
@@ -360,14 +360,14 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         // a block with no expiry is inventory frozen for free.
         need(
           input.blockExpiry,
-          "Give the client's due date. A block without one is inventory frozen for free, and invisible to every deadline report.",
+          "Give the client's deadline. A block without one is inventory frozen for free, and invisible to every deadline report.",
         );
       }
       if (action === "SELL" || action === "REQUEST" || action === "WITHDRAW_REQUEST") {
         need(input.clientId, "Say which client this is for.");
       }
       if (action === "EXTEND_OPTION") need(input.optionExpiry, "Give the option's new date.");
-      if (action === "EXTEND_BLOCK") need(input.blockExpiry, "Give the new due date.");
+      if (action === "EXTEND_BLOCK") need(input.blockExpiry, "Give the new deadline.");
       if (action === "REPRICE_BUY") {
         need(input.buyPriceCents, "Give the price we pay per night.");
         need(input.buyCurrency, "Say which currency that is in.");
@@ -1561,14 +1561,14 @@ function describeChanges(before: LoadedNight[], after: LoadedNight[]) {
   const date = (value: Date | null) => (value ? formatDay(value) : null);
   const fields: { label: string; read: (night: LoadedNight) => string | null }[] = [
     { label: "Supplier reference", read: (night) => night.supplierRef },
-    { label: "Option runs to", read: (night) => date(night.optionExpiry) },
+    { label: "Option deadline", read: (night) => date(night.optionExpiry) },
     { label: "Buy price", read: (night) => money(night.buyPriceCents, night.buyCurrency) },
     { label: "Supplier notes", read: (night) => note(night.acquisitionNotes) },
     { label: "Supplier-side rep", read: (night) => person(night.acquisitionOwner) },
     { label: "Supplier contract", read: (night) => night.acquisitionContract?.name ?? null },
     { label: "Client", read: (night) => night.client?.name ?? null },
     { label: "Client reference", read: (night) => night.clientRef },
-    { label: "Due date", read: (night) => date(night.blockExpiry) },
+    { label: "Deadline", read: (night) => date(night.blockExpiry) },
     { label: "Payment due", read: (night) => date(night.dueDate) },
     { label: "Sell price", read: (night) => money(night.sellPriceCents, night.sellCurrency) },
     { label: "Client notes", read: (night) => note(night.salesNotes) },
