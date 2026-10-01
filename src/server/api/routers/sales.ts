@@ -14,7 +14,7 @@ import {
   salesStageLabels,
 } from "~/lib/sales";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
-import { applyInventoryChange } from "~/server/api/routers/inventory";
+import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
 import { snapshotNight } from "~/server/inventory";
 
@@ -457,6 +457,11 @@ export const salesRouter = createTRPCRouter({
         clientRef: z.string().max(200).optional(),
         /** The client contract a sale is made under (doc §7.1). */
         salesContractId: z.string().optional(),
+        /** Different rates for different dates — pre, event, post (doc §4.8). */
+        periods: z
+          .array(z.object({ checkIn: dayRequired, checkOut: dayRequired, priceCents: z.number().int().min(0), currency: z.string().length(3) }))
+          .max(20)
+          .optional(),
       }),
     )
     .mutation(({ ctx, input }) =>
@@ -487,7 +492,11 @@ export const salesRouter = createTRPCRouter({
             });
           }
           const chosen = free.slice(0, input.rooms);
-          const outcome = await applyInventoryChange(tx, ctx.session.user.id, {
+          const periods = input.periods?.map((period) => ({ ...period, checkIn: parseDay(period.checkIn), checkOut: parseDay(period.checkOut) }));
+          if (periods?.length) checkPeriods(periods, checkIn, checkOut);
+          const apply = (change: Parameters<typeof applyInventoryChange>[2]) =>
+            periods?.length ? applyByPeriod(tx, ctx.session.user.id, change, periods) : applyInventoryChange(tx, ctx.session.user.id, change);
+          const outcome = await apply({
             eventId: request.eventId,
             slotIds: chosen.map((room) => room.slotId),
             checkIn,

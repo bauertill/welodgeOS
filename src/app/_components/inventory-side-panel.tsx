@@ -26,6 +26,7 @@ import {
   salesTarget,
   type InventoryAction,
 } from "~/lib/inventory";
+import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
 import { isClosed, salesStageLabels } from "~/lib/sales";
 import { api } from "~/trpc/react";
 
@@ -253,6 +254,26 @@ export function InventorySidePanel({
 
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  // Different rates for different dates — a pre rate, the event rate, a post
+  // rate (doc §4.8) — in place of the one price.
+  const [periodsMode, setPeriodsMode] = useState(false);
+  const [periods, setPeriods] = useState<RatePeriod[]>([]);
+  const periodsAllowed = ["START_NEGOTIATION", "TAKE_OPTION", "BUY", "REQUEST", "BLOCK", "SELL", "REPRICE_BUY", "REPRICE_SELL"].includes(action);
+  // The first period starts on check-in and the last ends on check-out, whatever the dates become.
+  useEffect(() => {
+    setPeriods((current) =>
+      current.length
+        ? current.map((period, i) => ({
+            ...period,
+            ...(i === 0 && { checkIn: checkInInput }),
+            ...(i === current.length - 1 && { checkOut: checkOutInput }),
+          }))
+        : current,
+    );
+  }, [checkInInput, checkOutInput]);
+  useEffect(() => {
+    if (!periodsAllowed) setPeriodsMode(false);
+  }, [periodsAllowed]);
   // A problem with one field is said under that field, not at the foot of the
   // panel where it has to be scrolled to (2026-10-01).
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<PanelField, string>>>({});
@@ -404,6 +425,14 @@ export function InventorySidePanel({
     );
     needs("acquisitionOwner", action === "REASSIGN_ACQUISITION_OWNER" && !acquisitionOwnerId, "Pick who takes over with the supplier.");
     needs("salesOwner", action === "REASSIGN_SALES_OWNER" && !salesOwnerId, "Pick who takes over with the client.");
+    if (periodsMode) {
+      // The periods stand in for the one price: what they lack is said there.
+      const side = shows("buyPrice") ? "buyPrice" : "sellPrice";
+      delete problems.buyPrice;
+      delete problems.sellPrice;
+      const wrong = periodProblem(periods, checkInInput, checkOutInput);
+      if (wrong) problems[side] = wrong;
+    }
     showProblems(problems);
     if (Object.keys(problems).length) return;
 
@@ -443,7 +472,7 @@ export function InventorySidePanel({
       reason: reason.trim() || undefined,
       supplierRef: changed(supplierRef, initial(start.supplierRef)),
       optionExpiry: optionExpiry ? parseDay(optionExpiry) : undefined,
-      ...price("buy", buyPrice, buyCurrency, initial(start.buyPrice), initial(start.buyCurrency)),
+      ...(periodsMode ? {} : price("buy", buyPrice, buyCurrency, initial(start.buyPrice), initial(start.buyCurrency))),
       acquisitionOwnerId: changed(acquisitionOwnerId, initial(start.acquisitionOwnerId)),
       acquisitionNotes: changed(acquisitionNotes, initial(start.acquisitionNotes)),
       acquisitionContractId: shows("acquisitionContract") ? changed(acquisitionContractId, initial(start.acquisitionContractId)) ?? undefined : undefined,
@@ -451,7 +480,15 @@ export function InventorySidePanel({
       clientRef: changed(clientRef, clientStart(start.clientRef)),
       blockExpiry: blockExpiry ? parseDay(blockExpiry) : undefined,
       dueDate: nullableDay(changed(dueDate, clientStart(start.dueDate))),
-      ...price("sell", sellPrice, sellCurrency, clientStart(start.sellPrice), clientStart(start.sellCurrency)),
+      ...(periodsMode ? {} : price("sell", sellPrice, sellCurrency, clientStart(start.sellPrice), clientStart(start.sellCurrency))),
+      ...(periodsMode && {
+        periods: periods.map((period) => ({
+          checkIn: parseDay(period.checkIn),
+          checkOut: parseDay(period.checkOut),
+          priceCents: Math.round(Number(period.price.replace(",", ".")) * 100),
+          currency: shows("buyPrice") ? buyCurrency : sellCurrency,
+        })),
+      }),
       salesOwnerId: changed(salesOwnerId, clientStart(start.salesOwnerId)),
       salesNotes: changed(salesNotes, clientStart(start.salesNotes)),
       salesContractId: shows("salesContract") ? changed(salesContractId, clientStart(start.salesContractId)) ?? undefined : undefined,
@@ -747,70 +784,108 @@ export function InventorySidePanel({
 
           {shows("buyPrice") && (
             <div id="panel-field-buyPrice">
-              <Field
-                label={needsBuyPrice.includes(action) ? "We pay, per night — required" : "We pay, per night"}
-                hint={
-                  needsBuyPrice.includes(action)
-                    ? "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
-                    : undefined
-                }
-              >
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={buyPrice}
-                    onChange={(e) => setBuyPrice(e.target.value)}
-                    placeholder={varies(start.buyPrice) ? "Varies — leave empty to keep" : undefined}
-                    title={varies(start.buyPrice)}
-                  />
-                  <Select
-                    value={buyCurrency}
-                    onChange={(e) => setBuyCurrency(e.target.value)}
-                    className="w-24"
-                  >
-                    {CURRENCIES.map((c) => (
-                      <option key={c}>{c}</option>
-                    ))}
-                  </Select>
+              {periodsMode ? (
+                <div>
+                  <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">We pay, per night, by period</span>
+                  <RatePeriods periods={periods} onChange={setPeriods} currency={buyCurrency} onCurrencyChange={setBuyCurrency} />
                 </div>
-              </Field>
+              ) : (
+                <Field
+                  label={needsBuyPrice.includes(action) ? "We pay, per night — required" : "We pay, per night"}
+                  hint={
+                    needsBuyPrice.includes(action)
+                      ? "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
+                      : undefined
+                  }
+                >
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={buyPrice}
+                      onChange={(e) => setBuyPrice(e.target.value)}
+                      placeholder={varies(start.buyPrice) ? "Varies — leave empty to keep" : undefined}
+                      title={varies(start.buyPrice)}
+                    />
+                    <Select
+                      value={buyCurrency}
+                      onChange={(e) => setBuyCurrency(e.target.value)}
+                      className="w-24"
+                    >
+                      {CURRENCIES.map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </Select>
+                  </div>
+                </Field>
+              )}
+              {periodsAllowed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!periodsMode) setPeriods(wholeStay(checkInInput, checkOutInput, buyPrice));
+                    setPeriodsMode(!periodsMode);
+                  }}
+                  className="text-brand-700 mt-1.5 text-xs font-medium hover:underline"
+                >
+                  {periodsMode ? "One rate for the whole stay" : "Different rates for different dates"}
+                </button>
+              )}
               <FieldProblem message={fieldErrors.buyPrice} />
             </div>
           )}
 
           {shows("sellPrice") && (
             <div id="panel-field-sellPrice">
-              <Field
-                label={needsSellPrice.includes(action) ? "Client pays, per night — required" : "Client pays, per night"}
-                hint={
-                  needsSellPrice.includes(action)
-                    ? "The agreed price. Left empty, it is only accepted where every night already has this client's price."
-                    : undefined
-                }
-              >
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={sellPrice}
-                    onChange={(e) => setSellPrice(e.target.value)}
-                    placeholder={sameClient && varies(start.sellPrice) ? "Varies — leave empty to keep" : undefined}
-                    title={sameClient ? varies(start.sellPrice) : undefined}
-                  />
-                  <Select
-                    value={sellCurrency}
-                    onChange={(e) => setSellCurrency(e.target.value)}
-                    className="w-24"
-                  >
-                    {CURRENCIES.map((c) => (
-                      <option key={c}>{c}</option>
-                    ))}
-                  </Select>
+              {periodsMode ? (
+                <div>
+                  <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">Client pays, per night, by period</span>
+                  <RatePeriods periods={periods} onChange={setPeriods} currency={sellCurrency} onCurrencyChange={setSellCurrency} />
                 </div>
-              </Field>
+              ) : (
+                <Field
+                  label={needsSellPrice.includes(action) ? "Client pays, per night — required" : "Client pays, per night"}
+                  hint={
+                    needsSellPrice.includes(action)
+                      ? "The agreed price. Left empty, it is only accepted where every night already has this client's price."
+                      : undefined
+                  }
+                >
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={sellPrice}
+                      onChange={(e) => setSellPrice(e.target.value)}
+                      placeholder={sameClient && varies(start.sellPrice) ? "Varies — leave empty to keep" : undefined}
+                      title={sameClient ? varies(start.sellPrice) : undefined}
+                    />
+                    <Select
+                      value={sellCurrency}
+                      onChange={(e) => setSellCurrency(e.target.value)}
+                      className="w-24"
+                    >
+                      {CURRENCIES.map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </Select>
+                  </div>
+                </Field>
+              )}
+              {periodsAllowed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!periodsMode) setPeriods(wholeStay(checkInInput, checkOutInput, sellPrice));
+                    setPeriodsMode(!periodsMode);
+                  }}
+                  className="text-brand-700 mt-1.5 text-xs font-medium hover:underline"
+                >
+                  {periodsMode ? "One rate for the whole stay" : "Different rates for different dates"}
+                </button>
+              )}
               <FieldProblem message={fieldErrors.sellPrice} />
             </div>
           )}

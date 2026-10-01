@@ -1117,6 +1117,18 @@ box that showed it. One exception keeps the record honest: when a night passes t
 **different client** (a cancelled sale taken by someone else), the previous client's
 reference, price, due date, manager and notes do not carry over to the new one.
 
+**Different rates for different dates.** A stay often has a pre rate, the event rate and a
+post rate. Wherever a change takes a price per night — buying, an option, negotiating,
+requesting, blocking, selling, re-pricing — *Different rates for different dates* turns
+the one price into **periods**, each with its own dates and price: *Split* cuts a period
+in two, and moving where one ends moves where the next begins. Together they must run from
+check-in to check-out with no gap and no overlap, and each needs its price — otherwise it is
+refused, with the reason under the price, and nothing changes. The change is then applied
+period by period, each with its price, as **one step, all or nothing**, writing one ledger
+entry per period. The stay is still drawn as one booking on the sheet: a block only splits
+where the client, the status or a warning changes, never the price. The same is offered in
+a sales request's *+ Add rooms* (§4.11). (2026-10-01.)
+
 **Updating a detail without disturbing the rest.** *Update supplier details* and *Update
 client details* change only what is filled in — a note, a price, a reference, a manager —
 across the whole selection, and never the status. The client side only applies to nights a
@@ -2163,6 +2175,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Empty keeps, update details only | **Built** | A detail left empty keeps each night's own; *Update supplier details* / *Update client details* change only what is filled in; a night passing to another client does not keep the last one's details |
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
+| §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
 | §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the Finances section with Payments, Cancellations and Contracts; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy needs the hotel's supplier contract and Sell the client's contract, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |

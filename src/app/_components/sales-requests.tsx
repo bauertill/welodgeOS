@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Manager } from "~/app/_components/client-list";
+import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Card, EmptyState } from "~/app/_components/ui";
@@ -1263,6 +1264,20 @@ function AddRooms({
   const [clientRef, setClientRef] = useState("");
   const [contractId, setContractId] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  // A pre rate, the event rate, a post rate (doc §4.8) — in place of the one price.
+  const [periodsMode, setPeriodsMode] = useState(false);
+  const [periods, setPeriods] = useState<RatePeriod[]>([]);
+  useEffect(() => {
+    setPeriods((current) =>
+      current.length
+        ? current.map((period, i) => ({
+            ...period,
+            ...(i === 0 && { checkIn }),
+            ...(i === current.length - 1 && { checkOut }),
+          }))
+        : current,
+    );
+  }, [checkIn, checkOut]);
 
   const datesOk = /^\d{4}-\d{2}-\d{2}$/.test(checkIn) && /^\d{4}-\d{2}-\d{2}$/.test(checkOut) && checkOut > checkIn;
   const availability = api.sales.availability.useQuery(
@@ -1292,7 +1307,10 @@ function AddRooms({
         if (!Number.isInteger(wanted) || wanted < 1) return setProblem("Say how many rooms, like 6.");
         if (!datesOk) return setProblem("Give a check-in and a check-out after it.");
         if (action === "BLOCK" && !blockExpiry) return setProblem("Give the client's due date — a block needs one.");
-        if (action !== "REQUEST" && !price.trim()) {
+        if (periodsMode) {
+          const wrong = periodProblem(periods, checkIn, checkOut);
+          if (wrong) return setProblem(wrong);
+        } else if (action !== "REQUEST" && !price.trim()) {
           return setProblem(`Give the price per night — rooms ${action === "BLOCK" ? "blocked" : "sold"} for a client need their agreed price.`);
         }
         const amount = price.trim() ? Number(price.replace(",", ".")) : null;
@@ -1300,6 +1318,14 @@ function AddRooms({
         if (action === "SELL" && !contractId) return setProblem("Choose the client contract these rooms are sold under.");
         add.mutate({
           ...(action === "SELL" && { salesContractId: contractId }),
+          ...(periodsMode && {
+            periods: periods.map((period) => ({
+              checkIn: period.checkIn,
+              checkOut: period.checkOut,
+              priceCents: Math.round(Number(period.price.replace(",", ".")) * 100),
+              currency,
+            })),
+          }),
           id: request.id,
           categoryId,
           rooms: wanted,
@@ -1374,20 +1400,27 @@ function AddRooms({
             <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} />
           </Field>
         )}
-        <Field label={action === "REQUEST" ? "Price per night, to the client" : "Price per night — required"} className="sm:col-span-2">
-          <div className="flex gap-2">
-            <div className="min-w-0 flex-1">
-              <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="350.00" aria-label="Price per night" />
-            </div>
-            <div className="w-24 shrink-0">
-              <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
-                {["USD", "EUR", "CHF", "GBP"].map((code) => (
-                  <option key={code}>{code}</option>
-                ))}
-              </Select>
-            </div>
+        {periodsMode ? (
+          <div className="sm:col-span-6">
+            <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">Price per night, by period</span>
+            <RatePeriods periods={periods} onChange={setPeriods} currency={currency} onCurrencyChange={setCurrency} />
           </div>
-        </Field>
+        ) : (
+          <Field label={action === "REQUEST" ? "Price per night, to the client" : "Price per night — required"} className="sm:col-span-2">
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="350.00" aria-label="Price per night" />
+              </div>
+              <div className="w-24 shrink-0">
+                <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
+                  {["USD", "EUR", "CHF", "GBP"].map((code) => (
+                    <option key={code}>{code}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </Field>
+        )}
         <Field label="Client reference" className="sm:col-span-2">
           <Input value={clientRef} onChange={(e) => setClientRef(e.target.value)} placeholder="Their order number" />
         </Field>
@@ -1397,6 +1430,18 @@ function AddRooms({
           </div>
         )}
       </div>
+      {datesOk && (
+        <button
+          type="button"
+          onClick={() => {
+            if (!periodsMode) setPeriods(wholeStay(checkIn, checkOut, price));
+            setPeriodsMode(!periodsMode);
+          }}
+          className="text-brand-700 mt-2 text-xs font-medium hover:underline"
+        >
+          {periodsMode ? "One rate for the whole stay" : "Different rates for different dates — pre, event, post"}
+        </button>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={add.isPending}>

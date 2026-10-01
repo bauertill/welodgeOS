@@ -7,6 +7,7 @@ import { formatDay, formatMoney } from "~/lib/format";
 import {
   acquisitionLabels,
   acquisitionTarget,
+  actionFields,
   actionLabels,
   allowedAcquisitionMoves,
   allowedSalesMoves,
@@ -661,6 +662,44 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
       return { nights: ids.length, rooms: slotIds.length, added };
 }
 
+type Period = { checkIn: Date; checkOut: Date; priceCents: number; currency: string };
+
+/** Refuses periods that do not run from check-in to check-out, one after another. */
+export function checkPeriods(periods: Period[], checkIn: Date, checkOut: Date) {
+  const sorted = [...periods].sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+  const joined = sorted.every((period, i) => period.checkOut > period.checkIn && (i === 0 || period.checkIn.getTime() === sorted[i - 1]!.checkOut.getTime()));
+  if (!joined || sorted[0]!.checkIn.getTime() !== checkIn.getTime() || sorted.at(-1)!.checkOut.getTime() !== checkOut.getTime()) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Nothing was changed. The rate periods must run from check-in to check-out, each starting where the one before ends.",
+    });
+  }
+}
+
+/**
+ * Applies one change period by period, each with its own price per night — the
+ * buy price or the sell price, whichever the action sets — inside the caller's
+ * transaction, so it all holds or none of it does.
+ */
+export async function applyByPeriod(tx: Prisma.TransactionClient, actorId: string, change: ChangeInput, periods: Period[]) {
+  const buySide = actionFields[change.action].includes("buyPrice");
+  let nights = 0;
+  let added = 0;
+  for (const period of [...periods].sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime())) {
+    const outcome = await applyInventoryChange(tx, actorId, {
+      ...change,
+      checkIn: period.checkIn,
+      checkOut: period.checkOut,
+      ...(buySide
+        ? { buyPriceCents: period.priceCents, buyCurrency: period.currency }
+        : { sellPriceCents: period.priceCents, sellCurrency: period.currency }),
+    });
+    nights += outcome.nights;
+    added += outcome.added;
+  }
+  return { nights, rooms: change.slotIds.length, added };
+}
+
 export const inventoryRouter = createTRPCRouter({
   /**
    * §3.6 — the only bridge from Phase 1 to Phase 2. Materialises a category's
@@ -1067,11 +1106,31 @@ export const inventoryRouter = createTRPCRouter({
     ),
 
   applyChange: protectedProcedure
-    .input(changeInput)
+    .input(
+      changeInput.extend({
+        /**
+         * Different rates for different dates (doc §4.8): a pre rate, the event
+         * rate, a post rate. Together they run from check-in to check-out; each
+         * is applied with its own price per night.
+         */
+        periods: z
+          .array(z.object({ checkIn: z.date(), checkOut: z.date(), priceCents: z.number().int().min(0), currency: z.string().length(3) }))
+          .max(20)
+          .optional(),
+      }),
+    )
     .mutation(({ ctx, input }) =>
       // One transaction from start to finish, so a change that is refused
-      // leaves no half-added nights behind.
-      ctx.db.$transaction((tx) => applyInventoryChange(tx, ctx.session.user.id, input), { timeout: 30_000 }),
+      // leaves no half-added nights behind — however many periods it has.
+      ctx.db.$transaction(
+        async (tx) => {
+          const { periods, ...change } = input;
+          if (!periods?.length) return applyInventoryChange(tx, ctx.session.user.id, change);
+          checkPeriods(periods, change.checkIn, change.checkOut);
+          return applyByPeriod(tx, ctx.session.user.id, change, periods);
+        },
+        { timeout: 60_000 },
+      ),
     ),
 
   /**
