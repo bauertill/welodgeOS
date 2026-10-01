@@ -117,7 +117,7 @@ export default async function PropertyPage({
               },
               { key: "updates", label: "Updates", content: <UpdateThread propertyId={property.id} /> },
               // Kept for the record, rarely read: a tab of its own, out of the way.
-              { key: "activity", label: "Activity", content: <ActivityLog entity="Property" entityId={property.id} /> },
+              { key: "log", label: "Log", content: <ActivityLog entity="Property" entityId={property.id} /> },
             ]}
           />
         </div>
