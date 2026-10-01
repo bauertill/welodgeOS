@@ -16,7 +16,8 @@ Last reviewed: 2026-09-30.
 `welodge-os.vercel.app` from 2026-09-06 until then. Hosted on Vercel under the
 We Lodge team (`we-lodge`) — a Vercel account of its own, separate from any
 other work, so We Lodge owns the project and is billed for it directly. The
-database is a Neon Postgres instance provisioned through Vercel's marketplace.
+database is Neon Postgres — moving on 2026-09-30 into a Neon database the
+We Lodge team owns; see the item on the move below.
 
 - [x] **Pick a host.** Vercel, We Lodge team. The GitHub repo is connected, so
       every push to `master` deploys to the live site automatically (and, since
@@ -70,6 +71,9 @@ database is a Neon Postgres instance provisioned through Vercel's marketplace.
       an empty database. `master` is protected on GitHub: nothing merges into
       it unless that check passes.
 - [ ] **Staging at https://staging.welodge.net** — started 2026-09-30. The
+      steps listed further down were done by hand on 2026-09-30, except that
+      the database became a branch of the new live database (next item)
+      rather than a branch of the old one. The
       route is `staging` branch → staging.welodge.net → merge into `master` →
       os.welodge.net (`product-scope.md` §2.5). Done so far:
   - A Vercel **custom environment** called *Staging* (the team is on Pro),
@@ -108,6 +112,45 @@ database is a Neon Postgres instance provisioned through Vercel's marketplace.
      staging.welodge.net. Until steps 1–2 are done, a staging build fails at
      the migration step for want of a database — harmlessly: nothing is
      deployed, and the live site is untouched.
+- [ ] **The live data moves into the We Lodge team's own database** — copied
+      2026-09-30, switch still to do. The live database turned out not to
+      belong to the We Lodge Vercel team at all: it was Neon project
+      `winter-band-39306927`, in US East, in an account none of us could name,
+      connected only by a pasted connection string. Now:
+  - `welodge-production`, a Neon database created in the We Lodge Vercel team
+    (Frankfurt), connected to the project under the prefix `WELODGE_PROD_` so
+    that connecting it switched nothing.
+  - Staging is not a second database but a **branch** of that one, called
+    `staging`: *Reset from parent* in Neon refreshes it from the live data in
+    seconds. Its address is Staging's `DATABASE_URL`.
+  - The live data was copied with `scripts/copy-database.sh`, which refuses a
+    target that already has tables, restores in one transaction, and compares
+    every table's row count afterwards. All 35 tables matched.
+  - **Still to do:** set the live site's `DATABASE_URL` (Production) to
+    `welodge-production`'s pooled address and redeploy; then delete the
+    leftover `POSTGRES_*`, `PG*` and `NEON_*` settings that point at the old
+    database, and, after a week without needing it, the old database itself.
+    Until the switch, the live site still writes to the old database —
+    anything entered there after the copy is not in the new one.
+- [ ] **Nightly staging reset** — written 2026-10-01, not running yet.
+      `scripts/reset-staging.sh` resets the `staging` branch from the live
+      data and re-applies staging's pending migrations; it refuses to run
+      unless `staging` branches directly from the main branch.
+      `.github/workflows/reset-staging.yml` runs it at 00:00 UTC, and on
+      demand from GitHub → Actions → *Reset staging* → *Run workflow*. To
+      switch it on:
+  1. A Neon API key: Vercel → Storage → `welodge-production` → *Open in
+     Neon* → organization Settings → API keys → *Create*.
+  2. On GitHub (repo → Settings → Secrets and variables → Actions): secrets
+     `NEON_API_KEY` and `STAGING_DATABASE_URL` (the same value as Staging's
+     `DATABASE_URL` on Vercel); variable `NEON_PROJECT_ID`, which is `empty-silence-69345743`
+     (`welodge-production`'s project ID; not a secret).
+  3. Merge into `master` — GitHub only runs schedules from there.
+
+  By hand: put `NEON_API_KEY` and `NEON_PROJECT_ID` in `.env` and run
+  `./scripts/reset-staging.sh` from a checkout of `staging`. Without
+  `STAGING_DATABASE_URL` it resets the data only; redeploying staging then
+  re-applies the pending migrations. First run by hand 2026-10-01.
 - [x] **Checked 2026-09-30: branch deploys cannot reach the live database.**
       `DATABASE_URL` is set for Production only. The Neon integration's other
       variables (`POSTGRES_URL`, `PGHOST` and friends) *are* set for Preview

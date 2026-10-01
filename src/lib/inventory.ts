@@ -84,6 +84,8 @@ export const actionLabels = {
   REPRICE_SELL: "Change the sell price",
   REASSIGN_ACQUISITION_OWNER: "Reassign the supplier-side rep",
   REASSIGN_SALES_OWNER: "Reassign the client-side rep",
+  UPDATE_SUPPLIER_DETAILS: "Update supplier details",
+  UPDATE_CLIENT_DETAILS: "Update client details",
 } as const;
 
 export type InventoryAction = keyof typeof actionLabels;
@@ -106,6 +108,10 @@ export const actionHints: Record<InventoryAction, string> = {
   REPRICE_SELL: "Change what the client pays us per night.",
   REASSIGN_ACQUISITION_OWNER: "Change who is accountable for chasing the supplier.",
   REASSIGN_SALES_OWNER: "Change who is accountable for the client.",
+  UPDATE_SUPPLIER_DETAILS:
+    "Change only what you fill in — a note, the price, the reference. The status and everything left empty stay as they are.",
+  UPDATE_CLIENT_DETAILS:
+    "Change only what you fill in — a note, the price, the reference. The client, the status and everything left empty stay as they are.",
 };
 
 /** The acquisition state each acquisition action moves nights into. */
@@ -163,6 +169,7 @@ export const actionGroups: { label: string; actions: InventoryAction[] }[] = [
       "START_NEGOTIATION",
       "TAKE_OPTION",
       "BUY",
+      "UPDATE_SUPPLIER_DETAILS",
       "EXTEND_OPTION",
       "REPRICE_BUY",
       "REASSIGN_ACQUISITION_OWNER",
@@ -175,6 +182,7 @@ export const actionGroups: { label: string; actions: InventoryAction[] }[] = [
     actions: [
       "BLOCK",
       "SELL",
+      "UPDATE_CLIENT_DETAILS",
       "EXTEND_BLOCK",
       "REPRICE_SELL",
       "REASSIGN_SALES_OWNER",
@@ -185,7 +193,11 @@ export const actionGroups: { label: string; actions: InventoryAction[] }[] = [
   { label: "Requests", actions: ["REQUEST", "WITHDRAW_REQUEST"] },
 ];
 
-/** Which fields each action asks for. Anything not listed is not shown. */
+/**
+ * Which fields each action asks for. Anything not listed is not shown. A field
+ * left empty keeps what each night already has; only an entry that is cleared
+ * on purpose is removed (doc §4.8).
+ */
 export const actionFields: Record<InventoryAction, string[]> = {
   START_NEGOTIATION: ["supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
   TAKE_OPTION: ["supplierRef", "optionExpiry", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
@@ -203,7 +215,13 @@ export const actionFields: Record<InventoryAction, string[]> = {
   EXTEND_BLOCK: ["blockExpiry"],
   REPRICE_SELL: ["sellPrice"],
   REASSIGN_SALES_OWNER: ["salesOwner"],
+  UPDATE_SUPPLIER_DETAILS: ["supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
+  UPDATE_CLIENT_DETAILS: ["clientRef", "dueDate", "sellPrice", "salesOwner", "salesNotes"],
 
   REQUEST: ["client", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
   WITHDRAW_REQUEST: ["client"],
 };
+
+/** Actions that need a price per night before they can be applied (doc §4.1, §4.2). */
+export const needsBuyPrice: InventoryAction[] = ["BUY"];
+export const needsSellPrice: InventoryAction[] = ["BLOCK", "SELL"];

@@ -1,5 +1,6 @@
 "use client";
 
+import { keepPreviousData } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Combobox } from "~/app/_components/combobox";
@@ -7,6 +8,7 @@ import { Input } from "~/app/_components/form";
 import { InventorySidePanel, type SelectedCell } from "~/app/_components/inventory-side-panel";
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
+import { formatMoney } from "~/lib/format";
 import { acquisitionLabels, salesLabels } from "~/lib/inventory";
 import { severityLabels, type Severity } from "~/lib/position";
 import { blockKind, buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
@@ -57,6 +59,27 @@ export function InventoryGrid({
     if (restored) writeWindow(eventId, checkIn, checkOut, defaultCheckIn, defaultCheckOut);
   }, [restored, eventId, checkIn, checkOut, defaultCheckIn, defaultCheckOut]);
   const isEventWindow = checkIn === defaultCheckIn && checkOut === defaultCheckOut;
+
+  // What is in the two date boxes, which becomes the window only once it is a
+  // real date and has stopped changing for a moment. The browser's calendar
+  // changes the date with every month arrow; applying each of those at once
+  // reloaded the sheet under the open calendar and closed it, so a day in
+  // another month could never be clicked (Ami's review, 2026-10-01).
+  const [checkInBox, setCheckInBox] = useState(checkIn);
+  const [checkOutBox, setCheckOutBox] = useState(checkOut);
+  useEffect(() => setCheckInBox(checkIn), [checkIn]);
+  useEffect(() => setCheckOutBox(checkOut), [checkOut]);
+  useEffect(() => {
+    // A year still being typed ("0002") is not a date yet.
+    const real = (value: string) => /^(19|20|21)\d{2}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(parseDay(value).getTime());
+    if (!real(checkInBox) || !real(checkOutBox) || checkOutBox <= checkInBox) return;
+    if (checkInBox === checkIn && checkOutBox === checkOut) return;
+    const timer = setTimeout(() => {
+      setCheckIn(checkInBox);
+      setCheckOut(checkOutBox);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [checkInBox, checkOutBox, checkIn, checkOut]);
 
   const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -166,7 +189,9 @@ export function InventoryGrid({
     clientId: clientId || undefined,
     checkIn: parseDay(checkIn),
     checkOut: parseDay(checkOut),
-  }, { enabled: restored });
+    // The last sheet stays on screen while the next one loads, so nothing —
+    // an open calendar least of all — disappears from under the pointer.
+  }, { enabled: restored, placeholderData: keepPreviousData });
   const clients = api.clients.list.useQuery();
   // What is available over the window in view (doc §5.4): whole rooms held
   // by us and not sold on every night of it. Only a sale takes a room — a
@@ -181,7 +206,7 @@ export function InventoryGrid({
       checkIn: parseDay(checkIn),
       checkOut: parseDay(checkOut),
     },
-    { enabled: restored },
+    { enabled: restored, placeholderData: keepPreviousData },
   );
 
   const toggleSet = (
@@ -508,6 +533,35 @@ export function InventoryGrid({
             Nothing to look out for in this window — every cell is clear.
           </p>
         ) : (
+          <>
+          {(issues.has(4) || issues.has(3)) && (() => {
+            // Critical and urgent are said loudly, above everything else.
+            const critical = issues.get(4)?.keys.size ?? 0;
+            const urgent = issues.get(3)?.keys.size ?? 0;
+            const worst = critical ? 4 : 3;
+            return (
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border-2 border-[#c03654] bg-[#fde8ec] px-4 py-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#c03654] text-sm font-bold text-white" aria-hidden="true">
+                  !
+                </span>
+                <p className="min-w-0 flex-1 text-[13px] text-[#8e1f36]">
+                  <span className="font-semibold">
+                    {critical + urgent} room-night{critical + urgent === 1 ? " needs" : "s need"} attention now
+                  </span>
+                  {" — "}
+                  {[critical ? `${critical} critical` : null, urgent ? `${urgent} urgent` : null].filter(Boolean).join(", ")}.
+                  <span className="block text-xs font-light">Outlined in red on the sheet. Point at one to see why.</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIssueFilter(issueFilter === worst ? null : worst)}
+                  className="rounded-full bg-[#c03654] px-4 py-1.5 text-[13px] font-medium text-white hover:bg-[#a52b46]"
+                >
+                  {issueFilter === worst ? "Show everything" : "Show only those"}
+                </button>
+              </div>
+            );
+          })()}
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <span className="text-ink-500 text-[13px] font-light">Look out for:</span>
             {levels.map((level) => {
@@ -540,6 +594,7 @@ export function InventoryGrid({
               </button>
             )}
           </div>
+          </>
         );
       })()}
 
@@ -583,16 +638,18 @@ export function InventoryGrid({
           <div className="w-40">
             <Input
               type="date"
-              value={checkIn}
-              onChange={(e) => setCheckIn(e.target.value)}
+              value={checkInBox}
+              onChange={(e) => setCheckInBox(e.target.value)}
+              aria-label="From"
             />
           </div>
           <span className="text-ink-400">–</span>
           <div className="w-40">
             <Input
               type="date"
-              value={checkOut}
-              onChange={(e) => setCheckOut(e.target.value)}
+              value={checkOutBox}
+              onChange={(e) => setCheckOutBox(e.target.value)}
+              aria-label="Until"
             />
           </div>
         </div>
@@ -790,10 +847,15 @@ export function InventoryGrid({
                                               } ${edge.top && edge.right ? "rounded-tr-md" : ""} ${
                                                 edge.bottom && edge.left ? "rounded-bl-md" : ""
                                               } ${edge.bottom && edge.right ? "rounded-br-md" : ""} ${
-                                                // An outline round the whole block, not every night.
-                                                outlined(block.kind)
-                                                  ? `${edge.top ? "border-t" : ""} ${edge.bottom ? "border-b" : ""} ${edge.left ? "border-l" : ""} ${edge.right ? "border-r" : ""}`
-                                                  : ""
+                                                // An outline round the whole block, not every night —
+                                                // thick and coloured where it needs attention.
+                                                block.severity >= 2
+                                                  ? `${edge.top ? "border-t-2" : ""} ${edge.bottom ? "border-b-2" : ""} ${edge.left ? "border-l-2" : ""} ${edge.right ? "border-r-2" : ""} ${
+                                                      block.severity >= 3 ? "border-[#c03654]!" : "border-[#e0a02a]!"
+                                                    }`
+                                                  : outlined(block.kind)
+                                                    ? `${edge.top ? "border-t" : ""} ${edge.bottom ? "border-b" : ""} ${edge.left ? "border-l" : ""} ${edge.right ? "border-r" : ""}`
+                                                    : ""
                                               }`}
                                             />
                                           ) : null}
@@ -879,6 +941,23 @@ export function InventoryGrid({
             const date = dates[b.labelDate];
             const cell = row && date ? cells[`${row.slotId}|${dayKey(date)}`] : undefined;
             return cell?.position;
+          })()}
+          recorded={(() => {
+            // Every night of the booking, for its notes and prices (doc §5.4).
+            const b = blocks[hovered.block]!;
+            const nights = b.runs.flatMap((run) =>
+              dates.slice(run.from, run.to + 1).map((date) => cells[`${visibleRows[run.row]!.slotId}|${dayKey(date)}`]),
+            );
+            const distinct = (read: (cell: NonNullable<(typeof nights)[number]>) => string | null) => [
+              ...new Set(nights.map((cell) => (cell ? read(cell) : null)).filter((value): value is string => Boolean(value))),
+            ];
+            return {
+              salesNotes: distinct((cell) => cell.salesNotes),
+              supplierNotes: distinct((cell) => cell.acquisitionNotes),
+              sellPrices: distinct((cell) =>
+                cell.sellPriceCents !== null && cell.sellCurrency ? formatMoney(cell.sellPriceCents, cell.sellCurrency) : null,
+              ),
+            };
           })()}
           checkOutDay={hovered.checkOutDay}
           continuesBefore={continues[hovered.block]?.before ?? false}
@@ -1089,6 +1168,7 @@ function BlockSummary({
   dates,
   rooms,
   detail,
+  recorded,
   checkOutDay,
   continuesBefore,
   continuesAfter,
@@ -1099,6 +1179,7 @@ function BlockSummary({
   dates: Date[];
   rooms: { slotNumber: number; categorySize: number }[];
   detail?: { headline: string; detail: string | null; flags: string[] };
+  recorded: { salesNotes: string[]; supplierNotes: string[]; sellPrices: string[] };
   checkOutDay?: Date;
   continuesBefore: boolean;
   continuesAfter: boolean;
@@ -1165,6 +1246,26 @@ function BlockSummary({
         <dd className="text-ink-900">
           {plural(numbers.length, "room", "rooms")} of {rooms[0]?.categorySize ?? numbers.length} · {roomList}
         </dd>
+        {hasClient(block.kind) && recorded.sellPrices.length > 0 && (
+          <>
+            <dt className="text-ink-500">Client pays</dt>
+            <dd className="text-ink-900">
+              {recorded.sellPrices.length === 1 ? `${recorded.sellPrices[0]} a night` : `varies — ${recorded.sellPrices.join(", ")}`}
+            </dd>
+          </>
+        )}
+        {recorded.salesNotes.length > 0 && (
+          <>
+            <dt className="text-ink-500">Client notes</dt>
+            <dd className="text-ink-900 whitespace-pre-line">{recorded.salesNotes.join("\n")}</dd>
+          </>
+        )}
+        {recorded.supplierNotes.length > 0 && (
+          <>
+            <dt className="text-ink-500">Supplier notes</dt>
+            <dd className="text-ink-900 whitespace-pre-line">{recorded.supplierNotes.join("\n")}</dd>
+          </>
+        )}
       </dl>
       {!block.uniform && (
         <p className="text-ink-500 mt-2 font-light">Not every room checks in and out on the same day.</p>
@@ -1208,7 +1309,12 @@ function Legend() {
         Check-out day
       </span>
       <span className="flex items-center gap-1.5">
-        <AttentionMark severity={3} /> Needs attention — hover for why
+        <span className="inline-block h-3 w-5 rounded-sm border-2 border-[#e0a02a] bg-white" />
+        <AttentionMark severity={2} /> Warning
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-5 rounded-sm border-2 border-[#c03654] bg-white" />
+        <AttentionMark severity={3} /> Urgent or critical — point at it for why
       </span>
     </div>
   );

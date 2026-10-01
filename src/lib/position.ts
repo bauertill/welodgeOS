@@ -260,6 +260,9 @@ export function positionOf(
       flags.push(`${what} expired on ${formatDay(date)}`);
       deadlineSeverity = highest(deadlineSeverity, 2);
     } else if (urgency === "urgent") {
+      // Said in words, so a warning on the sheet explains itself.
+      const days = daysUntil(date, today);
+      flags.push(`${what} runs out ${days <= 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`} (${formatDay(date)})`);
       deadlineSeverity = highest(deadlineSeverity, 2);
     } else if (urgency === "upcoming") {
       deadlineSeverity = highest(deadlineSeverity, 1);

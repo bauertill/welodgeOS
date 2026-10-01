@@ -1,0 +1,40 @@
+# Every night at midnight UTC, staging's database becomes a fresh copy of the
+# live data, with staging's own not-yet-live database changes re-applied on
+# top (scripts/reset-staging.sh). Anything entered on staging during the day
+# is gone the next morning — by design: staging is for trying, not keeping.
+#
+# Also runs on demand: GitHub → Actions → Reset staging → Run workflow.
+#
+# GitHub only runs schedules from master, so this file has to reach master
+# before the nightly reset starts.
+name: Reset staging
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency: reset-staging
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check the secrets are set
+        run: test -n "$STAGING_DATABASE_URL" || { echo "STAGING_DATABASE_URL secret is missing"; exit 1; }
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      - run: ./scripts/reset-staging.sh
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
