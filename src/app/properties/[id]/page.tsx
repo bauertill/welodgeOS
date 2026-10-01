@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
 import { DeleteProperty } from "~/app/_components/delete-property";
+import { DisclosureCard } from "~/app/_components/disclosure";
+import { PropertyQuotations } from "~/app/_components/quotations";
 import {
   AmenitiesCard,
   ContactsCard,
@@ -75,6 +77,11 @@ export default async function PropertyPage({
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          <PropertyQuotations
+            entries={[...property.scoutingEntries].sort((a, b) => Number(b.id === cameFrom?.id) - Number(a.id === cameFrom?.id))}
+            categories={property.categories}
+          />
+
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
               Updates
@@ -123,12 +130,10 @@ export default async function PropertyPage({
             )}
           </Card>
 
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Activity
-            </h2>
+          {/* Kept for the record, rarely read: closed until asked for. */}
+          <DisclosureCard title="Activity">
             <ActivityLog entity="Property" entityId={property.id} />
-          </Card>
+          </DisclosureCard>
         </div>
 
         <div className="space-y-5">

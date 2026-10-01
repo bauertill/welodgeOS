@@ -8,7 +8,6 @@ import {
   ScoutingStatusKey,
 } from "~/app/_components/scouting-list";
 import { Card, PageHeader } from "~/app/_components/ui";
-import { dayKey } from "~/lib/dates";
 import { formatRange } from "~/lib/format";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
@@ -78,12 +77,7 @@ export default async function EventPropertiesPage({
         </Link>
       </p>
 
-      <ScoutingList
-        eventId={event.id}
-        places={places}
-        amenities={amenities}
-        stay={{ checkIn: dayKey(event.startDate), checkOut: dayKey(event.endDate) }}
-      />
+      <ScoutingList eventId={event.id} places={places} amenities={amenities} />
 
       <Card className="mt-8">
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">

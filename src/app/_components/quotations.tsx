@@ -12,7 +12,46 @@ import { contractHref } from "~/lib/finance";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 /**
- * A hotel's quotations for an event (doc §3.10): each one a scenario — a group,
+ * The Quotations card on a property's page (doc §3.10): its quotations for
+ * each event it is on, the event it was opened from first. Tinted, so it
+ * stands apart from what the property is.
+ */
+export function PropertyQuotations({
+  entries,
+  categories,
+}: {
+  entries: { id: string; event: { id: string; name: string; startDate: Date; endDate: Date } }[];
+  categories: Category[];
+}) {
+  return (
+    <section id="quotations" className="border-brand-200 bg-brand-50 scroll-mt-6 rounded-xl border p-5">
+      <h2 className="text-brand-900 text-[15px] font-medium">Quotations</h2>
+      {entries.length === 0 ? (
+        <p className="text-ink-500 mt-2 text-sm font-light">Put the property on an event&apos;s list to record what it quotes for that event.</p>
+      ) : categories.length === 0 ? (
+        <p className="text-ink-500 mt-2 text-sm font-light">
+          Add the property&apos;s room categories first — each line of a quotation is rooms of one of them.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-6">
+          {entries.map((entry) => (
+            <QuotationsSection
+              key={entry.id}
+              scoutingEntryId={entry.id}
+              eventId={entry.event.id}
+              eventName={entries.length > 1 ? entry.event.name : null}
+              categories={categories}
+              stay={{ checkIn: dayKey(entry.event.startDate), checkOut: dayKey(entry.event.endDate) }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A hotel's quotations for one event (doc §3.10): each one a scenario — a group,
  * periods and room categories with rooms and rates, and the terms offered —
  * kept apart from the hotel's general details. An accepted one becomes the
  * supplier contract.
@@ -39,11 +78,14 @@ const statusStyles: Record<QuotationStatus, string> = {
 export function QuotationsSection({
   scoutingEntryId,
   eventId,
+  eventName,
   categories,
   stay,
 }: {
   scoutingEntryId: string;
   eventId: string;
+  /** Named only when the property is on more than one event. */
+  eventName: string | null;
   categories: Category[];
   /** The event's own dates, as a starting point for a new line. */
   stay: { checkIn: string; checkOut: string };
@@ -52,12 +94,11 @@ export function QuotationsSection({
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const rows = quotations.data ?? [];
   return (
-    // Sticky and capped: the row it opens in belongs to a table far wider than
-    // the screen, which scrolls sideways.
-    <div className="border-ink-200/60 sticky left-5 mt-4 ml-5 max-w-5xl border-t pt-4">
+    <div>
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 className="text-ink-900 text-[14px] font-medium">
-          Quotations{rows.length > 0 && <span className="text-ink-500 ml-1.5 text-xs font-light">{rows.length}</span>}
+        <h3 className="text-ink-700 text-[13px] font-medium">
+          {eventName && `For ${eventName}`}
+          {eventName && rows.length > 0 && <span className="text-ink-500 ml-1.5 text-xs font-light">{rows.length}</span>}
         </h3>
         {editing === null && (
           <button type="button" onClick={() => setEditing("new")} className="text-brand-700 text-[13px] font-medium hover:underline">
@@ -307,7 +348,7 @@ function QuotationEditor({
 
   return (
     <form
-      className="border-brand-200 bg-brand-50/40 space-y-4 rounded-lg border p-4"
+      className="border-brand-300 space-y-4 rounded-lg border bg-white p-4"
       onSubmit={(e) => {
         e.preventDefault();
         setProblem(null);

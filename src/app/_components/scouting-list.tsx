@@ -31,7 +31,6 @@ import {
 import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RoomCategoryTable } from "~/app/_components/room-categories";
-import { QuotationsSection } from "~/app/_components/quotations";
 import { GroupHeader, Initials, NewGroup } from "~/app/_components/property-groups";
 import { api } from "~/trpc/react";
 
@@ -52,11 +51,8 @@ export function ScoutingList({
   eventId,
   places,
   amenities,
-  stay,
 }: {
   eventId: string;
-  /** The event's own dates — where a new quotation line starts. */
-  stay: { checkIn: string; checkOut: string };
   /** The event's places of interest (doc §3.7) — venues, airports, stations. */
   places: MapPlace[];
   amenities: { id: string; label: string }[];
@@ -280,14 +276,13 @@ export function ScoutingList({
                           {property.stars ? ` · ${property.stars}-star` : ""}
                         </span>
                         {entry.quotations.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => hasCategories && !categoryOpen && toggleExpanded(entry.id)}
+                          <PendingLink
+                            href={`/properties/${property.id}?back=${encodeURIComponent(`/events/${eventId}`)}#quotations`}
                             className="text-brand-700 block text-xs font-light hover:underline"
                           >
                             {entry.quotations.length} {entry.quotations.length === 1 ? "quotation" : "quotations"}
                             {entry.quotations.some((quotation) => quotation.status === "ACCEPTED") && " · one accepted"}
-                          </button>
+                          </PendingLink>
                         )}
                         {statusSummary.map((line) => (
                           <span
@@ -424,12 +419,6 @@ export function ScoutingList({
                             status,
                           })
                         }
-                      />
-                      <QuotationsSection
-                        scoutingEntryId={entry.id}
-                        eventId={eventId}
-                        categories={property.categories}
-                        stay={stay}
                       />
                       {/* The history only grows, so it is behind a button rather
                           than always open under the room categories. */}
@@ -582,7 +571,7 @@ export function ScoutingList({
         hasQuotations ? (
           <EmptyState
             title="No property has a quotation yet"
-            description="Open a property and add the quotation it sent — then it shows here and on the map."
+            description="Open a property and add the quotation it sent in its Quotations section — then it shows here and on the map."
           />
         ) : (
           <EmptyState

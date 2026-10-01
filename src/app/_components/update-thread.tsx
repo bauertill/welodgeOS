@@ -13,7 +13,8 @@ type Scope = { propertyId: string; clientId?: undefined } | { clientId: string; 
 /**
  * The Updates feed (doc §2.6): a running history of meeting notes and
  * feedback on a property or a client, with @mentions of colleagues. Newest
- * first, same convention as the inventory ledger. An author can edit their
+ * first, same convention as the inventory ledger; only the latest shows
+ * until "View more" opens the rest. An author can edit their
  * own post, which then says it was edited, and when.
  */
 export function UpdateThread(scope: Scope) {
@@ -23,6 +24,10 @@ export function UpdateThread(scope: Scope) {
   const me = api.user.me.useQuery();
   const [body, setBody] = useState("");
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
+  // Only the latest shows until asked: the feed only grows.
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? updates.data : updates.data?.slice(0, 1);
+  const earlier = (updates.data?.length ?? 0) - 1;
 
   const edit = api.update.edit.useMutation({
     onSuccess: () => {
@@ -65,7 +70,7 @@ export function UpdateThread(scope: Scope) {
 
       {updates.data && updates.data.length > 0 ? (
         <ul className="space-y-3">
-          {updates.data.map((entry) => (
+          {shown!.map((entry) => (
             <li key={entry.id} className="border-ink-200/60 rounded-lg border p-3">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-ink-900 text-[13px] font-medium">
@@ -129,6 +134,17 @@ export function UpdateThread(scope: Scope) {
               )}
             </li>
           ))}
+          {earlier > 0 && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setShowAll((current) => !current)}
+                className="text-brand-700 text-[13px] font-light hover:underline"
+              >
+                {showAll ? "Show only the latest" : `View more — ${earlier} earlier ${earlier === 1 ? "update" : "updates"}`}
+              </button>
+            </li>
+          )}
         </ul>
       ) : (
         <p className="text-ink-500 text-sm font-light">No updates yet.</p>

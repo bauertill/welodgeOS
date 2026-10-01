@@ -180,6 +180,10 @@ is replaced, so nothing that was said is lost, and the "Edited" note means a rea
 knows the text is not what was first posted. The earlier wordings are not shown anywhere yet
 — there is no "see previous versions" — but they are there if they are ever needed.
 
+**Only the latest update shows.** The feed only grows, so the rest sit behind *View more*,
+which says how many earlier ones there are and opens them all, newest first. This holds on
+a property's page and on a client's.
+
 ### 2.7 The team — profiles and internal chat
 
 Like Updates, this sits outside the three phases: it is about the people at We Lodge, not
@@ -846,8 +850,12 @@ so the tab's old *From* column, which showed the indicative price, is gone.
 What a hotel **offered** for an event is kept apart from what the hotel **is**. A hotel
 often sends several offers for the same event — different periods, a different number
 of rooms, a different group — so each quotation is a scenario of its own, and a
-property on the Properties tab can hold any number of them. They are listed when its
-row is opened, under its room categories.
+property can hold any number of them. They live on the **property's page**, in a
+*Quotations* section at the top, tinted so it stands apart from what the property is. A
+property on several events shows each event's quotations under that event's name, the
+event it was opened from first. They are not shown under the property's row on the
+Properties tab, where many of them would make the board too long; the row says how many
+there are and links to them.
 
 A quotation has:
 
@@ -884,6 +892,9 @@ The Properties tab's **With quotations** button shows only the properties that h
 least one quotation, on the list and on the map. A property's row says how many it has,
 and whether one is accepted. Adding, changing, accepting, declining and removing a
 quotation are recorded in the property's history for the event.
+
+On the property's page, the **Activity** — the record of every change to the property —
+is closed until *Show* opens it: it is kept for the record and rarely read.
 
 Decided with the owner: statuses on the Properties tab stay as they are (Prospect,
 Contacted, Shortlisted, Rejected); a quotation has its own three. A quotation can only use
@@ -2201,7 +2212,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
-| §2.6 Updates | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. No deleting. No notification is sent — see §9 |
+| §2.6 Updates | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
 | §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |
@@ -2226,7 +2237,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each card of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
-| §3.10 Quotations | **Built** | Several per property per event, lines of periods × room categories with rooms and rates, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 Quotations | **Built** | On the property's page, tinted, per event; Activity there closed until opened, Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
