@@ -6,7 +6,7 @@ build next and what to fix in what already exists. Update it as things get
 done or the plan changes. It is not meant to be exhaustive of every polish
 item, only what someone would need to know to decide what to work on next.
 
-Last reviewed: 2026-09-30.
+Last reviewed: 2026-10-01.
 
 ---
 
@@ -240,6 +240,14 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       an upgrade request only for public apps.
       *2026-09-30:* Brandon has a key and it works locally; it still has to be
       added to the Vercel project (someone with Vercel access — Till).
+- [ ] **Google Places, to find hotels near a venue automatically**
+      (`product-scope.md` §3.10, the Properties overhaul). The plan: enter an
+      event's venue and get the hotels around it as a list and on the map,
+      ready to add to the event's Properties. Needs **Places API (New)**
+      switched on in the Google Cloud project that already holds the Maps and
+      Routes key, and a budget alert like the Routes one — Till. Brandon asked
+      (2026-10-01) for this not to be forgotten; it is the next part of the
+      overhaul once the API is on.
 
 ## 3. Phase 3 — Operations
 
