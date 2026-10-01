@@ -1571,7 +1571,12 @@ the fact that makes it so is highlighted in the warning's colour, with its "!": 
 supplier side when a client holds what we have not bought (*Acquisition: Nothing
 started*), or the date running out — the option, the block or the due date, which the card
 lists whenever they apply. A booking blocked with nothing bought and an expired block has
-both marked. (2026-10-01.) (From Ami's review, 2026-09-30: notes could be written
+both marked. (2026-10-01.) **A problem is said where it is.** What is missing in the panel —
+the client, the price, a block or option date, the manager — is pointed out under that
+field before anything is sent, and the panel scrolls to the first one and puts the cursor
+in it; the message goes as soon as the field is filled in. A refusal from the system about
+one field lands under it too; one about the nights themselves (*"already sold to another
+client"*) stays by the button, which the panel scrolls to. (2026-10-01.) (From Ami's review, 2026-09-30: notes could be written
 but never read back.) **The last
 day highlighted is the check-out day**, as a stay is written everywhere else: highlighting
 10 Jul to 31 Jul selects check-in 10 Jul, check-out 31 Jul, 21 nights, and changes those 21

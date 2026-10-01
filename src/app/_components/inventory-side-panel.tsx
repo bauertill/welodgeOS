@@ -222,6 +222,30 @@ export function InventorySidePanel({
 
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  // A problem with one field is said under that field, not at the foot of the
+  // panel where it has to be scrolled to (2026-10-01).
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<PanelField, string>>>({});
+  const showProblems = (problems: Partial<Record<PanelField, string>>) => {
+    setFieldErrors(problems);
+    const first = panelFields.find((field) => problems[field]);
+    if (!first) return;
+    requestAnimationFrame(() => {
+      const box = document.getElementById(`panel-field-${first}`);
+      box?.scrollIntoView({ block: "center", behavior: "smooth" });
+      box?.querySelector<HTMLElement>("input, select, textarea")?.focus({ preventScroll: true });
+    });
+  };
+  const footer = useRef<HTMLDivElement>(null);
+  // A message goes as soon as its field is put right, and all of them when the action changes.
+  const clear = (field: PanelField) => setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
+  useEffect(() => clear("client"), [clientId]);
+  useEffect(() => clear("optionExpiry"), [optionExpiry]);
+  useEffect(() => clear("blockExpiry"), [blockExpiry]);
+  useEffect(() => clear("buyPrice"), [buyPrice]);
+  useEffect(() => clear("sellPrice"), [sellPrice]);
+  useEffect(() => clear("acquisitionOwner"), [acquisitionOwnerId]);
+  useEffect(() => clear("salesOwner"), [salesOwnerId]);
+  useEffect(() => setFieldErrors({}), [action]);
 
   const apply = api.inventory.applyChange.useMutation({
     onSuccess: (outcome) => {
@@ -235,7 +259,16 @@ export function InventorySidePanel({
     },
     onError: (e) => {
       setResult(null);
-      setError(e.message);
+      // A refusal about one field goes under it; anything else — a night
+      // already held by someone else, say — stays by the button, in view.
+      const field = fieldOfMessage(e.message);
+      if (field) {
+        setError(null);
+        showProblems({ [field]: e.message });
+      } else {
+        setError(e.message);
+        requestAnimationFrame(() => footer.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+      }
     },
   });
 
@@ -302,6 +335,34 @@ export function InventorySidePanel({
   const submit = async () => {
     setError(null);
     setResult(null);
+
+    // What is plainly missing is said before anything is sent, field by field.
+    const problems: Partial<Record<PanelField, string>> = {};
+    const needs = (field: PanelField, missing: boolean, message: string) => {
+      if (missing && !problems[field]) problems[field] = message;
+    };
+    const known = dateRangeEdited ? [] : cells;
+    needs("client", shows("client") && !clientId, "Say which client this is for.");
+    needs("optionExpiry", shows("optionExpiry") && !optionExpiry, "Give the date the option runs to.");
+    needs("blockExpiry", shows("blockExpiry") && !blockExpiry, "Give the date the block runs to — a block without one is inventory frozen for free.");
+    needs(
+      "buyPrice",
+      (needsBuyPrice.includes(action) || action === "REPRICE_BUY") &&
+        !buyPrice.trim() &&
+        (action === "REPRICE_BUY" || known.length === 0 || known.some((cell) => cell.buyPriceCents === null)),
+      "Give the price we pay per night — a night marked bought needs its price.",
+    );
+    needs(
+      "sellPrice",
+      (needsSellPrice.includes(action) || action === "REPRICE_SELL") &&
+        !sellPrice.trim() &&
+        (action === "REPRICE_SELL" || known.length === 0 || known.some((cell) => cell.sellPriceCents === null || cell.clientId !== clientId)),
+      `Give the price the client pays per night — a night ${action === "BLOCK" ? "blocked" : "sold"} for a client needs its agreed price.`,
+    );
+    needs("acquisitionOwner", action === "REASSIGN_ACQUISITION_OWNER" && !acquisitionOwnerId, "Pick who takes over with the supplier.");
+    needs("salesOwner", action === "REASSIGN_SALES_OWNER" && !salesOwnerId, "Pick who takes over with the client.");
+    showProblems(problems);
+    if (Object.keys(problems).length) return;
 
     // A rectangle that already carries data on the axis this action touches
     // is about to be overwritten silently — ask first (doc §4), exactly as
@@ -487,56 +548,59 @@ export function InventorySidePanel({
           </Field>
 
           {shows("client") && (
-            <Field label="Client">
-              {addingClient ? (
-                <div className="border-ink-200/60 space-y-2 rounded-lg border p-3">
-                  <Input
-                    value={newClientName}
-                    onChange={(e) => setNewClientName(e.target.value)}
-                    placeholder="Name"
-                    autoFocus
-                  />
-                  <Input
-                    value={newClientShortName}
-                    onChange={(e) => setNewClientShortName(e.target.value)}
-                    placeholder="Short name (used on the stock sheet)"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      disabled={!newClientName.trim() || createClient.isPending}
-                      onClick={() =>
-                        createClient.mutate({
-                          name: newClientName,
-                          shortName: newClientShortName || undefined,
-                        })
-                      }
-                    >
-                      {createClient.isPending ? "Adding…" : "Add client"}
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={() => setAddingClient(false)}>
-                      Cancel
-                    </Button>
+            <div id="panel-field-client">
+              <Field label="Client">
+                {addingClient ? (
+                  <div className="border-ink-200/60 space-y-2 rounded-lg border p-3">
+                    <Input
+                      value={newClientName}
+                      onChange={(e) => setNewClientName(e.target.value)}
+                      placeholder="Name"
+                      autoFocus
+                    />
+                    <Input
+                      value={newClientShortName}
+                      onChange={(e) => setNewClientShortName(e.target.value)}
+                      placeholder="Short name (used on the stock sheet)"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        disabled={!newClientName.trim() || createClient.isPending}
+                        onClick={() =>
+                          createClient.mutate({
+                            name: newClientName,
+                            shortName: newClientShortName || undefined,
+                          })
+                        }
+                      >
+                        {createClient.isPending ? "Adding…" : "Add client"}
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={() => setAddingClient(false)}>
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <Select
-                  value={clientId}
-                  onChange={(e) => {
-                    if (e.target.value === "__new__") setAddingClient(true);
-                    else setClientId(e.target.value);
-                  }}
-                >
-                  <option value="">Choose…</option>
-                  {(clients.data ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.shortName ? `${c.shortName} — ${c.name}` : c.name}
-                    </option>
-                  ))}
-                  <option value="__new__">+ Add a new client…</option>
-                </Select>
-              )}
-            </Field>
+                ) : (
+                  <Select
+                    value={clientId}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") setAddingClient(true);
+                      else setClientId(e.target.value);
+                    }}
+                  >
+                    <option value="">Choose…</option>
+                    {(clients.data ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.shortName ? `${c.shortName} — ${c.name}` : c.name}
+                      </option>
+                    ))}
+                    <option value="__new__">+ Add a new client…</option>
+                  </Select>
+                )}
+              </Field>
+              <FieldProblem message={fieldErrors.client} />
+            </div>
           )}
 
           {shows("supplierRef") && (
@@ -546,29 +610,35 @@ export function InventorySidePanel({
           )}
 
           {shows("optionExpiry") && (
-            <Field
-              label="Option runs to"
-              hint="Required. An option without a date is invisible to every deadline report."
-            >
-              <Input
-                type="date"
-                value={optionExpiry}
-                onChange={(e) => setOptionExpiry(e.target.value)}
-              />
-            </Field>
+            <div id="panel-field-optionExpiry">
+              <Field
+                label="Option runs to"
+                hint="Required. An option without a date is invisible to every deadline report."
+              >
+                <Input
+                  type="date"
+                  value={optionExpiry}
+                  onChange={(e) => setOptionExpiry(e.target.value)}
+                />
+              </Field>
+              <FieldProblem message={fieldErrors.optionExpiry} />
+            </div>
           )}
 
           {shows("blockExpiry") && (
-            <Field
-              label="Block runs to"
-              hint="Required. A block with no deadline is inventory frozen for free."
-            >
-              <Input
-                type="date"
-                value={blockExpiry}
-                onChange={(e) => setBlockExpiry(e.target.value)}
-              />
-            </Field>
+            <div id="panel-field-blockExpiry">
+              <Field
+                label="Block runs to"
+                hint="Required. A block with no deadline is inventory frozen for free."
+              >
+                <Input
+                  type="date"
+                  value={blockExpiry}
+                  onChange={(e) => setBlockExpiry(e.target.value)}
+                />
+              </Field>
+              <FieldProblem message={fieldErrors.blockExpiry} />
+            </div>
           )}
 
           {forRequest && clientId && openRequests.length > 0 && (
@@ -601,99 +671,111 @@ export function InventorySidePanel({
           )}
 
           {shows("buyPrice") && (
-            <Field
-              label={needsBuyPrice.includes(action) ? "We pay, per night — required" : "We pay, per night"}
-              hint={
-                needsBuyPrice.includes(action)
-                  ? "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
-                  : undefined
-              }
-            >
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  value={buyPrice}
-                  onChange={(e) => setBuyPrice(e.target.value)}
-                  placeholder={varies(start.buyPrice) ? "Varies — leave empty to keep" : undefined}
-                  title={varies(start.buyPrice)}
-                />
-                <Select
-                  value={buyCurrency}
-                  onChange={(e) => setBuyCurrency(e.target.value)}
-                  className="w-24"
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </Select>
-              </div>
-            </Field>
+            <div id="panel-field-buyPrice">
+              <Field
+                label={needsBuyPrice.includes(action) ? "We pay, per night — required" : "We pay, per night"}
+                hint={
+                  needsBuyPrice.includes(action)
+                    ? "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
+                    : undefined
+                }
+              >
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={buyPrice}
+                    onChange={(e) => setBuyPrice(e.target.value)}
+                    placeholder={varies(start.buyPrice) ? "Varies — leave empty to keep" : undefined}
+                    title={varies(start.buyPrice)}
+                  />
+                  <Select
+                    value={buyCurrency}
+                    onChange={(e) => setBuyCurrency(e.target.value)}
+                    className="w-24"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </Select>
+                </div>
+              </Field>
+              <FieldProblem message={fieldErrors.buyPrice} />
+            </div>
           )}
 
           {shows("sellPrice") && (
-            <Field
-              label={needsSellPrice.includes(action) ? "Client pays, per night — required" : "Client pays, per night"}
-              hint={
-                needsSellPrice.includes(action)
-                  ? "The agreed price. Left empty, it is only accepted where every night already has this client's price."
-                  : undefined
-              }
-            >
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  value={sellPrice}
-                  onChange={(e) => setSellPrice(e.target.value)}
-                  placeholder={sameClient && varies(start.sellPrice) ? "Varies — leave empty to keep" : undefined}
-                  title={sameClient ? varies(start.sellPrice) : undefined}
-                />
-                <Select
-                  value={sellCurrency}
-                  onChange={(e) => setSellCurrency(e.target.value)}
-                  className="w-24"
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </Select>
-              </div>
-            </Field>
+            <div id="panel-field-sellPrice">
+              <Field
+                label={needsSellPrice.includes(action) ? "Client pays, per night — required" : "Client pays, per night"}
+                hint={
+                  needsSellPrice.includes(action)
+                    ? "The agreed price. Left empty, it is only accepted where every night already has this client's price."
+                    : undefined
+                }
+              >
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={sellPrice}
+                    onChange={(e) => setSellPrice(e.target.value)}
+                    placeholder={sameClient && varies(start.sellPrice) ? "Varies — leave empty to keep" : undefined}
+                    title={sameClient ? varies(start.sellPrice) : undefined}
+                  />
+                  <Select
+                    value={sellCurrency}
+                    onChange={(e) => setSellCurrency(e.target.value)}
+                    className="w-24"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </Select>
+                </div>
+              </Field>
+              <FieldProblem message={fieldErrors.sellPrice} />
+            </div>
           )}
 
           {shows("acquisitionOwner") && (
-            <Field label="Accommodation Manager">
-              <Select
-                value={acquisitionOwnerId}
-                onChange={(e) => setAcquisitionOwnerId(e.target.value)}
-              >
-                <option value="">Nobody yet</option>
-                {(people.data ?? []).map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name ?? person.email}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            <div id="panel-field-acquisitionOwner">
+              <Field label="Accommodation Manager">
+                <Select
+                  value={acquisitionOwnerId}
+                  onChange={(e) => setAcquisitionOwnerId(e.target.value)}
+                >
+                  <option value="">Nobody yet</option>
+                  {(people.data ?? []).map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name ?? person.email}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <FieldProblem message={fieldErrors.acquisitionOwner} />
+            </div>
           )}
 
           {shows("salesOwner") && (
-            <Field label="Sales Manager">
-              <Select
-                value={salesOwnerId}
-                onChange={(e) => setSalesOwnerId(e.target.value)}
-              >
-                <option value="">Nobody yet</option>
-                {(people.data ?? []).map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name ?? person.email}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            <div id="panel-field-salesOwner">
+              <Field label="Sales Manager">
+                <Select
+                  value={salesOwnerId}
+                  onChange={(e) => setSalesOwnerId(e.target.value)}
+                >
+                  <option value="">Nobody yet</option>
+                  {(people.data ?? []).map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name ?? person.email}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <FieldProblem message={fieldErrors.salesOwner} />
+            </div>
           )}
 
           {shows("acquisitionNotes") && (
@@ -730,7 +812,7 @@ export function InventorySidePanel({
           </Field>
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
+        <div ref={footer} className="mt-4 flex items-center gap-3">
           <Button
             type="button"
             disabled={!slotIds.length || !validRange || apply.isPending}
@@ -812,5 +894,34 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
         {line("Client notes", (cell) => cell.salesNotes)}
       </dl>
     </div>
+  );
+}
+
+/** The fields a problem can be pointed at, top to bottom as they appear. */
+const panelFields = ["client", "optionExpiry", "blockExpiry", "buyPrice", "sellPrice", "acquisitionOwner", "salesOwner"] as const;
+type PanelField = (typeof panelFields)[number];
+
+/** Which field the server's refusal is about, when it is about one. */
+function fieldOfMessage(message: string): PanelField | null {
+  if (/price we pay/i.test(message)) return "buyPrice";
+  if (/price the client pays/i.test(message)) return "sellPrice";
+  if (/which client/i.test(message)) return "client";
+  if (/block needs a date|block's new date/i.test(message)) return "blockExpiry";
+  if (/option needs a date|option's new date/i.test(message)) return "optionExpiry";
+  if (/takes over with the supplier/i.test(message)) return "acquisitionOwner";
+  if (/takes over with the client/i.test(message)) return "salesOwner";
+  return null;
+}
+
+/** A problem with one field, said right under it. */
+function FieldProblem({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-[#c03654]">
+      <span className="mt-px inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-[#c03654] text-[9px] font-bold text-white">
+        !
+      </span>
+      {message}
+    </p>
   );
 }
