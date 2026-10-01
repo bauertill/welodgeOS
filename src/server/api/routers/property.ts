@@ -190,7 +190,7 @@ export const propertyRouter = createTRPCRouter({
         where: { id: input.id },
         include: {
           ...detail,
-          scoutingEntries: { include: { event: true } },
+          scoutingEntries: { include: { event: true, _count: { select: { quotations: true } } } },
         },
       }),
     ),

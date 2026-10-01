@@ -850,12 +850,26 @@ so the tab's old *From* column, which showed the indicative price, is gone.
 What a hotel **offered** for an event is kept apart from what the hotel **is**. A hotel
 often sends several offers for the same event — different periods, a different number
 of rooms, a different group — so each quotation is a scenario of its own, and a
-property can hold any number of them. They live on the **property's page**, in a
-*Quotations* section at the top, tinted so it stands apart from what the property is. A
-property on several events shows each event's quotations under that event's name, the
-event it was opened from first. They are not shown under the property's row on the
-Properties tab, where many of them would make the board too long; the row says how many
-there are and links to them.
+property can hold any number of them. They live on the **property's page**, on its
+*Quotations* tab, the first one, which is coloured so it stands apart. Each quotation is
+one tinted line — its name, status, period, room-nights, rooms and total — and opens to
+its lines, terms and actions; a lone quotation starts open. A property on several events
+shows each event's quotations under that event's name, the event it was opened from
+first. They are not shown under the property's row on the Properties tab, where many of
+them would make the board too long; the row says how many there are and links straight
+to the tab.
+
+**The property's page** is laid out so that it fits on a screen rather than being a long
+stack of cards:
+
+- Under the name, the events the property is on, each with its status, as links.
+- On the left, one card of tabs: **Quotations**, **Room categories** (or *Unit types*),
+  **Updates** and **Activity**. The address remembers the tab, so a link can open one.
+  The Updates box is one line until something is typed into it.
+- On the right, one **Details** panel instead of a card per subject: Notes, Where it is,
+  Contacts, Amenities, More about the property and Contracting details, each a section
+  that folds shut. The last two start shut, saying how many of their fields are filled.
+  Fields that are empty are left out of the panel; *Edit* on a section shows them all.
 
 A quotation has:
 
@@ -896,7 +910,7 @@ and whether one is accepted. Adding, changing, accepting, declining and removing
 quotation are recorded in the property's history for the event.
 
 On the property's page, the **Activity** — the record of every change to the property —
-is closed until *Show* opens it: it is kept for the record and rarely read.
+is a tab of its own, out of the way: it is kept for the record and rarely read.
 
 Decided with the owner: statuses on the Properties tab stay as they are (Prospect,
 Contacted, Shortlisted, Rejected); a quotation has its own three. A quotation can only use
@@ -2238,8 +2252,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
-| §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each card of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
-| §3.10 Quotations | **Built** | On the property's page, tinted, per event; Activity there closed until opened, Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
+| §3.10 Quotations | **Built** | On the property's page, first of its tabs (Quotations, Room categories, Updates, Activity), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |

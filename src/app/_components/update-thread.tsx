@@ -50,9 +50,11 @@ export function UpdateThread(scope: Scope) {
           value={body}
           onChange={setBody}
           people={people.data ?? []}
-          placeholder="Write an update and mention colleagues with @"
-          rows={3}
+          placeholder="Write an update — @ to mention a colleague"
+          // One line until something is typed, so an empty box takes no room.
+          rows={body ? 3 : 1}
         />
+        {(body || post.error) && (
         <div className="mt-2 flex items-center justify-between gap-3">
           {post.error && (
             <p className="text-xs text-[#c03654]">{post.error.message}</p>
@@ -66,6 +68,7 @@ export function UpdateThread(scope: Scope) {
             {post.isPending ? "Posting…" : "Post update"}
           </Button>
         </div>
+        )}
       </div>
 
       {updates.data && updates.data.length > 0 ? (

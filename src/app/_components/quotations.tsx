@@ -14,9 +14,9 @@ import { describeRateIncludes } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 /**
- * The Quotations card on a property's page (doc §3.10): its quotations for
- * each event it is on, the event it was opened from first. Tinted, so it
- * stands apart from what the property is.
+ * The Quotations tab of a property's page (doc §3.10): its quotations for
+ * each event it is on, the event it was opened from first. Each is one tinted
+ * line until opened, so many of them still fit on a screen.
  */
 export function PropertyQuotations({
   entries,
@@ -26,16 +26,15 @@ export function PropertyQuotations({
   categories: Category[];
 }) {
   return (
-    <section id="quotations" className="border-brand-200 bg-brand-50 scroll-mt-6 rounded-xl border p-5">
-      <h2 className="text-brand-900 text-[15px] font-medium">Quotations</h2>
+    <div>
       {entries.length === 0 ? (
-        <p className="text-ink-500 mt-2 text-sm font-light">Put the property on an event&apos;s list to record what it quotes for that event.</p>
+        <p className="text-ink-500 text-sm font-light">Put the property on an event&apos;s list to record what it quotes for that event.</p>
       ) : categories.length === 0 ? (
-        <p className="text-ink-500 mt-2 text-sm font-light">
+        <p className="text-ink-500 text-sm font-light">
           Add the property&apos;s room categories first — each line of a quotation is rooms of one of them.
         </p>
       ) : (
-        <div className="mt-3 space-y-6">
+        <div className="space-y-6">
           {entries.map((entry) => (
             <QuotationsSection
               key={entry.id}
@@ -48,7 +47,7 @@ export function PropertyQuotations({
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -116,7 +115,7 @@ export function QuotationsSection({
           None yet. Add each quotation the hotel sends — different periods, rooms or groups are separate scenarios.
         </p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {rows.map((quotation) =>
             editing === quotation.id ? (
               <QuotationEditor
@@ -128,7 +127,13 @@ export function QuotationsSection({
                 onDone={() => setEditing(null)}
               />
             ) : (
-              <QuotationCard key={quotation.id} quotation={quotation} eventId={eventId} onEdit={() => setEditing(quotation.id)} />
+              <QuotationCard
+                key={quotation.id}
+                quotation={quotation}
+                eventId={eventId}
+                startOpen={rows.length === 1}
+                onEdit={() => setEditing(quotation.id)}
+              />
             ),
           )}
         </div>
@@ -137,7 +142,19 @@ export function QuotationsSection({
   );
 }
 
-function QuotationCard({ quotation, eventId, onEdit }: { quotation: Quotation; eventId: string; onEdit: () => void }) {
+function QuotationCard({
+  quotation,
+  eventId,
+  startOpen,
+  onEdit,
+}: {
+  quotation: Quotation;
+  eventId: string;
+  /** A lone quotation shows in full; several start as one line each. */
+  startOpen: boolean;
+  onEdit: () => void;
+}) {
+  const [open, setOpen] = useState(startOpen);
   const router = useRouter();
   const utils = api.useUtils();
   const refresh = () => {
@@ -163,9 +180,23 @@ function QuotationCard({ quotation, eventId, onEdit }: { quotation: Quotation; e
   ].filter(([, value]) => value) as [string, string][];
 
   return (
-    <div className={`border-ink-200/60 rounded-lg border bg-white p-3 ${quotation.status === "DECLINED" ? "opacity-60" : ""}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+    <div className={`border-brand-200 bg-brand-50/60 rounded-lg border ${quotation.status === "DECLINED" ? "opacity-60" : ""}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="hover:bg-brand-50 flex w-full items-start justify-between gap-3 rounded-lg p-3 text-left"
+      >
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            className={`text-brand-700 mt-1 h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+            aria-hidden
+          >
+            <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div className="min-w-0">
           <p className="text-ink-900 text-[14px] font-medium">
             {quotation.name}
             <span className={`ml-2 rounded-full px-2 py-0.5 align-middle text-[11px] font-medium ${statusStyles[quotation.status]}`}>
@@ -183,11 +214,14 @@ function QuotationCard({ quotation, eventId, onEdit }: { quotation: Quotation; e
               .filter(Boolean)
               .join(" · ")}
           </p>
+          </div>
         </div>
-        <p className="text-ink-900 text-[15px] font-semibold whitespace-nowrap">{formatMoney(quotation.totalCents, quotation.currency)}</p>
-      </div>
+        <p className="text-ink-900 shrink-0 text-[15px] font-semibold whitespace-nowrap">{formatMoney(quotation.totalCents, quotation.currency)}</p>
+      </button>
 
-      <div className="border-ink-200/60 mt-3 overflow-x-auto rounded-lg border">
+      {open && (
+      <div className="px-3 pb-3">
+      <div className="border-ink-200/60 overflow-x-auto rounded-lg border bg-white">
         <table className="w-full text-left">
           <thead className="bg-ink-50/60">
             <tr>
@@ -281,6 +315,8 @@ function QuotationCard({ quotation, eventId, onEdit }: { quotation: Quotation; e
         )}
       </div>
       {error && <FormError message={friendlyError(error)} />}
+      </div>
+      )}
     </div>
   );
 }

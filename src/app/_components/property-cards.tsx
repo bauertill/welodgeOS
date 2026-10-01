@@ -2,7 +2,7 @@
 
 import type { PropertyType } from "generated/prisma";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Select } from "~/app/_components/form";
 import { LocationPreview } from "~/app/_components/location-preview";
@@ -60,17 +60,102 @@ export type PropertyForCards = Contracting &
     categories: Category[];
   };
 
+/**
+ * Inside the Details panel the cards are its sections rather than cards of
+ * their own: divided by a line, and each folding open and shut, so a long
+ * list of facts does not push everything else down the page.
+ */
+const InPanel = createContext(false);
+
+/** The property's facts as one panel of folding sections, not a stack of cards. */
+export function DetailsPanel({ children }: { children: React.ReactNode }) {
+  return (
+    // Empty facts are left out here — the section's summary says how many are
+    // filled, and Edit shows every field.
+    <div className="border-ink-200/60 divide-ink-200/60 divide-y rounded-xl border bg-white px-5 [&_[data-empty]]:hidden [&_dt]:w-24">
+      <InPanel.Provider value={true}>{children}</InPanel.Provider>
+    </div>
+  );
+}
+
+/** One folding section of the Details panel. */
+export function PanelSection({
+  title,
+  summary,
+  defaultOpen = false,
+  action,
+  children,
+}: {
+  title: string;
+  /** Said beside the title while the section is shut. */
+  summary?: string | null;
+  defaultOpen?: boolean;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="py-4">
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          className="group flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            className={`text-ink-400 group-hover:text-ink-700 h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+            aria-hidden
+          >
+            <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <h2 className="text-ink-900 text-[14px] font-medium">{title}</h2>
+          {!open && summary && <span className="text-ink-500 truncate text-xs font-light">{summary}</span>}
+        </button>
+        {open && action}
+      </div>
+      {open && <div className="mt-3 pl-5.5">{children}</div>}
+    </section>
+  );
+}
+
 /** A card with an Edit button in its corner, and the form it opens. */
 function EditableCard({
   title,
   children,
   editor,
+  summary,
+  defaultOpen,
 }: {
   title: string;
   children: React.ReactNode;
   editor: (done: () => void) => React.ReactNode;
+  /** In the Details panel: what the section holds, said while it is shut. */
+  summary?: string | null;
+  defaultOpen?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const inPanel = useContext(InPanel);
+  if (inPanel) {
+    return (
+      <PanelSection
+        title={title}
+        summary={summary}
+        defaultOpen={defaultOpen}
+        action={
+          !editing && (
+            <button type="button" onClick={() => setEditing(true)} className="text-brand-700 text-[13px] font-light hover:underline">
+              Edit
+            </button>
+          )
+        }
+      >
+        {editing ? editor(() => setEditing(false)) : children}
+      </PanelSection>
+    );
+  }
   return (
     <Card>
       <div className="mb-3 flex items-baseline justify-between gap-3">
@@ -198,9 +283,16 @@ function FieldsEditor({
   );
 }
 
+/** "6 of 14 filled", or nothing when none are. */
+function filledOf(property: object, keys: string[]) {
+  const values = property as Record<string, unknown>;
+  const filled = keys.filter((key) => values[key] !== null && values[key] !== undefined && values[key] !== "").length;
+  return filled ? `${filled} of ${keys.length} filled` : null;
+}
+
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-3" data-empty={value == null || value === "" ? "" : undefined}>
       <dt className="text-ink-500 w-28 shrink-0">{label}</dt>
       <dd className="text-ink-900 min-w-0 break-words">{value ?? "—"}</dd>
     </div>
@@ -213,6 +305,8 @@ export function WhereItIsCard({ property, totalLabel }: { property: PropertyForC
   return (
     <EditableCard
       title="Where it is"
+      defaultOpen
+      summary={[property.area, property.city].filter(Boolean).join(", ") || null}
       editor={(done) => (
         <FieldsEditor
           propertyId={property.id}
@@ -265,6 +359,12 @@ export function MoreAboutCard({ property, backTo }: { property: PropertyForCards
   return (
     <EditableCard
       title="More about the property"
+      summary={filledOf(property, [
+        "providerId",
+        "yearBuilt",
+        ...propertyDetailFields.map((field) => field.key),
+        ...propertyServiceFields.map((field) => field.key),
+      ])}
       editor={(done) => (
         <FieldsEditor
           propertyId={property.id}
@@ -293,6 +393,7 @@ export function ContractingCard({ property }: { property: PropertyForCards }) {
   return (
     <EditableCard
       title="Contracting details"
+      summary={filledOf(property, contractingFields.map((field) => field.key)) ?? (property.provider ? `from ${property.provider.name}` : "none recorded")}
       editor={(done) => (
         <>
           <p className="text-ink-500 mb-3 text-xs font-light">
@@ -326,6 +427,8 @@ export function AmenitiesCard({
   return (
     <EditableCard
       title="Amenities"
+      defaultOpen
+      summary={property.amenities.length ? `${property.amenities.length}` : "none"}
       editor={(done) => <AmenitiesEditor property={property} amenities={amenities} onDone={done} />}
     >
       {property.amenities.length === 0 ? (
@@ -392,7 +495,11 @@ function AmenitiesEditor({
 
 export function ContactsCard({ property }: { property: PropertyForCards }) {
   return (
-    <EditableCard title="Contacts" editor={(done) => <ContactsEditor property={property} onDone={done} />}>
+    <EditableCard
+      title="Contacts"
+      defaultOpen
+      summary={property.contacts.length ? `${property.contacts.length}` : "none"}
+      editor={(done) => <ContactsEditor property={property} onDone={done} />}>
       <ContactList property={property} />
     </EditableCard>
   );
@@ -459,13 +566,14 @@ function ContactsEditor({ property, onDone }: { property: PropertyForCards; onDo
 
 const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
-export function RoomCategoriesCard({ property }: { property: PropertyForCards }) {
+export function RoomCategoriesCard({ property, bare = false }: { property: PropertyForCards; /** In a tab: no card, no title. */ bare?: boolean }) {
   const hotel = property.type === "HOTEL";
   const [editing, setEditing] = useState<string | "new" | null>(null);
+  const Frame = bare ? "div" : Card;
   return (
-    <Card>
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-ink-900 text-[15px] font-medium">{hotel ? "Room categories" : "Unit types"}</h2>
+    <Frame>
+      <div className={`mb-3 flex items-baseline gap-3 ${bare ? "justify-end" : "justify-between"}`}>
+        {!bare && <h2 className="text-ink-900 text-[15px] font-medium">{hotel ? "Room categories" : "Unit types"}</h2>}
         {editing === null && (
           <button type="button" onClick={() => setEditing("new")} className="text-brand-700 text-[13px] font-light hover:underline">
             + Add {hotel ? "room category" : "unit type"}
@@ -537,7 +645,7 @@ export function RoomCategoriesCard({ property }: { property: PropertyForCards })
           </tbody>
         </Table>
       )}
-    </Card>
+    </Frame>
   );
 }
 
