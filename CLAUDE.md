@@ -93,6 +93,7 @@ conversation.
 | `pnpm run db:seed:amenities` | Load the amenity vocabulary only — the sole form safe against the live database |
 | `pnpm run dev` | Development server on :3000 |
 | `pnpm run typecheck` | `tsc --noEmit` |
+| `./scripts/reset-staging.sh` | Overwrite staging's database with the live data, then re-apply staging's pending migrations. Also runs nightly at 00:00 UTC |
 | `pnpm run build` | Applies pending migrations, then builds — run before claiming something works. Needs the database running |
 
 `pnpm run db:seed` deletes and rebuilds the demo event and properties. The

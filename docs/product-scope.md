@@ -130,10 +130,13 @@ to the database's structure — is tried on real data before the team depends on
   deliberate: a database change rehearsed on invented demo data proves little. It follows
   that staging holds real client and supplier data, and is treated with the same care —
   the demo reset (`pnpm run db:seed`) is never run against it.
-- **Staging drifts, and is reset rather than repaired.** Whatever is entered on staging
-  stays on staging; nothing flows back to the live system. When staging's data has gone
-  stale or a rehearsal has left it in a bad state, it is reset from the live database in
-  Neon, which throws away everything done on staging since.
+- **Staging is reset to the live data every night at midnight UTC** (01:00 in London
+  and 02:00 in Berlin during summer time; 00:00 and 01:00 in winter). Whatever was entered
+  on staging that day is gone the next morning, and nothing on staging ever flows back to
+  the live system: staging is for trying things, not for keeping them. Straight after the
+  reset, the database changes that are on staging but not yet live are applied again — so
+  every night also rehearses the next release's database change on that day's real data.
+  The same reset can be run by hand at any time (`docs/todos.md` §1 says how).
 - **Signing in works the same way on both**: the same Google Workspace accounts, but a
   separate session — being signed in to one does not sign you in to the other.
 - **Every change is built automatically before it deploys** (GitHub Actions): the code is
