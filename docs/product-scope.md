@@ -863,11 +863,12 @@ A quotation has:
 | --- | --- |
 | Name | The group or scenario it is for — *Austria House staff*, *Main block, option B*. Required |
 | Received on, valid until | When the hotel sent it, and until when the offer stands. Both optional |
-| Persons | How many people it is for, when the hotel quoted for a group size |
+| Rooms | How many rooms the quotation is for, as the hotel put it |
 | Currency | One per quotation |
 | Lines | **Periods × room types**: each line is rooms of one of the hotel's own room categories, for one period (check-in to check-out), at one rate per room per night, optionally with how many people per room. A pre or post period, or a second room type, is another line. At least one line |
 | Payment terms, cancellation terms | As the hotel worded them, in plain text — not yet the structured payments and cut-offs of a contract (§7.1) |
-| Rates include | Breakfast, Wi-Fi, … |
+| Rates include | The same choice as a room category's rate (§3.9): Breakfast, Wi-Fi, Taxes, Parking and Cleaning — which then asks how often: daily, weekly or other — plus anything else in words |
+| TOT, other applicable tax | The TOT as a percentage, and any other tax in words, as on a room category's rate |
 | Link | The quotation itself, as a Google Drive link |
 | Notes | Anything else |
 
@@ -880,7 +881,8 @@ and it can be put back to received. **Accept and make the contract** marks it ac
 creates the hotel's supplier contract on the event's Contracts tab (§7.1): for this hotel
 and event, named after the hotel and the quotation, worth the quotation's total, in its
 currency, with its link, owned by the property's account manager, and with the quoted
-payment and cancellation terms copied into the contract's notes. Those terms still have to
+payment and cancellation terms, what the rates include and the taxes copied into the
+contract's notes. Those terms still have to
 be entered as payments and cut-offs on the contract, which flags itself incomplete until
 they are. Once a quotation has its contract, it links to it and can no longer be declined
 or removed from the board.
@@ -2237,7 +2239,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each card of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
-| §3.10 Quotations | **Built** | On the property's page, tinted, per event; Activity there closed until opened, Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 Quotations | **Built** | On the property's page, tinted, per event; Activity there closed until opened, Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |

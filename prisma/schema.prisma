@@ -480,14 +480,23 @@ model Quotation {
   receivedOn DateTime? @db.Date
   /// Until when the hotel holds the offer.
   validUntil DateTime? @db.Date
-  persons    Int?
+  /// How many rooms the quotation is for, as the hotel put it.
+  rooms      Int?
   /// Every line's rate is in this currency (§4.5).
   currency   String
   /// The terms offered, in the hotel's words — they become a contract's
   /// structured payments and cut-offs once accepted (§7.1).
   paymentTerms      String?
   cancellationTerms String?
-  ratesInclude      String?
+  /// What the rates include and the taxes on them, as on a room category's
+  /// rate for an event (§3.9).
+  rateIncludes      RateInclusion[] @default([])
+  rateIncludesOther String?
+  cleaning          Cleaning?
+  cleaningOther     String?
+  /// TOT as hundredths of a percent: 15.00% is 1500.
+  totBasisPoints    Int?
+  otherTaxes        String?
   /// The quotation as received — a Google Drive link.
   documentUrl String?
   notes       String?

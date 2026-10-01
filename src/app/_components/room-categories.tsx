@@ -1,7 +1,7 @@
 "use client";
 
 import type { CategoryContractStatus, Cleaning, RateInclusion } from "generated/prisma";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button, Field, friendlyError, Input, Label, Select } from "~/app/_components/form";
 import { PendingLink } from "~/app/_components/pending-link";
@@ -434,7 +434,7 @@ function EditRow({
  * which then asks how often — and a line for anything the list does not have.
  * The button reads back what is ticked.
  */
-function RateIncludesPicker({
+export function RateIncludesPicker({
   value,
   onChange,
   other,
@@ -459,6 +459,8 @@ function RateIncludesPicker({
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  // Its own radio group, so two pickers on a page do not share one.
+  const radioGroup = useId();
 
   // Closes when clicking anywhere else, as a dropdown does.
   useEffect(() => {
@@ -520,7 +522,7 @@ function RateIncludesPicker({
                   <label key={option} className="flex items-center gap-2 text-sm font-light">
                     <input
                       type="radio"
-                      name="cleaning"
+                      name={`cleaning-${radioGroup}`}
                       className="accent-brand-400 h-4 w-4"
                       checked={cleaning === option}
                       onChange={() => onCleaningChange(option)}

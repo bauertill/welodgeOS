@@ -1,9 +1,11 @@
-import { QuotationStatus, type Prisma } from "generated/prisma";
+import { Cleaning, QuotationStatus, RateInclusion, type Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { nightsBetween, parseDay } from "~/lib/dates";
+import { percent } from "~/lib/finance";
 import { formatDate, formatMoney } from "~/lib/format";
+import { describeRateIncludes } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
 
@@ -33,11 +35,16 @@ const quotationInput = z.object({
   name: z.string().trim().min(1, "Give the quotation a name — the group or scenario, like Austria House staff").max(300),
   receivedOn: optionalDay,
   validUntil: optionalDay,
-  persons: z.number().int().min(0).max(100_000).nullable(),
+  rooms: z.number().int().min(0).max(100_000).nullable(),
   currency: z.string().length(3),
   paymentTerms: z.string().max(5000),
   cancellationTerms: z.string().max(5000),
-  ratesInclude: z.string().max(2000),
+  rateIncludes: z.array(z.nativeEnum(RateInclusion)),
+  rateIncludesOther: z.string().max(2000),
+  cleaning: z.nativeEnum(Cleaning).nullable(),
+  cleaningOther: z.string().max(500),
+  totBasisPoints: z.number().int().min(0).max(10_000).nullable(),
+  otherTaxes: z.string().max(2000),
   documentUrl: z
     .string()
     .trim()
@@ -119,11 +126,16 @@ export const quotationRouter = createTRPCRouter({
           name: fields.name,
           receivedOn: toDay(fields.receivedOn),
           validUntil: toDay(fields.validUntil),
-          persons: fields.persons,
+          rooms: fields.rooms,
           currency: fields.currency,
           paymentTerms: blank(fields.paymentTerms),
           cancellationTerms: blank(fields.cancellationTerms),
-          ratesInclude: blank(fields.ratesInclude),
+          rateIncludes: [...new Set(fields.rateIncludes)],
+          rateIncludesOther: blank(fields.rateIncludesOther),
+          cleaning: fields.cleaning,
+          cleaningOther: fields.cleaning === "OTHER" ? blank(fields.cleaningOther) : null,
+          totBasisPoints: fields.totBasisPoints,
+          otherTaxes: blank(fields.otherTaxes),
           documentUrl: blank(fields.documentUrl),
           notes: blank(fields.notes),
         };
@@ -206,6 +218,12 @@ export const quotationRouter = createTRPCRouter({
         `From the quotation "${quotation.name}"${quotation.receivedOn ? ` received ${formatDate(quotation.receivedOn)}` : ""}.`,
         quotation.paymentTerms ? `Payment terms as quoted: ${quotation.paymentTerms}` : null,
         quotation.cancellationTerms ? `Cancellation terms as quoted: ${quotation.cancellationTerms}` : null,
+        (() => {
+          const includes = describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther);
+          return includes ? `Rates include: ${includes}` : null;
+        })(),
+        quotation.totBasisPoints !== null ? `TOT: ${percent(quotation.totBasisPoints)}` : null,
+        quotation.otherTaxes ? `Other taxes: ${quotation.otherTaxes}` : null,
       ]
         .filter(Boolean)
         .join("\n\n");

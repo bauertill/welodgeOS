@@ -1,14 +1,16 @@
 "use client";
 
-import type { QuotationStatus } from "generated/prisma";
+import type { Cleaning, QuotationStatus, RateInclusion } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
+import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
+import { RateIncludesPicker } from "~/app/_components/room-categories";
 import { dayKey } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
-import { contractHref } from "~/lib/finance";
+import { contractHref, percent } from "~/lib/finance";
+import { describeRateIncludes } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 /**
@@ -155,7 +157,9 @@ function QuotationCard({ quotation, eventId, onEdit }: { quotation: Quotation; e
   const terms = [
     ["Payment terms", quotation.paymentTerms],
     ["Cancellation terms", quotation.cancellationTerms],
-    ["Rates include", quotation.ratesInclude],
+    ["Rates include", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
+    ["TOT", percent(quotation.totBasisPoints)],
+    ["Other taxes", quotation.otherTaxes],
   ].filter(([, value]) => value) as [string, string][];
 
   return (
@@ -172,7 +176,7 @@ function QuotationCard({ quotation, eventId, onEdit }: { quotation: Quotation; e
             {[
               quotation.from && quotation.to ? formatRange(quotation.from, quotation.to) : null,
               `${quotation.roomNights} room-nights`,
-              quotation.persons ? `${quotation.persons} persons` : null,
+              quotation.rooms ? `${quotation.rooms} rooms` : null,
               quotation.receivedOn ? `received ${formatDate(quotation.receivedOn)}` : null,
               quotation.validUntil ? `valid until ${formatDate(quotation.validUntil)}` : null,
             ]
@@ -301,14 +305,21 @@ function QuotationEditor({
     name: quotation?.name ?? "",
     receivedOn: quotation?.receivedOn ? dayKey(quotation.receivedOn) : "",
     validUntil: quotation?.validUntil ? dayKey(quotation.validUntil) : "",
-    persons: quotation?.persons?.toString() ?? "",
+    rooms: quotation?.rooms?.toString() ?? "",
     currency: quotation?.currency ?? "USD",
     paymentTerms: quotation?.paymentTerms ?? "",
     cancellationTerms: quotation?.cancellationTerms ?? "",
-    ratesInclude: quotation?.ratesInclude ?? "",
+    rateIncludesOther: quotation?.rateIncludesOther ?? "",
+    cleaningOther: quotation?.cleaningOther ?? "",
+    tot: quotation?.totBasisPoints != null ? (quotation.totBasisPoints / 100).toFixed(2) : "",
+    otherTaxes: quotation?.otherTaxes ?? "",
     documentUrl: quotation?.documentUrl ?? "",
     notes: quotation?.notes ?? "",
   });
+  // What the rates include, the same choice as on a room category (§3.9).
+  const [includes, setIncludes] = useState<RateInclusion[]>(quotation?.rateIncludes ?? []);
+  const [cleaningIncluded, setCleaningIncluded] = useState(quotation?.cleaning != null);
+  const [cleaning, setCleaning] = useState<Cleaning | "">(quotation?.cleaning ?? "");
   const blankLine = (from?: LineDraft): LineDraft => ({
     categoryId: from?.categoryId ?? categories[0]?.id ?? "",
     checkIn: from?.checkOut ?? stay.checkIn,
@@ -365,23 +376,38 @@ function QuotationEditor({
           if (occupancy !== null && (!Number.isInteger(occupancy) || occupancy < 1)) return setProblem(`Line ${i + 1}: people per room should be a whole number.`);
           parsed.push({ categoryId: line.categoryId, checkIn: line.checkIn, checkOut: line.checkOut, rooms, rateCents: Math.round(rate * 100), occupancy });
         }
-        const persons = draft.persons.trim() ? Number(draft.persons) : null;
-        if (persons !== null && (!Number.isInteger(persons) || persons < 0)) return setProblem("Persons should be a whole number.");
-        save.mutate({ scoutingEntryId, id: quotation?.id, quotation: { ...draft, persons, lines: parsed } });
+        const rooms = draft.rooms.trim() ? Number(draft.rooms) : null;
+        if (rooms !== null && (!Number.isInteger(rooms) || rooms < 0)) return setProblem("Rooms should be a whole number, like 40.");
+        if (cleaningIncluded && !cleaning) return setProblem("Say how often the rooms are cleaned, or untick cleaning.");
+        const tot = draft.tot.trim() ? Number(draft.tot.replace(",", ".").replace("%", "")) : null;
+        if (tot !== null && (!Number.isFinite(tot) || tot < 0 || tot > 100)) return setProblem("TOT should be a percentage, like 15.");
+        const { tot: _tot, ...fields } = draft;
+        save.mutate({
+          scoutingEntryId,
+          id: quotation?.id,
+          quotation: {
+            ...fields,
+            rooms,
+            rateIncludes: includes,
+            cleaning: cleaningIncluded && cleaning ? cleaning : null,
+            totBasisPoints: tot === null ? null : Math.round(tot * 100),
+            lines: parsed,
+          },
+        });
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-6">
-        <Field label="Name — the group or scenario" className="sm:col-span-3">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9.5rem_9.5rem_5.5rem]">
+        <Field label="Name — the group or scenario">
           <Input value={draft.name} onChange={(e) => set("name")(e.target.value)} placeholder="Austria House staff" autoFocus />
         </Field>
-        <Field label="Received on" className="sm:col-span-1">
+        <Field label="Received on">
           <Input type="date" value={draft.receivedOn} onChange={(e) => set("receivedOn")(e.target.value)} />
         </Field>
-        <Field label="Valid until" className="sm:col-span-1">
+        <Field label="Valid until">
           <Input type="date" value={draft.validUntil} onChange={(e) => set("validUntil")(e.target.value)} />
         </Field>
-        <Field label="Persons" className="sm:col-span-1">
-          <Input value={draft.persons} onChange={(e) => set("persons")(e.target.value)} inputMode="numeric" placeholder="60" />
+        <Field label="Rooms">
+          <Input value={draft.rooms} onChange={(e) => set("rooms")(e.target.value)} inputMode="numeric" placeholder="40" />
         </Field>
       </div>
 
@@ -398,7 +424,7 @@ function QuotationEditor({
         </div>
         <div className="space-y-2">
           {lines.map((line, index) => (
-            <div key={index} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_5rem_6rem_5rem_auto] sm:items-end">
+            <div key={index} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_8.75rem_8.75rem_4.5rem_5.5rem_4.5rem_auto] sm:items-end">
               <label className="col-span-2 min-w-0 sm:col-span-1">
                 <span className="text-ink-500 mb-1 block text-[11px]">Room category</span>
                 <Select value={line.categoryId} onChange={(e) => setLine(index, "categoryId", e.target.value)} aria-label={`Line ${index + 1} category`}>
@@ -456,8 +482,28 @@ function QuotationEditor({
         <Field label="Cancellation terms, as quoted">
           <Textarea rows={2} value={draft.cancellationTerms} onChange={(e) => set("cancellationTerms")(e.target.value)} placeholder="10% attrition until 10 May 2028…" />
         </Field>
-        <Field label="Rates include">
-          <Input value={draft.ratesInclude} onChange={(e) => set("ratesInclude")(e.target.value)} placeholder="Breakfast, Wi-Fi" />
+        {/* Not a Field: a label around the list would tick the first item
+            on any click inside it. */}
+        <div>
+          <Label>Rates include</Label>
+          <RateIncludesPicker
+            value={includes}
+            onChange={setIncludes}
+            other={draft.rateIncludesOther}
+            onOtherChange={set("rateIncludesOther")}
+            cleaningIncluded={cleaningIncluded}
+            onCleaningIncludedChange={setCleaningIncluded}
+            cleaning={cleaning}
+            onCleaningChange={setCleaning}
+            cleaningOther={draft.cleaningOther}
+            onCleaningOtherChange={set("cleaningOther")}
+          />
+        </div>
+        <Field label="TOT (Transient Occupancy Tax), %">
+          <Input value={draft.tot} onChange={(e) => set("tot")(e.target.value)} placeholder="15.00" inputMode="decimal" aria-label="TOT %" />
+        </Field>
+        <Field label="Other applicable tax">
+          <Input value={draft.otherTaxes} onChange={(e) => set("otherTaxes")(e.target.value)} placeholder="TMD: 6.25 USD (ADR 200–300)" aria-label="Other applicable tax" />
         </Field>
         <Field label="The quotation — Google Drive link">
           <Input value={draft.documentUrl} onChange={(e) => set("documentUrl")(e.target.value)} placeholder="https://drive.google.com/file/d/…" />
