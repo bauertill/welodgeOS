@@ -1566,7 +1566,12 @@ Every box below starts filled in with what the nights share, so amending an entr
 from what is there rather than from nothing; a box where the nights differ starts empty and
 says so, and left empty keeps each night's own (§4.8). Choosing a different client empties
 the client's boxes. Pointing at a booking on the sheet shows its price per night, client
-notes and supplier notes as well. (From Ami's review, 2026-09-30: notes could be written
+notes and supplier notes as well. **The card points at the cause.** Where a booking needs attention,
+the fact that makes it so is highlighted in the warning's colour, with its "!": the
+supplier side when a client holds what we have not bought (*Acquisition: Nothing
+started*), or the date running out — the option, the block or the due date, which the card
+lists whenever they apply. A booking blocked with nothing bought and an expired block has
+both marked. (2026-10-01.) (From Ami's review, 2026-09-30: notes could be written
 but never read back.) **The last
 day highlighted is the check-out day**, as a stay is written everywhere else: highlighting
 10 Jul to 31 Jul selects check-in 10 Jul, check-out 31 Jul, 21 nights, and changes those 21

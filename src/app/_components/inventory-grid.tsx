@@ -8,9 +8,9 @@ import { Input } from "~/app/_components/form";
 import { InventorySidePanel, type SelectedCell } from "~/app/_components/inventory-side-panel";
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
-import { formatMoney } from "~/lib/format";
+import { formatDay, formatMoney } from "~/lib/format";
 import { acquisitionLabels, salesLabels } from "~/lib/inventory";
-import { severityLabels, type Severity } from "~/lib/position";
+import { severityLabels, type Cause, type Severity } from "~/lib/position";
 import { blockKind, buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
 import { api } from "~/trpc/react";
 
@@ -951,7 +951,24 @@ export function InventoryGrid({
             const distinct = (read: (cell: NonNullable<(typeof nights)[number]>) => string | null) => [
               ...new Set(nights.map((cell) => (cell ? read(cell) : null)).filter((value): value is string => Boolean(value))),
             ];
+            // What makes the booking need attention, at its worst on any night.
+            const causes: Partial<Record<Cause, Severity>> = {};
+            for (const cell of nights) {
+              if (!cell) continue;
+              for (const [cause, level] of Object.entries(cell.position.causes) as [Cause, Severity][]) {
+                if (level > (causes[cause] ?? 0)) causes[cause] = level;
+              }
+            }
+            const dateOf = (read: (cell: NonNullable<(typeof nights)[number]>) => Date | null) =>
+              distinct((cell) => {
+                const value = read(cell);
+                return value ? formatDay(value) : null;
+              });
             return {
+              causes,
+              optionExpiries: dateOf((cell) => (cell.acquisitionState === "OPTION" ? cell.optionExpiry : null)),
+              blockExpiries: dateOf((cell) => (cell.salesState === "BLOCKED" ? cell.blockExpiry : null)),
+              dueDates: dateOf((cell) => (cell.salesState === "BLOCKED" ? cell.dueDate : null)),
               salesNotes: distinct((cell) => cell.salesNotes),
               supplierNotes: distinct((cell) => cell.acquisitionNotes),
               sellPrices: distinct((cell) =>
@@ -1179,7 +1196,15 @@ function BlockSummary({
   dates: Date[];
   rooms: { slotNumber: number; categorySize: number }[];
   detail?: { headline: string; detail: string | null; flags: string[] };
-  recorded: { salesNotes: string[]; supplierNotes: string[]; sellPrices: string[] };
+  recorded: {
+    causes: Partial<Record<Cause, Severity>>;
+    optionExpiries: string[];
+    blockExpiries: string[];
+    dueDates: string[];
+    salesNotes: string[];
+    supplierNotes: string[];
+    sellPrices: string[];
+  };
   checkOutDay?: Date;
   continuesBefore: boolean;
   continuesAfter: boolean;
@@ -1230,7 +1255,33 @@ function BlockSummary({
           </>
         )}
         <dt className="text-ink-500">Acquisition</dt>
-        <dd className="text-ink-900">{acquisitionLabels[block.acquisition]}</dd>
+        <dd className="text-ink-900">
+          <Culprit level={recorded.causes.acquisition}>{acquisitionLabels[block.acquisition]}</Culprit>
+        </dd>
+        {recorded.optionExpiries.length > 0 && (
+          <>
+            <dt className="text-ink-500">Option runs to</dt>
+            <dd className="text-ink-900">
+              <Culprit level={recorded.causes.optionExpiry}>{recorded.optionExpiries.join(", ")}</Culprit>
+            </dd>
+          </>
+        )}
+        {block.kind === "BLOCKED" && recorded.blockExpiries.length > 0 && (
+          <>
+            <dt className="text-ink-500">Block runs to</dt>
+            <dd className="text-ink-900">
+              <Culprit level={recorded.causes.blockExpiry}>{recorded.blockExpiries.join(", ")}</Culprit>
+            </dd>
+          </>
+        )}
+        {block.kind === "BLOCKED" && recorded.dueDates.length > 0 && (
+          <>
+            <dt className="text-ink-500">Due</dt>
+            <dd className="text-ink-900">
+              <Culprit level={recorded.causes.dueDate}>{recorded.dueDates.join(", ")}</Culprit>
+            </dd>
+          </>
+        )}
         <dt className="text-ink-500">{hasClient(block.kind) ? "Check-in" : "From"}</dt>
         <dd className="text-ink-900">
           {continuesBefore ? `before ${checkIn}` : checkIn}
@@ -1287,6 +1338,25 @@ function BlockSummary({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * A fact in the hover card, marked when it is what makes the booking need
+ * attention — so the cause is the first thing the eye lands on.
+ */
+function Culprit({ level, children }: { level?: Severity; children: React.ReactNode }) {
+  if (!level || level < 2) return <>{children}</>;
+  const red = level >= 3;
+  return (
+    <span
+      className={`-mx-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium ${
+        red ? "bg-[#fde8ec] text-[#a3243d] ring-1 ring-[#c03654]/40" : "bg-[#fdf1dc] text-[#8a5a0f] ring-1 ring-[#e0a02a]/50"
+      }`}
+    >
+      <AttentionMark severity={level} />
+      {children}
+    </span>
   );
 }
 

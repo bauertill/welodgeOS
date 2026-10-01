@@ -76,7 +76,15 @@ export type Position = {
   detail: string | null;
   /** Things that need a human: an expiry gone by, a deadline that cannot hold. */
   flags: string[];
+  /**
+   * Which facts make the night what it is, and how badly — so a screen can
+   * point at the cause itself: the supplier side when we sold what we do not
+   * hold, a date when it is running out. A fact appears once, at its worst.
+   */
+  causes: Partial<Record<Cause, Severity>>;
 };
+
+export type Cause = "acquisition" | "optionExpiry" | "blockExpiry" | "dueDate";
 
 /**
  * `RELEASED` counts as not held and `CANCELLED` counts as not sold (doc §4.1,
@@ -249,8 +257,14 @@ export function positionOf(
   const flags: string[] = [];
   const detail: string[] = [];
   let deadlineSeverity: Severity = 0;
+  const causes: Partial<Record<Cause, Severity>> = {};
+  const blame = (cause: Cause, level: Severity) => {
+    if (level > 0) causes[cause] = highest(causes[cause] ?? 0, level);
+  };
+  // A client holding what we have not bought: the supplier side is the cause.
+  if (sale !== "NONE" && acq !== "BOUGHT") blame("acquisition", cell.severity);
 
-  const read = (date: Date | null, describe: (when: string) => string, what: string) => {
+  const read = (date: Date | null, describe: (when: string) => string, what: string, cause: Cause) => {
     if (!date) return;
     const urgency = deadlineUrgency(date, today);
     detail.push(describe(formatDay(date)));
@@ -259,23 +273,27 @@ export function positionOf(
       // stays in the way until a human extends, converts or releases it.
       flags.push(`${what} expired on ${formatDay(date)}`);
       deadlineSeverity = highest(deadlineSeverity, 2);
+      blame(cause, 2);
     } else if (urgency === "urgent") {
       // Said in words, so a warning on the sheet explains itself.
       const days = daysUntil(date, today);
       flags.push(`${what} runs out ${days <= 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`} (${formatDay(date)})`);
       deadlineSeverity = highest(deadlineSeverity, 2);
+      blame(cause, 2);
     } else if (urgency === "upcoming") {
       deadlineSeverity = highest(deadlineSeverity, 1);
+      blame(cause, 1);
     }
   };
 
-  read(optionDeadline, (w) => `Our option runs to ${w}`, "The option");
+  read(optionDeadline, (w) => `Our option runs to ${w}`, "The option", "optionExpiry");
   read(
     blockDeadline,
     (w) => `${night.clientName ?? "The client"}'s block runs to ${w}`,
     "The block",
+    "blockExpiry",
   );
-  read(dueDeadline, (w) => `Due ${w}`, "The due date");
+  read(dueDeadline, (w) => `Due ${w}`, "The due date", "dueDate");
 
   // Invariant §4.5.5 — deadline coherence. If the client's block outlives our
   // option to supply it, we are promising something we may not be able to
@@ -292,6 +310,8 @@ export function positionOf(
       `The block runs to ${formatDay(night.blockExpiry)} but our option only runs to ${formatDay(night.optionExpiry)}`,
     );
     coherenceSeverity = 2;
+    blame("optionExpiry", 2);
+    blame("blockExpiry", 2);
   }
 
   // A sale resting on an option that is about to lapse is the one case the
@@ -303,7 +323,13 @@ export function positionOf(
       ? 4
       : 0;
 
+  if (soldOnALapsingOption) {
+    blame("acquisition", 4);
+    blame("optionExpiry", 4);
+  }
+
   return {
+    causes,
     acquisition: night.acquisitionState,
     sales,
     severity: highest(
