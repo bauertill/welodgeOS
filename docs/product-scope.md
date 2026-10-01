@@ -122,7 +122,7 @@ used to reach any other part of the system, and a rep can switch it off at any t
 
 The system is a website, not something anyone installs. It runs at
 **https://os.welodge.net**, hosted on Vercel, with its database (PostgreSQL, hosted by
-Neon) in Vercel's `we-lodge` account. It answered at `welodge-os.vercel.app` until
+Neon in Frankfurt) owned by the We Lodge Vercel team. It answered at `welodge-os.vercel.app` until
 2026-09-24; that address now redirects to this one, so older links and bookmarks still
 arrive.
 
@@ -2014,7 +2014,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Sign-in screen only for visitors | **Built** | Signed out, every address — the front page included — goes to the sign-in screen, which says nothing about what the system does |
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
-| §2.5 Staging | **Being set up** | https://staging.welodge.net, from the `staging` branch, on a copy of the live database. The Vercel environment and address exist; its database copy, settings, DNS record and Google sign-in address are outstanding — see `docs/todos.md` §1 |
+| §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. No deleting. No notification is sent — see §9 |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
