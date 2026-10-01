@@ -29,6 +29,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Check the secrets are set
+        run: test -n "$STAGING_DATABASE_URL" || { echo "STAGING_DATABASE_URL secret is missing"; exit 1; }
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
       - run: ./scripts/reset-staging.sh
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}

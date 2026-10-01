@@ -143,12 +143,14 @@ We Lodge team owns; see the item on the move below.
      Neon* → organization Settings → API keys → *Create*.
   2. On GitHub (repo → Settings → Secrets and variables → Actions): secrets
      `NEON_API_KEY` and `STAGING_DATABASE_URL` (the same value as Staging's
-     `DATABASE_URL` on Vercel); variable `NEON_PROJECT_ID`
-     (`welodge-production`'s project ID, Neon → Settings).
+     `DATABASE_URL` on Vercel); variable `NEON_PROJECT_ID`, which is `empty-silence-69345743`
+     (`welodge-production`'s project ID; not a secret).
   3. Merge into `master` — GitHub only runs schedules from there.
 
-  By hand: put the same three values in `.env` and run
-  `./scripts/reset-staging.sh` from a checkout of `staging`.
+  By hand: put `NEON_API_KEY` and `NEON_PROJECT_ID` in `.env` and run
+  `./scripts/reset-staging.sh` from a checkout of `staging`. Without
+  `STAGING_DATABASE_URL` it resets the data only; redeploying staging then
+  re-applies the pending migrations. First run by hand 2026-10-01.
 - [x] **Checked 2026-09-30: branch deploys cannot reach the live database.**
       `DATABASE_URL` is set for Production only. The Neon integration's other
       variables (`POSTGRES_URL`, `PGHOST` and friends) *are* set for Preview

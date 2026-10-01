@@ -18,7 +18,9 @@
 #   NEON_API_KEY             a Neon API key with access to welodge-production
 #   NEON_PROJECT_ID          welodge-production's project ID (Neon → Settings)
 #   STAGING_DATABASE_URL     staging's connection string — the same value as
-#                            the Staging DATABASE_URL on Vercel
+#                            the Staging DATABASE_URL on Vercel. Optional by
+#                            hand: without it the data is reset and the next
+#                            staging deploy re-applies the pending changes.
 #
 # The migrations applied are those in the working copy, so run it from a
 # checkout of the staging branch.
@@ -29,7 +31,6 @@ cd "$(dirname "$0")/.."
 if [[ -f .env ]]; then set -a; source .env; set +a; fi
 : "${NEON_API_KEY:?NEON_API_KEY is not set}"
 : "${NEON_PROJECT_ID:?NEON_PROJECT_ID is not set}"
-: "${STAGING_DATABASE_URL:?STAGING_DATABASE_URL is not set}"
 
 api() {
   curl -sS --fail-with-body -H "Authorization: Bearer $NEON_API_KEY" \
@@ -67,6 +68,11 @@ for op in $operations; do
 done
 echo "Staging now holds the live data."
 
+if [[ -z "${STAGING_DATABASE_URL:-}" ]]; then
+  echo "STAGING_DATABASE_URL is not set, so staging's pending database changes"
+  echo "were not re-applied. Redeploy staging on Vercel to apply them."
+  exit 0
+fi
 echo "Applying the database changes that are on staging but not yet live…"
 DATABASE_URL="$STAGING_DATABASE_URL" pnpm exec prisma migrate deploy
 echo "Staging is reset."
