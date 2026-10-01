@@ -1495,8 +1495,10 @@ out sooner and so needs attention sooner.
   after 25 Jul" — rather than presenting the edge of the window as the day the guest
   arrives. This is judged from the night on either side of the window, so a stay that really
   begins on the first day shown says so plainly.
-- **Something needing attention is marked**, with a red or amber "!" in the label **and a
-  thick outline round the whole booking** — amber for a warning, red for urgent or critical:
+- **Something needing attention is marked**, with a red or amber "!" in the label, **the
+  label on that colour, diagonal stripes across the whole booking and a thick outline round
+  it** — amber for a warning, red for urgent or critical, so it stands out at a glance
+  (2026-10-01):
   the same judgement as §4.4 — sold without having secured it, an option or a block that is
   running out — taken from the worst night in the block, so grouping never hides a problem.
   A deadline inside the urgent window says so in words: *"The block runs out today (30

@@ -836,6 +836,7 @@ export function InventoryGrid({
                                         >
                                           {block ? (
                                             <div
+                                              style={warningStripes(block.severity, rowIndex, dateIndex, edge)}
                                               className={`absolute ${kindStyles[block.kind]} ${
                                                 issueFilter && block.severity !== issueFilter ? "opacity-25" : ""
                                               } ${
@@ -1161,9 +1162,49 @@ function BlockLabel({
       className={`pointer-events-none absolute top-0 bottom-0 z-[1] ${faded ? "opacity-40" : ""} flex items-center gap-1 overflow-hidden text-[11px] leading-none font-medium whitespace-nowrap ${kindText[block.kind]}`}
     >
       {block.severity >= 2 && <AttentionMark severity={block.severity} />}
-      <span className="truncate">{parts.join(" · ")}</span>
+      <span
+        className={`truncate ${
+          // Where it needs attention, the words sit on the warning's own colour.
+          block.severity >= 3
+            ? "rounded bg-[#c03654] px-1.5 py-0.5 text-white"
+            : block.severity === 2
+              ? "rounded bg-[#b97b12] px-1.5 py-0.5 text-white"
+              : ""
+        }`}
+      >
+        {parts.join(" · ")}
+      </span>
     </span>
   );
+}
+
+/** A cell of the sheet, in pixels — the stripes line up across a whole booking by it. */
+const CELL_WIDTH = 36;
+const CELL_HEIGHT = 32;
+
+/**
+ * Diagonal stripes over a booking that needs attention — red for urgent or
+ * critical, amber for a warning — so it stands out at a glance (2026-10-01).
+ * Each cell shows its own part of one large striped sheet, so the stripes run
+ * on unbroken from cell to cell across the whole booking.
+ */
+function warningStripes(
+  severity: Severity,
+  row: number,
+  column: number,
+  edge: { top: boolean; left: boolean } = { top: false, left: false },
+): React.CSSProperties | undefined {
+  if (severity < 2) return undefined;
+  const colour = severity >= 3 ? "rgba(192, 54, 84, 0.5)" : "rgba(224, 160, 42, 0.6)";
+  // A booking's outer cells start a little inside their cell (2px from the
+  // left, 3px from the top); the stripes allow for it so they meet up.
+  const x = column * CELL_WIDTH + (edge.left ? 2 : 0);
+  const y = row * CELL_HEIGHT + (edge.top ? 3 : 0);
+  return {
+    backgroundImage: `repeating-linear-gradient(135deg, ${colour} 0 5px, transparent 5px 13px)`,
+    backgroundSize: `${CELL_WIDTH * 600}px ${CELL_HEIGHT * 600}px`,
+    backgroundPosition: `-${x}px -${y}px`,
+  };
 }
 
 function AttentionMark({ severity }: { severity: Severity }) {
@@ -1379,11 +1420,11 @@ function Legend() {
         Check-out day
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="inline-block h-3 w-5 rounded-sm border-2 border-[#e0a02a] bg-white" />
+        <span className="bg-brand-500 inline-block h-3 w-5 rounded-sm border-2 border-[#e0a02a]" style={warningStripes(2, 0, 0)} />
         <AttentionMark severity={2} /> Warning
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="inline-block h-3 w-5 rounded-sm border-2 border-[#c03654] bg-white" />
+        <span className="bg-brand-500 inline-block h-3 w-5 rounded-sm border-2 border-[#c03654]" style={warningStripes(3, 0, 0)} />
         <AttentionMark severity={3} /> Urgent or critical — point at it for why
       </span>
     </div>
