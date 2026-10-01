@@ -1913,8 +1913,8 @@ contracts and adds one already filled in with the client, the event and the requ
 as its total.
 
 **Contracts live with their event.** Every contract — supplier and client side alike — is
-for one event, always, so each event has a **Contracts** tab beside Properties, Inventory,
-Deadlines and Position. It shows the event's contracts, its payments and its cancellation
+for one event, always, so each event has a **Contracts** tab, second after Properties and
+before Inventory, Deadlines and Position. It shows the event's contracts, its payments and its cancellation
 deadlines, three views of one tab; *+ New contract* there adds one for that event, which
 is set and cannot be changed. A contract's own page sits under its event, and its back link
 returns to the tab. A contract added from a sales request, or on the stock sheet while

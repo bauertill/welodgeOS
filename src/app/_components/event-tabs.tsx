@@ -7,16 +7,16 @@ import { useEffect } from "react";
 import { setLastEventPath } from "~/lib/last-event";
 
 /**
- * An event is read in four ways, matching the phases of the business: what we
- * could contract, what we hold and have promised, what runs out soon, and where
- * that leaves us commercially.
+ * An event is read in five ways: what we could contract, what we signed, what
+ * we hold and have promised, what runs out soon, and where that leaves us
+ * commercially.
  */
 const tabs = [
   { slug: "", label: "Properties", hint: "What could we contract" },
+  { slug: "contracts", label: "Contracts", hint: "What we signed, what falls due, and what can still be given back" },
   { slug: "inventory", label: "Inventory", hint: "What we hold and what we promised" },
   { slug: "deadlines", label: "Deadlines", hint: "What runs out soon" },
   { slug: "position", label: "Position", hint: "Where we are exposed" },
-  { slug: "contracts", label: "Contracts", hint: "What we signed, what falls due, and what can still be given back" },
 ] as const;
 
 export function EventTabs({ eventId }: { eventId: string }) {
