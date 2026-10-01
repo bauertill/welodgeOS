@@ -148,10 +148,22 @@ export function InventorySidePanel({
       ? cells[0]
       : null;
 
-  const defaultAction = (
-    tab === "acquisition" ? actionGroups[0] : actionGroups[1]
-  )!.actions[0]!;
-  const [action, setAction] = useState<InventoryAction>(defaultAction);
+  // The action starts as what the nights already are on that side — Option
+  // nights open on "Take an option", sold ones on "Sell to a client" — so with
+  // every detail filled in, amending an entry is change-what-differs and save.
+  const currentAction = (side: "acquisition" | "sales"): InventoryAction => {
+    const fallback = (side === "acquisition" ? actionGroups[0] : actionGroups[1])!.actions[0]!;
+    if (dateRangeEdited || cells.length === 0) return fallback;
+    const most = <T extends string>(values: T[]) => {
+      const counts = new Map<T, number>();
+      for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+      return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+    };
+    return side === "acquisition"
+      ? (statusAction.acquisition[most(cells.map((cell) => cell.acquisitionState))] ?? fallback)
+      : (statusAction.sales[most(cells.map((cell) => cell.salesState))] ?? fallback);
+  };
+  const [action, setAction] = useState<InventoryAction>(() => currentAction(tab));
   const [reason, setReason] = useState("");
 
   // What every selected night already says, detail by detail — the starting
@@ -159,6 +171,8 @@ export function InventorySidePanel({
   const known = dateRangeEdited ? [] : cells;
   const start = {
     supplierRef: shared(known, (cell) => cell.supplierRef ?? ""),
+    optionExpiry: shared(known, (cell) => (cell.acquisitionState === "OPTION" && cell.optionExpiry ? dayKey(cell.optionExpiry) : "")),
+    blockExpiry: shared(known, (cell) => (cell.salesState === "BLOCKED" && cell.blockExpiry ? dayKey(cell.blockExpiry) : "")),
     buyPrice: shared(known, (cell) => priceText(cell.buyPriceCents)),
     buyCurrency: shared(known, (cell) => cell.buyCurrency ?? ""),
     acquisitionOwnerId: shared(known, (cell) => cell.acquisitionOwnerId ?? ""),
@@ -174,7 +188,7 @@ export function InventorySidePanel({
   const initial = (detail: Shared) => (detail.same ? detail.value : "");
 
   const [supplierRef, setSupplierRef] = useState(initial(start.supplierRef));
-  const [optionExpiry, setOptionExpiry] = useState("");
+  const [optionExpiry, setOptionExpiry] = useState(initial(start.optionExpiry));
   const [buyPrice, setBuyPrice] = useState(initial(start.buyPrice));
   const [buyCurrency, setBuyCurrency] = useState(initial(start.buyCurrency) || "USD");
   const [acquisitionOwnerId, setAcquisitionOwnerId] = useState(initial(start.acquisitionOwnerId));
@@ -185,7 +199,9 @@ export function InventorySidePanel({
   const [addingClient, setAddingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [newClientShortName, setNewClientShortName] = useState("");
-  const [blockExpiry, setBlockExpiry] = useState("");
+  const [blockExpiry, setBlockExpiry] = useState(() =>
+    start.clientId.same && start.clientId.value ? initial(start.blockExpiry) : "",
+  );
   const [dueDate, setDueDate] = useState(initial(start.dueDate));
   const [sellPrice, setSellPrice] = useState(initial(start.sellPrice));
   const [sellCurrency, setSellCurrency] = useState(initial(start.sellCurrency) || "USD");
@@ -203,6 +219,7 @@ export function InventorySidePanel({
       return;
     }
     setClientRef(clientStart(start.clientRef));
+    setBlockExpiry(clientStart(start.blockExpiry));
     setDueDate(clientStart(start.dueDate));
     setSellPrice(clientStart(start.sellPrice));
     setSellCurrency(clientStart(start.sellCurrency) || "USD");
@@ -516,7 +533,7 @@ export function InventorySidePanel({
               type="button"
               onClick={() => {
                 setTab(t);
-                setAction((t === "acquisition" ? actionGroups[0] : actionGroups[1])!.actions[0]!);
+                setAction(currentAction(t));
               }}
               className={`-mb-px border-b-2 px-3 py-2 text-[13px] transition-colors ${
                 tab === t
@@ -925,3 +942,12 @@ function FieldProblem({ message }: { message?: string }) {
     </p>
   );
 }
+
+/** The action that records each status, for opening the panel on what the nights already are. */
+const statusAction: {
+  acquisition: Partial<Record<AcquisitionState, InventoryAction>>;
+  sales: Partial<Record<SalesState, InventoryAction>>;
+} = {
+  acquisition: { IN_PROGRESS: "START_NEGOTIATION", OPTION: "TAKE_OPTION", BOUGHT: "BUY", RELEASED: "RELEASE" },
+  sales: { BLOCKED: "BLOCK", SOLD: "SELL", CANCELLED: "CANCEL_SALE" },
+};

@@ -1565,7 +1565,11 @@ Manager, client notes — as the one value the nights share, or *varies* where t
 Every box below starts filled in with what the nights share, so amending an entry starts
 from what is there rather than from nothing; a box where the nights differ starts empty and
 says so, and left empty keeps each night's own (§4.8). Choosing a different client empties
-the client's boxes. Pointing at a booking on the sheet shows its price per night, client
+the client's boxes. **The action starts as what the nights already are** on that side —
+Option nights open on *Take an option*, bought ones on *Buy*, sold ones on *Sell to a
+client*, a mixed selection on what most of its nights are — with their option or block
+date filled in too, so amending an entry is change what differs and save. Nights where
+nothing has started open on the first action, as before. (2026-10-01.) Pointing at a booking on the sheet shows its price per night, client
 notes and supplier notes as well. **The card points at the cause.** Where a booking needs attention,
 the fact that makes it so is highlighted in the warning's colour, with its "!": the
 supplier side when a client holds what we have not bought (*Acquisition: Nothing
