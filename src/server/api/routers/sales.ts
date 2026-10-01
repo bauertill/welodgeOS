@@ -455,6 +455,8 @@ export const salesRouter = createTRPCRouter({
         sellPriceCents: z.number().int().min(0).nullable().optional(),
         sellCurrency: z.string().length(3).optional(),
         clientRef: z.string().max(200).optional(),
+        /** The client contract a sale is made under (doc §7.1). */
+        salesContractId: z.string().optional(),
       }),
     )
     .mutation(({ ctx, input }) =>
@@ -498,6 +500,7 @@ export const salesRouter = createTRPCRouter({
             sellCurrency: input.sellPriceCents != null ? input.sellCurrency : undefined,
             clientRef: input.clientRef,
             salesOwnerId: request.ownerId ?? undefined,
+            ...(input.action === "SELL" && input.salesContractId && { salesContractId: input.salesContractId }),
           });
           const category = await tx.roomCategory.findUniqueOrThrow({
             where: { id: input.categoryId },
@@ -532,6 +535,7 @@ export const salesRouter = createTRPCRouter({
         blockExpiry: day,
         sellPriceCents: z.number().int().min(0).nullable().optional(),
         sellCurrency: z.string().length(3).optional(),
+        salesContractId: z.string().optional(),
       }),
     )
     .mutation(({ ctx, input }) =>
@@ -607,6 +611,7 @@ export const salesRouter = createTRPCRouter({
               action: input.action,
               clientId: request.clientId,
               ...((input.action === "BLOCK" || input.action === "SELL") && { salesRequestId: input.id }),
+              ...(input.action === "SELL" && input.salesContractId && { salesContractId: input.salesContractId }),
               blockExpiry: input.blockExpiry ? parseDay(input.blockExpiry) : undefined,
               // A sale keeps what the block said unless told otherwise; a mix
               // across nights is not guessed at.

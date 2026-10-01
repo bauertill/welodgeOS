@@ -77,6 +77,7 @@ model Event {
   ledger          LedgerEntry[]
   propertyGroups  PropertyGroup[]
   salesRequests   SalesRequest[]
+  contracts       Contract[]
 
   @@index([startDate])
 }
@@ -189,6 +190,7 @@ model Property {
   amenities       Amenity[]         @relation("PropertyAmenities")
   scoutingEntries ScoutingEntry[]
   updates         Update[]
+  contracts       Contract[]
 
   scoutedBy   User?   @relation(fields: [scoutedById], references: [id], onDelete: SetNull)
   scoutedById String?
@@ -447,6 +449,135 @@ model CategoryContract {
   @@index([scoutingEntryId])
 }
 
+// --- Contracts, payments and cancellation deadlines (doc §7.1) ---------------
+
+/// Who a contract is with: a hotel or provider we buy from, or a client we sell to.
+enum ContractParty {
+  SUPPLIER
+  CLIENT
+}
+
+/// Where a payment stands. Suppliers invoice us; we invoice clients.
+enum PaymentStatus {
+  TO_BE_PAID
+  INVOICE_REQUESTED
+  INVOICE_RECEIVED
+  INVOICE_ISSUED
+  PAID
+  REFUND
+}
+
+/// What a cancellation deadline lets us — or the client — do by its cut-off.
+enum CancellationKind {
+  /// We may reduce the rooms or nights by an agreed share, without paying for them.
+  ATTRITION
+  /// We may hand rooms back, or an exclusivity lapses.
+  RELEASE
+  /// The client may cancel, free or for a fee.
+  CLIENT_CANCELLATION
+  OTHER
+}
+
+/**
+ * A signed contract — with a supplier or with a client — for one event (doc
+ * §7.1): the PDF, the total it is worth, and its payment and cancellation
+ * terms. Room-nights are bought and sold under one.
+ */
+model Contract {
+  id    String        @id @default(cuid())
+  party ContractParty
+  /// "Group Sales Agreement — Courtyard Culver City"
+  name  String
+
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId String
+  /// The hotel, on a supplier contract.
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  propertyId String?
+  /// The client, on a client contract — and, if it came from one, their sales request.
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId       String?
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId String?
+
+  /// The signed PDF, as a Google Drive link for now (doc §7.1).
+  documentUrl String?
+  signedOn    DateTime? @db.Date
+  /// What the whole contract is worth; every payment's share is of this.
+  /// Minor units, with an explicit currency (§4.5).
+  totalCents Int?
+  currency   String?
+  notes      String?
+  /// Said on purpose when the contract has no cancellation deadlines at all,
+  /// so it stops being flagged as missing them.
+  noCancellationTerms Boolean @default(false)
+
+  owner   User?   @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+
+  payments          ContractPayment[]
+  cancellations     ContractCancellation[]
+  acquisitionNights RoomNight[]            @relation("AcquisitionContract")
+  salesNights       RoomNight[]            @relation("SalesContract")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([propertyId])
+  @@index([clientId])
+}
+
+/// One payment a contract schedules — a share of its total, or a set amount.
+model ContractPayment {
+  id          String   @id @default(cuid())
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractId  String
+  /// "1st deposit", "Final payment + tax".
+  description String
+  dueOn       DateTime @db.Date
+  /// A share of the contract's total, in hundredths of a percent: 20% is 2000.
+  percentBasisPoints Int?
+  /// A set amount instead, where the payment is not a plain share of the total.
+  amountCents Int?
+  status      PaymentStatus @default(TO_BE_PAID)
+  paidOn      DateTime?     @db.Date
+  invoiceUrl  String?
+  proofUrl    String?
+  beneficiary String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+  @@index([dueOn])
+}
+
+/// One cancellation deadline in a contract: by its cut-off, something may be given back.
+model ContractCancellation {
+  id         String           @id @default(cuid())
+  contract   Contract         @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractId String
+  kind       CancellationKind
+  cutoffOn   DateTime         @db.Date
+  /// How much may go, as a share: 10% is 1000.
+  percentBasisPoints Int?
+  /// Or in words: "63 room-nights", "2 family rooms".
+  appliesTo  String?
+  roomType   String?
+  /// What cancelling costs, as a share — "with a 30% cancellation fee".
+  feeBasisPoints Int?
+  remarks    String?
+  /// When someone dealt with it. A cut-off is a reminder; nothing happens on its own (§2.4).
+  handledOn  DateTime?        @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+  @@index([cutoffOn])
+}
+
 // ---------------------------------------------------------------------------
 // NextAuth
 // ---------------------------------------------------------------------------
@@ -520,6 +651,7 @@ model User {
   customEmoji   CustomEmoji[]
   accountManaged ScoutingEntry[] @relation("AccountManager")
   clientsManaged  Client[]        @relation("ClientAccountManager")
+  contractsManaged Contract[]     @relation("ContractOwner")
   salesRequests   SalesRequest[]  @relation("SalesRequestOwner")
   contactsManaged ClientContact[] @relation("ContactAccountManager")
 }
@@ -779,6 +911,7 @@ model Client {
   updates    Update[]
   contacts   ClientContact[]
   salesRequests SalesRequest[]
+  contracts  Contract[]
 
   @@unique([name])
 }
@@ -894,6 +1027,7 @@ model SalesRequest {
   /// The room-nights held for this request, and the nights it has asked about.
   nights        RoomNight[]
   nightRequests RoomNightRequest[]
+  contracts     Contract[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1018,6 +1152,13 @@ model RoomNight {
   /// cancelled sale, as the client is.
   salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
   salesRequestId String?
+
+  /// The signed contracts these nights were bought and sold under (doc §7.1):
+  /// one with the supplier, one with the client.
+  acquisitionContract   Contract? @relation("AcquisitionContract", fields: [acquisitionContractId], references: [id], onDelete: SetNull)
+  acquisitionContractId String?
+  salesContract         Contract? @relation("SalesContract", fields: [salesContractId], references: [id], onDelete: SetNull)
+  salesContractId       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -51,6 +51,11 @@ export type SelectedCell = {
   salesOwner: string | null;
   salesOwnerId: string | null;
   salesNotes: string | null;
+  propertyId: string;
+  acquisitionContractId: string | null;
+  acquisitionContract: string | null;
+  salesContractId: string | null;
+  salesContract: string | null;
 };
 
 /**
@@ -184,7 +189,11 @@ export function InventorySidePanel({
     sellCurrency: shared(known, (cell) => cell.sellCurrency ?? ""),
     salesOwnerId: shared(known, (cell) => cell.salesOwnerId ?? ""),
     salesNotes: shared(known, (cell) => cell.salesNotes ?? ""),
+    acquisitionContractId: shared(known, (cell) => cell.acquisitionContractId ?? ""),
+    salesContractId: shared(known, (cell) => cell.salesContractId ?? ""),
   };
+  // The one hotel the selection is in — a supplier contract is with one hotel.
+  const hotels = [...new Set(known.map((cell) => cell.propertyId))];
   const initial = (detail: Shared) => (detail.same ? detail.value : "");
 
   const [supplierRef, setSupplierRef] = useState(initial(start.supplierRef));
@@ -193,6 +202,7 @@ export function InventorySidePanel({
   const [buyCurrency, setBuyCurrency] = useState(initial(start.buyCurrency) || "USD");
   const [acquisitionOwnerId, setAcquisitionOwnerId] = useState(initial(start.acquisitionOwnerId));
   const [acquisitionNotes, setAcquisitionNotes] = useState(initial(start.acquisitionNotes));
+  const [acquisitionContractId, setAcquisitionContractId] = useState(initial(start.acquisitionContractId));
 
   const [clientId, setClientId] = useState(initial(start.clientId));
   const [clientRef, setClientRef] = useState(initial(start.clientRef));
@@ -207,6 +217,9 @@ export function InventorySidePanel({
   const [sellCurrency, setSellCurrency] = useState(initial(start.sellCurrency) || "USD");
   const [salesOwnerId, setSalesOwnerId] = useState(initial(start.salesOwnerId));
   const [salesNotes, setSalesNotes] = useState(initial(start.salesNotes));
+  const [salesContractId, setSalesContractId] = useState(() =>
+    start.clientId.same && start.clientId.value ? initial(start.salesContractId) : "",
+  );
   // The client's details only carry over while it is the same client: for
   // another one, the boxes start empty (and the server clears the last one's).
   const sameClient = start.clientId.same && Boolean(start.clientId.value) && start.clientId.value === clientId;
@@ -225,6 +238,7 @@ export function InventorySidePanel({
     setSellCurrency(clientStart(start.sellCurrency) || "USD");
     setSalesOwnerId(clientStart(start.salesOwnerId));
     setSalesNotes(clientStart(start.salesNotes));
+    setSalesContractId(clientStart(start.salesContractId));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when it becomes, or stops being, the same client
   }, [sameClient]);
   // Which of the client's sales requests these nights belong to (doc §4.11).
@@ -262,6 +276,8 @@ export function InventorySidePanel({
   useEffect(() => clear("sellPrice"), [sellPrice]);
   useEffect(() => clear("acquisitionOwner"), [acquisitionOwnerId]);
   useEffect(() => clear("salesOwner"), [salesOwnerId]);
+  useEffect(() => clear("acquisitionContract"), [acquisitionContractId]);
+  useEffect(() => clear("salesContract"), [salesContractId]);
   useEffect(() => setFieldErrors({}), [action]);
 
   const apply = api.inventory.applyChange.useMutation({
@@ -376,6 +392,16 @@ export function InventorySidePanel({
         (action === "REPRICE_SELL" || known.length === 0 || known.some((cell) => cell.sellPriceCents === null || cell.clientId !== clientId)),
       `Give the price the client pays per night — a night ${action === "BLOCK" ? "blocked" : "sold"} for a client needs its agreed price.`,
     );
+    needs(
+      "acquisitionContract",
+      action === "BUY" && !acquisitionContractId && (known.length === 0 || known.some((cell) => !cell.acquisitionContractId)),
+      "Choose the supplier contract these nights are bought under — or add it with + New contract.",
+    );
+    needs(
+      "salesContract",
+      action === "SELL" && !salesContractId && (known.length === 0 || known.some((cell) => !cell.salesContractId || cell.clientId !== clientId)),
+      "Choose the client contract these nights are sold under — or add it with + New contract.",
+    );
     needs("acquisitionOwner", action === "REASSIGN_ACQUISITION_OWNER" && !acquisitionOwnerId, "Pick who takes over with the supplier.");
     needs("salesOwner", action === "REASSIGN_SALES_OWNER" && !salesOwnerId, "Pick who takes over with the client.");
     showProblems(problems);
@@ -420,6 +446,7 @@ export function InventorySidePanel({
       ...price("buy", buyPrice, buyCurrency, initial(start.buyPrice), initial(start.buyCurrency)),
       acquisitionOwnerId: changed(acquisitionOwnerId, initial(start.acquisitionOwnerId)),
       acquisitionNotes: changed(acquisitionNotes, initial(start.acquisitionNotes)),
+      acquisitionContractId: shows("acquisitionContract") ? changed(acquisitionContractId, initial(start.acquisitionContractId)) ?? undefined : undefined,
       clientId: clientId || undefined,
       clientRef: changed(clientRef, clientStart(start.clientRef)),
       blockExpiry: blockExpiry ? parseDay(blockExpiry) : undefined,
@@ -427,6 +454,7 @@ export function InventorySidePanel({
       ...price("sell", sellPrice, sellCurrency, clientStart(start.sellPrice), clientStart(start.sellCurrency)),
       salesOwnerId: changed(salesOwnerId, clientStart(start.salesOwnerId)),
       salesNotes: changed(salesNotes, clientStart(start.salesNotes)),
+      salesContractId: shows("salesContract") ? changed(salesContractId, clientStart(start.salesContractId)) ?? undefined : undefined,
       salesRequestId: forRequest && chosenRequest ? chosenRequest : undefined,
     });
   };
@@ -620,6 +648,21 @@ export function InventorySidePanel({
             </div>
           )}
 
+          {shows("acquisitionContract") && (
+            <div id="panel-field-acquisitionContract">
+              <ContractPicker
+                party="SUPPLIER"
+                eventId={eventId}
+                propertyId={hotels.length === 1 ? hotels[0]! : null}
+                value={acquisitionContractId}
+                onChange={setAcquisitionContractId}
+                required={action === "BUY"}
+                varies={!start.acquisitionContractId.same}
+              />
+              <FieldProblem message={fieldErrors.acquisitionContract} />
+            </div>
+          )}
+
           {shows("supplierRef") && (
             <Field label="Supplier reference" hint="Their contract or booking number.">
               <Input value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder={varies(start.supplierRef)} />
@@ -669,6 +712,21 @@ export function InventorySidePanel({
                 ))}
               </Select>
             </Field>
+          )}
+
+          {shows("salesContract") && (
+            <div id="panel-field-salesContract">
+              <ContractPicker
+                party="CLIENT"
+                eventId={eventId}
+                clientId={clientId || null}
+                value={salesContractId}
+                onChange={setSalesContractId}
+                required={action === "SELL"}
+                varies={sameClient && !start.salesContractId.same}
+              />
+              <FieldProblem message={fieldErrors.salesContract} />
+            </div>
           )}
 
           {shows("clientRef") && (
@@ -894,6 +952,7 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
         {line("Buy price", (cell) => money(cell.buyPriceCents, cell.buyCurrency))}
         {line("Option runs to", (cell) => day(cell.optionExpiry))}
         {line("Supplier ref.", (cell) => cell.supplierRef)}
+        {line("Supplier contract", (cell) => cell.acquisitionContract)}
         {line("Accommodation Mgr", (cell) => cell.acquisitionOwner)}
         {line("Supplier notes", (cell) => cell.acquisitionNotes)}
       </dl>
@@ -908,6 +967,7 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
         {/* Only where it was recorded before there was one due date (2026-10-01). */}
         {line("Payment due", (cell) => day(cell.dueDate))}
         {line("Client ref.", (cell) => cell.clientRef)}
+        {line("Client contract", (cell) => cell.salesContract)}
         {line("Sales Manager", (cell) => cell.salesOwner)}
         {line("Client notes", (cell) => cell.salesNotes)}
       </dl>
@@ -916,11 +976,23 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
 }
 
 /** The fields a problem can be pointed at, top to bottom as they appear. */
-const panelFields = ["client", "optionExpiry", "blockExpiry", "buyPrice", "sellPrice", "acquisitionOwner", "salesOwner"] as const;
+const panelFields = [
+  "client",
+  "acquisitionContract",
+  "salesContract",
+  "optionExpiry",
+  "blockExpiry",
+  "buyPrice",
+  "sellPrice",
+  "acquisitionOwner",
+  "salesOwner",
+] as const;
 type PanelField = (typeof panelFields)[number];
 
 /** Which field the server's refusal is about, when it is about one. */
 function fieldOfMessage(message: string): PanelField | null {
+  if (/supplier contract/i.test(message)) return "acquisitionContract";
+  if (/client contract/i.test(message)) return "salesContract";
   if (/price we pay/i.test(message)) return "buyPrice";
   if (/price the client pays/i.test(message)) return "sellPrice";
   if (/which client/i.test(message)) return "client";
@@ -952,3 +1024,131 @@ const statusAction: {
   acquisition: { IN_PROGRESS: "START_NEGOTIATION", OPTION: "TAKE_OPTION", BOUGHT: "BUY", RELEASED: "RELEASE" },
   sales: { BLOCKED: "BLOCK", SOLD: "SELL", CANCELLED: "CANCEL_SALE" },
 };
+
+/**
+ * The contract nights are bought or sold under (doc §7.1): this hotel's or
+ * this client's, for this event — or a new one, added right here with its
+ * name, total and PDF link. Its payment and cancellation terms follow on its
+ * own page; until then it is flagged.
+ */
+function ContractPicker({
+  party,
+  eventId,
+  propertyId,
+  clientId,
+  value,
+  onChange,
+  required,
+  varies,
+}: {
+  party: "SUPPLIER" | "CLIENT";
+  eventId: string;
+  propertyId?: string | null;
+  clientId?: string | null;
+  value: string;
+  onChange: (id: string) => void;
+  required: boolean;
+  varies: boolean;
+}) {
+  const utils = api.useUtils();
+  const contracts = api.finance.contracts.useQuery({ eventId, party });
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [total, setTotal] = useState("");
+  const [currency, setCurrency] = useState("USD");
+  const [link, setLink] = useState("");
+  const create = api.finance.createContract.useMutation({
+    onSuccess: (contract) => {
+      void utils.finance.invalidate();
+      onChange(contract.id);
+      setAdding(false);
+      setName("");
+      setTotal("");
+      setLink("");
+    },
+  });
+  const owner = party === "SUPPLIER" ? propertyId : clientId;
+  const options = (contracts.data ?? []).filter((contract) =>
+    party === "SUPPLIER" ? contract.propertyId === owner : contract.clientId === owner,
+  );
+  const label = party === "SUPPLIER" ? "Supplier contract" : "Client contract";
+  const chosen = options.find((contract) => contract.id === value);
+
+  if (!owner) {
+    return (
+      <Field label={label}>
+        <p className="text-ink-500 text-xs font-light">
+          {party === "SUPPLIER" ? "Select rooms of one hotel to choose its contract." : "Choose the client first."}
+        </p>
+      </Field>
+    );
+  }
+  return (
+    <Field
+      label={required ? `${label} — required` : label}
+      hint={
+        chosen && chosen.missing.length
+          ? `This contract is still missing ${chosen.missing.join(", ")}.`
+          : varies
+            ? "These nights are under different contracts — leave it to keep each night's own."
+            : undefined
+      }
+    >
+      {adding ? (
+        <div className="border-ink-200/60 space-y-2 rounded-lg border p-3">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Contract name, like Group Sales Agreement" autoFocus />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <Input value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" placeholder="Total of the contract" aria-label="Total" />
+            </div>
+            <Select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-24" aria-label="Currency">
+              {CURRENCIES.map((code) => (
+                <option key={code}>{code}</option>
+              ))}
+            </Select>
+          </div>
+          <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Signed PDF — Google Drive link (can come later)" />
+          {create.error && <FormError message={create.error.message} />}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              disabled={!name.trim() || create.isPending}
+              onClick={() => {
+                const cents = total.trim() ? Math.round(Number(total.replace(/[’'\s,]/g, "")) * 100) : null;
+                create.mutate({
+                  party,
+                  eventId,
+                  ...(party === "SUPPLIER" ? { propertyId: owner } : { clientId: owner }),
+                  name,
+                  totalCents: cents !== null && Number.isFinite(cents) ? cents : null,
+                  currency,
+                  documentUrl: link,
+                });
+              }}
+            >
+              {create.isPending ? "Adding…" : "Add contract"}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+              Cancel
+            </Button>
+          </div>
+          <p className="text-ink-500 text-xs font-light">Its payment and cancellation terms are added on the contract's page.</p>
+        </div>
+      ) : (
+        <Select
+          value={value}
+          onChange={(e) => (e.target.value === "__new__" ? setAdding(true) : onChange(e.target.value))}
+        >
+          <option value="">{varies ? "Varies — keep each night's own" : options.length ? "Choose…" : "None yet"}</option>
+          {options.map((contract) => (
+            <option key={contract.id} value={contract.id}>
+              {contract.name}
+              {contract.missing.length ? " — terms missing" : ""}
+            </option>
+          ))}
+          <option value="__new__">+ New contract…</option>
+        </Select>
+      )}
+    </Field>
+  );
+}

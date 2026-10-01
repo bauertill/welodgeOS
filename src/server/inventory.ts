@@ -18,6 +18,8 @@ import type { InventoryAction } from "~/lib/inventory";
 /** Everything the stock sheet and the position grid need about a night. */
 export const nightInclude = {
   client: { select: { id: true, name: true, shortName: true } },
+  acquisitionContract: { select: { id: true, name: true } },
+  salesContract: { select: { id: true, name: true } },
   acquisitionOwner: { select: { name: true, email: true } },
   salesOwner: { select: { name: true, email: true } },
   requests: {
@@ -78,6 +80,8 @@ export function flatten(night: LoadedNight): NightRecord {
     acquisitionOwner: person(night.acquisitionOwner),
     acquisitionOwnerId: night.acquisitionOwnerId,
     acquisitionNotes: night.acquisitionNotes,
+    acquisitionContractId: night.acquisitionContractId,
+    acquisitionContract: night.acquisitionContract?.name ?? null,
 
     salesState: night.salesState,
     clientId: night.clientId,
@@ -90,6 +94,8 @@ export function flatten(night: LoadedNight): NightRecord {
     salesOwner: person(night.salesOwner),
     salesOwnerId: night.salesOwnerId,
     salesNotes: night.salesNotes,
+    salesContractId: night.salesContractId,
+    salesContract: night.salesContract?.name ?? null,
 
     requestedBy: night.requests.map((request) => ({
       id: request.clientId,
@@ -131,6 +137,9 @@ export type NightSnapshot = {
   salesOwnerId: string | null;
   /** Absent in entries written before requests held nights (doc §4.11). */
   salesRequestId?: string | null;
+  /** Absent in entries written before nights carried their contracts (doc §7.1). */
+  acquisitionContractId?: string | null;
+  salesContractId?: string | null;
 };
 
 /** Captures a night's current field values as a snapshot — call this with
@@ -158,6 +167,8 @@ export function snapshotNight(night: RoomNight, existed = true): NightSnapshot {
     salesNotes: night.salesNotes,
     salesOwnerId: night.salesOwnerId,
     salesRequestId: night.salesRequestId,
+    acquisitionContractId: night.acquisitionContractId,
+    salesContractId: night.salesContractId,
   };
 }
 
@@ -183,6 +194,8 @@ export function snapshotToFields(snapshot: NightSnapshot) {
     salesOwnerId: snapshot.salesOwnerId,
     // An older entry never recorded it, so undoing one leaves it as it is.
     ...(snapshot.salesRequestId !== undefined && { salesRequestId: snapshot.salesRequestId }),
+    ...(snapshot.acquisitionContractId !== undefined && { acquisitionContractId: snapshot.acquisitionContractId }),
+    ...(snapshot.salesContractId !== undefined && { salesContractId: snapshot.salesContractId }),
   };
 }
 

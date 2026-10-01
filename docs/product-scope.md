@@ -1822,9 +1822,81 @@ Derived:
 
 Aggregations must be available by event, property, category, client, party and date range.
 
-**Out of scope for v1:** invoicing, payment tracking, FX conversion (aggregates are
-reported per currency), taxes and tourist levies, commission splits, deposit schedules.
-`dueDate` is captured as a deadline only, with no payment state behind it.
+**Out of scope for v1:** invoicing, FX conversion (aggregates are reported per currency),
+taxes and tourist levies, commission splits. Payment schedules and their tracking — once out
+of scope here — are now §7.1.
+
+### 7.1 Contracts, payments and cancellation deadlines
+
+> **Built, in a first version.** Contracts with their payment and cancellation terms, the
+> Finances section, and buying and selling under a contract. The signed PDF is a pasted
+> Google Drive link; uploading it into the system, into a We Lodge Drive folder, is wanted
+> but waits on a conversation with Till (it needs Google Drive access set up). Reading the
+> terms out of the PDF automatically was considered and left for later. Nothing has been
+> imported from monday.com's *Payables*, *Payments from Clients* or *Cancellation
+> Deadlines* boards.
+
+Every contract we sign — with a supplier or with a client — carries payment and
+cancellation deadlines. **A contract is a record of its own**: who it is with (a hotel, on a
+supplier contract; a client, and the sales request it came from, on a client contract), the
+event, its name ("Group Sales Agreement"), the signed PDF as a Google Drive link, when it
+was signed, its account manager, notes, and **its total** — what the whole contract is worth,
+with its currency (§4.5).
+
+**Payment terms** are the payments the contract schedules, each with a description ("1st
+deposit"), a due date, and **its share of the contract's total** — 20% of US$ 198,450 is
+US$ 39,690. The amount is worked out from the total every time it is read, never stored, so
+changing the total changes every share with it (§2 conventions). Where a payment is not a
+plain share — a tax charged on top, say — it can be a set amount instead. Each payment
+moves through a status: for a supplier *To be paid → Invoice requested → Invoice received →
+Paid*, for a client *To be paid → Invoice issued → Paid*, and *Refund* on either; marking it
+paid records the date. It can carry links to the invoice and the proof of payment, and, on
+a supplier payment, the beneficiary's name. The contract's page says what the shares add
+up to, and warns when they are not 100%.
+
+**Cancellation terms** are the contract's cut-offs, each with its date and kind —
+*Attrition* (we may reduce the rooms or nights by an agreed share without paying for them)
+and *Release* (we may hand rooms back, or an exclusivity lapses) on a supplier contract,
+*Client cancellation* (the client may cancel, free or for a fee) on a client contract, and
+*Other* — the share that may go, what it applies to in words ("63 room-nights"), the room
+type, the fee ("30%"), and remarks. **A cut-off is a reminder**: nothing is released or
+cancelled on its own (§2.4). Someone ticks it once it has been dealt with.
+
+**Incomplete contracts are flagged.** A contract missing its total, its payment terms, its
+cancellation terms (unless it has been said, on purpose, that it has none) or its signed PDF
+says so in red on its page, in the list of contracts, and where it is chosen. It can still be
+used meanwhile — that was the decision (2026-10-01) — but it stays flagged until complete.
+
+**Buying and selling happen under a contract.** *Buy* on the stock sheet asks for the
+supplier contract — one with that hotel, for that event — and *Sell*, whether on the stock
+sheet or from a sales request (§4.11), asks for the client contract: that client's, for that
+event. Anything else is refused. Where every night selected already has its contract, it
+can be left as it is; where there is none yet, *+ New contract* adds one on the spot with
+its name, total and PDF link, its terms to follow. The nights then carry their contracts:
+the panel's *Recorded now* shows them, the ledger records them (*"Supplier contract: — →
+Group Sales Agreement"*), *Update supplier details* and *Update client details* can attach
+nights to one after the fact, and undo puts them back. Abandoning the supplier negotiation
+unties nights from their supplier contract; releasing a client's hold unties them from the
+client's; a cancelled sale stays on its contract, as it stays with its client. Blocking and
+requesting need no contract — nothing has been signed yet. A sales request shows its client
+contracts and adds one already filled in with the client, the event and the request's value
+as its total.
+
+**The Finances section** — *Finances* in the menu, a panel like *Events* and *Sales* —
+holds three pages:
+
+- **Payments**, *To suppliers* and *From clients*: every open payment from every contract,
+  soonest first, with what it is for, its share and amount, its status (changed right in
+  the list), and its documents. Overdue ones are red and those due within 7 days amber, and
+  a line above sums each per currency. Paid ones are under *Paid*.
+- **Cancellations**, *With suppliers* and *With clients*: every cut-off still open, soonest
+  first, ticked off as they are dealt with.
+- **Contracts**: every contract, by event, with its total and whether its terms are
+  complete.
+
+The panel says how many payments are due within a week or overdue, how many cut-offs fall
+within 30 days, and how many contracts are missing terms. Every change to a contract, its
+payments and its deadlines is in the contract's history.
 
 ---
 
@@ -2091,6 +2163,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Empty keeps, update details only | **Built** | A detail left empty keeps each night's own; *Update supplier details* / *Update client details* change only what is filled in; a night passing to another client does not keep the last one's details |
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
+| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the Finances section with Payments, Cancellations and Contracts; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
+| §7.1 Buying and selling under a contract | **Built** | Buy needs the hotel's supplier contract and Sell the client's contract, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
 | §4.9 General audit trail | **Built** | Scouting status, contract status, and property/client/event edits — no undo, and no field-level diff of nested categories/contacts |

@@ -879,6 +879,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
         <div className="space-y-5">
           <FollowUpCard request={request} />
+          <ContractCard request={request} />
           <DetailsCard request={request} />
         </div>
       </div>
@@ -1138,6 +1139,7 @@ function ChangeRooms({
     },
   });
   const needsPrice = action === "SELL" || action === "BLOCK";
+  const [contractId, setContractId] = useState("");
   const needsDate = action === "BLOCK" || action === "EXTEND_BLOCK";
   const warning = {
     RELEASE_HOLD: `Releases the client's block on these ${row.nights} room-nights. They become free for anyone.`,
@@ -1160,7 +1162,12 @@ function ChangeRooms({
           setProblem(`Give the price per night — rooms ${action === "BLOCK" ? "blocked" : "sold"} for a client need their agreed price.`);
           return;
         }
+        if (action === "SELL" && !contractId) {
+          setProblem("Choose the client contract these rooms are sold under.");
+          return;
+        }
         change.mutate({
+          ...(action === "SELL" && { salesContractId: contractId }),
           id: request.id,
           categoryId: row.categoryId,
           state: row.state as "REQUESTED" | "BLOCKED" | "SOLD",
@@ -1171,6 +1178,7 @@ function ChangeRooms({
       }}
     >
       {warning[action] && <p className="text-ink-700 w-full text-[13px] font-light">{warning[action]}</p>}
+      {action === "SELL" && <RequestContractPicker request={request} value={contractId} onChange={setContractId} />}
       {needsDate && (
         <div className="w-44">
           <Field label={action === "EXTEND_BLOCK" ? "New due date" : "Due date"}>
@@ -1253,6 +1261,7 @@ function AddRooms({
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [clientRef, setClientRef] = useState("");
+  const [contractId, setContractId] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
 
   const datesOk = /^\d{4}-\d{2}-\d{2}$/.test(checkIn) && /^\d{4}-\d{2}-\d{2}$/.test(checkOut) && checkOut > checkIn;
@@ -1288,7 +1297,9 @@ function AddRooms({
         }
         const amount = price.trim() ? Number(price.replace(",", ".")) : null;
         if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return setProblem("The price should be a number, like 281.50.");
+        if (action === "SELL" && !contractId) return setProblem("Choose the client contract these rooms are sold under.");
         add.mutate({
+          ...(action === "SELL" && { salesContractId: contractId }),
           id: request.id,
           categoryId,
           rooms: wanted,
@@ -1380,6 +1391,11 @@ function AddRooms({
         <Field label="Client reference" className="sm:col-span-2">
           <Input value={clientRef} onChange={(e) => setClientRef(e.target.value)} placeholder="Their order number" />
         </Field>
+        {action === "SELL" && (
+          <div className="sm:col-span-6">
+            <RequestContractPicker request={request} value={contractId} onChange={setContractId} />
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -1416,6 +1432,84 @@ function LooseRooms({ request, count }: { request: FullRequest; count: number })
       </button>
       {tie.error && <span className="block text-xs text-[#c03654]">{friendlyError(tie.error)}</span>}
     </p>
+  );
+}
+
+/**
+ * Which client contract a sale from the request is made under (doc §7.1): this
+ * client's, for this event. Picked for you when there is just one; when there
+ * is none, it says where to add it.
+ */
+function RequestContractPicker({ request, value, onChange }: { request: FullRequest; value: string; onChange: (id: string) => void }) {
+  const contracts = api.finance.contracts.useQuery({ eventId: request.event?.id, party: "CLIENT" }, { enabled: Boolean(request.event) });
+  const options = (contracts.data ?? []).filter((contract) => contract.clientId === request.client.id);
+  useEffect(() => {
+    if (!value && options.length === 1) onChange(options[0]!.id);
+  }, [value, options, onChange]);
+  if (contracts.isSuccess && options.length === 0) {
+    return (
+      <p className="w-full text-[13px] font-light text-[#c03654]">
+        A sale needs the client&apos;s contract, and {request.client.name} has none for {request.event?.name} yet.{" "}
+        <Link href={`/finances/contracts/new?request=${request.id}`} className="text-brand-700 font-medium hover:underline">
+          Add the contract
+        </Link>
+      </p>
+    );
+  }
+  return (
+    <div className="w-72">
+      <Field label="Client contract — required">
+        <Select value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Choose…</option>
+          {options.map((contract) => (
+            <option key={contract.id} value={contract.id}>
+              {contract.name}
+              {contract.missing.length ? " — terms missing" : ""}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    </div>
+  );
+}
+
+/** The signed contract with the client for this request, with its terms (doc §7.1). */
+function ContractCard({ request }: { request: FullRequest }) {
+  const contracts = api.finance.contracts.useQuery({ salesRequestId: request.id });
+  const rows = contracts.data ?? [];
+  return (
+    <Card>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-ink-900 text-[15px] font-medium">Contract</h2>
+        {request.event && (
+          <Link href={`/finances/contracts/new?request=${request.id}`} className="text-brand-700 text-[13px] font-light hover:underline">
+            + New contract
+          </Link>
+        )}
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">
+          {request.event
+            ? "None yet. Once the client signs, add the contract with its payment and cancellation terms."
+            : "Choose the event under Details first — a contract is for an event."}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((contract) => (
+            <li key={contract.id} className="text-sm">
+              <Link href={`/finances/contracts/${contract.id}`} className="hover:text-brand-700 font-medium">
+                {contract.name}
+              </Link>
+              <span className={`block text-xs font-light ${contract.missing.length ? "text-[#c03654]" : "text-ink-500"}`}>
+                {contract.missing.length
+                  ? `Missing ${contract.missing.join(", ")}`
+                  : `${contract._count.payments} payments · ${contract.totalCents !== null && contract.currency ? formatMoney(contract.totalCents, contract.currency) : ""}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

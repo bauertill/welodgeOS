@@ -75,6 +75,12 @@ const attributes = z.object({
    * nights already tied to a request stay tied to it.
    */
   salesRequestId: z.string().optional(),
+  /**
+   * The signed contracts the nights fall under (doc §7.1): with the supplier
+   * when buying, with the client when selling. Left out, nights keep theirs.
+   */
+  acquisitionContractId: z.string().optional(),
+  salesContractId: z.string().optional(),
 });
 
 /**
@@ -402,11 +408,52 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           });
         }
       }
+      // Buying and selling happen under a signed contract (doc §7.1): one with
+      // the hotel when buying, one with the client when selling — each for this
+      // event and that very hotel or client. Left empty is fine only where
+      // every night already carries one (the client's own, on the sales side).
+      if (action === "BUY" && !input.acquisitionContractId && nights.some((night) => !night.acquisitionContractId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose the supplier contract these nights are bought under — or add it first.",
+        });
+      }
+      if (
+        action === "SELL" &&
+        !input.salesContractId &&
+        nights.some((night) => !night.salesContractId || night.clientId !== input.clientId)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose the client contract these nights are sold under — or add it first.",
+        });
+      }
+      if (input.acquisitionContractId) {
+        const contract = await tx.contract.findUnique({ where: { id: input.acquisitionContractId } });
+        const hotels = new Set(nights.map((night) => night.slot.category.property.id));
+        if (!contract || contract.party !== "SUPPLIER" || contract.eventId !== eventId || hotels.size !== 1 || !hotels.has(contract.propertyId ?? "")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Nothing was changed. That supplier contract is not with this hotel, for this event.",
+          });
+        }
+      }
+      if (input.salesContractId) {
+        const contract = await tx.contract.findUnique({ where: { id: input.salesContractId } });
+        const holder = input.clientId ?? (new Set(nights.map((night) => night.clientId)).size === 1 ? nights[0]?.clientId : null);
+        if (!contract || contract.party !== "CLIENT" || contract.eventId !== eventId || contract.clientId !== holder) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Nothing was changed. That client contract is not this client's, for this event.",
+          });
+        }
+      }
+
       if (action === "UPDATE_SUPPLIER_DETAILS" || action === "UPDATE_CLIENT_DETAILS") {
         const keys =
           action === "UPDATE_SUPPLIER_DETAILS"
-            ? (["supplierRef", "buyPriceCents", "acquisitionOwnerId", "acquisitionNotes"] as const)
-            : (["clientRef", "dueDate", "sellPriceCents", "salesOwnerId", "salesNotes"] as const);
+            ? (["supplierRef", "buyPriceCents", "acquisitionOwnerId", "acquisitionNotes", "acquisitionContractId"] as const)
+            : (["clientRef", "dueDate", "sellPriceCents", "salesOwnerId", "salesNotes", "salesContractId"] as const);
         if (keys.every((key) => input[key] === undefined)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Nothing to change — fill in what should change. Everything left empty stays as it is." });
         }
@@ -562,6 +609,7 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           if (action === "BLOCK" || action === "SELL") {
             const passed = nights.filter((night) => night.clientId !== input.clientId).map((night) => night.id);
             const reset = {
+              ...(input.salesContractId === undefined && { salesContractId: null }),
               ...(input.clientRef === undefined && { clientRef: null }),
               ...(input.dueDate === undefined && { dueDate: null }),
               ...(input.sellPriceCents === undefined && { sellPriceCents: null, sellCurrency: null }),
@@ -1458,6 +1506,7 @@ function describeChanges(before: LoadedNight[], after: LoadedNight[]) {
     { label: "Buy price", read: (night) => money(night.buyPriceCents, night.buyCurrency) },
     { label: "Supplier notes", read: (night) => note(night.acquisitionNotes) },
     { label: "Supplier-side rep", read: (night) => person(night.acquisitionOwner) },
+    { label: "Supplier contract", read: (night) => night.acquisitionContract?.name ?? null },
     { label: "Client", read: (night) => night.client?.name ?? null },
     { label: "Client reference", read: (night) => night.clientRef },
     { label: "Due date", read: (night) => date(night.blockExpiry) },
@@ -1465,6 +1514,7 @@ function describeChanges(before: LoadedNight[], after: LoadedNight[]) {
     { label: "Sell price", read: (night) => money(night.sellPriceCents, night.sellCurrency) },
     { label: "Client notes", read: (night) => note(night.salesNotes) },
     { label: "Client-side rep", read: (night) => person(night.salesOwner) },
+    { label: "Client contract", read: (night) => night.salesContract?.name ?? null },
   ];
   const was = new Map(before.map((night) => [night.id, night]));
   const counts = new Map<string, { order: number; line: string; count: number }>();
@@ -1509,6 +1559,7 @@ function buildUpdate(
         ...keepPrice(input.buyPriceCents, input.buyCurrency, "buyPriceCents", "buyCurrency"),
         acquisitionOwnerId: input.acquisitionOwnerId,
         acquisitionNotes: keepText(input.acquisitionNotes),
+        acquisitionContractId: input.acquisitionContractId,
       };
 
     case "UPDATE_SUPPLIER_DETAILS":
@@ -1517,6 +1568,7 @@ function buildUpdate(
         ...keepPrice(input.buyPriceCents, input.buyCurrency, "buyPriceCents", "buyCurrency"),
         acquisitionOwnerId: input.acquisitionOwnerId,
         acquisitionNotes: keepText(input.acquisitionNotes),
+        acquisitionContractId: input.acquisitionContractId,
       };
 
     case "UPDATE_CLIENT_DETAILS":
@@ -1526,6 +1578,7 @@ function buildUpdate(
         ...keepPrice(input.sellPriceCents, input.sellCurrency, "sellPriceCents", "sellCurrency"),
         salesOwnerId: input.salesOwnerId,
         salesNotes: keepText(input.salesNotes),
+        salesContractId: input.salesContractId,
       };
 
     case "ABANDON":
@@ -1533,6 +1586,7 @@ function buildUpdate(
       // details of it go with it. The ledger keeps what it was.
       return {
         acquisitionState: "NONE" as const,
+        acquisitionContractId: null,
         supplierRef: null,
         optionExpiry: null,
         buyPriceCents: null,
@@ -1565,6 +1619,7 @@ function buildUpdate(
         salesOwnerId: input.salesOwnerId,
         salesNotes: keepText(input.salesNotes),
         ...(input.salesRequestId !== undefined && { salesRequestId: input.salesRequestId }),
+        salesContractId: input.salesContractId,
       };
 
     case "RELEASE_HOLD":
@@ -1573,6 +1628,7 @@ function buildUpdate(
         salesState: "NONE" as const,
         clientId: null,
         salesRequestId: null,
+        salesContractId: null,
         clientRef: null,
         blockExpiry: null,
         dueDate: null,

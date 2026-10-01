@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { EventsPanel } from "~/app/_components/events-panel";
+import { FinancePanel } from "~/app/_components/finance-panel";
 import { SalesPanel } from "~/app/_components/sales-panel";
 
 // Properties has no standalone section — a property belongs to the event(s)
@@ -46,6 +47,7 @@ export function Nav() {
   const pathname = usePathname();
   const [eventsOpen, setEventsOpen] = useState(false);
   const [salesOpen, setSalesOpen] = useState(false);
+  const [financeOpen, setFinanceOpen] = useState(false);
 
   if (pathname.startsWith("/signin") || pathname.startsWith("/signout"))
     return null;
@@ -106,10 +108,21 @@ export function Nav() {
         >
           Sales
         </button>
+        <button
+          type="button"
+          onClick={() => setFinanceOpen(true)}
+          aria-current={pathname.startsWith("/finances") ? "page" : undefined}
+          aria-haspopup="dialog"
+          aria-expanded={financeOpen}
+          className={itemStyles(pathname.startsWith("/finances"))}
+        >
+          Finances
+        </button>
       </nav>
 
       {eventsOpen && <EventsPanel onClose={() => setEventsOpen(false)} />}
       {salesOpen && <SalesPanel onClose={() => setSalesOpen(false)} />}
+      {financeOpen && <FinancePanel onClose={() => setFinanceOpen(false)} />}
     </>
   );
 }

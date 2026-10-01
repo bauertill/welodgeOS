@@ -201,7 +201,7 @@ export const actionGroups: { label: string; actions: InventoryAction[] }[] = [
 export const actionFields: Record<InventoryAction, string[]> = {
   START_NEGOTIATION: ["supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
   TAKE_OPTION: ["supplierRef", "optionExpiry", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
-  BUY: ["supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
+  BUY: ["acquisitionContract", "supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
   ABANDON: ["acquisitionNotes"],
   RELEASE: ["acquisitionNotes"],
   EXTEND_OPTION: ["optionExpiry"],
@@ -210,14 +210,14 @@ export const actionFields: Record<InventoryAction, string[]> = {
 
   // One client deadline, the due date: the block's own date (doc §4.2).
   BLOCK: ["client", "blockExpiry", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
-  SELL: ["client", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
+  SELL: ["client", "salesContract", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
   RELEASE_HOLD: ["salesNotes"],
   CANCEL_SALE: ["salesNotes"],
   EXTEND_BLOCK: ["blockExpiry"],
   REPRICE_SELL: ["sellPrice"],
   REASSIGN_SALES_OWNER: ["salesOwner"],
-  UPDATE_SUPPLIER_DETAILS: ["supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
-  UPDATE_CLIENT_DETAILS: ["clientRef", "sellPrice", "salesOwner", "salesNotes"],
+  UPDATE_SUPPLIER_DETAILS: ["acquisitionContract", "supplierRef", "buyPrice", "acquisitionOwner", "acquisitionNotes"],
+  UPDATE_CLIENT_DETAILS: ["salesContract", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
 
   REQUEST: ["client", "clientRef", "sellPrice", "salesOwner", "salesNotes"],
   WITHDRAW_REQUEST: ["client"],
