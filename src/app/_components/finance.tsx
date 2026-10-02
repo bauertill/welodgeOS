@@ -434,7 +434,18 @@ export function NewContractForm({
   preset,
 }: {
   /** The event it is for — always set, as a contract is added from its event. */
-  preset: { party?: ContractParty; eventId: string; eventName: string; clientId?: string; propertyId?: string; salesRequestId?: string; totalCents?: number | null; currency?: string | null };
+  preset: {
+    party?: ContractParty;
+    eventId: string;
+    eventName: string;
+    clientId?: string;
+    propertyId?: string;
+    salesRequestId?: string;
+    /** Registered to mark its sales request Signed: saving it does both (doc §4.11). */
+    markRequestSigned?: boolean;
+    totalCents?: number | null;
+    currency?: string | null;
+  };
 }) {
   const router = useRouter();
   const utils = api.useUtils();
@@ -451,6 +462,7 @@ export function NewContractForm({
   const create = api.finance.createContract.useMutation({
     onSuccess: (contract) => {
       void utils.finance.invalidate();
+      void utils.sales.invalidate();
       router.push(contractHref(contract.eventId, contract.id));
     },
   });
@@ -467,7 +479,9 @@ export function NewContractForm({
           create.mutate({
             party,
             eventId,
-            ...(party === "SUPPLIER" ? { propertyId: withId } : { clientId: withId, salesRequestId: preset?.salesRequestId }),
+            ...(party === "SUPPLIER"
+              ? { propertyId: withId }
+              : { clientId: withId, salesRequestId: preset?.salesRequestId, markRequestSigned: preset?.markRequestSigned }),
             name,
             documentUrl,
             signedOn,
@@ -528,7 +542,7 @@ export function NewContractForm({
         <div className="space-y-2 sm:col-span-2">
           <FormError message={problem ?? (create.error ? friendlyError(create.error) : null)} />
           <Button type="submit" disabled={create.isPending || !eventId || !withId || !name.trim()}>
-            {create.isPending ? "Adding…" : "Add contract"}
+            {create.isPending ? "Adding…" : preset?.markRequestSigned ? "Add contract and mark signed" : "Add contract"}
           </Button>
           <p className="text-ink-500 text-xs font-light">Its payment and cancellation terms are added on the next page.</p>
         </div>

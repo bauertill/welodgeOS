@@ -1418,7 +1418,7 @@ stored on the request, so it cannot disagree with the stock sheet.
 | *Initial interest* | The client has asked. We are looking for units and preparing a proposal. Monday: *Discovery* |
 | *Proposal sent* | We have sent a proposal and are waiting for the answer |
 | *Blocked* | The client is holding rooms while they decide |
-| *Signed* | Closed: the client has signed |
+| *Signed* | Closed: the client has signed — and their contract is registered against the request (below) |
 | *Released* | Closed: the client let their block go |
 | *No reply* | Closed: the client never came back to us |
 | *Lost* | Closed: the client went elsewhere or dropped the plan |
@@ -1428,6 +1428,23 @@ reopened. Moving to *Proposal sent* dates the proposal today, unless a date is a
 there. Moving to a closing stage records the day it closed; reopening clears that. Nothing
 moves a request on its own — a block that has passed its date is not released by the
 system (§2.4).
+
+**Signed needs the client's contract.** A request can be marked *Signed* only once a client
+contract (§7.1) is registered against it — the client's, for the request's event — so
+there is always a contract whose payments and cancellation deadlines are followed. Clicking
+*Signed*, or *Mark the request Signed* after a sale, marks it at once when there is one.
+When there is not, it asks for one instead:
+
+- **Sign under a contract already registered** — any of the client's contracts for the
+  event not yet tied to a request; choosing one ties it to this request and marks it
+  signed.
+- **Register the contract** — opens the new-contract form for this client and event, worth
+  the request's value, and saving it marks the request signed in the same step. Its payment
+  and cancellation terms are added next, on the contract.
+
+A request with no event cannot be signed until its event is chosen, as a contract is for an
+event. Requests marked signed before this rule (2026-10-02) keep their stage; their
+*Contract* card says, in red, that no contract is registered, with a link to register it.
 
 **What a request holds:**
 
@@ -2267,7 +2284,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
+| §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |

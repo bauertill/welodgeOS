@@ -212,6 +212,59 @@ function rectangles(nights: { slotId: string; date: Date }[]) {
   return [...runs.values()];
 }
 
+/**
+ * Move a request to another stage — the one way a stage changes. A request is
+ * marked Signed only once the client's contract is registered against it
+ * (doc §4.11): signed means there is a contract to collect payments under.
+ */
+export async function moveStage(tx: Prisma.TransactionClient, actorId: string, id: string, stage: SalesRequestStage) {
+  const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
+  if (before.stage === stage) return before;
+  if (stage === "SIGNED") {
+    if (!before.eventId) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — a signed request needs the client's contract, and a contract is for an event." });
+    }
+    const contracts = await tx.contract.count({ where: { salesRequestId: id, party: "CLIENT" } });
+    if (contracts === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Register the client's contract before marking the request signed." });
+    }
+  }
+  const closing = isClosed(stage);
+  const after = await tx.salesRequest.update({
+    where: { id },
+    data: {
+      stage,
+      closedOn: closing ? (before.closedOn && isClosed(before.stage) ? before.closedOn : today()) : null,
+      ...(stage === "PROPOSAL_SENT" && !before.proposalSentOn && { proposalSentOn: today() }),
+    },
+    include,
+  });
+  await logAudit(tx, {
+    actorId,
+    entity: "SalesRequest",
+    entityId: id,
+    summary: `Stage: ${salesStageLabels[before.stage]} → ${salesStageLabels[stage]}`,
+  });
+  return after;
+}
+
+/** Tie one of the client's contracts for the request's event to the request. */
+async function tieContract(tx: Prisma.TransactionClient, actorId: string, requestId: string, contractId: string) {
+  const [request, contract] = await Promise.all([
+    tx.salesRequest.findUniqueOrThrow({ where: { id: requestId }, select: { clientId: true, eventId: true } }),
+    tx.contract.findUniqueOrThrow({ where: { id: contractId }, select: { party: true, clientId: true, eventId: true, salesRequestId: true, name: true } }),
+  ]);
+  if (contract.party !== "CLIENT" || contract.clientId !== request.clientId || contract.eventId !== request.eventId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That contract is not this client's for this event." });
+  }
+  if (contract.salesRequestId === requestId) return;
+  if (contract.salesRequestId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That contract belongs to another sales request." });
+  }
+  await tx.contract.update({ where: { id: contractId }, data: { salesRequestId: requestId } });
+  await logAudit(tx, { actorId, entity: "SalesRequest", entityId: requestId, summary: `Contract tied to the request: ${contract.name}` });
+}
+
 export const salesRouter = createTRPCRouter({
   /**
    * The Sales requests page (doc §4.11): open ones by default, filtered by
@@ -802,28 +855,18 @@ export const salesRouter = createTRPCRouter({
    * and reopening clears that — a request is closed only while its stage says so.
    */
   setStage: protectedProcedure
-    .input(z.object({ id: z.string(), stage: z.nativeEnum(SalesRequestStage) }))
+    .input(
+      z.object({
+        id: z.string(),
+        stage: z.nativeEnum(SalesRequestStage),
+        /** Signing under one of the client's contracts for the event not yet tied to a request: it is tied to this one. */
+        contractId: z.string().optional(),
+      }),
+    )
     .mutation(({ ctx, input }) =>
       ctx.db.$transaction(async (tx) => {
-        const before = await tx.salesRequest.findUniqueOrThrow({ where: { id: input.id }, include });
-        if (before.stage === input.stage) return before;
-        const closing = isClosed(input.stage);
-        const after = await tx.salesRequest.update({
-          where: { id: input.id },
-          data: {
-            stage: input.stage,
-            closedOn: closing ? (before.closedOn && isClosed(before.stage) ? before.closedOn : today()) : null,
-            ...(input.stage === "PROPOSAL_SENT" && !before.proposalSentOn && { proposalSentOn: today() }),
-          },
-          include,
-        });
-        await logAudit(tx, {
-          actorId: ctx.session.user.id,
-          entity: "SalesRequest",
-          entityId: input.id,
-          summary: `Stage: ${salesStageLabels[before.stage]} → ${salesStageLabels[input.stage]}`,
-        });
-        return after;
+        if (input.contractId) await tieContract(tx, ctx.session.user.id, input.id, input.contractId);
+        return moveStage(tx, ctx.session.user.id, input.id, input.stage);
       }),
     ),
 

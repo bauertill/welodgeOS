@@ -6,6 +6,7 @@ import { addDays, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney } from "~/lib/format";
 import { cancellationKindLabels, isSettled, missingTerms, paymentAmount, paymentStatusLabels, percent } from "~/lib/finance";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { moveStage } from "~/server/api/routers/sales";
 import { diffFields, logAudit } from "~/server/audit";
 
 /**
@@ -150,6 +151,8 @@ export const financeRouter = createTRPCRouter({
         propertyId: z.string().optional(),
         clientId: z.string().optional(),
         salesRequestId: z.string().optional(),
+        /** Registered on the way to marking its sales request Signed: the request moves too. */
+        markRequestSigned: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -165,7 +168,11 @@ export const financeRouter = createTRPCRouter({
           throw new TRPCError({ code: "BAD_REQUEST", message: "That sales request is not this client's." });
         }
       }
-      const contract = await ctx.db.contract.create({
+      if (input.markRequestSigned && (input.party !== "CLIENT" || !input.salesRequestId)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Only a client contract from a sales request can mark it signed." });
+      }
+      return ctx.db.$transaction(async (tx) => {
+      const contract = await tx.contract.create({
         data: {
           party: input.party,
           name: input.name,
@@ -182,8 +189,10 @@ export const financeRouter = createTRPCRouter({
           noCancellationTerms: input.noCancellationTerms ?? false,
         },
       });
-      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary: "Contract added" });
+      await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary: "Contract added" });
+      if (input.markRequestSigned) await moveStage(tx, ctx.session.user.id, input.salesRequestId!, "SIGNED");
       return contract;
+      });
     }),
 
   /** Change a contract's own details; its payments are changed one by one. */

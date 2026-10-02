@@ -611,10 +611,109 @@ function ContractingLink({ request }: { request: FullRequest }) {
   );
 }
 
+/**
+ * Marking a request Signed needs the client's contract registered against it
+ * (doc §4.11). With one already there, it is marked at once. Otherwise this
+ * asks for it: one of the client's contracts for the event not yet tied to a
+ * request, or a new one — registering it marks the request signed.
+ */
+function useSign(request: FullRequest, onSigned: () => void) {
+  const [asking, setAsking] = useState(false);
+  const utils = api.useUtils();
+  const linked = api.finance.contracts.useQuery({ salesRequestId: request.id });
+  const setStage = api.sales.setStage.useMutation({
+    onSuccess: () => {
+      // A contract may have been tied to the request on the way.
+      void utils.finance.invalidate();
+      setAsking(false);
+      onSigned();
+    },
+  });
+  const start = () => {
+    setStage.reset();
+    if ((linked.data ?? []).some((contract) => contract.party === "CLIENT")) setStage.mutate({ id: request.id, stage: "SIGNED" });
+    else setAsking(true);
+  };
+  const panel = asking ? (
+    <SignNeedsContract
+      request={request}
+      pending={setStage.isPending}
+      error={setStage.error ? friendlyError(setStage.error) : null}
+      onUse={(contractId) => setStage.mutate({ id: request.id, stage: "SIGNED", contractId })}
+      onCancel={() => setAsking(false)}
+    />
+  ) : setStage.error ? (
+    <FormError message={friendlyError(setStage.error)} />
+  ) : null;
+  return { start, panel };
+}
+
+function SignNeedsContract({
+  request,
+  pending,
+  error,
+  onUse,
+  onCancel,
+}: {
+  request: FullRequest;
+  pending: boolean;
+  error: string | null;
+  onUse: (contractId: string) => void;
+  onCancel: () => void;
+}) {
+  const contracts = api.finance.contracts.useQuery({ eventId: request.event?.id, party: "CLIENT" }, { enabled: Boolean(request.event) });
+  const free = (contracts.data ?? []).filter((contract) => contract.clientId === request.client.id && !contract.salesRequestId);
+  return (
+    <div className="border-brand-200 bg-brand-50/60 mt-3 rounded-lg border p-3 text-[13px] font-light">
+      <p className="text-ink-900 font-medium">To mark it signed, register the client&apos;s contract</p>
+      {!request.event ? (
+        <p className="text-ink-700 mt-1">Choose the event under Details first — a contract is for an event.</p>
+      ) : (
+        <>
+          <p className="text-ink-700 mt-1">
+            A signed request needs {request.client.name}&apos;s contract for {request.event.name}, so its payments and cancellation
+            terms are followed.
+          </p>
+          {free.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              <p className="text-ink-500 text-xs">Already registered for {request.event.name}, not tied to a request:</p>
+              {free.map((contract) => (
+                <button
+                  key={contract.id}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => onUse(contract.id)}
+                  className="border-ink-200 hover:border-brand-400 flex w-full items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 text-left"
+                >
+                  <span className="text-ink-900">{contract.name}</span>
+                  <span className="text-brand-700 text-xs font-medium whitespace-nowrap">Sign under this one</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <Link
+              href={newContractHref(request.event.id, `?request=${request.id}&sign=1`)}
+              className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] text-white"
+            >
+              Register the contract
+            </Link>
+            <button type="button" onClick={onCancel} className="text-ink-500 text-xs hover:underline">
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+      {error && <div className="mt-2"><FormError message={error} /></div>}
+    </div>
+  );
+}
+
 /** The stage, as buttons: open stages in order, then the ways it can close. */
 function StagePicker({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const setStage = api.sales.setStage.useMutation({ onSuccess: saved });
+  const sign = useSign(request, saved);
   const button = (stage: SalesRequestStage) => {
     const current = request.stage === stage;
     return (
@@ -623,7 +722,7 @@ function StagePicker({ request }: { request: FullRequest }) {
         type="button"
         title={salesStageHints[stage]}
         disabled={setStage.isPending}
-        onClick={() => !current && setStage.mutate({ id: request.id, stage })}
+        onClick={() => !current && (stage === "SIGNED" ? sign.start() : setStage.mutate({ id: request.id, stage }))}
         aria-pressed={current}
         className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
           current ? `${salesStageStyles[stage]} border-transparent font-medium` : "border-ink-200 text-ink-500 hover:text-ink-900 bg-white font-light"
@@ -642,6 +741,7 @@ function StagePicker({ request }: { request: FullRequest }) {
         {closedStages.map(button)}
       </div>
       <p className="text-ink-500 mt-2 text-xs font-light">{salesStageHints[request.stage]}</p>
+      {sign.panel}
       {setStage.error && <FormError message={friendlyError(setStage.error)} />}
     </Card>
   );
@@ -1025,14 +1125,16 @@ function RoomsCard({ request }: { request: FullRequest }) {
 function Done({ done, request, onClose }: { done: { text: string; offer: SalesRequestStage | null }; request: FullRequest; onClose: () => void }) {
   const saved = useSaved();
   const setStage = api.sales.setStage.useMutation({ onSuccess: () => { saved(); onClose(); } });
+  const sign = useSign(request, () => { saved(); onClose(); });
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-[#e3f8ee] px-3 py-2 text-[13px] text-[#0a7a47]">
+    <div className="mb-3">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg bg-[#e3f8ee] px-3 py-2 text-[13px] text-[#0a7a47]">
       <span>{done.text}</span>
       {done.offer && (
         <button
           type="button"
           disabled={setStage.isPending}
-          onClick={() => setStage.mutate({ id: request.id, stage: done.offer! })}
+          onClick={() => (done.offer === "SIGNED" ? sign.start() : setStage.mutate({ id: request.id, stage: done.offer! }))}
           className="font-medium hover:underline"
         >
           Mark the request {salesStageLabels[done.offer]}
@@ -1041,6 +1143,9 @@ function Done({ done, request, onClose }: { done: { text: string; offer: SalesRe
       <button type="button" onClick={onClose} className="ml-auto text-xs font-light hover:underline">
         Close
       </button>
+    </div>
+    {sign.panel}
+    {setStage.error && <FormError message={friendlyError(setStage.error)} />}
     </div>
   );
 }
@@ -1533,7 +1638,19 @@ function ContractCard({ request }: { request: FullRequest }) {
           </Link>
         )}
       </div>
-      {rows.length === 0 ? (
+      {rows.length === 0 && request.stage === "SIGNED" ? (
+        // Signed before a contract was required: said, so it gets registered.
+        <p className="text-sm font-light text-[#c03654]">
+          Marked signed, but no contract is registered.{" "}
+          {request.event ? (
+            <Link href={newContractHref(request.event.id, `?request=${request.id}`)} className="text-brand-700 font-medium hover:underline">
+              Register the client&apos;s contract
+            </Link>
+          ) : (
+            "Choose the event under Details, then register the client's contract."
+          )}
+        </p>
+      ) : rows.length === 0 ? (
         <p className="text-ink-500 text-sm font-light">
           {request.event
             ? "None yet. Once the client signs, add the contract with its payment and cancellation terms."
