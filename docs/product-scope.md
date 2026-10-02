@@ -1997,12 +1997,16 @@ cancellation terms (unless it has been said, on purpose, that it has none) or it
 says so in red on its page, in the list of contracts, and where it is chosen. It can still be
 used meanwhile — that was the decision (2026-10-01) — but it stays flagged until complete.
 
-**Buying and selling happen under a contract.** *Buy* on the stock sheet asks for the
-supplier contract — one with that hotel, for that event — and *Sell*, whether on the stock
-sheet or from a sales request (§4.11), asks for the client contract: that client's, for that
-event. Anything else is refused. Where every night selected already has its contract, it
-can be left as it is; where there is none yet, *+ New contract* adds one on the spot with
-its name, total and PDF link, its terms to follow. The nights then carry their contracts:
+**Buying and selling can name their contract — they do not wait for it.** *Buy* on the
+stock sheet offers the supplier contract — one with that hotel, for that event — and
+*Sell*, whether on the stock sheet or from a sales request (§4.11), the client contract:
+that client's, for that event. Both are optional: rooms can be bought or sold before the
+contract is registered, and tied to it afterwards. One that is chosen must be with that
+hotel or client, for that event; anything else is refused. Where there is none yet,
+*+ New contract* adds one on the spot with its name, total and PDF link, its terms to
+follow. (Until 2026-10-02 the contract was required for Buy and Sell; the owner decided it
+should not hold the team up. A sales request still needs its client contract to be marked
+*Signed* — §4.11.) The nights then carry their contracts:
 the panel's *Recorded now* shows them, the ledger records them (*"Supplier contract: — →
 Group Sales Agreement"*), *Update supplier details* and *Update client details* can attach
 nights to one after the fact, and undo puts them back. Abandoning the supplier negotiation
@@ -2303,7 +2307,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
 | §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs, kept on each event's Contracts tab; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
-| §7.1 Buying and selling under a contract | **Built** | Buy needs the hotel's supplier contract and Sell the client's contract, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
+| §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
 | §4.9 General audit trail | **Built** | Scouting status, contract status, and property/client/event edits — no undo, and no field-level diff of nested categories/contacts |

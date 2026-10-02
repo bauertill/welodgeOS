@@ -409,26 +409,9 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           });
         }
       }
-      // Buying and selling happen under a signed contract (doc §7.1): one with
-      // the hotel when buying, one with the client when selling — each for this
-      // event and that very hotel or client. Left empty is fine only where
-      // every night already carries one (the client's own, on the sales side).
-      if (action === "BUY" && !input.acquisitionContractId && nights.some((night) => !night.acquisitionContractId)) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Choose the supplier contract these nights are bought under — or add it first.",
-        });
-      }
-      if (
-        action === "SELL" &&
-        !input.salesContractId &&
-        nights.some((night) => !night.salesContractId || night.clientId !== input.clientId)
-      ) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Choose the client contract these nights are sold under — or add it first.",
-        });
-      }
+      // The contract nights are bought or sold under (doc §7.1) is optional —
+      // since 2026-10-02 buying and selling no longer wait for it. When one is
+      // given it must be with this hotel or client, for this event.
       if (input.acquisitionContractId) {
         const contract = await tx.contract.findUnique({ where: { id: input.acquisitionContractId } });
         const hotels = new Set(nights.map((night) => night.slot.category.property.id));

@@ -413,16 +413,6 @@ export function InventorySidePanel({
         (action === "REPRICE_SELL" || known.length === 0 || known.some((cell) => cell.sellPriceCents === null || cell.clientId !== clientId)),
       `Give the price the client pays per night — a night ${action === "BLOCK" ? "blocked" : "sold"} for a client needs its agreed price.`,
     );
-    needs(
-      "acquisitionContract",
-      action === "BUY" && !acquisitionContractId && (known.length === 0 || known.some((cell) => !cell.acquisitionContractId)),
-      "Choose the supplier contract these nights are bought under — or add it with + New contract.",
-    );
-    needs(
-      "salesContract",
-      action === "SELL" && !salesContractId && (known.length === 0 || known.some((cell) => !cell.salesContractId || cell.clientId !== clientId)),
-      "Choose the client contract these nights are sold under — or add it with + New contract.",
-    );
     needs("acquisitionOwner", action === "REASSIGN_ACQUISITION_OWNER" && !acquisitionOwnerId, "Pick who takes over with the supplier.");
     needs("salesOwner", action === "REASSIGN_SALES_OWNER" && !salesOwnerId, "Pick who takes over with the client.");
     if (periodsMode) {
@@ -693,7 +683,7 @@ export function InventorySidePanel({
                 propertyId={hotels.length === 1 ? hotels[0]! : null}
                 value={acquisitionContractId}
                 onChange={setAcquisitionContractId}
-                required={action === "BUY"}
+                required={false}
                 varies={!start.acquisitionContractId.same}
               />
               <FieldProblem message={fieldErrors.acquisitionContract} />
@@ -759,7 +749,7 @@ export function InventorySidePanel({
                 clientId={clientId || null}
                 value={salesContractId}
                 onChange={setSalesContractId}
-                required={action === "SELL"}
+                required={false}
                 varies={sameClient && !start.salesContractId.same}
               />
               <FieldProblem message={fieldErrors.salesContract} />
@@ -1215,7 +1205,7 @@ function ContractPicker({
           value={value}
           onChange={(e) => (e.target.value === "__new__" ? setAdding(true) : onChange(e.target.value))}
         >
-          <option value="">{varies ? "Varies — keep each night's own" : options.length ? "Choose…" : "None yet"}</option>
+          <option value="">{varies ? "Varies — keep each night's own" : options.length ? (required ? "Choose…" : "None") : "None yet"}</option>
           {options.map((contract) => (
             <option key={contract.id} value={contract.id}>
               {contract.name}

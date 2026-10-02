@@ -1269,12 +1269,8 @@ function ChangeRooms({
           setProblem(`Give the price per night — rooms ${action === "BLOCK" ? "blocked" : "sold"} for a client need their agreed price.`);
           return;
         }
-        if (action === "SELL" && !contractId) {
-          setProblem("Choose the client contract these rooms are sold under.");
-          return;
-        }
         change.mutate({
-          ...(action === "SELL" && { salesContractId: contractId }),
+          ...(action === "SELL" && contractId && { salesContractId: contractId }),
           id: request.id,
           categoryId: row.categoryId,
           state: row.state as "REQUESTED" | "BLOCKED" | "SOLD",
@@ -1421,9 +1417,8 @@ function AddRooms({
         }
         const amount = price.trim() ? Number(price.replace(",", ".")) : null;
         if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return setProblem("The price should be a number, like 281.50.");
-        if (action === "SELL" && !contractId) return setProblem("Choose the client contract these rooms are sold under.");
         add.mutate({
-          ...(action === "SELL" && { salesContractId: contractId }),
+          ...(action === "SELL" && contractId && { salesContractId: contractId }),
           ...(periodsMode && {
             periods: periods.map((period) => ({
               checkIn: period.checkIn,
@@ -1588,8 +1583,8 @@ function LooseRooms({ request, count }: { request: FullRequest; count: number })
 
 /**
  * Which client contract a sale from the request is made under (doc §7.1): this
- * client's, for this event. Picked for you when there is just one; when there
- * is none, it says where to add it.
+ * client's, for this event. Optional — a sale does not wait for it. Picked for
+ * you when there is just one; when there is none, it says where to add it.
  */
 function RequestContractPicker({ request, value, onChange }: { request: FullRequest; value: string; onChange: (id: string) => void }) {
   const contracts = api.finance.contracts.useQuery({ eventId: request.event?.id, party: "CLIENT" }, { enabled: Boolean(request.event) });
@@ -1599,8 +1594,8 @@ function RequestContractPicker({ request, value, onChange }: { request: FullRequ
   }, [value, options, onChange]);
   if (contracts.isSuccess && options.length === 0) {
     return (
-      <p className="w-full text-[13px] font-light text-[#c03654]">
-        A sale needs the client&apos;s contract, and {request.client.name} has none for {request.event?.name} yet.{" "}
+      <p className="text-ink-500 w-full text-[13px] font-light">
+        {request.client.name} has no contract for {request.event?.name} yet — the rooms can be sold without one, and tied to it later.{" "}
         <Link href={newContractHref(request.event?.id ?? "", `?request=${request.id}`)} className="text-brand-700 font-medium hover:underline">
           Add the contract
         </Link>
@@ -1609,9 +1604,9 @@ function RequestContractPicker({ request, value, onChange }: { request: FullRequ
   }
   return (
     <div className="w-72">
-      <Field label="Client contract — required">
+      <Field label="Client contract">
         <Select value={value} onChange={(e) => onChange(e.target.value)}>
-          <option value="">Choose…</option>
+          <option value="">None yet</option>
           {options.map((contract) => (
             <option key={contract.id} value={contract.id}>
               {contract.name}
