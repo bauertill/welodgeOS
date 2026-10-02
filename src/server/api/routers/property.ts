@@ -270,6 +270,7 @@ export const propertyRouter = createTRPCRouter({
         include: {
           ...detail,
           scoutingEntries: { include: { event: true, _count: { select: { quotations: true } } } },
+          _count: { select: { contracts: true } },
         },
       }),
     ),

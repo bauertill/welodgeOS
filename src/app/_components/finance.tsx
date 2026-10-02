@@ -427,6 +427,86 @@ export function ContractsList({ eventId }: { eventId: string }) {
 }
 
 /**
+ * A hotel's contracts, on the property's page (doc §7.1) — where they live
+ * while the event's Contracts tab is hidden. One list per event the hotel is
+ * on, each with its own + New contract; accepting a quotation adds one too.
+ */
+export function PropertyContracts({ propertyId, events }: { propertyId: string; events: { id: string; name: string }[] }) {
+  const contracts = api.finance.contracts.useQuery({ propertyId, party: "SUPPLIER" });
+  const rows = contracts.data ?? [];
+  if (events.length === 0) {
+    return <p className="text-ink-500 text-sm font-light">Put the property on an event&apos;s list to add its contract for that event.</p>;
+  }
+  return (
+    <div className="space-y-6">
+      {events.map((event) => {
+        const own = rows.filter((contract) => contract.event.id === event.id);
+        return (
+          <div key={event.id}>
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h3 className="text-ink-700 text-[13px] font-medium">{events.length > 1 ? `For ${event.name}` : ""}</h3>
+              <Link href={newContractHref(event.id, `?property=${propertyId}`)} className="text-brand-700 text-[13px] font-medium hover:underline">
+                + New contract
+              </Link>
+            </div>
+            {own.length === 0 ? (
+              <p className="text-ink-500 text-[13px] font-light">
+                {contracts.isLoading ? "…" : "None yet. Add the signed contract with + New contract — or accept a quotation, which makes one."}
+              </p>
+            ) : (
+              <div className="border-ink-200/60 overflow-x-auto rounded-lg border">
+                <table className="w-full text-left">
+                  <thead className="bg-ink-50/60">
+                    <tr>
+                      <th className={th}>Contract</th>
+                      <th className={th}>Total</th>
+                      <th className={th}>Terms</th>
+                      <th className={th}>PDF</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {own.map((contract) => (
+                      <tr key={contract.id}>
+                        <td className={`${td} text-ink-900`}>
+                          <Link href={contractHref(contract.event.id, contract.id)} className="hover:text-brand-700 font-medium">
+                            {contract.name}
+                          </Link>
+                          {contract.signedOn && <span className="text-ink-500 block text-xs">Signed {formatDate(contract.signedOn)}</span>}
+                        </td>
+                        <td className={`${td} whitespace-nowrap`}>{money(contract.totalCents, contract.currency)}</td>
+                        <td className={td}>
+                          {contract.missing.length ? (
+                            <span className="font-medium text-[#c03654]">Missing {contract.missing.join(", ")}</span>
+                          ) : (
+                            <span className="text-[#0a7a47]">
+                              {contract._count.payments} payment{contract._count.payments === 1 ? "" : "s"} ·{" "}
+                              {contract.noCancellationTerms ? "no cancellation terms" : `${contract._count.cancellations} cancellation deadline${contract._count.cancellations === 1 ? "" : "s"}`}
+                            </span>
+                          )}
+                        </td>
+                        <td className={td}>
+                          {contract.documentUrl ? (
+                            <a href={contract.documentUrl} target="_blank" rel="noreferrer" className="text-brand-700 text-xs hover:underline">
+                              Open ↗
+                            </a>
+                          ) : (
+                            <span className="text-ink-500">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * A new contract: who it is with, for which event, the total and the PDF.
  * Its payment and cancellation terms are added on its page, after.
  */

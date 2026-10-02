@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ActivityLog } from "~/app/_components/activity-log";
 import { ContractView } from "~/app/_components/finance";
 import { Card, PageHeader } from "~/app/_components/ui";
-import { partyLabels } from "~/lib/finance";
+import { contractBack, partyLabels } from "~/lib/finance";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
@@ -17,7 +17,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   return (
     <>
       <PageHeader
-        back={{ href: `/events/${contract.event.id}/contracts`, label: `${contract.event.name} · Contracts` }}
+        back={contractBack(contract)}
         title={contract.name}
         subtitle={`${partyLabels[contract.party]} contract · ${contract.property?.name ?? contract.client?.name ?? ""} · ${contract.event.name}`}
       />

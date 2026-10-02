@@ -98,11 +98,12 @@ export const financeRouter = createTRPCRouter({
         eventId: z.string().optional(),
         party: z.nativeEnum(ContractParty).optional(),
         salesRequestId: z.string().optional(),
+        propertyId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const contracts = await ctx.db.contract.findMany({
-        where: { eventId: input.eventId, party: input.party, salesRequestId: input.salesRequestId },
+        where: { eventId: input.eventId, party: input.party, salesRequestId: input.salesRequestId, propertyId: input.propertyId },
         orderBy: [{ event: { startDate: "asc" } }, { name: "asc" }],
         include: contractInclude,
       });

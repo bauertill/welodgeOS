@@ -885,7 +885,7 @@ to the tab.
 stack of cards:
 
 - Under the name, the events the property is on, each with its status, as links.
-- On the left, one card of tabs: **Quotations**, **Room categories** (or *Unit types*),
+- On the left, one card of tabs: **Quotations**, **Contracts** (§7.1), **Room categories** (or *Unit types*),
   **Feedback** and **Log**. The address remembers the tab, so a link can open one.
   The Feedback box is one line until something is typed into it.
 - On the right, one **Details** panel instead of a card per subject: Notes, Where it is,
@@ -914,7 +914,7 @@ form shows the total while it is typed.
 
 A quotation is **Received**, **Accepted** or **Declined**. Declining one keeps it, greyed,
 and it can be put back to received. **Accept and make the contract** marks it accepted and
-creates the hotel's supplier contract on the event's Contracts tab (§7.1): for this hotel
+creates the hotel's supplier contract, listed on the property's *Contracts* tab (§7.1): for this hotel
 and event, named after the hotel and the quotation, worth the quotation's total, in its
 currency, with its link, owned by the property's account manager, and with the quoted
 payment and cancellation terms, what the rates include and the taxes copied into the
@@ -2032,13 +2032,19 @@ requesting need no contract — nothing has been signed yet. A sales request sho
 contracts and adds one already filled in with the client, the event and the request's value
 as its total.
 
-**Contracts live with their event.** Every contract — supplier and client side alike — is
-for one event, always, so each event has a **Contracts** tab, second after Properties and
-before Inventory, Deadlines and Position. It shows the event's contracts, its payments and its cancellation
-deadlines, three views of one tab; *+ New contract* there adds one for that event, which
-is set and cannot be changed. A contract's own page sits under its event, and its back link
-returns to the tab. A contract added from a sales request, or on the stock sheet while
-buying or selling, belongs to that event in the same way. (2026-10-01.)
+**Contracts live with their event — shown with the hotel or the client.** Every contract —
+supplier and client side alike — is for one event, always, and its page sits under that
+event. **The event's Contracts tab is hidden for now** (the owner's decision, 2026-10-02; it
+is kept, to be worked on later, and its page still exists). Meanwhile:
+
+- **A hotel's contracts are on the property's page**, on its *Contracts* tab next to
+  *Quotations*: one list per event the hotel is on, each with its total, whether its terms
+  are complete, its PDF, and *+ New contract* for that event. Accepting a quotation adds one
+  there too (§3.10).
+- **A client's contracts are on their sales request** (§4.11), as before.
+- A contract's page goes back to the hotel's page, or to the sales request, or else to the
+  event. A contract added on the stock sheet while buying or selling belongs to its event
+  in the same way.
 
 **The Finances section** — *Finances* in the menu, a panel like *Events* and *Sales* — is
 the view **across every event**, for whoever pays and chases invoices without opening each
@@ -2052,7 +2058,7 @@ event in turn:
   first, ticked off as they are dealt with.
 Each row names its event and opens the contract. The panel says how many payments are due
 within a week or overdue, how many cut-offs fall within 30 days, and how many contracts are
-missing terms — those are found on each event's Contracts tab. Every change to a contract, its
+missing terms — each found on its hotel's page or its sales request. Every change to a contract, its
 payments and its deadlines is in the contract's history.
 
 ---
@@ -2294,7 +2300,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
-| §3.10 Quotations | **Built** | On the property's page, first of its tabs (Quotations, Room categories, Feedback, Log), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Feedback showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 Quotations | **Built** | On the property's page, first of its tabs (Quotations, Contracts, Room categories, Feedback, Log), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Feedback showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
@@ -2323,7 +2329,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
-| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs, kept on each event's Contracts tab; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
+| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |

@@ -7,13 +7,15 @@ import { useEffect } from "react";
 import { setLastEventPath } from "~/lib/last-event";
 
 /**
- * An event is read in five ways: what we could contract, what we signed, what
- * we hold and have promised, what runs out soon, and where that leaves us
- * commercially.
+ * An event is read in four ways: what we could contract, what we hold and have
+ * promised, what runs out soon, and where that leaves us commercially.
+ *
+ * The Contracts tab is hidden for now (owner, 2026-10-02) — its page still
+ * exists at /contracts, to come back to; a hotel's contracts live on the
+ * property's page meanwhile, a client's on their sales request.
  */
 const tabs = [
   { slug: "", label: "Properties", hint: "What could we contract" },
-  { slug: "contracts", label: "Contracts", hint: "What we signed, what falls due, and what can still be given back" },
   { slug: "inventory", label: "Inventory", hint: "What we hold and what we promised" },
   { slug: "deadlines", label: "Deadlines", hint: "What runs out soon" },
   { slug: "position", label: "Position", hint: "Where we are exposed" },

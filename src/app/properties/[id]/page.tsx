@@ -14,6 +14,7 @@ import {
   RoomCategoriesCard,
   WhereItIsCard,
 } from "~/app/_components/property-cards";
+import { PropertyContracts } from "~/app/_components/finance";
 import { PropertyTabs } from "~/app/_components/property-tabs";
 import { PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
@@ -108,6 +109,12 @@ export default async function PropertyPage({
                 highlight: true,
                 count: property.scoutingEntries.reduce((sum, entry) => sum + entry._count.quotations, 0),
                 content: <PropertyQuotations entries={entries} categories={property.categories} />,
+              },
+              {
+                key: "contracts",
+                label: "Contracts",
+                count: property._count.contracts,
+                content: <PropertyContracts propertyId={property.id} events={entries.map((entry) => entry.event)} />,
               },
               {
                 key: "rooms",
