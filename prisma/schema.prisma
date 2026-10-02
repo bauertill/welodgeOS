@@ -49,6 +49,8 @@ enum ScoutingStatus {
 /// property is rarely all-or-nothing: one category can be signed while another
 /// is still being drafted (doc §3.5, §3.6).
 enum CategoryContractStatus {
+  /// Nobody has started with the hotel on this room type yet — the default.
+  NOT_STARTED
   IN_NEGOTIATION
   IN_CONTRACTING
   CONTRACTED
@@ -77,6 +79,7 @@ model Event {
   ledger          LedgerEntry[]
   propertyGroups  PropertyGroup[]
   salesRequests   SalesRequest[]
+  contracts       Contract[]
 
   @@index([startDate])
 }
@@ -189,6 +192,7 @@ model Property {
   amenities       Amenity[]         @relation("PropertyAmenities")
   scoutingEntries ScoutingEntry[]
   updates         Update[]
+  contracts       Contract[]
 
   scoutedBy   User?   @relation(fields: [scoutedById], references: [id], onDelete: SetNull)
   scoutedById String?
@@ -240,6 +244,8 @@ model RoomCategory {
   categoryContracts CategoryContract[]
 
   @@index([propertyId])
+
+  quotationLines QuotationLine[]
 }
 
 /// A controlled vocabulary, shared by both property types, so amenities stay a
@@ -334,6 +340,8 @@ model ScoutingEntry {
 
   /// The per-category contract status underneath this entry (doc §3.5, §3.6).
   categoryContracts CategoryContract[]
+  /// The hotel's quotations for this event — several scenarios at once (doc §3.10).
+  quotations Quotation[]
 
   /// The group the team has sorted this property into on this event (doc
   /// §3.9). Empty means "No group". Deleting a group leaves its entries here.
@@ -361,7 +369,7 @@ model ScoutingEntry {
 }
 
 /// One room category's supplier-contract status on one event's scouting list.
-/// Absent means `IN_NEGOTIATION` — a row only exists once someone has said
+/// Absent means `NOT_STARTED` (shown blank) — a row only exists once someone has said
 /// otherwise, so adding a property to a list never has to pre-create one of
 /// these per category (doc §3.5, §3.6).
 /** The colours a property group can have — a fixed palette, each legible on the page. */
@@ -416,7 +424,7 @@ enum Cleaning {
 
 model CategoryContract {
   id     String                 @id @default(cuid())
-  status CategoryContractStatus @default(IN_NEGOTIATION)
+  status CategoryContractStatus @default(NOT_STARTED)
 
   // The rates and taxes agreed for this room category on this event (doc
   // §3.9) — an LA28 rate never overwrites an EXPO 2030 one.
@@ -445,6 +453,220 @@ model CategoryContract {
 
   @@unique([scoutingEntryId, categoryId])
   @@index([scoutingEntryId])
+}
+
+// --- Quotations (doc §3.10) ------------------------------------------------------
+
+/// Where a quotation stands with us.
+enum QuotationStatus {
+  RECEIVED
+  ACCEPTED
+  DECLINED
+}
+
+/**
+ * One quotation from a hotel for an event — one scenario among several (doc
+ * §3.10): a group, periods and room categories with their rooms and rates, and
+ * the terms offered. It is what the hotel offered, kept apart from what the
+ * hotel is (its general details); an accepted one becomes the supplier contract.
+ */
+model Quotation {
+  id     String          @id @default(cuid())
+  status QuotationStatus @default(RECEIVED)
+  /// "Austria House staff", "Plan B — 20 rooms".
+  name   String
+
+  scoutingEntry   ScoutingEntry @relation(fields: [scoutingEntryId], references: [id], onDelete: Cascade)
+  scoutingEntryId String
+
+  receivedOn DateTime? @db.Date
+  /// Until when the hotel holds the offer.
+  validUntil DateTime? @db.Date
+  /// How many rooms the quotation is for, as the hotel put it.
+  rooms      Int?
+  /// Every line's rate is in this currency (§4.5).
+  currency   String
+  /// The terms offered, in the hotel's words — they become a contract's
+  /// structured payments and cut-offs once accepted (§7.1).
+  paymentTerms      String?
+  cancellationTerms String?
+  /// What the rates include and the taxes on them, as on a room category's
+  /// rate for an event (§3.9).
+  rateIncludes      RateInclusion[] @default([])
+  rateIncludesOther String?
+  cleaning          Cleaning?
+  cleaningOther     String?
+  /// TOT as hundredths of a percent: 15.00% is 1500.
+  totBasisPoints    Int?
+  otherTaxes        String?
+  /// The quotation as received — a Google Drive link.
+  documentUrl String?
+  notes       String?
+
+  /// The supplier contract made from it, once accepted.
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  contractId String?
+
+  lines QuotationLine[]
+
+  addedBy   User?    @relation("QuotationAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+  addedById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scoutingEntryId])
+}
+
+/// One line of a quotation: rooms of one category, for one period, at one rate.
+model QuotationLine {
+  id          String    @id @default(cuid())
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationId String
+
+  category   RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String
+  /// The period, as a stay: first night to check-out day.
+  checkIn    DateTime @db.Date
+  checkOut   DateTime @db.Date
+  rooms      Int
+  /// Minor units, in the quotation's currency.
+  rateCents  Int
+  /// People per room, where the quote says.
+  occupancy  Int?
+  position   Int      @default(0)
+
+  @@index([quotationId])
+}
+
+// --- Contracts, payments and cancellation deadlines (doc §7.1) ---------------
+
+/// Who a contract is with: a hotel or provider we buy from, or a client we sell to.
+enum ContractParty {
+  SUPPLIER
+  CLIENT
+}
+
+/// Where a payment stands. Suppliers invoice us; we invoice clients.
+enum PaymentStatus {
+  TO_BE_PAID
+  INVOICE_REQUESTED
+  INVOICE_RECEIVED
+  INVOICE_ISSUED
+  PAID
+  REFUND
+}
+
+/// What a cancellation deadline lets us — or the client — do by its cut-off.
+enum CancellationKind {
+  /// We may reduce the rooms or nights by an agreed share, without paying for them.
+  ATTRITION
+  /// We may hand rooms back, or an exclusivity lapses.
+  RELEASE
+  /// The client may cancel, free or for a fee.
+  CLIENT_CANCELLATION
+  OTHER
+}
+
+/**
+ * A signed contract — with a supplier or with a client — for one event (doc
+ * §7.1): the PDF, the total it is worth, and its payment and cancellation
+ * terms. Room-nights are bought and sold under one.
+ */
+model Contract {
+  id    String        @id @default(cuid())
+  party ContractParty
+  /// "Group Sales Agreement — Courtyard Culver City"
+  name  String
+
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId String
+  /// The hotel, on a supplier contract.
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  propertyId String?
+  /// The client, on a client contract — and, if it came from one, their sales request.
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId       String?
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId String?
+
+  /// The signed PDF, as a Google Drive link for now (doc §7.1).
+  documentUrl String?
+  signedOn    DateTime? @db.Date
+  /// What the whole contract is worth; every payment's share is of this.
+  /// Minor units, with an explicit currency (§4.5).
+  totalCents Int?
+  currency   String?
+  notes      String?
+  /// Said on purpose when the contract has no cancellation deadlines at all,
+  /// so it stops being flagged as missing them.
+  noCancellationTerms Boolean @default(false)
+
+  owner   User?   @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+
+  payments          ContractPayment[]
+  cancellations     ContractCancellation[]
+  /// The quotation it was made from, if any (doc §3.10).
+  quotations        Quotation[]
+  acquisitionNights RoomNight[]            @relation("AcquisitionContract")
+  salesNights       RoomNight[]            @relation("SalesContract")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([propertyId])
+  @@index([clientId])
+}
+
+/// One payment a contract schedules — a share of its total, or a set amount.
+model ContractPayment {
+  id          String   @id @default(cuid())
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractId  String
+  /// "1st deposit", "Final payment + tax".
+  description String
+  dueOn       DateTime @db.Date
+  /// A share of the contract's total, in hundredths of a percent: 20% is 2000.
+  percentBasisPoints Int?
+  /// A set amount instead, where the payment is not a plain share of the total.
+  amountCents Int?
+  status      PaymentStatus @default(TO_BE_PAID)
+  paidOn      DateTime?     @db.Date
+  invoiceUrl  String?
+  proofUrl    String?
+  beneficiary String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+  @@index([dueOn])
+}
+
+/// One cancellation deadline in a contract: by its cut-off, something may be given back.
+model ContractCancellation {
+  id         String           @id @default(cuid())
+  contract   Contract         @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractId String
+  kind       CancellationKind
+  cutoffOn   DateTime         @db.Date
+  /// How much may go, as a share: 10% is 1000.
+  percentBasisPoints Int?
+  /// Or in words: "63 room-nights", "2 family rooms".
+  appliesTo  String?
+  roomType   String?
+  /// What cancelling costs, as a share — "with a 30% cancellation fee".
+  feeBasisPoints Int?
+  remarks    String?
+  /// When someone dealt with it. A cut-off is a reminder; nothing happens on its own (§2.4).
+  handledOn  DateTime?        @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+  @@index([cutoffOn])
 }
 
 // ---------------------------------------------------------------------------
@@ -488,6 +710,7 @@ model User {
   sessions      Session[]
 
   scoutedProperties Property[]
+  quotationsAdded   Quotation[] @relation("QuotationAddedBy")
   scoutingEntries   ScoutingEntry[] @relation("AddedBy")
 
   acquisitionNights RoomNight[]        @relation("AcquisitionOwner")
@@ -520,6 +743,7 @@ model User {
   customEmoji   CustomEmoji[]
   accountManaged ScoutingEntry[] @relation("AccountManager")
   clientsManaged  Client[]        @relation("ClientAccountManager")
+  contractsManaged Contract[]     @relation("ContractOwner")
   salesRequests   SalesRequest[]  @relation("SalesRequestOwner")
   contactsManaged ClientContact[] @relation("ContactAccountManager")
 }
@@ -779,6 +1003,7 @@ model Client {
   updates    Update[]
   contacts   ClientContact[]
   salesRequests SalesRequest[]
+  contracts  Contract[]
 
   @@unique([name])
 }
@@ -894,6 +1119,7 @@ model SalesRequest {
   /// The room-nights held for this request, and the nights it has asked about.
   nights        RoomNight[]
   nightRequests RoomNightRequest[]
+  contracts     Contract[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1018,6 +1244,13 @@ model RoomNight {
   /// cancelled sale, as the client is.
   salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
   salesRequestId String?
+
+  /// The signed contracts these nights were bought and sold under (doc §7.1):
+  /// one with the supplier, one with the client.
+  acquisitionContract   Contract? @relation("AcquisitionContract", fields: [acquisitionContractId], references: [id], onDelete: SetNull)
+  acquisitionContractId String?
+  salesContract         Contract? @relation("SalesContract", fields: [salesContractId], references: [id], onDelete: SetNull)
+  salesContractId       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

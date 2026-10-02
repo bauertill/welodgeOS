@@ -53,7 +53,7 @@ export function PositionReport({ eventId }: { eventId: string }) {
     return (
       <EmptyState
         title="No inventory yet"
-        description="Bring rooms into inventory on the Inventory tab and this page will show where they leave us."
+        description="Nothing has been recorded on the Inventory tab's stock sheet yet. Once rooms are bought, blocked or sold there, this page shows where they leave us."
       />
     );
   }

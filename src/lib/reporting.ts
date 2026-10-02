@@ -1,6 +1,7 @@
 import { addDays, dayKey, daysUntil, today as todayDay } from "~/lib/dates";
 import { isHardHold } from "~/lib/inventory";
 import {
+  LOOKAHEAD_DAYS,
   REMINDER_WINDOW_DAYS,
   deadlineUrgency,
   displayedSalesState,
@@ -382,6 +383,8 @@ export type DeadlineGroup = {
   date: Date;
   daysAway: number;
   urgency: DeadlineUrgency;
+  /** Where it falls for the Deadlines page: already passed, this week, or this month. */
+  window: "passed" | "week" | "month";
   propertyId: string;
   propertyName: string;
   categoryName: string;
@@ -427,6 +430,7 @@ export function deadlines(nights: NightRecord[], today = todayDay()): DeadlineGr
         date,
         daysAway: daysUntil(date, today),
         urgency: deadlineUrgency(date, today),
+        window: daysUntil(date, today) < 0 ? "passed" : daysUntil(date, today) <= REMINDER_WINDOW_DAYS ? "week" : "month",
         propertyId: night.propertyId,
         propertyName: night.propertyName,
         categoryName: night.categoryName,
@@ -458,14 +462,16 @@ export function deadlines(nights: NightRecord[], today = todayDay()): DeadlineGr
       today,
     );
 
+    // What falls within the month ahead, or has already passed (doc §4.6).
+    const ahead = (date: Date) => daysUntil(date, today) <= LOOKAHEAD_DAYS;
     if (night.acquisitionState === "OPTION" && night.optionExpiry) {
-      if (deadlineUrgency(night.optionExpiry, today) !== "none") {
+      if (ahead(night.optionExpiry)) {
         const expected = expectedBuyPrice(night);
         record(
           night,
           "option",
           night.optionExpiry,
-          "Our option runs out — exercise it, extend it or let it go",
+          "Exercise the option, extend it or let it go",
           night.clientName,
           position.severity,
           expected?.cents ?? null,
@@ -475,12 +481,12 @@ export function deadlines(nights: NightRecord[], today = todayDay()): DeadlineGr
     }
 
     if (night.salesState === "BLOCKED" && night.blockExpiry) {
-      if (deadlineUrgency(night.blockExpiry, today) !== "none") {
+      if (ahead(night.blockExpiry)) {
         record(
           night,
           "block",
           night.blockExpiry,
-          "The client's block runs out — chase the decision",
+          "Chase the client's decision",
           night.clientName,
           position.severity,
           night.sellPriceCents,
@@ -493,12 +499,12 @@ export function deadlines(nights: NightRecord[], today = todayDay()): DeadlineGr
     // open — SOLD means they already signed, so it stops being a clock once
     // the sale closes (doc §4.2, §4.6).
     if (night.salesState === "BLOCKED" && night.dueDate) {
-      if (deadlineUrgency(night.dueDate, today) !== "none") {
+      if (ahead(night.dueDate)) {
         record(
           night,
           "due",
           night.dueDate,
-          "The client's due date",
+          "Payment due",
           night.clientName,
           position.severity,
           night.sellPriceCents,

@@ -3,15 +3,19 @@ import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
 import { DeleteProperty } from "~/app/_components/delete-property";
+import { PropertyQuotations } from "~/app/_components/quotations";
 import {
   AmenitiesCard,
   ContactsCard,
   ContractingCard,
+  DetailsPanel,
   MoreAboutCard,
+  PanelSection,
   RoomCategoriesCard,
   WhereItIsCard,
 } from "~/app/_components/property-cards";
-import { Card, PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
+import { PropertyTabs } from "~/app/_components/property-tabs";
+import { PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
 import { propertyTypeLabels, totalUnits } from "~/lib/scouting";
 import { auth } from "~/server/auth";
@@ -38,6 +42,10 @@ export default async function PropertyPage({
   const editHref = `/properties/${property.id}/edit${cameFrom ? `?back=${encodeURIComponent(back!)}` : ""}`;
 
   const units = totalUnits(property.categories) || property.totalRooms || 0;
+  // The event it was opened from first.
+  const entries = [...property.scoutingEntries].sort(
+    (a, b) => Number(b.id === cameFrom?.id) - Number(a.id === cameFrom?.id),
+  );
 
   return (
     <>
@@ -73,76 +81,63 @@ export default async function PropertyPage({
         }
       />
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Updates
-            </h2>
-            <UpdateThread propertyId={property.id} />
-          </Card>
+      {/* The events it is on, under its name, rather than a card of their own. */}
+      {property.scoutingEntries.length > 0 && (
+        <div className="-mt-5 mb-6 flex flex-wrap items-center gap-2 text-[13px] font-light">
+          <span className="text-ink-500">On</span>
+          {property.scoutingEntries.map((entry) => (
+            <Link
+              key={entry.id}
+              href={`/events/${entry.eventId}`}
+              className="border-ink-200 hover:border-brand-400 flex items-center gap-2 rounded-full border bg-white py-1 pr-1 pl-3 transition-colors"
+            >
+              {entry.event.name}
+              <ScoutingStatusBadge status={entry.status} />
+            </Link>
+          ))}
+        </div>
+      )}
 
-          <RoomCategoriesCard property={property} />
-
-          {property.notes && (
-            <Card>
-              <h2 className="text-ink-900 mb-2 text-[15px] font-medium">
-                Notes
-              </h2>
-              <p className="text-ink-500 text-sm font-light whitespace-pre-line">
-                {property.notes}
-              </p>
-            </Card>
-          )}
-
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              On these scouting lists
-            </h2>
-            {property.scoutingEntries.length === 0 ? (
-              <p className="text-ink-500 text-sm font-light">
-                Not on any event&apos;s list yet.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {property.scoutingEntries.map((entry) => (
-                  <li
-                    key={entry.id}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <Link
-                      href={`/events/${entry.eventId}`}
-                      className="hover:text-brand-700 text-sm"
-                    >
-                      {entry.event.name}
-                    </Link>
-                    <ScoutingStatusBadge status={entry.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Activity
-            </h2>
-            <ActivityLog entity="Property" entityId={property.id} />
-          </Card>
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          <PropertyTabs
+            tabs={[
+              {
+                key: "quotations",
+                label: "Quotations",
+                highlight: true,
+                count: property.scoutingEntries.reduce((sum, entry) => sum + entry._count.quotations, 0),
+                content: <PropertyQuotations entries={entries} categories={property.categories} />,
+              },
+              {
+                key: "rooms",
+                label: property.type === "HOTEL" ? "Room categories" : "Unit types",
+                count: property.categories.length,
+                content: <RoomCategoriesCard property={property} bare />,
+              },
+              { key: "feedback", label: "Feedback", content: <UpdateThread propertyId={property.id} /> },
+              // Kept for the record, rarely read: a tab of its own, out of the way.
+              { key: "log", label: "Log", content: <ActivityLog entity="Property" entityId={property.id} /> },
+            ]}
+          />
         </div>
 
-        <div className="space-y-5">
-          <WhereItIsCard property={property} totalLabel={units ? `${units} rooms` : null} />
-
-          <ContactsCard property={property} />
-
-          <AmenitiesCard property={property} amenities={amenities} />
-
-          <MoreAboutCard property={property} backTo={cameFrom ? `/events/${cameFrom.event.id}` : undefined} />
-          <ContractingCard property={property} />
+        <div className="space-y-3">
+          <DetailsPanel>
+            {property.notes && (
+              <PanelSection title="Notes" defaultOpen>
+                <p className="text-ink-700 text-sm font-light whitespace-pre-line">{property.notes}</p>
+              </PanelSection>
+            )}
+            <WhereItIsCard property={property} totalLabel={units ? `${units} rooms` : null} />
+            <ContactsCard property={property} />
+            <AmenitiesCard property={property} amenities={amenities} />
+            <MoreAboutCard property={property} backTo={cameFrom ? `/events/${cameFrom.event.id}` : undefined} />
+            <ContractingCard property={property} />
+          </DetailsPanel>
 
           {property.scoutedBy && (
-            <p className="text-ink-500 text-xs font-light">
+            <p className="text-ink-500 px-1 text-xs font-light">
               Scouted by {property.scoutedBy.name ?? property.scoutedBy.email}
             </p>
           )}

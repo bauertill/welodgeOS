@@ -24,7 +24,8 @@ type PropertyLike = Contracting &
 
 export function DetailRow({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
-    <div className="flex gap-3">
+    // Marked when empty, so the property page's Details panel can leave it out.
+    <div className="flex gap-3" data-empty={value == null || value === "" ? "" : undefined}>
       <dt className="text-ink-500 w-40 shrink-0">{label}</dt>
       <dd className="text-ink-900 min-w-0 break-words whitespace-pre-line">{value ?? "—"}</dd>
     </div>

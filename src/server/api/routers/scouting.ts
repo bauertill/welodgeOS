@@ -16,6 +16,7 @@ const SCOUTING_STATUSES = [
 ] as const;
 
 const CATEGORY_CONTRACT_STATUSES = [
+  "NOT_STARTED",
   "IN_NEGOTIATION",
   "IN_CONTRACTING",
   "CONTRACTED",
@@ -247,6 +248,8 @@ export const scoutingRouter = createTRPCRouter({
         amenityIds: z.array(z.string()).default([]),
         /** One chain's properties on this event (doc §3.9). */
         providerId: z.string().optional(),
+        /** Only the hotels that have sent a quotation (doc §3.10). */
+        hasQuotations: z.boolean().default(false),
       }),
     )
     .query(({ ctx, input }) =>
@@ -254,6 +257,7 @@ export const scoutingRouter = createTRPCRouter({
         where: {
           eventId: input.eventId,
           status: input.status,
+          ...(input.hasQuotations && { quotations: { some: {} } }),
           property: {
             type: input.type,
             providerId: input.providerId,
@@ -282,6 +286,7 @@ export const scoutingRouter = createTRPCRouter({
           // Absent for a category means "in negotiation" — see
           // `categoryContractStatusLabels` in ~/lib/scouting (doc §3.5).
           categoryContracts: true,
+          quotations: { select: { id: true, status: true } },
         },
       }),
     ),
@@ -374,13 +379,13 @@ export const scoutingRouter = createTRPCRouter({
             status: input.status,
           },
         });
-        const beforeStatus = before?.status ?? "IN_NEGOTIATION";
+        const beforeStatus = before?.status ?? "NOT_STARTED";
         if (beforeStatus !== input.status) {
           await logAudit(tx, {
             actorId: ctx.session.user.id,
             entity: "CategoryContract",
             entityId: contract.id,
-            summary: `Contract status: ${categoryContractStatusLabels[beforeStatus]} → ${categoryContractStatusLabels[input.status]}`,
+            summary: `Contract status: ${categoryContractStatusLabels[beforeStatus] || "—"} → ${categoryContractStatusLabels[input.status] || "—"}`,
           });
         }
         return contract;

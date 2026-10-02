@@ -101,6 +101,12 @@ grants access, and removing them is what withdraws it — the system holds no se
 of who is allowed in. Anyone without a Workspace account cannot get in at all, which today
 means every supplier and every client.
 
+**Someone who is not signed in sees only the sign-in screen.** Any address on the site —
+the front page included — sends them there, and it shows the We Lodge logo, a *Continue
+with Google* button and nothing else: no menu, no description of what the system does or
+holds. A stranger who finds the address learns only that something here needs a We Lodge
+account.
+
 Two consequences worth stating plainly, because neither is obvious from a screen:
 
 - **Everyone who signs in sees everything.** There are no roles yet. A rep can read and
@@ -116,7 +122,7 @@ used to reach any other part of the system, and a rep can switch it off at any t
 
 The system is a website, not something anyone installs. It runs at
 **https://os.welodge.net**, hosted on Vercel, with its database (PostgreSQL, hosted by
-Neon) in Vercel's `we-lodge` account. It answered at `welodge-os.vercel.app` until
+Neon in Frankfurt) owned by the We Lodge Vercel team. It answered at `welodge-os.vercel.app` until
 2026-09-24; that address now redirects to this one, so older links and bookmarks still
 arrive.
 
@@ -147,7 +153,10 @@ Magic-link sign-in by email is built and deliberately switched off: at launch no
 outside the Workspace needs an account. It becomes available again by configuring an email
 sender, without any code change. See `docs/todos.md` §2.
 
-### 2.6 Updates — a running history per property and client
+### 2.6 Feedback — a running history per property and client
+
+Called **Feedback** on screen (it was *Updates* until 2026-10-01); a single post is still
+referred to below as an update.
 
 A property or a client keeps a running, append-only feed of free-text posts — a meeting
 note, a call summary, feedback from the field — the same way `LedgerEntry` keeps a
@@ -174,9 +183,13 @@ is replaced, so nothing that was said is lost, and the "Edited" note means a rea
 knows the text is not what was first posted. The earlier wordings are not shown anywhere yet
 — there is no "see previous versions" — but they are there if they are ever needed.
 
+**Only the latest update shows.** The feed only grows, so the rest sit behind *View more*,
+which says how many earlier ones there are and opens them all, newest first. This holds on
+a property's page and on a client's.
+
 ### 2.7 The team — profiles and internal chat
 
-Like Updates, this sits outside the three phases: it is about the people at We Lodge, not
+Like Feedback, this sits outside the three phases: it is about the people at We Lodge, not
 about room-nights. It is reached by hovering over (or clicking) **We Lodge AG** at the foot
 of the sidebar, which opens a small menu — *My profile*, *Team* and *Messages*. On a phone,
 where there is no sidebar, a *Team* link in the header leads to the same place. A count of
@@ -336,7 +349,7 @@ Common to every type:
 | --- | --- |
 | `name` | |
 | `type` | `HOTEL` \| `APARTMENT` \| `APARTHOTEL` |
-| `address`, `city`, `country` | |
+| `address`, `city`, `country` | The address box searches **Google Maps** as it is typed — a hotel's name or an address. Picking a suggestion fills in the address, city, country and coordinates from Google, and the name, website and phone where they are still empty (the name only when Google calls the place somewhere to stay). Anything not found is typed or pasted and kept as written; *Find coordinates from address* still looks the coordinates up (OpenStreetMap). The search needs Google's *Places API (New)* allowed on the server's Google key; until it is, the box says so and works as a plain one |
 | `latitude`, `longitude` | Optional. Present ⇒ pin on the map view. |
 | `distanceToVenue` | Derived: straight-line distance to the event's **nearest venue** (§3.7), when both have coordinates. |
 | `stars` | Hotels and aparthotels; optional. Not asked of a plain apartment. |
@@ -463,10 +476,14 @@ mid-contract on some categories and not others, which one property-wide status c
 say.
 
 **Per-category contract status.** A `CategoryContract` row records one room category's own
-supplier-contract status on one event's list — `IN_NEGOTIATION` → `IN_CONTRACTING` →
-`CONTRACTED` — independent of its property's pursuit status and of every other category at
-the same property. A category with no row yet reads as `IN_NEGOTIATION`: adding a property
-to a list never has to pre-create one of these per category. The property's own screen
+supplier-contract status on one event's list — blank, then *In negotiation* → *In
+contracting* → *Contracted* — independent of its property's pursuit status and of every
+other category at the same property. **A room category starts blank**: nothing started
+with the hotel on it yet, shown as an empty choice and not mentioned in the property's
+summary line (the owner's call, 2026-10-02 — it used to start as *In negotiation*). A
+category with no row yet reads as blank: adding a property to a list never has to
+pre-create one of these per category. Rows that had become *In negotiation* only because a
+rate was saved, with no one ever choosing it, were set back to blank. The property's own screen
 shows a rolled-up summary — one line per category, e.g. "ROH · 30 rooms · Contracted" —
 rather than a single word for the whole property.
 
@@ -475,24 +492,39 @@ library for other events — which is the point of scouting once.
 
 ### 3.6 Scouting → inventory
 
-Converting a contracted room category into inventory is an explicit act: pick the event,
-the category, a slot range (`#1..#30`) and a date range, and the system materialises those
-room-nights at acquisition state `NONE`. Nothing is contracted by this act. This is the
-only bridge between Phase 1 and Phase 2.
+**How the work runs** (as the owner described it, 2026-10-02). It can start from either
+side, but usually: a place of interest is defined — the venue, or a point a client asked
+for — and the hotels and apartments near it are researched and added to the event's
+**Properties** list (§3.5), by hand or found automatically. They are contacted to see
+whether they want to work with us, and those that do get a follow-up with more about We
+Lodge. Then the information is gathered: the room categories, their availability and
+details (bed configuration and the rest), the amenities, the payment and cancellation terms
+for this request, the rates — for the event period and for pre and post periods, which can
+each differ — what the rate includes, and any extra costs in words (cleaning fee, city
+tax…). That builds up the database of properties; the quotations each hotel sends are
+recorded against it (§3.10).
 
-The category's own `CONTRACTED` status is enforced, not advisory: materialising a category
-that is only in negotiation or in contracting is refused, and says so, naming the category
-rather than the property — one hotel can have one category ready and another still being
-drafted. Re-running the same conversion over an overlapping range is safe — it adds the
-missing nights and leaves the existing ones, and their commercial position, untouched.
+**There is no step that brings rooms into inventory.** Every room of every room category of
+a property on the event's Properties list is on the Inventory tab's stock sheet from the
+moment the category is there with its number of rooms — numbered #1 to that count, blank
+until something is recorded on it. Rooms of a property marked *Rejected* are left off; a
+category with no number of rooms has no rows. Whether a room category is marked
+*Contracted* (§3.5) is information for the team; it no longer decides what can be put on
+the sheet.
 
-**Removing a mistake.** The reverse of materialising: a rectangle of room-nights can be
-taken back out of inventory entirely, but only while every one of them is still completely
-untouched — acquisition state `NONE` and sales state `NONE`. Anything that has had a
-supplier or client relationship recorded against it is refused, and told to release or
-cancel it properly instead, which keeps the record rather than erasing it. Removal still
-writes a ledger entry (what was removed, by whom), even though the room-nights themselves
-are then deleted — the ledger's own summary stays readable as history.
+A room's night comes into being the first time something happens on it — bought, an option
+taken, blocked, sold or requested — as part of that change, in one step, and its "What
+changed" entry is the record. A blank cell and a night with nothing on it mean the same, so
+nothing is ever added or removed on its own. (Until 2026-10-02 a category had first to be
+marked *Contracted* and then **brought into inventory** for a range of rooms and dates, and
+untouched nights could be **removed from inventory**; both steps are gone. Entries they
+wrote stay in the ledger and can still be undone where nothing has happened since.)
+
+**Empty rooms are hidden until asked for.** With up to a hundred properties on an event,
+most of them never contracted, the stock sheet shows only the rooms with something on them
+in the dates shown — a supplier or client side, or a client asking. *Show empty rooms (n)*
+shows the rest, and *Hide empty rooms* hides them again. Choosing one property in the
+property filter shows all of its rooms, empty or not, to work on it.
 
 ### 3.7 Places of interest
 
@@ -835,6 +867,82 @@ so the tab's old *From* column, which showed the indicative price, is gone.
   the rest are in the side panel.
 - **Monday's other views** (Map, Kanban). The map already exists (§3.8).
 
+### 3.10 Quotations
+
+What a hotel **offered** for an event is kept apart from what the hotel **is**. A hotel
+often sends several offers for the same event — different periods, a different number
+of rooms, a different group — so each quotation is a scenario of its own, and a
+property can hold any number of them. They live on the **property's page**, on its
+*Quotations* tab, the first one, which is coloured so it stands apart. Each quotation is
+one tinted line — its name, status, period, room-nights, rooms and total — and opens to
+its lines, terms and actions; a lone quotation starts open. A property on several events
+shows each event's quotations under that event's name, the event it was opened from
+first. They are not shown under the property's row on the Properties tab, where many of
+them would make the board too long; the row says how many there are and links straight
+to the tab.
+
+**The property's page** is laid out so that it fits on a screen rather than being a long
+stack of cards:
+
+- Under the name, the events the property is on, each with its status, as links.
+- On the left, one card of tabs: **Quotations**, **Room categories** (or *Unit types*),
+  **Feedback** and **Log**. The address remembers the tab, so a link can open one.
+  The Feedback box is one line until something is typed into it.
+- On the right, one **Details** panel instead of a card per subject: Notes, Where it is,
+  Contacts, Amenities, More about the property and Contracting details, each a section
+  that folds shut. The last two start shut, saying how many of their fields are filled.
+  Fields that are empty are left out of the panel; *Edit* on a section shows them all.
+
+A quotation has:
+
+| Field | Meaning |
+| --- | --- |
+| Name | The group or scenario it is for — *Austria House staff*, *Main block, option B*. Required |
+| Received on, valid until | When the hotel sent it, and until when the offer stands. Both optional |
+| Rooms | How many rooms the quotation is for, as the hotel put it |
+| Currency | One per quotation |
+| Lines | **Periods × room types**: each line is rooms of one of the hotel's own room categories, for one period (check-in to check-out), at one rate per room per night, optionally with how many people per room. A pre or post period, or a second room type, is another line. At least one line |
+| Payment terms, cancellation terms | As the hotel worded them, in plain text — not yet the structured payments and cut-offs of a contract (§7.1) |
+| Rates include | The same choice as a room category's rate (§3.9): Breakfast, Wi-Fi, Taxes, Parking and Cleaning — which then asks how often: daily, weekly or other — plus anything else in words |
+| TOT, other applicable tax | The TOT as a percentage, and any other tax in words, as on a room category's rate |
+| Link | The quotation itself, as a Google Drive link |
+| Notes | Anything else |
+
+**Totals are worked out, never stored**: each line comes to nights × rooms × rate, and
+the quotation to the sum of its lines, with its room-nights and its overall period. The
+form shows the total while it is typed.
+
+A quotation is **Received**, **Accepted** or **Declined**. Declining one keeps it, greyed,
+and it can be put back to received. **Accept and make the contract** marks it accepted and
+creates the hotel's supplier contract on the event's Contracts tab (§7.1): for this hotel
+and event, named after the hotel and the quotation, worth the quotation's total, in its
+currency, with its link, owned by the property's account manager, and with the quoted
+payment and cancellation terms, what the rates include and the taxes copied into the
+contract's notes. Those terms still have to
+be entered as payments and cut-offs on the contract, which flags itself incomplete until
+they are. Once a quotation has its contract, it links to it and can no longer be declined
+or removed from the board.
+
+A quotation commits nothing: it creates no room-nights and changes no inventory. Rooms are
+bought on the stock sheet (§4), under the contract.
+
+The Properties tab's **With quotations** button shows only the properties that have at
+least one quotation, on the list and on the map. A property's row says how many it has,
+and whether one is accepted. Adding, changing, accepting, declining and removing a
+quotation are recorded in the property's history for the event.
+
+On the property's page, the **Log** — the record of every change to the property —
+is a tab of its own, out of the way: it is kept for the record and rarely read. The same record is called *Log* on a client's page and on an event's edit page.
+
+Decided with the owner: statuses on the Properties tab stay as they are (Prospect,
+Contacted, Shortlisted, Rejected); a quotation has its own three. A quotation can only use
+room categories the hotel already has, so a hotel's room categories are added first.
+
+Not built yet, in the order agreed: finding nearby hotels from a venue automatically
+(Google Places); laying a sales request over the quoted hotels to see which fit; reading a
+hotel's general details from its official website; onboarding and operational forms sent
+to hotels by link; telling a property's accommodation manager when a sales request moves.
+
 
 ---
 
@@ -854,7 +962,13 @@ stateDiagram-v2
     OPTION --> IN_PROGRESS: option lapsed, still talking
     OPTION --> NONE: option released
     BOUGHT --> RELEASED: returned to supplier
+    RELEASED --> IN_PROGRESS: talking again
+    RELEASED --> BOUGHT: bought back
 ```
+
+A released night can be **bought back** straight away — the hotel takes us back on — or
+returned to *In progress* if the talks start again (the owner's decision, 2026-10-02).
+Buying it back needs its price like any purchase, and the release stays in the ledger.
 
 | State | Meaning |
 | --- | --- |
@@ -895,8 +1009,8 @@ stateDiagram-v2
 | `SOLD` | The client has bought these room-nights — **exclusive** |
 | `CANCELLED` | Previously sold, cancelled (kept for audit, counts as not sold) |
 
-Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`),
-`sellPriceCents`, `currency`, `owner`, `notes`, `dueDate`.
+Required attributes: `client`, `clientRef`, `blockExpiry` (mandatory in `BLOCKED`, and
+shown everywhere as the client's **deadline**), `sellPriceCents`, `currency`, `owner`, `notes`.
 
 **A block or a sale needs the agreed price.** *Block* and *Sell* are refused until the price
 per night to the client is given — or, left empty, only where every night already carries
@@ -904,10 +1018,20 @@ that same client's price, as when a block becomes a sale. This holds on the stoc
 on a sales request alike (§4.11). A request (soft) does not need one. (From Ami's review,
 2026-09-30.)
 
-**`dueDate` is the client's decision deadline while the hold is still open** — asked for
-only when blocking, never when selling. `SOLD` means the client has already signed; there is
-no further decision to chase, so the sale form does not ask for one. (Resolves the open
-question this used to be — §9.)
+**A block has one deadline: the client's deadline.** It is the date the client must decide
+by, the block's own date (`blockExpiry`) — required when blocking, the one the deadline
+warnings, the deadline dashboard and the coherence check with our option all run on, and
+moved by *Extend the block*. Everywhere it is shown it is called the **deadline**: the
+stock sheet's panel and hover card, the sales request, the history and the warnings (*"The
+deadline is today (30 Sep)"*, *"The deadline passed on 13 Sep"*). `SOLD` means the client
+has signed; there is no decision left to chase.
+
+> **Change, 2026-10-01.** There used to be a second, optional date beside it — `dueDate`,
+> "payment or decision deadline" — asked for on the same form. Two dates for one deadline
+> was confusing, so it is no longer asked for. A value recorded before stays on the night,
+> shown as **Payment due** wherever there is one, and still counts as a deadline while the
+> night is blocked; it is simply never set again. (Resolves what was §9's open question on
+> which deadline the due date was.)
 
 Only `NONE`, `BLOCKED`, `SOLD` and `CANCELLED` are ever *stored* on a room-night: those are
 the hard hold, and a night has at most one. `REQUESTED` is never stored there — a request
@@ -1016,18 +1140,34 @@ never a silent write.
 
 ### 4.6 Deadlines
 
-Two clocks per night: `optionExpiry` (supplier side) and `blockExpiry` (client side), plus
-`dueDate` — the client's decision deadline while `BLOCKED` (§4.2). It has nothing to chase
-once `SOLD`, so it is not asked for there.
+Two clocks per night, and **both are called deadlines** wherever they are shown: the
+**option deadline** (`optionExpiry`, supplier side — when our option with the hotel runs
+out) and the client's **deadline** (`blockExpiry`, client side, §4.2). A payment date
+recorded before 2026-10-01 (`dueDate`) still counts while the night is blocked, as
+*Payment due*, but is no longer asked for. (2026-10-01: "call it deadlines throughout".)
 
-- **Reminder window** — configurable, default 7 days out: severity ≥ 1, appears on the
-  deadline dashboard.
-- **Urgency window** — configurable, default 48 hours: severity escalates (amber → red).
-- **Expired** — the state is unchanged and the record is flagged `expired`. It stays in the
-  user's face until someone extends, converts or releases it.
+How worrying a deadline is follows two windows:
 
-The **deadline dashboard** is a first-class screen: everything expiring, soonest first,
-grouped by property and client, with the value at stake.
+- **Reminder window** — 7 days out: the night becomes *Watch* (severity 1).
+- **Urgency window** — 48 hours, today included: it becomes *Warning* (severity 2), and says
+  so in words: *"The deadline is today (30 Sep)"*.
+- **Passed** — the state is unchanged and the night stays a *Warning*, flagged *"The
+  deadline passed on 13 Sep"*, in the user's face until someone extends, converts or
+  releases it.
+
+**What the levels mean**, said on every level badge when pointed at and on the Deadlines
+page: *Watch* is worth knowing with nothing to do yet — a deadline 3 to 7 days away, our own
+stock unsold, a client asking about rooms we hold; *Warning* needs action soon — a deadline
+within 2 days or passed, or a client blocking or sold nights we have not secured; *Urgent*
+is act now — sold while still negotiating with the hotel; *Critical* is act today — sold
+with nothing secured, or a sale resting on an option about to run out.
+
+The **Deadlines page** (an event's *Deadlines* tab) is a first-class screen: every deadline
+**within the next month**, and every one already passed, soonest first, grouped by property
+and client, with the value at stake. The summary at its top counts them as **Already
+passed**, **This week** and **This month** — the pace the work is planned at (2026-10-01; it
+used to be *within 48 hours* and *this week*). Looking a month ahead changes only what is
+listed, not how worrying each one is: that is still the two windows above.
 
 **Calendar reminders (carried over).** The add-on's most-used feature is a scheduled job
 that writes option expiries into a shared Google Calendar. Keep it, with its aggregation
@@ -1099,7 +1239,19 @@ a note leaves their prices, references and managers as they were, even where the
 from night to night. A detail is removed only when it is cleared on purpose — emptied in a
 box that showed it. One exception keeps the record honest: when a night passes to a
 **different client** (a cancelled sale taken by someone else), the previous client's
-reference, price, due date, manager and notes do not carry over to the new one.
+reference, price, deadline, manager and notes do not carry over to the new one.
+
+**Different rates for different dates.** A stay often has a pre rate, the event rate and a
+post rate. Wherever a change takes a price per night — buying, an option, negotiating,
+requesting, blocking, selling, re-pricing — *Different rates for different dates* turns
+the one price into **periods**, each with its own dates and price: *Split* cuts a period
+in two, and moving where one ends moves where the next begins. Together they must run from
+check-in to check-out with no gap and no overlap, and each needs its price — otherwise it is
+refused, with the reason under the price, and nothing changes. The change is then applied
+period by period, each with its price, as **one step, all or nothing**, writing one ledger
+entry per period. The stay is still drawn as one booking on the sheet: a block only splits
+where the client, the status or a warning changes, never the price. The same is offered in
+a sales request's *+ Add rooms* (§4.11). (2026-10-01.)
 
 **Updating a detail without disturbing the rest.** *Update supplier details* and *Update
 client details* change only what is filled in — a note, a price, a reference, a manager —
@@ -1245,7 +1397,7 @@ stock sheet and doing it again.
 
 - **+ Add rooms** takes a room category of the event, how many rooms, check-in and
   check-out, and what to do: *Request* (a soft claim that locks nothing, §4.3), *Block*
-  (with the date it runs to, which is required, §4.2) or *Sell*, with the price per night
+  (with the client's deadline, which is required, §4.2) or *Sell*, with the price per night
   to the client and the client's reference if there is one. Before anything is done it
   says how many of that category's rooms are free for every night of the stay, how many of
   those we have bought, and — if fewer are bought than asked for — that blocking or selling
@@ -1291,7 +1443,7 @@ stored on the request, so it cannot disagree with the stock sheet.
 | *Initial interest* | The client has asked. We are looking for units and preparing a proposal. Monday: *Discovery* |
 | *Proposal sent* | We have sent a proposal and are waiting for the answer |
 | *Blocked* | The client is holding rooms while they decide |
-| *Signed* | Closed: the client has signed |
+| *Signed* | Closed: the client has signed — and their contract is registered against the request (below) |
 | *Released* | Closed: the client let their block go |
 | *No reply* | Closed: the client never came back to us |
 | *Lost* | Closed: the client went elsewhere or dropped the plan |
@@ -1301,6 +1453,23 @@ reopened. Moving to *Proposal sent* dates the proposal today, unless a date is a
 there. Moving to a closing stage records the day it closed; reopening clears that. Nothing
 moves a request on its own — a block that has passed its date is not released by the
 system (§2.4).
+
+**Signed needs the client's contract.** A request can be marked *Signed* only once a client
+contract (§7.1) is registered against it — the client's, for the request's event — so
+there is always a contract whose payments and cancellation deadlines are followed. Clicking
+*Signed*, or *Mark the request Signed* after a sale, marks it at once when there is one.
+When there is not, it asks for one instead:
+
+- **Sign under a contract already registered** — any of the client's contracts for the
+  event not yet tied to a request; choosing one ties it to this request and marks it
+  signed.
+- **Register the contract** — opens the new-contract form for this client and event, worth
+  the request's value, and saving it marks the request signed in the same step. Its payment
+  and cancellation terms are added next, on the contract.
+
+A request with no event cannot be signed until its event is chosen, as a contract is for an
+event. Requests marked signed before this rule (2026-10-02) keep their stage; their
+*Contract* card says, in red, that no contract is registered, with a link to register it.
 
 **What a request holds:**
 
@@ -1467,11 +1636,13 @@ out sooner and so needs attention sooner.
   after 25 Jul" — rather than presenting the edge of the window as the day the guest
   arrives. This is judged from the night on either side of the window, so a stay that really
   begins on the first day shown says so plainly.
-- **Something needing attention is marked**, with a red or amber "!" in the label **and a
-  thick outline round the whole booking** — amber for a warning, red for urgent or critical:
+- **Something needing attention is marked**, with a red or amber "!" in the label, **the
+  label on that colour, diagonal stripes across the whole booking and a thick outline round
+  it** — amber for a warning, red for urgent or critical, so it stands out at a glance
+  (2026-10-01):
   the same judgement as §4.4 — sold without having secured it, an option or a block that is
   running out — taken from the worst night in the block, so grouping never hides a problem.
-  A deadline inside the urgent window says so in words: *"The block runs out today (30
+  A deadline inside the urgent window says so in words: *"The deadline is today (30
   Sep)"*. The *Look out for* counts above the sheet count these blocks as issues (see
   above).
 - **Hovering over a block summarises it**, without clicking anything: who it is for, the
@@ -1554,13 +1725,27 @@ contiguous range of days — which opens a panel scoped to exactly that selectio
 
 **The panel shows what is already recorded** on those nights, under *Recorded now*: each
 side's status, and every detail — buy price, option date, supplier reference, Accommodation
-Manager, supplier notes; client, sell price, block date, due date, client reference, Sales
-Manager, client notes — as the one value the nights share, or *varies* where they differ.
+Manager, supplier notes; client, sell price, deadline, client reference, Sales Manager,
+client notes — as the one value the nights share, or *varies* where they differ.
 Every box below starts filled in with what the nights share, so amending an entry starts
 from what is there rather than from nothing; a box where the nights differ starts empty and
 says so, and left empty keeps each night's own (§4.8). Choosing a different client empties
-the client's boxes. Pointing at a booking on the sheet shows its price per night, client
-notes and supplier notes as well. (From Ami's review, 2026-09-30: notes could be written
+the client's boxes. **The action starts as what the nights already are** on that side —
+Option nights open on *Take an option*, bought ones on *Buy*, sold ones on *Sell to a
+client*, a mixed selection on what most of its nights are — with their option or block
+date filled in too, so amending an entry is change what differs and save. Nights where
+nothing has started open on the first action, as before. (2026-10-01.) Pointing at a booking on the sheet shows its price per night, client
+notes and supplier notes as well. **The card points at the cause.** Where a booking needs attention,
+the fact that makes it so is highlighted in the warning's colour, with its "!": the
+supplier side when a client holds what we have not bought (*Acquisition: Nothing
+started*), or the date running out — the option deadline or the client's deadline, which the card
+lists whenever they apply. A booking blocked with nothing bought and an expired block has
+both marked. (2026-10-01.) **A problem is said where it is.** What is missing in the panel —
+the client, the price, a block or option date, the manager — is pointed out under that
+field before anything is sent, and the panel scrolls to the first one and puts the cursor
+in it; the message goes as soon as the field is filled in. A refusal from the system about
+one field lands under it too; one about the nights themselves (*"already sold to another
+client"*) stays by the button, which the panel scrolls to. (2026-10-01.) (From Ami's review, 2026-09-30: notes could be written
 but never read back.) **The last
 day highlighted is the check-out day**, as a stay is written everywhere else: highlighting
 10 Jul to 31 Jul selects check-in 10 Jul, check-out 31 Jul, 21 nights, and changes those 21
@@ -1571,21 +1756,12 @@ the window's own check-out day, the sheet has one column more than it has nights
 after the last night, in lighter grey. Nothing is drawn in it except the CO of stays that
 leave that day.
 
-**Extending rooms from the sheet.** A selection may include nights a room does not have
-yet — dragging past the end of a stay to add a few nights. The panel says so first ("4 of 8
-room-nights aren't in inventory yet. Any change below adds them first, extending these
-rooms"), and then either:
-
-- **any change** — sell, block, buy, take an option — adds the missing nights and applies
-  itself to the whole selection, as **one step, all or nothing**: if the change is refused
-  for any night (a night already sold to someone else, a block to extend that is not
-  there), nothing is added either; or
-- **Only add them to inventory** adds the nights and nothing more, as "nothing started".
-
-The same rule applies as bringing rooms in (§3.6): only rooms of a room type this event
-has marked *Contracted* can be extended into new nights. The addition is recorded in "What
-changed" as its own entry ("Extended Hotel Carmel King Room 2 rooms (#1–#2) into 31 Jul –
-02 Aug"), followed by the change, and each can be undone. Extending a sale into nights we
+**Blank cells and extending.** A selection may include blank cells — rooms with nothing on
+them yet, or nights past the end of a stay. Any change — sell, block, buy, take an option —
+applies to the whole selection, blank cells included, as **one step, all or nothing**: if
+the change is refused for any night (a night already sold to someone else, a block to
+extend that is not there), nothing changes anywhere (§3.6). Only rooms of properties on the
+event's list can be used. Extending a sale into nights we
 have not yet bought from the hotel is allowed — it is a real situation — and those nights
 carry the red *needs attention* mark until they are bought. A
 selection can run past what is on screen: dragging to within a finger's width of an edge,
@@ -1792,9 +1968,92 @@ Derived:
 
 Aggregations must be available by event, property, category, client, party and date range.
 
-**Out of scope for v1:** invoicing, payment tracking, FX conversion (aggregates are
-reported per currency), taxes and tourist levies, commission splits, deposit schedules.
-`dueDate` is captured as a deadline only, with no payment state behind it.
+**Out of scope for v1:** invoicing, FX conversion (aggregates are reported per currency),
+taxes and tourist levies, commission splits. Payment schedules and their tracking — once out
+of scope here — are now §7.1.
+
+### 7.1 Contracts, payments and cancellation deadlines
+
+> **Built, in a first version.** Contracts with their payment and cancellation terms, the
+> Finances section, and buying and selling under a contract. The signed PDF is a pasted
+> Google Drive link; uploading it into the system, into a We Lodge Drive folder, is wanted
+> but waits on a conversation with Till (it needs Google Drive access set up). Reading the
+> terms out of the PDF automatically was considered and left for later. Nothing has been
+> imported from monday.com's *Payables*, *Payments from Clients* or *Cancellation
+> Deadlines* boards.
+
+Every contract we sign — with a supplier or with a client — carries payment and
+cancellation deadlines. **A contract is a record of its own**: who it is with (a hotel, on a
+supplier contract; a client, and the sales request it came from, on a client contract), the
+event, its name ("Group Sales Agreement"), the signed PDF as a Google Drive link, when it
+was signed, its account manager, notes, and **its total** — what the whole contract is worth,
+with its currency (§4.5).
+
+**Payment terms** are the payments the contract schedules, each with a description ("1st
+deposit"), a due date, and **its share of the contract's total** — 20% of US$ 198,450 is
+US$ 39,690. The amount is worked out from the total every time it is read, never stored, so
+changing the total changes every share with it (§2 conventions). Where a payment is not a
+plain share — a tax charged on top, say — it can be a set amount instead. Each payment
+moves through a status: for a supplier *To be paid → Invoice requested → Invoice received →
+Paid*, for a client *To be paid → Invoice issued → Paid*, and *Refund* on either; marking it
+paid records the date. It can carry links to the invoice and the proof of payment, and, on
+a supplier payment, the beneficiary's name. The contract's page says what the shares add
+up to, and warns when they are not 100%.
+
+**Cancellation terms** are the contract's cut-offs, each with its date and kind —
+*Attrition* (we may reduce the rooms or nights by an agreed share without paying for them)
+and *Release* (we may hand rooms back, or an exclusivity lapses) on a supplier contract,
+*Client cancellation* (the client may cancel, free or for a fee) on a client contract, and
+*Other* — the share that may go, what it applies to in words ("63 room-nights"), the room
+type, the fee ("30%"), and remarks. **A cut-off is a reminder**: nothing is released or
+cancelled on its own (§2.4). Someone ticks it once it has been dealt with.
+
+**Incomplete contracts are flagged.** A contract missing its total, its payment terms, its
+cancellation terms (unless it has been said, on purpose, that it has none) or its signed PDF
+says so in red on its page, in the list of contracts, and where it is chosen. It can still be
+used meanwhile — that was the decision (2026-10-01) — but it stays flagged until complete.
+
+**Buying and selling can name their contract — they do not wait for it.** *Buy* on the
+stock sheet offers the supplier contract — one with that hotel, for that event — and
+*Sell*, whether on the stock sheet or from a sales request (§4.11), the client contract:
+that client's, for that event. Both are optional: rooms can be bought or sold before the
+contract is registered, and tied to it afterwards. One that is chosen must be with that
+hotel or client, for that event; anything else is refused. Where there is none yet,
+*+ New contract* adds one on the spot with its name, total and PDF link, its terms to
+follow. (Until 2026-10-02 the contract was required for Buy and Sell; the owner decided it
+should not hold the team up. A sales request still needs its client contract to be marked
+*Signed* — §4.11.) The nights then carry their contracts:
+the panel's *Recorded now* shows them, the ledger records them (*"Supplier contract: — →
+Group Sales Agreement"*), *Update supplier details* and *Update client details* can attach
+nights to one after the fact, and undo puts them back. Abandoning the supplier negotiation
+unties nights from their supplier contract; releasing a client's hold unties them from the
+client's; a cancelled sale stays on its contract, as it stays with its client. Blocking and
+requesting need no contract — nothing has been signed yet. A sales request shows its client
+contracts and adds one already filled in with the client, the event and the request's value
+as its total.
+
+**Contracts live with their event.** Every contract — supplier and client side alike — is
+for one event, always, so each event has a **Contracts** tab, second after Properties and
+before Inventory, Deadlines and Position. It shows the event's contracts, its payments and its cancellation
+deadlines, three views of one tab; *+ New contract* there adds one for that event, which
+is set and cannot be changed. A contract's own page sits under its event, and its back link
+returns to the tab. A contract added from a sales request, or on the stock sheet while
+buying or selling, belongs to that event in the same way. (2026-10-01.)
+
+**The Finances section** — *Finances* in the menu, a panel like *Events* and *Sales* — is
+the view **across every event**, for whoever pays and chases invoices without opening each
+event in turn:
+
+- **Payments**, *To suppliers* and *From clients*: every open payment from every contract,
+  soonest first, with what it is for, its share and amount, its status (changed right in
+  the list), and its documents. Overdue ones are red and those due within 7 days amber, and
+  a line above sums each per currency. Paid ones are under *Paid*.
+- **Cancellations**, *With suppliers* and *With clients*: every cut-off still open, soonest
+  first, ticked off as they are dealt with.
+Each row names its event and opens the contract. The panel says how many payments are due
+within a week or overdue, how many cut-offs fall within 30 days, and how many contracts are
+missing terms — those are found on each event's Contracts tab. Every change to a contract, its
+payments and its deadlines is in the contract's history.
 
 ---
 
@@ -2005,10 +2264,11 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | --- | --- | --- |
 | §2.5 Google Workspace sign-in | **Built** | Live. A `@welodge.net` account is the only way in; first sign-in creates the user |
 | §2.5 Roles and permissions | **Not built** | Every signed-in user has full access to everything — see §9, open question 5 |
+| §2.5 Sign-in screen only for visitors | **Built** | Signed out, every address — the front page included — goes to the sign-in screen, which says nothing about what the system does |
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
-| §2.5 Staging | **Being set up** | https://staging.welodge.net, from the `staging` branch, on a copy of the live database. The Vercel environment and address exist; its database copy, settings, DNS record and Google sign-in address are outstanding — see `docs/todos.md` §1 |
-| §2.6 Updates | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. No deleting. No notification is sent — see §9 |
+| §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
+| §2.6 Feedback (was Updates) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
 | §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |
@@ -2020,6 +2280,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
+| §3.1 Address search on Google Maps | **Built, needs a key change** | On the property form (new and edit). Waits on *Places API (New)* being enabled and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till) — today Google refuses, so the box is a plain one with a note |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
@@ -2032,7 +2293,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
-| §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each card of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
+| §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
+| §3.10 Quotations | **Built** | On the property's page, first of its tabs (Quotations, Room categories, Feedback, Log), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Feedback showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
@@ -2043,11 +2305,11 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
+| §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
-| §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
+| §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
 | §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |
 | §4.3 Exclusivity and contention | **Built** | One hard hold per night, enforced; requests are a set, and contention is counted on the stock sheet and per night |
@@ -2060,6 +2322,9 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Empty keeps, update details only | **Built** | A detail left empty keeps each night's own; *Update supplier details* / *Update client details* change only what is filled in; a night passing to another client does not keep the last one's details |
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
+| §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
+| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs, kept on each event's Contracts tab; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
+| §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
 | §4.9 General audit trail | **Built** | Scouting status, contract status, and property/client/event edits — no undo, and no field-level diff of nested categories/contacts |

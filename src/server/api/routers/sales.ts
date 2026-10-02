@@ -14,7 +14,7 @@ import {
   salesStageLabels,
 } from "~/lib/sales";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
-import { applyInventoryChange } from "~/server/api/routers/inventory";
+import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
 import { snapshotNight } from "~/server/inventory";
 
@@ -114,7 +114,7 @@ const historyFields = [
   { key: "followUpOn", label: "Follow up on" },
   { key: "nextStep", label: "Next step" },
   { key: "proposalSentOn", label: "Proposal sent on" },
-  { key: "blockedUntil", label: "Blocked until" },
+  { key: "blockedUntil", label: "Deadline" },
   { key: "value", label: "Value" },
   ...interestFields.map(({ key, label }) => ({ key, label })),
   ...contractingFields.map(({ key, label }) => ({ key, label })),
@@ -143,14 +143,20 @@ const changeVerbs = {
 
 /**
  * Every room of a category over a stay, and whether it could go to this
- * client: in inventory every night, and held by no other client. A room this
- * client already holds on any of those nights is theirs, not free.
+ * client: held by no other client on any of those nights. A room this client
+ * already holds on any of them is theirs, not free. Every room of the
+ * category counts, whether or not anything has happened on it yet (doc §3.6).
  */
 async function roomsFor(
   db: Prisma.TransactionClient,
   input: { eventId: string; categoryId: string; clientId: string; checkIn: Date; checkOut: Date },
 ) {
   const nightCount = nightsBetween(input.checkIn, input.checkOut);
+  const category = await db.roomCategory.findUniqueOrThrow({ where: { id: input.categoryId }, select: { unitCount: true } });
+  await db.roomSlot.createMany({
+    data: Array.from({ length: category.unitCount }, (_, i) => ({ categoryId: input.categoryId, slotNumber: i + 1 })),
+    skipDuplicates: true,
+  });
   const slots = await db.roomSlot.findMany({
     where: { categoryId: input.categoryId },
     orderBy: { slotNumber: "asc" },
@@ -164,7 +170,8 @@ async function roomsFor(
     },
   });
   const hard = (state: string) => state === "BLOCKED" || state === "SOLD";
-  return slots.map((slot) => {
+  // A room beyond a lowered count only while it still has nights here.
+  return slots.filter((slot) => slot.slotNumber <= category.unitCount || slot.roomNights.length > 0).map((slot) => {
     const present = slot.roomNights.length === nightCount;
     const heldByOther = slot.roomNights.some((night) => hard(night.salesState) && night.clientId !== input.clientId);
     const theirs = slot.roomNights.some((night) => hard(night.salesState) && night.clientId === input.clientId);
@@ -173,7 +180,7 @@ async function roomsFor(
       slotNumber: slot.slotNumber,
       present,
       theirs,
-      free: present && !heldByOther && !theirs,
+      free: !heldByOther && !theirs,
       bought: present && slot.roomNights.every((night) => night.acquisitionState === "BOUGHT"),
     };
   });
@@ -210,6 +217,59 @@ function rectangles(nights: { slotId: string; date: Date }[]) {
     flush();
   }
   return [...runs.values()];
+}
+
+/**
+ * Move a request to another stage — the one way a stage changes. A request is
+ * marked Signed only once the client's contract is registered against it
+ * (doc §4.11): signed means there is a contract to collect payments under.
+ */
+export async function moveStage(tx: Prisma.TransactionClient, actorId: string, id: string, stage: SalesRequestStage) {
+  const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
+  if (before.stage === stage) return before;
+  if (stage === "SIGNED") {
+    if (!before.eventId) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — a signed request needs the client's contract, and a contract is for an event." });
+    }
+    const contracts = await tx.contract.count({ where: { salesRequestId: id, party: "CLIENT" } });
+    if (contracts === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Register the client's contract before marking the request signed." });
+    }
+  }
+  const closing = isClosed(stage);
+  const after = await tx.salesRequest.update({
+    where: { id },
+    data: {
+      stage,
+      closedOn: closing ? (before.closedOn && isClosed(before.stage) ? before.closedOn : today()) : null,
+      ...(stage === "PROPOSAL_SENT" && !before.proposalSentOn && { proposalSentOn: today() }),
+    },
+    include,
+  });
+  await logAudit(tx, {
+    actorId,
+    entity: "SalesRequest",
+    entityId: id,
+    summary: `Stage: ${salesStageLabels[before.stage]} → ${salesStageLabels[stage]}`,
+  });
+  return after;
+}
+
+/** Tie one of the client's contracts for the request's event to the request. */
+async function tieContract(tx: Prisma.TransactionClient, actorId: string, requestId: string, contractId: string) {
+  const [request, contract] = await Promise.all([
+    tx.salesRequest.findUniqueOrThrow({ where: { id: requestId }, select: { clientId: true, eventId: true } }),
+    tx.contract.findUniqueOrThrow({ where: { id: contractId }, select: { party: true, clientId: true, eventId: true, salesRequestId: true, name: true } }),
+  ]);
+  if (contract.party !== "CLIENT" || contract.clientId !== request.clientId || contract.eventId !== request.eventId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That contract is not this client's for this event." });
+  }
+  if (contract.salesRequestId === requestId) return;
+  if (contract.salesRequestId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That contract belongs to another sales request." });
+  }
+  await tx.contract.update({ where: { id: contractId }, data: { salesRequestId: requestId } });
+  await logAudit(tx, { actorId, entity: "SalesRequest", entityId: requestId, summary: `Contract tied to the request: ${contract.name}` });
 }
 
 export const salesRouter = createTRPCRouter({
@@ -404,9 +464,16 @@ export const salesRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const request = await ctx.db.salesRequest.findUniqueOrThrow({ where: { id: input.id }, select: { eventId: true } });
       if (!request.eventId) return [];
+      // The room categories of the properties on the event's list (doc §3.6),
+      // and any other with nights here.
       const slots = await ctx.db.roomNight.groupBy({ by: ["slotId"], where: { eventId: request.eventId } });
       const categories = await ctx.db.roomCategory.findMany({
-        where: { slots: { some: { id: { in: slots.map((slot) => slot.slotId) } } } },
+        where: {
+          OR: [
+            { unitCount: { gt: 0 }, property: { scoutingEntries: { some: { eventId: request.eventId, status: { not: "REJECTED" } } } } },
+            { slots: { some: { id: { in: slots.map((slot) => slot.slotId) } } } },
+          ],
+        },
         select: { id: true, name: true, property: { select: { name: true } } },
         orderBy: [{ property: { name: "asc" } }, { sortOrder: "asc" }],
       });
@@ -415,7 +482,7 @@ export const salesRouter = createTRPCRouter({
 
   /**
    * How many rooms of a category could be given to this request for the whole
-   * stay — in inventory every night, and held by no other client — and how
+   * stay — held by no other client on any night — and how
    * many of those we have bought.
    */
   availability: protectedProcedure
@@ -432,7 +499,6 @@ export const salesRouter = createTRPCRouter({
         free: rooms.filter((room) => room.free).length,
         freeBought: rooms.filter((room) => room.free && room.bought).length,
         alreadyTheirs: rooms.filter((room) => room.theirs).length,
-        notInInventory: rooms.filter((room) => !room.present).length,
       };
     }),
 
@@ -455,6 +521,13 @@ export const salesRouter = createTRPCRouter({
         sellPriceCents: z.number().int().min(0).nullable().optional(),
         sellCurrency: z.string().length(3).optional(),
         clientRef: z.string().max(200).optional(),
+        /** The client contract a sale is made under (doc §7.1). */
+        salesContractId: z.string().optional(),
+        /** Different rates for different dates — pre, event, post (doc §4.8). */
+        periods: z
+          .array(z.object({ checkIn: dayRequired, checkOut: dayRequired, priceCents: z.number().int().min(0), currency: z.string().length(3) }))
+          .max(20)
+          .optional(),
       }),
     )
     .mutation(({ ctx, input }) =>
@@ -479,13 +552,15 @@ export const salesRouter = createTRPCRouter({
           if (free.length < input.rooms) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Nothing was changed. Only ${free.length} of these rooms ${free.length === 1 ? "is" : "are"} free for every night of the stay${
-                rooms.some((room) => !room.present) ? " (some are not in inventory for all those dates)" : ""
-              }. Ask for fewer, or split the dates.`,
+              message: `Nothing was changed. Only ${free.length} of these rooms ${free.length === 1 ? "is" : "are"} free for every night of the stay. Ask for fewer, or split the dates.`,
             });
           }
           const chosen = free.slice(0, input.rooms);
-          const outcome = await applyInventoryChange(tx, ctx.session.user.id, {
+          const periods = input.periods?.map((period) => ({ ...period, checkIn: parseDay(period.checkIn), checkOut: parseDay(period.checkOut) }));
+          if (periods?.length) checkPeriods(periods, checkIn, checkOut);
+          const apply = (change: Parameters<typeof applyInventoryChange>[2]) =>
+            periods?.length ? applyByPeriod(tx, ctx.session.user.id, change, periods) : applyInventoryChange(tx, ctx.session.user.id, change);
+          const outcome = await apply({
             eventId: request.eventId,
             slotIds: chosen.map((room) => room.slotId),
             checkIn,
@@ -498,6 +573,7 @@ export const salesRouter = createTRPCRouter({
             sellCurrency: input.sellPriceCents != null ? input.sellCurrency : undefined,
             clientRef: input.clientRef,
             salesOwnerId: request.ownerId ?? undefined,
+            ...(input.action === "SELL" && input.salesContractId && { salesContractId: input.salesContractId }),
           });
           const category = await tx.roomCategory.findUniqueOrThrow({
             where: { id: input.categoryId },
@@ -532,6 +608,7 @@ export const salesRouter = createTRPCRouter({
         blockExpiry: day,
         sellPriceCents: z.number().int().min(0).nullable().optional(),
         sellCurrency: z.string().length(3).optional(),
+        salesContractId: z.string().optional(),
       }),
     )
     .mutation(({ ctx, input }) =>
@@ -607,6 +684,7 @@ export const salesRouter = createTRPCRouter({
               action: input.action,
               clientId: request.clientId,
               ...((input.action === "BLOCK" || input.action === "SELL") && { salesRequestId: input.id }),
+              ...(input.action === "SELL" && input.salesContractId && { salesContractId: input.salesContractId }),
               blockExpiry: input.blockExpiry ? parseDay(input.blockExpiry) : undefined,
               // A sale keeps what the block said unless told otherwise; a mix
               // across nights is not guessed at.
@@ -788,28 +866,18 @@ export const salesRouter = createTRPCRouter({
    * and reopening clears that — a request is closed only while its stage says so.
    */
   setStage: protectedProcedure
-    .input(z.object({ id: z.string(), stage: z.nativeEnum(SalesRequestStage) }))
+    .input(
+      z.object({
+        id: z.string(),
+        stage: z.nativeEnum(SalesRequestStage),
+        /** Signing under one of the client's contracts for the event not yet tied to a request: it is tied to this one. */
+        contractId: z.string().optional(),
+      }),
+    )
     .mutation(({ ctx, input }) =>
       ctx.db.$transaction(async (tx) => {
-        const before = await tx.salesRequest.findUniqueOrThrow({ where: { id: input.id }, include });
-        if (before.stage === input.stage) return before;
-        const closing = isClosed(input.stage);
-        const after = await tx.salesRequest.update({
-          where: { id: input.id },
-          data: {
-            stage: input.stage,
-            closedOn: closing ? (before.closedOn && isClosed(before.stage) ? before.closedOn : today()) : null,
-            ...(input.stage === "PROPOSAL_SENT" && !before.proposalSentOn && { proposalSentOn: today() }),
-          },
-          include,
-        });
-        await logAudit(tx, {
-          actorId: ctx.session.user.id,
-          entity: "SalesRequest",
-          entityId: input.id,
-          summary: `Stage: ${salesStageLabels[before.stage]} → ${salesStageLabels[input.stage]}`,
-        });
-        return after;
+        if (input.contractId) await tieContract(tx, ctx.session.user.id, input.id, input.contractId);
+        return moveStage(tx, ctx.session.user.id, input.id, input.stage);
       }),
     ),
 

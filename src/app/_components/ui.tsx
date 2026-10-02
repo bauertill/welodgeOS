@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ScoutingStatus } from "generated/prisma";
 
 import { formatMoney } from "~/lib/format";
-import { severityLabels, severityStyles, type Severity } from "~/lib/position";
+import { severityHints, severityLabels, severityStyles, type Severity } from "~/lib/position";
 import { scoutingStatusLabels } from "~/lib/scouting";
 
 export function PageHeader({
@@ -170,6 +170,8 @@ export function SeverityBadge({
 }) {
   return (
     <span
+      // What the level means, on pointing at it — Watch and Warning read alike otherwise.
+      title={severityHints[severity]}
       className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap ${severityStyles[severity]}`}
     >
       {children ?? severityLabels[severity]}

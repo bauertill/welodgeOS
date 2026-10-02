@@ -3,7 +3,9 @@ import { auditRouter } from "~/server/api/routers/audit";
 import { chatRouter } from "~/server/api/routers/chat";
 import { clientRouter } from "~/server/api/routers/client";
 import { eventRouter } from "~/server/api/routers/event";
+import { financeRouter } from "~/server/api/routers/finance";
 import { inventoryRouter } from "~/server/api/routers/inventory";
+import { quotationRouter } from "~/server/api/routers/quotation";
 import { placeRouter } from "~/server/api/routers/place";
 import { propertyRouter } from "~/server/api/routers/property";
 import { providerRouter } from "~/server/api/routers/provider";
@@ -25,10 +27,12 @@ export const appRouter = createTRPCRouter({
   property: propertyRouter,
   provider: providerRouter,
   scouting: scoutingRouter,
+  quotation: quotationRouter,
   amenity: amenityRouter,
   clients: clientRouter,
   sales: salesRouter,
   inventory: inventoryRouter,
+  finance: financeRouter,
   reporting: reportingRouter,
   travel: travelRouter,
   user: userRouter,

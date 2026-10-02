@@ -44,7 +44,7 @@ export default async function ClientPage({
 
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Updates
+              Feedback
             </h2>
             <UpdateThread clientId={client.id} />
           </Card>
@@ -65,7 +65,7 @@ export default async function ClientPage({
 
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Activity
+              Log
             </h2>
             <ActivityLog entity="Client" entityId={client.id} />
           </Card>

@@ -21,6 +21,7 @@ import {
 } from "~/lib/contracting";
 import { LocationPreview } from "~/app/_components/location-preview";
 import { normalizePropertyName } from "~/lib/scouting";
+import { AddressSearch } from "~/app/_components/address-search";
 import { api } from "~/trpc/react";
 
 type CategoryDraft = {
@@ -399,12 +400,31 @@ export function PropertyForm({
             </Field>
           )}
 
-          <Field label="Address" className="sm:col-span-2">
-            <Input
+          {/* Not a Field: a label around it would send a click on a
+              suggestion back to the box. */}
+          <div className="sm:col-span-2">
+            <Label>Address</Label>
+            <AddressSearch
               value={values.address}
-              onChange={(e) => set("address", e.target.value)}
+              onChange={(address) => set("address", address)}
+              onFound={(place) => {
+                setGeocodeError(null);
+                // Where it is comes from Google; the rest only fills what is
+                // still empty, so nothing typed is overwritten.
+                setValues((current) => ({
+                  ...current,
+                  address: place.address ?? current.address,
+                  city: place.city ?? current.city,
+                  country: place.country ?? current.country,
+                  latitude: place.latitude !== null ? String(place.latitude) : current.latitude,
+                  longitude: place.longitude !== null ? String(place.longitude) : current.longitude,
+                  name: !current.name.trim() && place.lodging && place.name ? place.name : current.name,
+                  website: current.website.trim() ? current.website : (place.website ?? ""),
+                  phone: current.phone.trim() ? current.phone : (place.phone ?? ""),
+                }));
+              }}
             />
-          </Field>
+          </div>
 
           <Field label="City">
             <Input

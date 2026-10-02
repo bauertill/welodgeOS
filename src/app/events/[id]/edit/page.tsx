@@ -50,7 +50,7 @@ export default async function EditEventPage({
       <div className="mt-5">
         <Card>
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-            Activity
+            Log
           </h2>
           <ActivityLog entity="Event" entityId={event.id} />
         </Card>

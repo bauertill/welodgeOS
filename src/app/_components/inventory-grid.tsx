@@ -8,9 +8,9 @@ import { Input } from "~/app/_components/form";
 import { InventorySidePanel, type SelectedCell } from "~/app/_components/inventory-side-panel";
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
-import { formatMoney } from "~/lib/format";
+import { formatDay, formatMoney } from "~/lib/format";
 import { acquisitionLabels, salesLabels } from "~/lib/inventory";
-import { severityLabels, type Severity } from "~/lib/position";
+import { severityHints, severityLabels, type Cause, type Severity } from "~/lib/position";
 import { blockKind, buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
 import { api } from "~/trpc/react";
 
@@ -39,6 +39,10 @@ export function InventoryGrid({
 }) {
   const [propertyId, setPropertyId] = useState("");
   const [clientId, setClientId] = useState("");
+  // Every room of every property on the list is on the sheet (doc §3.6); with
+  // up to a hundred properties, the ones with nothing on them are hidden
+  // until asked for — or until one property is chosen to work on.
+  const [showEmpty, setShowEmpty] = useState(false);
   // The check-in/check-out window is remembered per event, in this browser,
   // so coming back to the tab does not snap it back to the event's dates.
   // Read after mount — storage only exists in the browser — and the sheet
@@ -279,10 +283,25 @@ export function InventoryGrid({
 
   // Clicking a "Look out for" count shows only the rooms with that issue.
   const [issueFilter, setIssueFilter] = useState<Severity | null>(null);
+  const emptyRooms = useMemo(
+    () => allProperties.reduce((sum, property) => sum + property.categories.reduce((n, category) => n + category.slots.filter((slot) => slot.empty).length, 0), 0),
+    [allProperties],
+  );
+  const shownProperties = useMemo(() => {
+    if (showEmpty || propertyId) return allProperties;
+    return allProperties
+      .map((property) => ({
+        ...property,
+        categories: property.categories
+          .map((category) => ({ ...category, slots: category.slots.filter((slot) => !slot.empty) }))
+          .filter((category) => category.slots.length > 0),
+      }))
+      .filter((property) => property.categories.length > 0);
+  }, [allProperties, showEmpty, propertyId]);
   const properties = useMemo(() => {
     const wanted = issueFilter ? issues.get(issueFilter)?.slots : null;
-    if (!wanted) return allProperties;
-    return allProperties
+    if (!wanted) return shownProperties;
+    return shownProperties
       .map((property) => ({
         ...property,
         categories: property.categories
@@ -290,7 +309,7 @@ export function InventoryGrid({
           .filter((category) => category.slots.length > 0),
       }))
       .filter((property) => property.categories.length > 0);
-  }, [allProperties, issueFilter, issues]);
+  }, [shownProperties, issueFilter, issues]);
   // ...and opens them, since the point is to see them.
   useEffect(() => {
     if (!issueFilter) return;
@@ -572,7 +591,7 @@ export function InventoryGrid({
                   key={level}
                   type="button"
                   aria-pressed={active}
-                  title={active ? "Show everything again" : `Show only the ${severityLabels[level].toLowerCase()} issues`}
+                  title={`${severityHints[level]} — ${active ? "click to show everything again" : `click to show only these`}`}
                   onClick={() => setIssueFilter(active ? null : level)}
                   className={`rounded-full transition-shadow ${
                     active ? "ring-ink-900 ring-2 ring-offset-2" : "hover:ring-ink-200 hover:ring-2 hover:ring-offset-1"
@@ -622,6 +641,20 @@ export function InventoryGrid({
           }))}
         />
 
+        {!propertyId && (emptyRooms > 0 || showEmpty) && (
+          <button
+            type="button"
+            onClick={() => setShowEmpty(!showEmpty)}
+            aria-pressed={showEmpty}
+            title="Rooms with nothing on them in these dates — no supplier or client side, and nobody asking"
+            className={`rounded-full px-4 py-2 text-[13px] font-light transition-colors ${
+              showEmpty ? "bg-brand-700 text-white" : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
+            }`}
+          >
+            {showEmpty ? "Hide empty rooms" : `Show empty rooms (${emptyRooms})`}
+          </button>
+        )}
+
         <div className="ml-auto flex items-center gap-2">
           {!isEventWindow && (
             <button
@@ -658,10 +691,22 @@ export function InventoryGrid({
       {properties.length > 0 && <Legend />}
 
       {properties.length === 0 ? (
-        <EmptyState
-          title="Nothing matches"
-          description="Nothing in this event's inventory matches the current filters and date window."
-        />
+        allProperties.length === 0 ? (
+          <EmptyState
+            title="No rooms yet"
+            description="Rooms appear here as soon as a property on the Properties tab has room categories with a number of rooms."
+          />
+        ) : !showEmpty && !propertyId && !clientId && !issueFilter ? (
+          <EmptyState
+            title="Nothing on any room in these dates yet"
+            description={`All ${emptyRooms} rooms are empty. Show the empty rooms, or choose a property, to start recording what is bought, blocked and sold.`}
+          />
+        ) : (
+          <EmptyState
+            title="Nothing matches"
+            description="Nothing in this event's inventory matches the current filters and date window."
+          />
+        )
       ) : (
         // Scrolls both ways inside a box no taller than the window, so the
         // date row can stay pinned along its top and the room column down
@@ -836,6 +881,7 @@ export function InventoryGrid({
                                         >
                                           {block ? (
                                             <div
+                                              style={warningStripes(block.severity, rowIndex, dateIndex, edge)}
                                               className={`absolute ${kindStyles[block.kind]} ${
                                                 issueFilter && block.severity !== issueFilter ? "opacity-25" : ""
                                               } ${
@@ -951,7 +997,24 @@ export function InventoryGrid({
             const distinct = (read: (cell: NonNullable<(typeof nights)[number]>) => string | null) => [
               ...new Set(nights.map((cell) => (cell ? read(cell) : null)).filter((value): value is string => Boolean(value))),
             ];
+            // What makes the booking need attention, at its worst on any night.
+            const causes: Partial<Record<Cause, Severity>> = {};
+            for (const cell of nights) {
+              if (!cell) continue;
+              for (const [cause, level] of Object.entries(cell.position.causes) as [Cause, Severity][]) {
+                if (level > (causes[cause] ?? 0)) causes[cause] = level;
+              }
+            }
+            const dateOf = (read: (cell: NonNullable<(typeof nights)[number]>) => Date | null) =>
+              distinct((cell) => {
+                const value = read(cell);
+                return value ? formatDay(value) : null;
+              });
             return {
+              causes,
+              optionExpiries: dateOf((cell) => (cell.acquisitionState === "OPTION" ? cell.optionExpiry : null)),
+              blockExpiries: dateOf((cell) => (cell.salesState === "BLOCKED" ? cell.blockExpiry : null)),
+              dueDates: dateOf((cell) => (cell.salesState === "BLOCKED" ? cell.dueDate : null)),
               salesNotes: distinct((cell) => cell.salesNotes),
               supplierNotes: distinct((cell) => cell.acquisitionNotes),
               sellPrices: distinct((cell) =>
@@ -1144,9 +1207,49 @@ function BlockLabel({
       className={`pointer-events-none absolute top-0 bottom-0 z-[1] ${faded ? "opacity-40" : ""} flex items-center gap-1 overflow-hidden text-[11px] leading-none font-medium whitespace-nowrap ${kindText[block.kind]}`}
     >
       {block.severity >= 2 && <AttentionMark severity={block.severity} />}
-      <span className="truncate">{parts.join(" · ")}</span>
+      <span
+        className={`truncate ${
+          // Where it needs attention, the words sit on the warning's own colour.
+          block.severity >= 3
+            ? "rounded bg-[#c03654] px-1.5 py-0.5 text-white"
+            : block.severity === 2
+              ? "rounded bg-[#b97b12] px-1.5 py-0.5 text-white"
+              : ""
+        }`}
+      >
+        {parts.join(" · ")}
+      </span>
     </span>
   );
+}
+
+/** A cell of the sheet, in pixels — the stripes line up across a whole booking by it. */
+const CELL_WIDTH = 36;
+const CELL_HEIGHT = 32;
+
+/**
+ * Diagonal stripes over a booking that needs attention — red for urgent or
+ * critical, amber for a warning — so it stands out at a glance (2026-10-01).
+ * Each cell shows its own part of one large striped sheet, so the stripes run
+ * on unbroken from cell to cell across the whole booking.
+ */
+function warningStripes(
+  severity: Severity,
+  row: number,
+  column: number,
+  edge: { top: boolean; left: boolean } = { top: false, left: false },
+): React.CSSProperties | undefined {
+  if (severity < 2) return undefined;
+  const colour = severity >= 3 ? "rgba(192, 54, 84, 0.5)" : "rgba(224, 160, 42, 0.6)";
+  // A booking's outer cells start a little inside their cell (2px from the
+  // left, 3px from the top); the stripes allow for it so they meet up.
+  const x = column * CELL_WIDTH + (edge.left ? 2 : 0);
+  const y = row * CELL_HEIGHT + (edge.top ? 3 : 0);
+  return {
+    backgroundImage: `repeating-linear-gradient(135deg, ${colour} 0 5px, transparent 5px 13px)`,
+    backgroundSize: `${CELL_WIDTH * 600}px ${CELL_HEIGHT * 600}px`,
+    backgroundPosition: `-${x}px -${y}px`,
+  };
 }
 
 function AttentionMark({ severity }: { severity: Severity }) {
@@ -1179,7 +1282,15 @@ function BlockSummary({
   dates: Date[];
   rooms: { slotNumber: number; categorySize: number }[];
   detail?: { headline: string; detail: string | null; flags: string[] };
-  recorded: { salesNotes: string[]; supplierNotes: string[]; sellPrices: string[] };
+  recorded: {
+    causes: Partial<Record<Cause, Severity>>;
+    optionExpiries: string[];
+    blockExpiries: string[];
+    dueDates: string[];
+    salesNotes: string[];
+    supplierNotes: string[];
+    sellPrices: string[];
+  };
   checkOutDay?: Date;
   continuesBefore: boolean;
   continuesAfter: boolean;
@@ -1230,7 +1341,33 @@ function BlockSummary({
           </>
         )}
         <dt className="text-ink-500">Acquisition</dt>
-        <dd className="text-ink-900">{acquisitionLabels[block.acquisition]}</dd>
+        <dd className="text-ink-900">
+          <Culprit level={recorded.causes.acquisition}>{acquisitionLabels[block.acquisition]}</Culprit>
+        </dd>
+        {recorded.optionExpiries.length > 0 && (
+          <>
+            <dt className="text-ink-500">Option deadline</dt>
+            <dd className="text-ink-900">
+              <Culprit level={recorded.causes.optionExpiry}>{recorded.optionExpiries.join(", ")}</Culprit>
+            </dd>
+          </>
+        )}
+        {block.kind === "BLOCKED" && recorded.blockExpiries.length > 0 && (
+          <>
+            <dt className="text-ink-500">Deadline</dt>
+            <dd className="text-ink-900">
+              <Culprit level={recorded.causes.blockExpiry}>{recorded.blockExpiries.join(", ")}</Culprit>
+            </dd>
+          </>
+        )}
+        {block.kind === "BLOCKED" && recorded.dueDates.length > 0 && (
+          <>
+            <dt className="text-ink-500">Payment due</dt>
+            <dd className="text-ink-900">
+              <Culprit level={recorded.causes.dueDate}>{recorded.dueDates.join(", ")}</Culprit>
+            </dd>
+          </>
+        )}
         <dt className="text-ink-500">{hasClient(block.kind) ? "Check-in" : "From"}</dt>
         <dd className="text-ink-900">
           {continuesBefore ? `before ${checkIn}` : checkIn}
@@ -1290,6 +1427,25 @@ function BlockSummary({
   );
 }
 
+/**
+ * A fact in the hover card, marked when it is what makes the booking need
+ * attention — so the cause is the first thing the eye lands on.
+ */
+function Culprit({ level, children }: { level?: Severity; children: React.ReactNode }) {
+  if (!level || level < 2) return <>{children}</>;
+  const red = level >= 3;
+  return (
+    <span
+      className={`-mx-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium ${
+        red ? "bg-[#fde8ec] text-[#a3243d] ring-1 ring-[#c03654]/40" : "bg-[#fdf1dc] text-[#8a5a0f] ring-1 ring-[#e0a02a]/50"
+      }`}
+    >
+      <AttentionMark severity={level} />
+      {children}
+    </span>
+  );
+}
+
 function Legend() {
   const shown: BlockKind[] = ["SOLD", "BLOCKED", "OUR_STOCK"];
   return (
@@ -1309,11 +1465,11 @@ function Legend() {
         Check-out day
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="inline-block h-3 w-5 rounded-sm border-2 border-[#e0a02a] bg-white" />
+        <span className="bg-brand-500 inline-block h-3 w-5 rounded-sm border-2 border-[#e0a02a]" style={warningStripes(2, 0, 0)} />
         <AttentionMark severity={2} /> Warning
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="inline-block h-3 w-5 rounded-sm border-2 border-[#c03654] bg-white" />
+        <span className="bg-brand-500 inline-block h-3 w-5 rounded-sm border-2 border-[#c03654]" style={warningStripes(3, 0, 0)} />
         <AttentionMark severity={3} /> Urgent or critical — point at it for why
       </span>
     </div>

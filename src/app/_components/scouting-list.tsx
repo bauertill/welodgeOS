@@ -65,6 +65,7 @@ export function ScoutingList({
   const providers = api.provider.list.useQuery();
   const [amenityIds, setAmenityIds] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [hasQuotations, setHasQuotations] = useState(false);
 
   const entries = api.scouting.listForEvent.useQuery({
     eventId,
@@ -72,6 +73,7 @@ export function ScoutingList({
     type: type || undefined,
     amenityIds,
     providerId: providerId || undefined,
+    hasQuotations,
   });
 
   const setStatusMutation = api.scouting.setStatus.useMutation({
@@ -134,7 +136,7 @@ export function ScoutingList({
     categoryId: string,
   ): CategoryContractStatus =>
     entry.categoryContracts.find((c) => c.categoryId === categoryId)
-      ?.status ?? "IN_NEGOTIATION";
+      ?.status ?? "NOT_STARTED";
 
   // An event can have several venues, so "to venue" means the nearest one and
   // has to name it (doc §3.7).
@@ -206,7 +208,8 @@ export function ScoutingList({
               // matters most at a glance, before how far the rest have got.
               const statusSummary = [...categoryContractStatusOrder]
                 .reverse()
-                .filter((status) => roomsByStatus.get(status))
+                // Rooms nothing has started on are not mentioned at all.
+                .filter((status) => status !== "NOT_STARTED" && roomsByStatus.get(status))
                 .map(
                   (status) =>
                     `${roomsByStatus.get(status)} rooms ${categoryContractStatusLabels[status].toLowerCase()}`,
@@ -273,6 +276,15 @@ export function ScoutingList({
                           {propertyTypeLabels[property.type]}
                           {property.stars ? ` · ${property.stars}-star` : ""}
                         </span>
+                        {entry.quotations.length > 0 && (
+                          <PendingLink
+                            href={`/properties/${property.id}?back=${encodeURIComponent(`/events/${eventId}`)}#quotations`}
+                            className="text-brand-700 block text-xs font-light hover:underline"
+                          >
+                            {entry.quotations.length} {entry.quotations.length === 1 ? "quotation" : "quotations"}
+                            {entry.quotations.some((quotation) => quotation.status === "ACCEPTED") && " · one accepted"}
+                          </PendingLink>
+                        )}
                         {statusSummary.map((line) => (
                           <span
                             key={line}
@@ -399,7 +411,7 @@ export function ScoutingList({
                           const position = availabilityByCategory.get(categoryId);
                           return position && position.slots > 0
                             ? `${position.genuinelyFree} available`
-                            : "Not in inventory yet";
+                            : "Nothing bought yet";
                         }}
                         onStatusChange={(categoryId, status) =>
                           setCategoryStatusMutation.mutate({
@@ -495,6 +507,20 @@ export function ScoutingList({
           </Select>
         )}
 
+        <button
+          type="button"
+          onClick={() => setHasQuotations((current) => !current)}
+          aria-pressed={hasQuotations}
+          className={`rounded-full px-4 py-2 text-[13px] font-light transition-colors ${
+            hasQuotations
+              ? "bg-brand-700 text-white"
+              : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
+          }`}
+          title="Only the properties that have sent a quotation — on the list and on the map"
+        >
+          With quotations
+        </button>
+
         <span className="text-ink-500 ml-auto text-[13px] font-light">
           {entries.isLoading
             ? "Loading…"
@@ -543,10 +569,17 @@ export function ScoutingList({
       )}
 
       {rows.length === 0 && !entries.isLoading ? (
-        <EmptyState
-          title="Nothing on this list yet"
-          description="Add properties you could contract for this event. Nothing here commits us to anything — it is research until Phase 2 picks it up."
-        />
+        hasQuotations ? (
+          <EmptyState
+            title="No property has a quotation yet"
+            description="Open a property and add the quotation it sent in its Quotations section — then it shows here and on the map."
+          />
+        ) : (
+          <EmptyState
+            title="Nothing on this list yet"
+            description="Add properties you could contract for this event. Nothing here commits us to anything — it is research until Phase 2 picks it up."
+          />
+        )
       ) : view === "map" ? (
         <>
           <ScoutingMap

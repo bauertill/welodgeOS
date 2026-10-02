@@ -12,11 +12,7 @@ import {
   Th,
 } from "~/app/_components/ui";
 import { formatDate, formatRooms } from "~/lib/format";
-import {
-  REMINDER_WINDOW_DAYS,
-  URGENCY_WINDOW_DAYS,
-  type Severity,
-} from "~/lib/position";
+import { LOOKAHEAD_DAYS, REMINDER_WINDOW_DAYS, severityHints, type Severity } from "~/lib/position";
 import { api } from "~/trpc/react";
 
 /**
@@ -28,25 +24,24 @@ import { api } from "~/trpc/react";
  * supplier believes, so a human decides to extend, convert or let it go.
  */
 const kindLabels = {
-  option: "Our option with the supplier",
-  block: "The client's block",
-  due: "The client's due date",
+  option: "Our option deadline",
+  block: "The client's deadline",
+  due: "Payment due (recorded earlier)",
 } as const;
 
-const urgencyCopy = {
-  expired: "Already gone by",
-  urgent: "Now",
-  upcoming: "Soon",
-  none: "Later",
+const windowCopy = {
+  passed: "Already passed",
+  week: "This week",
+  month: "This month",
 } as const;
 
 export function DeadlineDashboard({ eventId }: { eventId: string }) {
   const deadlines = api.reporting.deadlines.useQuery({ eventId });
   const rows = deadlines.data ?? [];
 
-  const expired = rows.filter((row) => row.urgency === "expired");
-  const urgent = rows.filter((row) => row.urgency === "urgent");
-  const upcoming = rows.filter((row) => row.urgency === "upcoming");
+  const passed = rows.filter((row) => row.window === "passed");
+  const week = rows.filter((row) => row.window === "week");
+  const month = rows.filter((row) => row.window === "month");
 
   if (deadlines.isLoading) {
     return (
@@ -59,8 +54,8 @@ export function DeadlineDashboard({ eventId }: { eventId: string }) {
   if (rows.length === 0) {
     return (
       <EmptyState
-        title="Nothing runs out soon"
-        description={`No option, block or due date on this event falls inside the next ${REMINDER_WINDOW_DAYS} days.`}
+        title="No deadlines this month"
+        description={`No option deadline or client deadline on this event falls inside the next ${LOOKAHEAD_DAYS} days, and none has passed.`}
       />
     );
   }
@@ -69,26 +64,18 @@ export function DeadlineDashboard({ eventId }: { eventId: string }) {
     <div className="space-y-8">
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
-          label="Already gone by"
-          value={expired.length}
+          label="Already passed"
+          value={passed.length}
           hint="Nothing was released automatically — someone has to decide"
         />
-        <StatCard
-          label="Within 48 hours"
-          value={urgent.length}
-          hint={`Inside the ${URGENCY_WINDOW_DAYS}-day urgency window`}
-        />
-        <StatCard
-          label="This week"
-          value={upcoming.length}
-          hint={`Inside the ${REMINDER_WINDOW_DAYS}-day reminder window`}
-        />
+        <StatCard label="This week" value={week.length} hint={`In the next ${REMINDER_WINDOW_DAYS} days`} />
+        <StatCard label="This month" value={month.length} hint={`In the next ${LOOKAHEAD_DAYS} days, after this week`} />
       </div>
 
       <div>
         <SectionHeading
-          title="What runs out"
-          hint="Soonest first. An expiry that has passed stays here until somebody extends it, converts it or lets it go."
+          title="Deadlines"
+          hint="Soonest first. A deadline that has passed stays here until somebody extends it, converts it or lets it go."
         />
         <Table>
           <thead>
@@ -110,7 +97,7 @@ export function DeadlineDashboard({ eventId }: { eventId: string }) {
                     {formatDate(row.date)}
                   </span>
                   <span className="text-ink-500 block text-xs font-light">
-                    {urgencyCopy[row.urgency]}
+                    {windowCopy[row.window]}
                     {row.daysAway === 0
                       ? " · today"
                       : row.daysAway > 0
@@ -152,11 +139,25 @@ export function DeadlineDashboard({ eventId }: { eventId: string }) {
       </div>
 
       <Card>
+        <p className="text-ink-900 font-medium">What the levels mean</p>
+        <dl className="mt-2 space-y-1.5 text-sm font-light">
+          {([1, 2, 3, 4] as const).map((level) => (
+            <div key={level} className="flex items-start gap-3">
+              <dt className="w-20 shrink-0">
+                <SeverityBadge severity={level} />
+              </dt>
+              <dd className="text-ink-700">{severityHints[level].replace(/^[A-Za-z]+ — /, "")}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+
+      <Card>
         <p className="text-ink-900 font-medium">
           Why nothing here happens by itself
         </p>
         <p className="text-ink-500 mt-1 text-sm font-light">
-          An option or block that has run out is flagged, never released. We do
+          An option deadline or a client's deadline that has passed is flagged, never released. We do
           not know what the supplier or the client believes, so the system keeps
           it in front of you until a person extends it, converts it or lets it
           go.

@@ -6,7 +6,7 @@ build next and what to fix in what already exists. Update it as things get
 done or the plan changes. It is not meant to be exhaustive of every polish
 item, only what someone would need to know to decide what to work on next.
 
-Last reviewed: 2026-09-30.
+Last reviewed: 2026-10-01.
 
 ---
 
@@ -16,8 +16,8 @@ Last reviewed: 2026-09-30.
 `welodge-os.vercel.app` from 2026-09-06 until then. Hosted on Vercel under the
 We Lodge team (`we-lodge`) — a Vercel account of its own, separate from any
 other work, so We Lodge owns the project and is billed for it directly. The
-database is Neon Postgres — moving on 2026-09-30 into a Neon database the
-We Lodge team owns; see the item on the move below.
+database is Neon Postgres, `welodge-production`, owned by the We Lodge team
+since 2026-10-01; see the item on the move below.
 
 - [x] **Pick a host.** Vercel, We Lodge team. The GitHub repo is connected, so
       every push to `master` deploys to the live site automatically (and, since
@@ -70,69 +70,58 @@ We Lodge team owns; see the item on the move below.
       against a throwaway Postgres, so it also proves the migrations apply to
       an empty database. `master` is protected on GitHub: nothing merges into
       it unless that check passes.
-- [ ] **Staging at https://staging.welodge.net** — started 2026-09-30. The
-      steps listed further down were done by hand on 2026-09-30, except that
-      the database became a branch of the new live database (next item)
-      rather than a branch of the old one. The
-      route is `staging` branch → staging.welodge.net → merge into `master` →
-      os.welodge.net (`product-scope.md` §2.5). Done so far:
+- [x] **Staging at https://staging.welodge.net** — working since
+      2026-10-01. The route is `staging` branch → staging.welodge.net → pull
+      request into `master` → os.welodge.net (`product-scope.md` §2.5). What
+      was set up, in case any of it has to be repeated or undone:
   - A Vercel **custom environment** called *Staging* (the team is on Pro),
-    which follows the `staging` branch. It is not the same as Vercel's
-    *Preview*: Preview variables do not reach it, every setting it needs is
-    set on it by name.
-  - `staging.welodge.net` added to the project and assigned to Staging.
-    Vercel's own login wall does not apply to it, because the project's
-    Deployment Protection already exempts custom domains; the Google sign-in
-    is the door, as on the live site.
-
-  Still to do, in this order (each needs a login only Till has):
-  1. **Copy the live database (Neon).** Vercel → We Lodge → Storage → the
-     Neon database → *Open in Neon* → Branches → *Create branch*, named
-     `staging`, from `main`, with current data. Copy its **pooled**
-     connection string.
-  2. **Set Staging's settings (Vercel).** Project → Settings → Environment
-     Variables, environment **Staging**:
-     - `DATABASE_URL` = the staging connection string from step 1 — never the
-       live one.
-     - `AUTH_SECRET` = a fresh value (`npx auth secret`), not production's.
-     - `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`,
-       `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`: open each existing entry, *Edit*, and
-       tick Staging as well. The Google ones are stored as sensitive, so they
-       cannot be read back and retyped — extending the existing entry is the
-       way.
-  3. **DNS (Cloudflare).** On `welodge.net`: a `CNAME` named `staging`,
-     target `9940483e22583f55.vercel-dns-017.com`, **proxy off — DNS only**,
-     for the same reasons as `os` above.
-  4. **Google Cloud.** Add
-     `https://staging.welodge.net/api/auth/callback/google` to the OAuth
-     client's authorized redirect URIs, and `staging.welodge.net/*` to the
-     Maps browser key's website restrictions.
-  5. **Redeploy staging** (Vercel → Deployments → the latest `staging` one →
-     *Redeploy*, or any push to `staging`) and sign in on
-     staging.welodge.net. Until steps 1–2 are done, a staging build fails at
-     the migration step for want of a database — harmlessly: nothing is
-     deployed, and the live site is untouched.
-- [ ] **The live data moves into the We Lodge team's own database** — copied
-      2026-09-30, switch still to do. The live database turned out not to
-      belong to the We Lodge Vercel team at all: it was Neon project
-      `winter-band-39306927`, in US East, in an account none of us could name,
-      connected only by a pasted connection string. Now:
-  - `welodge-production`, a Neon database created in the We Lodge Vercel team
-    (Frankfurt), connected to the project under the prefix `WELODGE_PROD_` so
-    that connecting it switched nothing.
-  - Staging is not a second database but a **branch** of that one, called
-    `staging`: *Reset from parent* in Neon refreshes it from the live data in
-    seconds. Its address is Staging's `DATABASE_URL`.
-  - The live data was copied with `scripts/copy-database.sh`, which refuses a
-    target that already has tables, restores in one transaction, and compares
-    every table's row count afterwards. All 35 tables matched.
-  - **Still to do:** set the live site's `DATABASE_URL` (Production) to
-    `welodge-production`'s pooled address and redeploy; then delete the
-    leftover `POSTGRES_*`, `PG*` and `NEON_*` settings that point at the old
-    database, and, after a week without needing it, the old database itself.
-    Until the switch, the live site still writes to the old database —
-    anything entered there after the copy is not in the new one.
-- [ ] **Nightly staging reset** — written 2026-10-01, not running yet.
+    which follows the `staging` branch. It is not Vercel's *Preview*:
+    Preview settings do not reach it, so every setting it needs is set on it
+    by name — its own `DATABASE_URL` and `AUTH_SECRET`, and the production
+    entries of `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` and the two
+    `NEXT_PUBLIC_GOOGLE_MAPS_…` keys extended to include it.
+  - `staging.welodge.net`, assigned to Staging on Vercel's Domains screen; a
+    `CNAME` at Cloudflare, name `staging`, target
+    `9940483e22583f55.vercel-dns-017.com`, proxy off, as for `os`.
+  - `https://staging.welodge.net/api/auth/callback/google` on the OAuth
+    client's redirect URIs.
+  - **Vercel Authentication is off for the whole project** (Settings →
+    Deployment Protection), decided 2026-10-01. With it on, Vercel put its
+    own login in front of staging — it only ever exempts the live site's
+    addresses — so every tester would have needed a paid seat on the Vercel
+    team. Every page already demands a `@welodge.net` Google sign-in, the
+    client map links are public by design on the live site too, and other
+    branch deploys have no database or secrets to show. It follows that a
+    deploy's own `….vercel.app` address is reachable by anyone who has it;
+    what they reach is the same sign-in page.
+  - Not yet confirmed: that `staging.welodge.net/*` is on the Maps browser
+    key's website restrictions. Without it the map on staging shows its
+    "no key" notice.
+- [x] **The live data lives in a database We Lodge owns** — since
+      2026-10-01. The original live database turned out not to belong to the
+      We Lodge Vercel team at all: it was Neon project `winter-band-39306927`,
+      in US East, in an account none of us could name, connected only by a
+      pasted connection string. Now:
+  - `welodge-production`, Neon project `empty-silence-69345743`, created
+    from the We Lodge Vercel team's Storage screen, in Frankfurt. Its `main`
+    branch is the live database; the live site's `DATABASE_URL`
+    (Production) is its pooled address.
+  - Staging is not a second database but a **branch** of it, called
+    `staging`, reset from `main` every night (next item).
+  - The data was copied on 2026-09-30 with `scripts/copy-database.sh`, which
+    refuses a target that already has tables, restores in one transaction
+    and compares every table's row count afterwards. All 35 tables matched.
+  - The password of `neondb_owner` was reset on both branches on
+    2026-10-01, after an earlier one had been pasted into a chat. Passwords
+    in Neon are per branch, and a reset from parent leaves staging's alone
+    (confirmed on the first reset).
+  - **Still to do:** delete the leftover `POSTGRES_*`, `PG*`, `NEON_*` and
+    `WELODGE_PROD_*` settings on Vercel — the first three point at the old
+    database, the last carries a password that no longer works, and the app
+    reads none of them. After a week without needing it, delete the old
+    database itself, from whichever Neon account it turns out to live in.
+- [x] **Nightly staging reset** — scheduled from 2026-10-01; first nightly
+      run 2026-10-02 00:00 UTC.
       `scripts/reset-staging.sh` resets the `staging` branch from the live
       data and re-applies staging's pending migrations; it refuses to run
       unless `staging` branches directly from the main branch.
@@ -146,6 +135,9 @@ We Lodge team owns; see the item on the move below.
      `DATABASE_URL` on Vercel); variable `NEON_PROJECT_ID`, which is `empty-silence-69345743`
      (`welodge-production`'s project ID; not a secret).
   3. Merge into `master` — GitHub only runs schedules from there.
+
+  All three were done on 2026-10-01. The API key is scoped to this one Neon
+  project and can touch nothing else.
 
   By hand: put `NEON_API_KEY` and `NEON_PROJECT_ID` in `.env` and run
   `./scripts/reset-staging.sh` from a checkout of `staging`. Without
@@ -248,6 +240,19 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       an upgrade request only for public apps.
       *2026-09-30:* Brandon has a key and it works locally; it still has to be
       added to the Vercel project (someone with Vercel access — Till).
+- [ ] **Google Places, to find hotels near a venue automatically**
+      (`product-scope.md` §3.10, the Properties overhaul). The plan: enter an
+      event's venue and get the hotels around it as a list and on the map,
+      ready to add to the event's Properties. Needs **Places API (New)**
+      switched on in the Google Cloud project that already holds the Maps and
+      Routes key, and a budget alert like the Routes one — Till. Brandon asked
+      (2026-10-01) for this not to be forgotten; it is the next part of the
+      overhaul once the API is on.
+      *2026-10-02:* the property form's address box already searches Google
+      Maps through it (§3.1) — it needs Places API (New) **enabled in the
+      project and added to the allowed APIs of `GOOGLE_MAPS_SERVER_KEY`**
+      (today Google answers `API_KEY_SERVICE_BLOCKED`). The same switch serves
+      the nearby-hotels search.
 
 ## 3. Phase 3 — Operations
 

@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Manager } from "~/app/_components/client-list";
+import { contractHref, newContractHref } from "~/lib/finance";
+import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Card, EmptyState } from "~/app/_components/ui";
@@ -609,10 +611,109 @@ function ContractingLink({ request }: { request: FullRequest }) {
   );
 }
 
+/**
+ * Marking a request Signed needs the client's contract registered against it
+ * (doc §4.11). With one already there, it is marked at once. Otherwise this
+ * asks for it: one of the client's contracts for the event not yet tied to a
+ * request, or a new one — registering it marks the request signed.
+ */
+function useSign(request: FullRequest, onSigned: () => void) {
+  const [asking, setAsking] = useState(false);
+  const utils = api.useUtils();
+  const linked = api.finance.contracts.useQuery({ salesRequestId: request.id });
+  const setStage = api.sales.setStage.useMutation({
+    onSuccess: () => {
+      // A contract may have been tied to the request on the way.
+      void utils.finance.invalidate();
+      setAsking(false);
+      onSigned();
+    },
+  });
+  const start = () => {
+    setStage.reset();
+    if ((linked.data ?? []).some((contract) => contract.party === "CLIENT")) setStage.mutate({ id: request.id, stage: "SIGNED" });
+    else setAsking(true);
+  };
+  const panel = asking ? (
+    <SignNeedsContract
+      request={request}
+      pending={setStage.isPending}
+      error={setStage.error ? friendlyError(setStage.error) : null}
+      onUse={(contractId) => setStage.mutate({ id: request.id, stage: "SIGNED", contractId })}
+      onCancel={() => setAsking(false)}
+    />
+  ) : setStage.error ? (
+    <FormError message={friendlyError(setStage.error)} />
+  ) : null;
+  return { start, panel };
+}
+
+function SignNeedsContract({
+  request,
+  pending,
+  error,
+  onUse,
+  onCancel,
+}: {
+  request: FullRequest;
+  pending: boolean;
+  error: string | null;
+  onUse: (contractId: string) => void;
+  onCancel: () => void;
+}) {
+  const contracts = api.finance.contracts.useQuery({ eventId: request.event?.id, party: "CLIENT" }, { enabled: Boolean(request.event) });
+  const free = (contracts.data ?? []).filter((contract) => contract.clientId === request.client.id && !contract.salesRequestId);
+  return (
+    <div className="border-brand-200 bg-brand-50/60 mt-3 rounded-lg border p-3 text-[13px] font-light">
+      <p className="text-ink-900 font-medium">To mark it signed, register the client&apos;s contract</p>
+      {!request.event ? (
+        <p className="text-ink-700 mt-1">Choose the event under Details first — a contract is for an event.</p>
+      ) : (
+        <>
+          <p className="text-ink-700 mt-1">
+            A signed request needs {request.client.name}&apos;s contract for {request.event.name}, so its payments and cancellation
+            terms are followed.
+          </p>
+          {free.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              <p className="text-ink-500 text-xs">Already registered for {request.event.name}, not tied to a request:</p>
+              {free.map((contract) => (
+                <button
+                  key={contract.id}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => onUse(contract.id)}
+                  className="border-ink-200 hover:border-brand-400 flex w-full items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 text-left"
+                >
+                  <span className="text-ink-900">{contract.name}</span>
+                  <span className="text-brand-700 text-xs font-medium whitespace-nowrap">Sign under this one</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <Link
+              href={newContractHref(request.event.id, `?request=${request.id}&sign=1`)}
+              className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] text-white"
+            >
+              Register the contract
+            </Link>
+            <button type="button" onClick={onCancel} className="text-ink-500 text-xs hover:underline">
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+      {error && <div className="mt-2"><FormError message={error} /></div>}
+    </div>
+  );
+}
+
 /** The stage, as buttons: open stages in order, then the ways it can close. */
 function StagePicker({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const setStage = api.sales.setStage.useMutation({ onSuccess: saved });
+  const sign = useSign(request, saved);
   const button = (stage: SalesRequestStage) => {
     const current = request.stage === stage;
     return (
@@ -621,7 +722,7 @@ function StagePicker({ request }: { request: FullRequest }) {
         type="button"
         title={salesStageHints[stage]}
         disabled={setStage.isPending}
-        onClick={() => !current && setStage.mutate({ id: request.id, stage })}
+        onClick={() => !current && (stage === "SIGNED" ? sign.start() : setStage.mutate({ id: request.id, stage }))}
         aria-pressed={current}
         className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
           current ? `${salesStageStyles[stage]} border-transparent font-medium` : "border-ink-200 text-ink-500 hover:text-ink-900 bg-white font-light"
@@ -640,6 +741,7 @@ function StagePicker({ request }: { request: FullRequest }) {
         {closedStages.map(button)}
       </div>
       <p className="text-ink-500 mt-2 text-xs font-light">{salesStageHints[request.stage]}</p>
+      {sign.panel}
       {setStage.error && <FormError message={friendlyError(setStage.error)} />}
     </Card>
   );
@@ -737,7 +839,7 @@ function DetailsCard({ request }: { request: FullRequest }) {
         <Row label="Account manager" value={request.owner ? <Manager person={request.owner} /> : null} />
         <Row label="Registered" value={formatDate(request.createdAt)} />
         <Row label="Proposal sent on" value={request.proposalSentOn ? formatDate(request.proposalSentOn) : null} />
-        <Row label="Blocked until" value={request.blockedUntil ? formatDate(request.blockedUntil) : null} />
+        <Row label="Deadline" value={request.blockedUntil ? formatDate(request.blockedUntil) : null} />
         <Row label="Value" value={request.valueCents !== null && request.valueCurrency ? formatMoney(request.valueCents, request.valueCurrency) : null} />
         {request.closedOn && <Row label="Closed on" value={formatDate(request.closedOn)} />}
         <Row label="Days open" value={String(daysOpen(request))} />
@@ -838,7 +940,7 @@ function DetailsEditor({
         <Field label="Proposal sent on">
           <Input type="date" value={values.proposalSentOn} onChange={(e) => set("proposalSentOn")(e.target.value)} />
         </Field>
-        <Field label="Blocked until">
+        <Field label="Deadline">
           <Input type="date" value={values.blockedUntil} onChange={(e) => set("blockedUntil")(e.target.value)} />
         </Field>
       </div>
@@ -879,6 +981,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
         <div className="space-y-5">
           <FollowUpCard request={request} />
+          <ContractCard request={request} />
           <DetailsCard request={request} />
         </div>
       </div>
@@ -1022,14 +1125,16 @@ function RoomsCard({ request }: { request: FullRequest }) {
 function Done({ done, request, onClose }: { done: { text: string; offer: SalesRequestStage | null }; request: FullRequest; onClose: () => void }) {
   const saved = useSaved();
   const setStage = api.sales.setStage.useMutation({ onSuccess: () => { saved(); onClose(); } });
+  const sign = useSign(request, () => { saved(); onClose(); });
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-[#e3f8ee] px-3 py-2 text-[13px] text-[#0a7a47]">
+    <div className="mb-3">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg bg-[#e3f8ee] px-3 py-2 text-[13px] text-[#0a7a47]">
       <span>{done.text}</span>
       {done.offer && (
         <button
           type="button"
           disabled={setStage.isPending}
-          onClick={() => setStage.mutate({ id: request.id, stage: done.offer! })}
+          onClick={() => (done.offer === "SIGNED" ? sign.start() : setStage.mutate({ id: request.id, stage: done.offer! }))}
           className="font-medium hover:underline"
         >
           Mark the request {salesStageLabels[done.offer]}
@@ -1038,6 +1143,9 @@ function Done({ done, request, onClose }: { done: { text: string; offer: SalesRe
       <button type="button" onClick={onClose} className="ml-auto text-xs font-light hover:underline">
         Close
       </button>
+    </div>
+    {sign.panel}
+    {setStage.error && <FormError message={friendlyError(setStage.error)} />}
     </div>
   );
 }
@@ -1066,7 +1174,7 @@ function RoomRowView({
         </td>
         <td className={td}>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${roomStateStyles[row.state]}`}>{roomStateLabels[row.state]}</span>
-          {row.blockExpiry && <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">until {formatDate(row.blockExpiry)}</span>}
+          {row.blockExpiry && <span className="text-ink-500 mt-1 block text-xs whitespace-nowrap">deadline {formatDate(row.blockExpiry)}</span>}
         </td>
         <td className={`${td} whitespace-nowrap`}>
           {row.rooms}
@@ -1138,6 +1246,7 @@ function ChangeRooms({
     },
   });
   const needsPrice = action === "SELL" || action === "BLOCK";
+  const [contractId, setContractId] = useState("");
   const needsDate = action === "BLOCK" || action === "EXTEND_BLOCK";
   const warning = {
     RELEASE_HOLD: `Releases the client's block on these ${row.nights} room-nights. They become free for anyone.`,
@@ -1161,6 +1270,7 @@ function ChangeRooms({
           return;
         }
         change.mutate({
+          ...(action === "SELL" && contractId && { salesContractId: contractId }),
           id: request.id,
           categoryId: row.categoryId,
           state: row.state as "REQUESTED" | "BLOCKED" | "SOLD",
@@ -1171,9 +1281,10 @@ function ChangeRooms({
       }}
     >
       {warning[action] && <p className="text-ink-700 w-full text-[13px] font-light">{warning[action]}</p>}
+      {action === "SELL" && <RequestContractPicker request={request} value={contractId} onChange={setContractId} />}
       {needsDate && (
         <div className="w-44">
-          <Field label={action === "EXTEND_BLOCK" ? "Block now runs to" : "Block runs to"}>
+          <Field label={action === "EXTEND_BLOCK" ? "New deadline" : "Deadline"}>
             <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} required />
           </Field>
         </div>
@@ -1253,7 +1364,22 @@ function AddRooms({
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [clientRef, setClientRef] = useState("");
+  const [contractId, setContractId] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  // A pre rate, the event rate, a post rate (doc §4.8) — in place of the one price.
+  const [periodsMode, setPeriodsMode] = useState(false);
+  const [periods, setPeriods] = useState<RatePeriod[]>([]);
+  useEffect(() => {
+    setPeriods((current) =>
+      current.length
+        ? current.map((period, i) => ({
+            ...period,
+            ...(i === 0 && { checkIn }),
+            ...(i === current.length - 1 && { checkOut }),
+          }))
+        : current,
+    );
+  }, [checkIn, checkOut]);
 
   const datesOk = /^\d{4}-\d{2}-\d{2}$/.test(checkIn) && /^\d{4}-\d{2}-\d{2}$/.test(checkOut) && checkOut > checkIn;
   const availability = api.sales.availability.useQuery(
@@ -1282,13 +1408,25 @@ function AddRooms({
         if (!categoryId) return setProblem("Choose the room category.");
         if (!Number.isInteger(wanted) || wanted < 1) return setProblem("Say how many rooms, like 6.");
         if (!datesOk) return setProblem("Give a check-in and a check-out after it.");
-        if (action === "BLOCK" && !blockExpiry) return setProblem("A block needs a date it runs to.");
-        if (action !== "REQUEST" && !price.trim()) {
+        if (action === "BLOCK" && !blockExpiry) return setProblem("Give the client's deadline — a block needs one.");
+        if (periodsMode) {
+          const wrong = periodProblem(periods, checkIn, checkOut);
+          if (wrong) return setProblem(wrong);
+        } else if (action !== "REQUEST" && !price.trim()) {
           return setProblem(`Give the price per night — rooms ${action === "BLOCK" ? "blocked" : "sold"} for a client need their agreed price.`);
         }
         const amount = price.trim() ? Number(price.replace(",", ".")) : null;
         if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return setProblem("The price should be a number, like 281.50.");
         add.mutate({
+          ...(action === "SELL" && contractId && { salesContractId: contractId }),
+          ...(periodsMode && {
+            periods: periods.map((period) => ({
+              checkIn: period.checkIn,
+              checkOut: period.checkOut,
+              priceCents: Math.round(Number(period.price.replace(",", ".")) * 100),
+              currency,
+            })),
+          }),
           id: request.id,
           categoryId,
           rooms: wanted,
@@ -1329,7 +1467,7 @@ function AddRooms({
           {availability.data.free} of {availability.data.total} rooms are free for every night of the stay
           {availability.data.free > 0 && ` — ${availability.data.freeBought} of them bought`}.
           {availability.data.alreadyTheirs > 0 && ` ${availability.data.alreadyTheirs} are already this client's on some of those nights.`}
-          {availability.data.notInInventory > 0 && ` ${availability.data.notInInventory} are not in inventory for all those dates.`}
+
           {free !== undefined && free >= wanted && availability.data.freeBought < wanted && action !== "REQUEST" && (
             <span className="block text-[#a15c00]">
               Fewer than {wanted} are bought: {action === "SELL" ? "selling" : "blocking"} them sells ahead of what we hold, and makes us short.
@@ -1359,28 +1497,52 @@ function AddRooms({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-6">
         {action === "BLOCK" && (
-          <Field label="Block runs to" className="sm:col-span-2">
+          <Field label="Deadline" className="sm:col-span-2">
             <Input type="date" value={blockExpiry} onChange={(e) => setBlockExpiry(e.target.value)} />
           </Field>
         )}
-        <Field label={action === "REQUEST" ? "Price per night, to the client" : "Price per night — required"} className="sm:col-span-2">
-          <div className="flex gap-2">
-            <div className="min-w-0 flex-1">
-              <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="350.00" aria-label="Price per night" />
-            </div>
-            <div className="w-24 shrink-0">
-              <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
-                {["USD", "EUR", "CHF", "GBP"].map((code) => (
-                  <option key={code}>{code}</option>
-                ))}
-              </Select>
-            </div>
+        {periodsMode ? (
+          <div className="sm:col-span-6">
+            <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">Price per night, by period</span>
+            <RatePeriods periods={periods} onChange={setPeriods} currency={currency} onCurrencyChange={setCurrency} />
           </div>
-        </Field>
+        ) : (
+          <Field label={action === "REQUEST" ? "Price per night, to the client" : "Price per night — required"} className="sm:col-span-2">
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="350.00" aria-label="Price per night" />
+              </div>
+              <div className="w-24 shrink-0">
+                <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
+                  {["USD", "EUR", "CHF", "GBP"].map((code) => (
+                    <option key={code}>{code}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </Field>
+        )}
         <Field label="Client reference" className="sm:col-span-2">
           <Input value={clientRef} onChange={(e) => setClientRef(e.target.value)} placeholder="Their order number" />
         </Field>
+        {action === "SELL" && (
+          <div className="sm:col-span-6">
+            <RequestContractPicker request={request} value={contractId} onChange={setContractId} />
+          </div>
+        )}
       </div>
+      {datesOk && (
+        <button
+          type="button"
+          onClick={() => {
+            if (!periodsMode) setPeriods(wholeStay(checkIn, checkOut, price));
+            setPeriodsMode(!periodsMode);
+          }}
+          className="text-brand-700 mt-2 text-xs font-medium hover:underline"
+        >
+          {periodsMode ? "One rate for the whole stay" : "Different rates for different dates — pre, event, post"}
+        </button>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={add.isPending}>
@@ -1416,6 +1578,96 @@ function LooseRooms({ request, count }: { request: FullRequest; count: number })
       </button>
       {tie.error && <span className="block text-xs text-[#c03654]">{friendlyError(tie.error)}</span>}
     </p>
+  );
+}
+
+/**
+ * Which client contract a sale from the request is made under (doc §7.1): this
+ * client's, for this event. Optional — a sale does not wait for it. Picked for
+ * you when there is just one; when there is none, it says where to add it.
+ */
+function RequestContractPicker({ request, value, onChange }: { request: FullRequest; value: string; onChange: (id: string) => void }) {
+  const contracts = api.finance.contracts.useQuery({ eventId: request.event?.id, party: "CLIENT" }, { enabled: Boolean(request.event) });
+  const options = (contracts.data ?? []).filter((contract) => contract.clientId === request.client.id);
+  useEffect(() => {
+    if (!value && options.length === 1) onChange(options[0]!.id);
+  }, [value, options, onChange]);
+  if (contracts.isSuccess && options.length === 0) {
+    return (
+      <p className="text-ink-500 w-full text-[13px] font-light">
+        {request.client.name} has no contract for {request.event?.name} yet — the rooms can be sold without one, and tied to it later.{" "}
+        <Link href={newContractHref(request.event?.id ?? "", `?request=${request.id}`)} className="text-brand-700 font-medium hover:underline">
+          Add the contract
+        </Link>
+      </p>
+    );
+  }
+  return (
+    <div className="w-72">
+      <Field label="Client contract">
+        <Select value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">None yet</option>
+          {options.map((contract) => (
+            <option key={contract.id} value={contract.id}>
+              {contract.name}
+              {contract.missing.length ? " — terms missing" : ""}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    </div>
+  );
+}
+
+/** The signed contract with the client for this request, with its terms (doc §7.1). */
+function ContractCard({ request }: { request: FullRequest }) {
+  const contracts = api.finance.contracts.useQuery({ salesRequestId: request.id });
+  const rows = contracts.data ?? [];
+  return (
+    <Card>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-ink-900 text-[15px] font-medium">Contract</h2>
+        {request.event && (
+          <Link href={newContractHref(request.event?.id ?? "", `?request=${request.id}`)} className="text-brand-700 text-[13px] font-light hover:underline">
+            + New contract
+          </Link>
+        )}
+      </div>
+      {rows.length === 0 && request.stage === "SIGNED" ? (
+        // Signed before a contract was required: said, so it gets registered.
+        <p className="text-sm font-light text-[#c03654]">
+          Marked signed, but no contract is registered.{" "}
+          {request.event ? (
+            <Link href={newContractHref(request.event.id, `?request=${request.id}`)} className="text-brand-700 font-medium hover:underline">
+              Register the client&apos;s contract
+            </Link>
+          ) : (
+            "Choose the event under Details, then register the client's contract."
+          )}
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">
+          {request.event
+            ? "None yet. Once the client signs, add the contract with its payment and cancellation terms."
+            : "Choose the event under Details first — a contract is for an event."}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((contract) => (
+            <li key={contract.id} className="text-sm">
+              <Link href={contractHref(contract.event.id, contract.id)} className="hover:text-brand-700 font-medium">
+                {contract.name}
+              </Link>
+              <span className={`block text-xs font-light ${contract.missing.length ? "text-[#c03654]" : "text-ink-500"}`}>
+                {contract.missing.length
+                  ? `Missing ${contract.missing.join(", ")}`
+                  : `${contract._count.payments} payments · ${contract.totalCents !== null && contract.currency ? formatMoney(contract.totalCents, contract.currency) : ""}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

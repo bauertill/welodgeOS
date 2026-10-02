@@ -31,6 +31,8 @@ export type NightRecord = {
   acquisitionOwner: string | null;
   acquisitionOwnerId: string | null;
   acquisitionNotes: string | null;
+  acquisitionContractId: string | null;
+  acquisitionContract: string | null;
 
   salesState: SalesState;
   clientId: string | null;
@@ -43,6 +45,8 @@ export type NightRecord = {
   salesOwner: string | null;
   salesOwnerId: string | null;
   salesNotes: string | null;
+  salesContractId: string | null;
+  salesContract: string | null;
 
   /** Clients with a soft request on this night (doc §4.3). */
   requestedBy: { id: string; name: string }[];

@@ -48,19 +48,23 @@ export const scoutingStatusOrder: SelectableScoutingStatus[] = [
   "REJECTED",
 ];
 
+/** Nothing started is left blank on screen, not named (owner, 2026-10-02). */
 export const categoryContractStatusLabels: Record<CategoryContractStatus, string> = {
+  NOT_STARTED: "",
   IN_NEGOTIATION: "In negotiation",
   IN_CONTRACTING: "In contracting",
   CONTRACTED: "Contracted",
 };
 
 export const categoryContractStatusHints: Record<CategoryContractStatus, string> = {
-  IN_NEGOTIATION: "Talking terms with the supplier. Not yet in Inventory.",
-  IN_CONTRACTING: "Terms agreed, paperwork in progress. Not yet in Inventory.",
-  CONTRACTED: "Signed. This is what becomes Inventory.",
+  NOT_STARTED: "Nothing started with the hotel on this room type yet.",
+  IN_NEGOTIATION: "Talking terms with the supplier.",
+  IN_CONTRACTING: "Terms agreed, paperwork in progress.",
+  CONTRACTED: "Signed with the hotel for this room type.",
 };
 
 export const categoryContractStatusOrder: CategoryContractStatus[] = [
+  "NOT_STARTED",
   "IN_NEGOTIATION",
   "IN_CONTRACTING",
   "CONTRACTED",

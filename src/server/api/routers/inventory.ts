@@ -7,6 +7,7 @@ import { formatDay, formatMoney } from "~/lib/format";
 import {
   acquisitionLabels,
   acquisitionTarget,
+  actionFields,
   actionLabels,
   allowedAcquisitionMoves,
   allowedSalesMoves,
@@ -18,7 +19,6 @@ import {
 } from "~/lib/inventory";
 import { positionOf } from "~/lib/position";
 import type { BlockNight } from "~/lib/stock-blocks";
-import { categoryContractStatusLabels } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
   axisOf,
@@ -75,6 +75,12 @@ const attributes = z.object({
    * nights already tied to a request stay tied to it.
    */
   salesRequestId: z.string().optional(),
+  /**
+   * The signed contracts the nights fall under (doc §7.1): with the supplier
+   * when buying, with the client when selling. Left out, nights keep theirs.
+   */
+  acquisitionContractId: z.string().optional(),
+  salesContractId: z.string().optional(),
 });
 
 /**
@@ -153,10 +159,12 @@ function collapse(problems: Problem[]): string[] {
 type EdgeNight = Omit<BlockNight, "severity">;
 
 /**
- * Adds the nights of an extension that are not in inventory yet (§5.4), as
- * "nothing started" — the same thing bringing rooms in does (§3.6), and under
- * the same rule: only a room type this event has contracted. Recorded as its
- * own ledger entry, so it can be undone like any other addition.
+ * Every room of a property on the event's list is on the stock sheet from the
+ * start (doc §3.6); a night only comes into being the first time something
+ * happens on it. This adds the nights a change touches that do not exist yet,
+ * as nothing started — the change then applies to them in the same step, and
+ * its ledger entry is the record. A night with nothing on it is the same as
+ * no night, so adding one is not recorded on its own.
  */
 async function addMissingNights(
   tx: Prisma.TransactionClient,
@@ -181,56 +189,61 @@ async function addMissingNights(
   );
   if (missing.length === 0) return 0;
 
-  // §3.6 — inventory only comes from a contracted room category.
-  for (const category of new Map(missing.map(({ slot }) => [slot.category.id, slot.category])).values()) {
-    const entry = await tx.scoutingEntry.findUnique({
-      where: { eventId_propertyId: { eventId: input.eventId, propertyId: category.propertyId } },
+  // Only the rooms of a property on this event's list (doc §3.6).
+  const propertyIds = [...new Set(missing.map(({ slot }) => slot.category.propertyId))];
+  const listed = await tx.scoutingEntry.findMany({
+    where: { eventId: input.eventId, propertyId: { in: propertyIds } },
+    select: { propertyId: true },
+  });
+  const onList = new Set(listed.map((entry) => entry.propertyId));
+  const off = missing.find(({ slot }) => !onList.has(slot.category.propertyId));
+  if (off) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Nothing was changed. ${off.slot.category.property.name} is not on this event's Properties list, so its rooms cannot be used for it.`,
     });
-    const contract = entry
-      ? await tx.categoryContract.findUnique({
-          where: { scoutingEntryId_categoryId: { scoutingEntryId: entry.id, categoryId: category.id } },
-        })
-      : null;
-    if (contract?.status !== "CONTRACTED") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Nothing was changed. ${category.property.name} — ${category.name} is not marked Contracted for this event, so its rooms cannot be extended into new nights. Mark it Contracted first.`,
-      });
-    }
   }
 
   await tx.roomNight.createMany({
     data: missing.map(({ slot, date }) => ({ slotId: slot.id, eventId: input.eventId, date })),
     skipDuplicates: true,
   });
-  const created = await tx.roomNight.findMany({
+  return missing.length;
+}
+
+/**
+ * The rooms on the stock sheet (doc §3.6): every room of every room category
+ * of the properties on the event's list — Rejected ones left out — numbered
+ * 1 to the category's count. A room's identity is kept as a slot, made here
+ * the first time it is needed and reused across events (doc §2.1).
+ */
+async function listedSlots(
+  db: Prisma.TransactionClient,
+  input: { eventId: string; propertyId?: string; categoryId?: string; minStars?: number },
+) {
+  const entries = await db.scoutingEntry.findMany({
     where: {
       eventId: input.eventId,
-      OR: missing.map(({ slot, date }) => ({ slotId: slot.id, date })),
+      status: { not: "REJECTED" },
+      propertyId: input.propertyId,
+      property: input.minStars ? { stars: { gte: input.minStars } } : undefined,
     },
+    select: { property: { select: { categories: { where: { id: input.categoryId, unitCount: { gt: 0 } }, select: { id: true, unitCount: true } } } } },
   });
-
-  const first = slots[0]!;
-  const numbers = slots.map((slot) => slot.slotNumber).sort((a, b) => a - b);
-  const dates = missing.map(({ date }) => date.getTime());
-  const from = new Date(Math.min(...dates));
-  const to = addDays(new Date(Math.max(...dates)), 1);
-  const roomsText =
-    numbers.length === 1 ? `#${numbers[0]}` : `${numbers.length} rooms (#${numbers[0]}–#${numbers.at(-1)})`;
-
-  await tx.ledgerEntry.create({
-    data: {
-      eventId: input.eventId,
-      actorId: input.actorId,
-      axis: "INVENTORY",
-      toState: "NONE",
-      nightCount: created.length,
-      summary: `Extended ${first.category.property.name} ${first.category.name} ${roomsText} into ${formatDay(from)} – ${formatDay(to)} (${created.length} room-nights added, nothing contracted).`,
-      beforeSnapshot: created.map((night) => snapshotNight(night, false)),
-      nights: { connect: created.map((night) => ({ id: night.id })) },
-    },
+  const categories = entries.flatMap((entry) => entry.property.categories);
+  if (categories.length === 0) return [];
+  await db.roomSlot.createMany({
+    data: categories.flatMap((category) =>
+      Array.from({ length: category.unitCount }, (_, i) => ({ categoryId: category.id, slotNumber: i + 1 })),
+    ),
+    skipDuplicates: true,
   });
-  return created.length;
+  const slots = await db.roomSlot.findMany({
+    where: { categoryId: { in: categories.map((category) => category.id) } },
+    include: { category: { include: { property: { select: { id: true, name: true, stars: true } } } } },
+  });
+  // A room beyond a lowered count is shown only while it has nights here.
+  return slots.filter((slot) => slot.slotNumber <= slot.category.unitCount);
 }
 
 /** What one change to inventory says: which nights, what to do, and with what (doc §4.8). */
@@ -241,11 +254,7 @@ export const changeInput = attributes.extend({
   checkOut: z.date(),
   action: z.enum(ACTIONS),
   reason: z.string().optional(),
-  /**
-   * Extend from the sheet (§5.4): nights in the selection that are not
-   * in inventory yet are added first, as "nothing started", then the
-   * change applies to all of them — one step, all or nothing.
-   */
+  /** No longer needed — nights a change touches are always added (doc §3.6). Accepted and ignored. */
   addMissing: z.boolean().optional(),
 });
 
@@ -281,15 +290,11 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         select: { slotId: true, date: true },
       });
 
-      // Extending: add whatever part of the selection is not in inventory yet.
+      // A room's nights come into being the first time something happens on
+      // them (doc §3.6): whatever part of the selection has none yet is added,
+      // as nothing started, and the change applies to all of it.
       let added = 0;
       if (present.length !== expected) {
-        if (!input.addMissing) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Nothing was changed. ${expected - present.length} of the ${expected} room-nights you selected are not in this event's inventory yet. Bring them in first.`,
-          });
-        }
         added = await addMissingNights(tx, {
           eventId,
           slotIds,
@@ -344,7 +349,7 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         // Invariant §4.5.4 — an option without a deadline is invalid.
         need(
           input.optionExpiry,
-          "An option needs a date it runs to. Without one it is invisible to every deadline report.",
+          "Give the option deadline. An option without one is invisible to every deadline report.",
         );
       }
       if (action === "BLOCK") {
@@ -353,14 +358,14 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         // a block with no expiry is inventory frozen for free.
         need(
           input.blockExpiry,
-          "A block needs a date it runs to. A block with no deadline is inventory frozen for free, and invisible to every deadline report.",
+          "Give the client's deadline. A block without one is inventory frozen for free, and invisible to every deadline report.",
         );
       }
       if (action === "SELL" || action === "REQUEST" || action === "WITHDRAW_REQUEST") {
         need(input.clientId, "Say which client this is for.");
       }
       if (action === "EXTEND_OPTION") need(input.optionExpiry, "Give the option's new date.");
-      if (action === "EXTEND_BLOCK") need(input.blockExpiry, "Give the block's new date.");
+      if (action === "EXTEND_BLOCK") need(input.blockExpiry, "Give the new deadline.");
       if (action === "REPRICE_BUY") {
         need(input.buyPriceCents, "Give the price we pay per night.");
         need(input.buyCurrency, "Say which currency that is in.");
@@ -402,11 +407,35 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           });
         }
       }
+      // The contract nights are bought or sold under (doc §7.1) is optional —
+      // since 2026-10-02 buying and selling no longer wait for it. When one is
+      // given it must be with this hotel or client, for this event.
+      if (input.acquisitionContractId) {
+        const contract = await tx.contract.findUnique({ where: { id: input.acquisitionContractId } });
+        const hotels = new Set(nights.map((night) => night.slot.category.property.id));
+        if (!contract || contract.party !== "SUPPLIER" || contract.eventId !== eventId || hotels.size !== 1 || !hotels.has(contract.propertyId ?? "")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Nothing was changed. That supplier contract is not with this hotel, for this event.",
+          });
+        }
+      }
+      if (input.salesContractId) {
+        const contract = await tx.contract.findUnique({ where: { id: input.salesContractId } });
+        const holder = input.clientId ?? (new Set(nights.map((night) => night.clientId)).size === 1 ? nights[0]?.clientId : null);
+        if (!contract || contract.party !== "CLIENT" || contract.eventId !== eventId || contract.clientId !== holder) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Nothing was changed. That client contract is not this client's, for this event.",
+          });
+        }
+      }
+
       if (action === "UPDATE_SUPPLIER_DETAILS" || action === "UPDATE_CLIENT_DETAILS") {
         const keys =
           action === "UPDATE_SUPPLIER_DETAILS"
-            ? (["supplierRef", "buyPriceCents", "acquisitionOwnerId", "acquisitionNotes"] as const)
-            : (["clientRef", "dueDate", "sellPriceCents", "salesOwnerId", "salesNotes"] as const);
+            ? (["supplierRef", "buyPriceCents", "acquisitionOwnerId", "acquisitionNotes", "acquisitionContractId"] as const)
+            : (["clientRef", "dueDate", "sellPriceCents", "salesOwnerId", "salesNotes", "salesContractId"] as const);
         if (keys.every((key) => input[key] === undefined)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Nothing to change — fill in what should change. Everything left empty stays as it is." });
         }
@@ -562,6 +591,7 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           if (action === "BLOCK" || action === "SELL") {
             const passed = nights.filter((night) => night.clientId !== input.clientId).map((night) => night.id);
             const reset = {
+              ...(input.salesContractId === undefined && { salesContractId: null }),
               ...(input.clientRef === undefined && { clientRef: null }),
               ...(input.dueDate === undefined && { dueDate: null }),
               ...(input.sellPriceCents === undefined && { sellPriceCents: null, sellCurrency: null }),
@@ -613,179 +643,45 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
       return { nights: ids.length, rooms: slotIds.length, added };
 }
 
+type Period = { checkIn: Date; checkOut: Date; priceCents: number; currency: string };
+
+/** Refuses periods that do not run from check-in to check-out, one after another. */
+export function checkPeriods(periods: Period[], checkIn: Date, checkOut: Date) {
+  const sorted = [...periods].sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+  const joined = sorted.every((period, i) => period.checkOut > period.checkIn && (i === 0 || period.checkIn.getTime() === sorted[i - 1]!.checkOut.getTime()));
+  if (!joined || sorted[0]!.checkIn.getTime() !== checkIn.getTime() || sorted.at(-1)!.checkOut.getTime() !== checkOut.getTime()) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Nothing was changed. The rate periods must run from check-in to check-out, each starting where the one before ends.",
+    });
+  }
+}
+
+/**
+ * Applies one change period by period, each with its own price per night — the
+ * buy price or the sell price, whichever the action sets — inside the caller's
+ * transaction, so it all holds or none of it does.
+ */
+export async function applyByPeriod(tx: Prisma.TransactionClient, actorId: string, change: ChangeInput, periods: Period[]) {
+  const buySide = actionFields[change.action].includes("buyPrice");
+  let nights = 0;
+  let added = 0;
+  for (const period of [...periods].sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime())) {
+    const outcome = await applyInventoryChange(tx, actorId, {
+      ...change,
+      checkIn: period.checkIn,
+      checkOut: period.checkOut,
+      ...(buySide
+        ? { buyPriceCents: period.priceCents, buyCurrency: period.currency }
+        : { sellPriceCents: period.priceCents, sellCurrency: period.currency }),
+    });
+    nights += outcome.nights;
+    added += outcome.added;
+  }
+  return { nights, rooms: change.slotIds.length, added };
+}
+
 export const inventoryRouter = createTRPCRouter({
-  /**
-   * §3.6 — the only bridge from Phase 1 to Phase 2. Materialises a category's
-   * slots over a date range at acquisition state `NONE`. **Nothing is
-   * contracted by this act**: it says "these rooms exist and belong to this
-   * event", not "we have them".
-   */
-  materialise: protectedProcedure
-    .input(
-      z.object({
-        eventId: z.string(),
-        categoryId: z.string(),
-        slotFrom: z.number().int().min(1),
-        slotTo: z.number().int().min(1),
-        checkIn: z.date(),
-        checkOut: z.date(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      if (input.slotTo < input.slotFrom) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "The last room number must not come before the first.",
-        });
-      }
-
-      // Invariant §4.5.7 — dates are closed-open.
-      const nights = eachNight(input.checkIn, input.checkOut);
-      if (nights.length === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "Check-out must be after check-in. A stay from 10-Jul to 11-Jul is one night; check-out day is never a night.",
-        });
-      }
-
-      const category = await ctx.db.roomCategory.findUnique({
-        where: { id: input.categoryId },
-        include: { property: { select: { id: true, name: true } } },
-      });
-      if (!category) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "No such category." });
-      }
-
-      // Invariant §4.5.3 — slot numbers may not exceed the category's count.
-      if (input.slotTo > category.unitCount) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `${category.property.name} has ${category.unitCount} ${category.unitCount === 1 ? "room" : "rooms"} of type "${category.name}", so room #${input.slotTo} does not exist. Raise the count on the property first if it should.`,
-        });
-      }
-
-      // §3.6 — inventory comes from a room category this event has
-      // contracted. The property's own status is not the gate any more —
-      // one hotel routinely has some categories signed and others still
-      // being negotiated (doc §3.5).
-      const entry = await ctx.db.scoutingEntry.findUnique({
-        where: {
-          eventId_propertyId: {
-            eventId: input.eventId,
-            propertyId: category.propertyId,
-          },
-        },
-      });
-      if (!entry) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `${category.property.name} is not on this event's scouting list.`,
-        });
-      }
-
-      const contract = await ctx.db.categoryContract.findUnique({
-        where: {
-          scoutingEntryId_categoryId: {
-            scoutingEntryId: entry.id,
-            categoryId: category.id,
-          },
-        },
-      });
-      if ((contract?.status ?? "IN_NEGOTIATION") !== "CONTRACTED") {
-        const label = categoryContractStatusLabels[
-          contract?.status ?? "IN_NEGOTIATION"
-        ].toLowerCase();
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `${category.property.name} — ${category.name} is marked "${label}" on this event's scouting list. Only a contracted room category becomes inventory — mark it Contracted first.`,
-        });
-      }
-
-      const slotNumbers = Array.from(
-        { length: input.slotTo - input.slotFrom + 1 },
-        (_, i) => input.slotFrom + i,
-      );
-
-      return ctx.db.$transaction(async (tx) => {
-        // Slots are a stable identity, reused across events (doc §2.1), so an
-        // existing one is kept rather than replaced.
-        const slots = await Promise.all(
-          slotNumbers.map((slotNumber) =>
-            tx.roomSlot.upsert({
-              where: {
-                categoryId_slotNumber: { categoryId: category.id, slotNumber },
-              },
-              update: {},
-              create: { categoryId: category.id, slotNumber },
-            }),
-          ),
-        );
-
-        // Recorded before creating anything, so undo can tell "this entry
-        // brought it into being" apart from "this was already here" — a
-        // re-materialised overlap must never let undo delete a night some
-        // earlier materialise owns.
-        const alreadyPresent = await tx.roomNight.findMany({
-          where: {
-            eventId: input.eventId,
-            slotId: { in: slots.map((slot) => slot.id) },
-            date: { gte: input.checkIn, lt: input.checkOut },
-          },
-          select: { slotId: true, date: true },
-        });
-        const alreadyPresentKeys = new Set(
-          alreadyPresent.map((night) => `${night.slotId}|${dayKey(night.date)}`),
-        );
-
-        // `skipDuplicates` leans on the `(slot, date)` uniqueness constraint
-        // (invariant §4.5.2): re-materialising an overlapping range adds the
-        // missing nights and leaves the existing ones — and their commercial
-        // position — untouched.
-        const created = await tx.roomNight.createMany({
-          data: slots.flatMap((slot) =>
-            nights.map((date) => ({
-              slotId: slot.id,
-              eventId: input.eventId,
-              date,
-            })),
-          ),
-          skipDuplicates: true,
-        });
-
-        const fresh = await tx.roomNight.findMany({
-          where: {
-            eventId: input.eventId,
-            slotId: { in: slots.map((slot) => slot.id) },
-            date: { gte: input.checkIn, lt: input.checkOut },
-          },
-        });
-        const newlyCreated = fresh.filter(
-          (night) => !alreadyPresentKeys.has(`${night.slotId}|${dayKey(night.date)}`),
-        );
-
-        await tx.ledgerEntry.create({
-          data: {
-            eventId: input.eventId,
-            actorId: ctx.session.user.id,
-            axis: "INVENTORY",
-            toState: "NONE",
-            nightCount: created.count,
-            summary: `Brought ${category.property.name} ${category.name} #${input.slotFrom}–#${input.slotTo} into inventory for ${formatDay(input.checkIn)} – ${formatDay(input.checkOut)} (${created.count} room-nights, nothing contracted).`,
-            beforeSnapshot: newlyCreated.map((night) => snapshotNight(night, false)),
-            nights: { connect: fresh.map((night) => ({ id: night.id })) },
-          },
-        });
-
-        return {
-          created: created.count,
-          alreadyThere: slots.length * nights.length - created.count,
-          slots: slots.length,
-          nights: nights.length,
-        };
-      });
-    }),
-
   /**
    * The properties, categories and slots this event has inventory in — what the
    * bulk-action picker offers as the rows of a rectangle.
@@ -916,43 +812,6 @@ export const inventoryRouter = createTRPCRouter({
       };
     }),
 
-  /**
-   * Room categories this event has contracted but not yet fully turned into
-   * inventory — grouped by property. Contracted is a per-category fact now,
-   * so a property can appear with only some of its categories listed
-   * (doc §3.5, §3.6).
-   */
-  materialisable: protectedProcedure
-    .input(z.object({ eventId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const contracts = await ctx.db.categoryContract.findMany({
-        where: { status: "CONTRACTED", scoutingEntry: { eventId: input.eventId } },
-        include: {
-          category: { select: { id: true, name: true, unitCount: true } },
-          scoutingEntry: {
-            select: { property: { select: { id: true, name: true } } },
-          },
-        },
-      });
-
-      const properties = new Map<
-        string,
-        { id: string; name: string; categories: { id: string; name: string; unitCount: number }[] }
-      >();
-      for (const contract of contracts) {
-        const property = contract.scoutingEntry.property;
-        const entry = properties.get(property.id) ?? {
-          id: property.id,
-          name: property.name,
-          categories: [],
-        };
-        entry.categories.push(contract.category);
-        properties.set(property.id, entry);
-      }
-
-      return [...properties.values()].sort((a, b) => a.name.localeCompare(b.name));
-    }),
-
   /** The audit trail: who changed what, when, and why (doc §4.7). */
   ledger: protectedProcedure
     .input(z.object({ eventId: z.string(), limit: z.number().min(1).max(200).default(50) }))
@@ -987,43 +846,32 @@ export const inventoryRouter = createTRPCRouter({
    * nights, atomically, refusing the whole operation and naming the nights that
    * would break an invariant.
    */
-  /** Extend rooms into nights they do not have yet, and nothing more (§5.4). */
-  addNights: protectedProcedure
+  applyChange: protectedProcedure
     .input(
-      z.object({
-        eventId: z.string(),
-        slotIds: z.array(z.string()).min(1, "Pick at least one room"),
-        checkIn: z.date(),
-        checkOut: z.date(),
+      changeInput.extend({
+        /**
+         * Different rates for different dates (doc §4.8): a pre rate, the event
+         * rate, a post rate. Together they run from check-in to check-out; each
+         * is applied with its own price per night.
+         */
+        periods: z
+          .array(z.object({ checkIn: z.date(), checkOut: z.date(), priceCents: z.number().int().min(0), currency: z.string().length(3) }))
+          .max(20)
+          .optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
-        const present = await tx.roomNight.findMany({
-          where: {
-            eventId: input.eventId,
-            slotId: { in: input.slotIds },
-            date: { gte: input.checkIn, lt: input.checkOut },
-          },
-          select: { slotId: true, date: true },
-        });
-        const added = await addMissingNights(tx, {
-          eventId: input.eventId,
-          slotIds: input.slotIds,
-          nights: eachNight(input.checkIn, input.checkOut),
-          present,
-          actorId: ctx.session.user.id,
-        });
-        return { added };
-      }),
-    ),
-
-  applyChange: protectedProcedure
-    .input(changeInput)
     .mutation(({ ctx, input }) =>
       // One transaction from start to finish, so a change that is refused
-      // leaves no half-added nights behind.
-      ctx.db.$transaction((tx) => applyInventoryChange(tx, ctx.session.user.id, input), { timeout: 30_000 }),
+      // leaves no half-added nights behind — however many periods it has.
+      ctx.db.$transaction(
+        async (tx) => {
+          const { periods, ...change } = input;
+          if (!periods?.length) return applyInventoryChange(tx, ctx.session.user.id, change);
+          checkPeriods(periods, change.checkIn, change.checkOut);
+          return applyByPeriod(tx, ctx.session.user.id, change, periods);
+        },
+        { timeout: 60_000 },
+      ),
     ),
 
   /**
@@ -1089,9 +937,12 @@ export const inventoryRouter = createTRPCRouter({
         orderBy: [{ slotId: "asc" }, { date: "asc" }],
       });
 
-      // Only the hotels, categories and rooms with a night that actually
-      // matches the filters above — "hide hotels with a status" falls out of
-      // the same filter rather than a second one.
+      // Every room of the properties on the event's list (doc §3.6), plus any
+      // other room with nights here. Filtered by client or state, only the
+      // rooms with a night that matches — "hide hotels with a status" falls
+      // out of the same filter rather than a second one.
+      const filtered = Boolean(input.clientId || input.acquisitionState || input.salesState);
+      const listed = filtered ? [] : await listedSlots(ctx.db, input);
       const properties = new Map<
         string,
         {
@@ -1104,13 +955,21 @@ export const inventoryRouter = createTRPCRouter({
               id: string;
               name: string;
               sortOrder: number;
-              slots: Map<string, { id: string; slotNumber: number }>;
+              slots: Map<string, { id: string; slotNumber: number; empty: boolean }>;
             }
           >;
         }
       >();
 
-      for (const night of nights) {
+      // A room is empty when nothing is on it anywhere in the window shown:
+      // no supplier or client state, and no client asking for it.
+      const active = new Set(
+        nights
+          .filter((night) => night.acquisitionState !== "NONE" || night.salesState !== "NONE" || night.requests.length > 0)
+          .map((night) => night.slotId),
+      );
+
+      for (const night of [...nights.map((night) => ({ slotId: night.slotId, slot: night.slot })), ...listed.map((slot) => ({ slotId: slot.id, slot }))]) {
         const propertyRow = night.slot.category.property;
         let property = properties.get(propertyRow.id);
         if (!property) {
@@ -1136,6 +995,7 @@ export const inventoryRouter = createTRPCRouter({
           category.slots.set(night.slotId, {
             id: night.slotId,
             slotNumber: night.slot.slotNumber,
+            empty: !active.has(night.slotId),
           });
         }
       }
@@ -1214,95 +1074,6 @@ export const inventoryRouter = createTRPCRouter({
           .sort((a, b) => a.name.localeCompare(b.name)),
         cells,
       };
-    }),
-
-  /**
-   * Undoes a mistaken `materialise` — the only way a room-night ever leaves
-   * inventory. Refused unless every night in the rectangle is still
-   * completely untouched (`NONE`/`NONE`): once anything real has happened,
-   * the right move is to release or cancel it properly, which keeps the
-   * record rather than erasing it.
-   */
-  remove: protectedProcedure
-    .input(
-      z.object({
-        eventId: z.string(),
-        slotIds: z.array(z.string()).min(1, "Pick at least one room"),
-        checkIn: z.date(),
-        checkOut: z.date(),
-        reason: z.string().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { eventId, slotIds, checkIn, checkOut, reason } = input;
-
-      const nightCount = nightsBetween(checkIn, checkOut);
-      if (nightCount === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "Check-out must be after check-in. A stay from 10-Jul to 11-Jul is one night; check-out day is never a night.",
-        });
-      }
-
-      const nights = await ctx.db.roomNight.findMany({
-        where: {
-          eventId,
-          slotId: { in: slotIds },
-          date: { gte: checkIn, lt: checkOut },
-        },
-        include: nightInclude,
-        orderBy: [{ slotId: "asc" }, { date: "asc" }],
-      });
-
-      const expected = slotIds.length * nightCount;
-      if (nights.length !== expected) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Nothing was removed. ${expected - nights.length} of the ${expected} room-nights you selected are not in this event's inventory.`,
-        });
-      }
-
-      const problems: Problem[] = [];
-      for (const night of nights) {
-        if (night.acquisitionState !== "NONE" || night.salesState !== "NONE") {
-          problems.push({
-            room: describeRoom(night),
-            date: night.date,
-            reason: `already ${acquisitionLabels[night.acquisitionState].toLowerCase()} / ${salesLabels[night.salesState].toLowerCase()} — release or cancel it instead of removing it.`,
-          });
-        }
-      }
-      if (problems.length) refuse(problems);
-
-      const ids = nights.map((night) => night.id);
-      const period = `${formatDay(checkIn)} – ${formatDay(checkOut)}`;
-      const rooms = `${slotIds.length} ${slotIds.length === 1 ? "room" : "rooms"}`;
-
-      await ctx.db.$transaction(async (tx) => {
-        // Written before the delete, so the ledger's own summary/nightCount
-        // stay readable as history even once the join to these nights is gone.
-        await tx.ledgerEntry.create({
-          data: {
-            eventId,
-            actorId: ctx.session.user.id,
-            axis: "INVENTORY",
-            fromState: "Nothing started",
-            toState: null,
-            nightCount: ids.length,
-            summary: `Removed from inventory — ${rooms} × ${nightCount} ${nightCount === 1 ? "night" : "nights"}, ${period}. Never contracted; brought in by mistake.`,
-            reason: reason?.trim() || null,
-            // Every one of these nights is NONE/NONE (checked above), so
-            // undoing a removal is just re-materialising them exactly as
-            // they were.
-            beforeSnapshot: nights.map((night) => snapshotNight(night)),
-            nights: { connect: ids.map((id) => ({ id })) },
-          },
-        });
-        await tx.roomNight.deleteMany({ where: { id: { in: ids } } });
-      });
-
-      return { removed: ids.length, rooms: slotIds.length };
     }),
 
   /**
@@ -1454,17 +1225,19 @@ function describeChanges(before: LoadedNight[], after: LoadedNight[]) {
   const date = (value: Date | null) => (value ? formatDay(value) : null);
   const fields: { label: string; read: (night: LoadedNight) => string | null }[] = [
     { label: "Supplier reference", read: (night) => night.supplierRef },
-    { label: "Option runs to", read: (night) => date(night.optionExpiry) },
+    { label: "Option deadline", read: (night) => date(night.optionExpiry) },
     { label: "Buy price", read: (night) => money(night.buyPriceCents, night.buyCurrency) },
     { label: "Supplier notes", read: (night) => note(night.acquisitionNotes) },
     { label: "Supplier-side rep", read: (night) => person(night.acquisitionOwner) },
+    { label: "Supplier contract", read: (night) => night.acquisitionContract?.name ?? null },
     { label: "Client", read: (night) => night.client?.name ?? null },
     { label: "Client reference", read: (night) => night.clientRef },
-    { label: "Block runs to", read: (night) => date(night.blockExpiry) },
-    { label: "Due date", read: (night) => date(night.dueDate) },
+    { label: "Deadline", read: (night) => date(night.blockExpiry) },
+    { label: "Payment due", read: (night) => date(night.dueDate) },
     { label: "Sell price", read: (night) => money(night.sellPriceCents, night.sellCurrency) },
     { label: "Client notes", read: (night) => note(night.salesNotes) },
     { label: "Client-side rep", read: (night) => person(night.salesOwner) },
+    { label: "Client contract", read: (night) => night.salesContract?.name ?? null },
   ];
   const was = new Map(before.map((night) => [night.id, night]));
   const counts = new Map<string, { order: number; line: string; count: number }>();
@@ -1509,6 +1282,7 @@ function buildUpdate(
         ...keepPrice(input.buyPriceCents, input.buyCurrency, "buyPriceCents", "buyCurrency"),
         acquisitionOwnerId: input.acquisitionOwnerId,
         acquisitionNotes: keepText(input.acquisitionNotes),
+        acquisitionContractId: input.acquisitionContractId,
       };
 
     case "UPDATE_SUPPLIER_DETAILS":
@@ -1517,6 +1291,7 @@ function buildUpdate(
         ...keepPrice(input.buyPriceCents, input.buyCurrency, "buyPriceCents", "buyCurrency"),
         acquisitionOwnerId: input.acquisitionOwnerId,
         acquisitionNotes: keepText(input.acquisitionNotes),
+        acquisitionContractId: input.acquisitionContractId,
       };
 
     case "UPDATE_CLIENT_DETAILS":
@@ -1526,6 +1301,7 @@ function buildUpdate(
         ...keepPrice(input.sellPriceCents, input.sellCurrency, "sellPriceCents", "sellCurrency"),
         salesOwnerId: input.salesOwnerId,
         salesNotes: keepText(input.salesNotes),
+        salesContractId: input.salesContractId,
       };
 
     case "ABANDON":
@@ -1533,6 +1309,7 @@ function buildUpdate(
       // details of it go with it. The ledger keeps what it was.
       return {
         acquisitionState: "NONE" as const,
+        acquisitionContractId: null,
         supplierRef: null,
         optionExpiry: null,
         buyPriceCents: null,
@@ -1565,6 +1342,7 @@ function buildUpdate(
         salesOwnerId: input.salesOwnerId,
         salesNotes: keepText(input.salesNotes),
         ...(input.salesRequestId !== undefined && { salesRequestId: input.salesRequestId }),
+        salesContractId: input.salesContractId,
       };
 
     case "RELEASE_HOLD":
@@ -1573,6 +1351,7 @@ function buildUpdate(
         salesState: "NONE" as const,
         clientId: null,
         salesRequestId: null,
+        salesContractId: null,
         clientRef: null,
         blockExpiry: null,
         dueDate: null,
