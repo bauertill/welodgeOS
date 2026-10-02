@@ -146,7 +146,8 @@ export const allowedAcquisitionMoves: Record<
   IN_PROGRESS: ["OPTION", "BOUGHT", "NONE"],
   OPTION: ["BOUGHT", "IN_PROGRESS", "NONE"],
   BOUGHT: ["RELEASED"],
-  RELEASED: ["IN_PROGRESS"],
+  // Bought again after being handed back — the owner's call, 2026-10-02.
+  RELEASED: ["IN_PROGRESS", "BOUGHT"],
 };
 
 export const allowedSalesMoves: Record<SalesState, SalesState[]> = {

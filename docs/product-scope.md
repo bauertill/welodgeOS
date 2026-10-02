@@ -943,7 +943,13 @@ stateDiagram-v2
     OPTION --> IN_PROGRESS: option lapsed, still talking
     OPTION --> NONE: option released
     BOUGHT --> RELEASED: returned to supplier
+    RELEASED --> IN_PROGRESS: talking again
+    RELEASED --> BOUGHT: bought back
 ```
+
+A released night can be **bought back** straight away — the hotel takes us back on — or
+returned to *In progress* if the talks start again (the owner's decision, 2026-10-02).
+Buying it back needs its price like any purchase, and the release stays in the ledger.
 
 | State | Meaning |
 | --- | --- |
