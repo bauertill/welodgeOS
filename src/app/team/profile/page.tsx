@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "~/app/_components/profile-form";
+import { MyWork } from "~/app/_components/tasks";
 import { PageHeader } from "~/app/_components/ui";
 import { auth } from "~/server/auth";
 
@@ -14,9 +15,12 @@ export default async function ProfilePage() {
     <>
       <PageHeader
         title="My profile"
-        subtitle="Your contact details, as your colleagues see them."
+        subtitle="Your work, and your contact details as your colleagues see them."
         back={{ href: "/team", label: "Team" }}
       />
+      <div className="border-ink-200/60 mb-8 rounded-xl border bg-white p-5">
+        <MyWork />
+      </div>
       <ProfileForm />
     </>
   );

@@ -15,6 +15,8 @@ import { SalesPanel } from "~/app/_components/sales-panel";
 export const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/events", label: "Events" },
+  // The team's shared task board (doc §2.8).
+  { href: "/tasks", label: "Tasks" },
 ] as const;
 
 /**

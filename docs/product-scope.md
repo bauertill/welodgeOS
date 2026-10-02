@@ -336,6 +336,49 @@ stored.
 
 ---
 
+### 2.8 Tasks — the team's shared board
+
+Like Feedback and the team pages, this sits outside the three phases: it is the work the
+team asks of each other. **Tasks** in the menu opens **one board that everyone sees**.
+
+**A task has:**
+
+| Field | Meaning |
+| --- | --- |
+| Task | What it is, in a line — *Get photos and a video of Hotel Carmel*. Required |
+| Details | Anything the person doing it needs to know |
+| To complete | The team member or members who do it. Can be left empty for now |
+| Requested by | Who asked for it — whoever adds it, unless someone else is chosen |
+| Deadline | Optional, a calendar day. Shown in red as *Overdue* once passed and not done |
+| Status | *Backlog* (noted for later), *To do*, *In progress*, *Done*. A new task is *To do* unless chosen otherwise |
+| Priority | High, Medium, Low, or none |
+| Type | Named by the team as they need them — *Get media*, a scouting task — from *+ New type…* on the form. There is no fixed list; **each type will get its own workflow** inside *In progress* later (the owner's plan, 2026-10-02), so for now a type is a label |
+| About | Optional: an event, a property, a client and a sales request — each a link. Choosing a sales request also fills in its client and event when they were left empty |
+| Comments | A running thread under the task, with `@Name` mentions as in Feedback (§2.6). The author can edit their own comment, which then says *Edited* |
+
+**Two views of the same board**, switched at the top and remembered in the browser:
+
+- **Kanban** — four columns, Backlog, To do, In progress and Done. Dragging a card to
+  another column moves the task there. A card shows the task, its priority, what it is
+  about, its type, its deadline, how many comments it has and who completes it. *Done*
+  shows what was finished in the last 30 days.
+- **List** — every task in a table: status, priority, type, who completes it, who asked,
+  deadline, soonest deadline first. It can also be filtered by status, and shows every
+  finished task.
+
+**Filters**, on both views: *My tasks* (the ones you complete), search, who completes it,
+who asked, priority, type, event and client.
+
+**A task's own page** has its status as buttons, its details, its comments, and its *Log* —
+every change, who made it and when, field by field. It can be edited or removed.
+
+**My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
+you asked of others, each with a link to the board.
+
+Not built yet: each type's own workflow; telling someone when a task is given to them or
+they are mentioned (there is no notification path yet, §2.5); tasks shown on the property,
+client and sales-request pages they are about.
+
 ## 3. Phase 1 — Scouting
 
 A scouting list is the long list of properties that *could* be contracted for an event.
@@ -2285,6 +2328,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
+| §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 Address search on Google Maps | **Built, needs a key change** | On the property form (new and edit). Waits on *Places API (New)* being enabled and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till) — today Google refuses, so the box is a plain one with a note |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |

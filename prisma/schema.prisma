@@ -80,6 +80,7 @@ model Event {
   propertyGroups  PropertyGroup[]
   salesRequests   SalesRequest[]
   contracts       Contract[]
+  tasks           Task[]
 
   @@index([startDate])
 }
@@ -154,18 +155,18 @@ model Property {
   // The rest of what the team records about a property (doc §3.9) — the same
   // on every event.
   /// The neighbourhood, e.g. "Santa Monica". City stays separate.
-  area           String?
-  yearBuilt      Int?
-  generalEmail   String?
-  videoUrl       String?
+  area            String?
+  yearBuilt       Int?
+  generalEmail    String?
+  videoUrl        String?
   /// The property's standard times, as written, e.g. "15:00".
-  checkInTime    String?
-  checkOutTime   String?
+  checkInTime     String?
+  checkOutTime    String?
   /// Free text, so "Included", "USD 25 pp" or "No" all fit.
-  breakfast      String?
-  cleaning       String?
-  laundry        String?
-  gym            String?
+  breakfast       String?
+  cleaning        String?
+  laundry         String?
+  gym             String?
   publicTransport String?
 
   // Contracting details (doc §3.9): the legal entity a contract is signed
@@ -196,6 +197,7 @@ model Property {
 
   scoutedBy   User?   @relation(fields: [scoutedById], references: [id], onDelete: SetNull)
   scoutedById String?
+  tasks       Task[]
 
   @@index([name])
   @@index([city])
@@ -243,9 +245,9 @@ model RoomCategory {
   /// This category's own supplier-contract status, per event (doc §3.5, §3.6).
   categoryContracts CategoryContract[]
 
-  @@index([propertyId])
-
   quotationLines QuotationLine[]
+
+  @@index([propertyId])
 }
 
 /// A controlled vocabulary, shared by both property types, so amenities stay a
@@ -269,10 +271,10 @@ model Amenity {
  * property with none of its own falls back on these.
  */
 model Provider {
-  id    String  @id @default(cuid())
-  name  String  @unique
+  id      String  @id @default(cuid())
+  name    String  @unique
   website String?
-  notes String?
+  notes   String?
 
   // Contracting details (doc §3.9): the legal entity a contract is signed
   // with. Visible to every colleague — accepted by the business for now.
@@ -341,7 +343,7 @@ model ScoutingEntry {
   /// The per-category contract status underneath this entry (doc §3.5, §3.6).
   categoryContracts CategoryContract[]
   /// The hotel's quotations for this event — several scenarios at once (doc §3.10).
-  quotations Quotation[]
+  quotations        Quotation[]
 
   /// The group the team has sorted this property into on this event (doc
   /// §3.9). Empty means "No group". Deleting a group leaves its entries here.
@@ -350,14 +352,14 @@ model ScoutingEntry {
 
   // Agreed for this event (doc §3.9) — never shared with another event's entry.
   /// The rep who owns this hotel on this event.
-  accountManager   User?   @relation("AccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
-  accountManagerId String?
+  accountManager      User?     @relation("AccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
+  accountManagerId    String?
   /// Contracting text, in the words that go to the lawyers.
-  applicablePeriod  String?
-  ratesInclude      String?
-  deposit           String?
-  cancellationTerms String?
-  paymentTerms      String?
+  applicablePeriod    String?
+  ratesInclude        String?
+  deposit             String?
+  cancellationTerms   String?
+  paymentTerms        String?
   /// When the hotel's hold on our rooms runs out — not a client's block (§4.2).
   blockExpiry         DateTime? @db.Date
   roomingListDeadline DateTime? @db.Date
@@ -372,7 +374,9 @@ model ScoutingEntry {
 /// Absent means `NOT_STARTED` (shown blank) — a row only exists once someone has said
 /// otherwise, so adding a property to a list never has to pre-create one of
 /// these per category (doc §3.5, §3.6).
-/** The colours a property group can have — a fixed palette, each legible on the page. */
+/**
+ * The colours a property group can have — a fixed palette, each legible on the page.
+ */
 enum GroupColour {
   PURPLE
   BLUE
@@ -479,13 +483,13 @@ model Quotation {
   scoutingEntry   ScoutingEntry @relation(fields: [scoutingEntryId], references: [id], onDelete: Cascade)
   scoutingEntryId String
 
-  receivedOn DateTime? @db.Date
+  receivedOn        DateTime?       @db.Date
   /// Until when the hotel holds the offer.
-  validUntil DateTime? @db.Date
+  validUntil        DateTime?       @db.Date
   /// How many rooms the quotation is for, as the hotel put it.
-  rooms      Int?
+  rooms             Int?
   /// Every line's rate is in this currency (§4.5).
-  currency   String
+  currency          String
   /// The terms offered, in the hotel's words — they become a contract's
   /// structured payments and cut-offs once accepted (§7.1).
   paymentTerms      String?
@@ -500,8 +504,8 @@ model Quotation {
   totBasisPoints    Int?
   otherTaxes        String?
   /// The quotation as received — a Google Drive link.
-  documentUrl String?
-  notes       String?
+  documentUrl       String?
+  notes             String?
 
   /// The supplier contract made from it, once accepted.
   contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
@@ -526,14 +530,14 @@ model QuotationLine {
   category   RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   categoryId String
   /// The period, as a stay: first night to check-out day.
-  checkIn    DateTime @db.Date
-  checkOut   DateTime @db.Date
+  checkIn    DateTime     @db.Date
+  checkOut   DateTime     @db.Date
   rooms      Int
   /// Minor units, in the quotation's currency.
   rateCents  Int
   /// People per room, where the quote says.
   occupancy  Int?
-  position   Int      @default(0)
+  position   Int          @default(0)
 
   @@index([quotationId])
 }
@@ -578,11 +582,11 @@ model Contract {
   /// "Group Sales Agreement — Courtyard Culver City"
   name  String
 
-  event   Event  @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  eventId String
+  event          Event         @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId        String
   /// The hotel, on a supplier contract.
-  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Restrict)
-  propertyId String?
+  property       Property?     @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  propertyId     String?
   /// The client, on a client contract — and, if it came from one, their sales request.
   client         Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   clientId       String?
@@ -590,16 +594,16 @@ model Contract {
   salesRequestId String?
 
   /// The signed PDF, as a Google Drive link for now (doc §7.1).
-  documentUrl String?
-  signedOn    DateTime? @db.Date
+  documentUrl         String?
+  signedOn            DateTime? @db.Date
   /// What the whole contract is worth; every payment's share is of this.
   /// Minor units, with an explicit currency (§4.5).
-  totalCents Int?
-  currency   String?
-  notes      String?
+  totalCents          Int?
+  currency            String?
+  notes               String?
   /// Said on purpose when the contract has no cancellation deadlines at all,
   /// so it stops being flagged as missing them.
-  noCancellationTerms Boolean @default(false)
+  noCancellationTerms Boolean   @default(false)
 
   owner   User?   @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   ownerId String?
@@ -621,21 +625,21 @@ model Contract {
 
 /// One payment a contract schedules — a share of its total, or a set amount.
 model ContractPayment {
-  id          String   @id @default(cuid())
-  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  contractId  String
+  id                 String        @id @default(cuid())
+  contract           Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractId         String
   /// "1st deposit", "Final payment + tax".
-  description String
-  dueOn       DateTime @db.Date
+  description        String
+  dueOn              DateTime      @db.Date
   /// A share of the contract's total, in hundredths of a percent: 20% is 2000.
   percentBasisPoints Int?
   /// A set amount instead, where the payment is not a plain share of the total.
-  amountCents Int?
-  status      PaymentStatus @default(TO_BE_PAID)
-  paidOn      DateTime?     @db.Date
-  invoiceUrl  String?
-  proofUrl    String?
-  beneficiary String?
+  amountCents        Int?
+  status             PaymentStatus @default(TO_BE_PAID)
+  paidOn             DateTime?     @db.Date
+  invoiceUrl         String?
+  proofUrl           String?
+  beneficiary        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -646,21 +650,21 @@ model ContractPayment {
 
 /// One cancellation deadline in a contract: by its cut-off, something may be given back.
 model ContractCancellation {
-  id         String           @id @default(cuid())
-  contract   Contract         @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  contractId String
-  kind       CancellationKind
-  cutoffOn   DateTime         @db.Date
+  id                 String           @id @default(cuid())
+  contract           Contract         @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contractId         String
+  kind               CancellationKind
+  cutoffOn           DateTime         @db.Date
   /// How much may go, as a share: 10% is 1000.
   percentBasisPoints Int?
   /// Or in words: "63 room-nights", "2 family rooms".
-  appliesTo  String?
-  roomType   String?
+  appliesTo          String?
+  roomType           String?
   /// What cancelling costs, as a share — "with a 30% cancellation fee".
-  feeBasisPoints Int?
-  remarks    String?
+  feeBasisPoints     Int?
+  remarks            String?
   /// When someone dealt with it. A cut-off is a reminder; nothing happens on its own (§2.4).
-  handledOn  DateTime?        @db.Date
+  handledOn          DateTime?        @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -710,7 +714,7 @@ model User {
   sessions      Session[]
 
   scoutedProperties Property[]
-  quotationsAdded   Quotation[] @relation("QuotationAddedBy")
+  quotationsAdded   Quotation[]     @relation("QuotationAddedBy")
   scoutingEntries   ScoutingEntry[] @relation("AddedBy")
 
   acquisitionNights RoomNight[]        @relation("AcquisitionOwner")
@@ -722,48 +726,58 @@ model User {
 
   // The team profile (doc §2.7). The sign-in email above is the contact
   // email: it is what Google vouches for, so it is shown, never edited.
-  jobTitle      String?
-  phones        UserPhone[]
+  jobTitle          String?
+  phones            UserPhone[]
   // Presence (doc §2.7). When the person last used the system — "Active" or
   // "Away" is judged from this on read, never stored — and the status they
   // set by hand, if any; empty means automatic. A status whose `statusUntil`
   // has passed is ignored on read rather than cleared: nothing changes on its
   // own.
-  lastSeenAt    DateTime?
-  status        UserStatus?
-  statusUntil   DateTime?
+  lastSeenAt        DateTime?
+  status            UserStatus?
+  statusUntil       DateTime?
   // A status in the person's own words, shown beside their name, with an
   // emoji and an optional time after which it no longer shows.
   customStatusEmoji String?
   customStatusText  String?
   customStatusUntil DateTime?
-  conversations ConversationMember[]
-  messages      Message[]
-  reactions     MessageReaction[]
-  customEmoji   CustomEmoji[]
-  accountManaged ScoutingEntry[] @relation("AccountManager")
-  clientsManaged  Client[]        @relation("ClientAccountManager")
-  contractsManaged Contract[]     @relation("ContractOwner")
-  salesRequests   SalesRequest[]  @relation("SalesRequestOwner")
-  contactsManaged ClientContact[] @relation("ContactAccountManager")
+  conversations     ConversationMember[]
+  messages          Message[]
+  reactions         MessageReaction[]
+  customEmoji       CustomEmoji[]
+  accountManaged    ScoutingEntry[]      @relation("AccountManager")
+  clientsManaged    Client[]             @relation("ClientAccountManager")
+  contractsManaged  Contract[]           @relation("ContractOwner")
+  salesRequests     SalesRequest[]       @relation("SalesRequestOwner")
+  contactsManaged   ClientContact[]      @relation("ContactAccountManager")
+  tasksAssigned     Task[]               @relation("TaskAssignees")
+  tasksRequested    Task[]               @relation("TaskRequestedBy")
+  tasksCreated      Task[]               @relation("TaskCreatedBy")
+  taskComments      TaskComment[]
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
 
-/** How a colleague can be reached on a number — one number is often both. */
+/**
+ * How a colleague can be reached on a number — one number is often both.
+ */
 enum PhoneKind {
   MOBILE
   WHATSAPP
   MOBILE_AND_WHATSAPP
 }
 
-/** A status a person sets by hand, overriding the automatic Active/Away. */
+/**
+ * A status a person sets by hand, overriding the automatic Active/Away.
+ */
 enum UserStatus {
   AWAY
   DO_NOT_DISTURB
 }
 
-/** A phone number on a colleague's profile; a person can have any number of them. */
+/**
+ * A phone number on a colleague's profile; a person can have any number of them.
+ */
 model UserPhone {
   id       String    @id @default(cuid())
   number   String
@@ -793,7 +807,9 @@ model Conversation {
   messages Message[]
 }
 
-/** Who is in a conversation, and how far they have read. */
+/**
+ * Who is in a conversation, and how far they have read.
+ */
 model ConversationMember {
   joinedAt   DateTime  @default(now())
   // Everything posted after this, by someone else, is unread for this member.
@@ -814,10 +830,10 @@ model ConversationMember {
  * earlier wording is kept in `MessageRevision` — but nobody can delete it.
  */
 model Message {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   /// Empty for a message that is only a GIF.
   body      String
-  createdAt DateTime @default(now())
+  createdAt DateTime          @default(now())
   // Set when the author last changed the text (doc §2.7).
   editedAt  DateTime?
   revisions MessageRevision[]
@@ -849,9 +865,9 @@ model Message {
  * team's own. Reacting with the same one again takes it back.
  */
 model MessageReaction {
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   messageId String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   /// The emoji itself ("👍"), or "custom:<id>" for one of the team's own.
   emoji     String
@@ -877,7 +893,9 @@ model CustomEmoji {
   createdById String?
 }
 
-/** A wording a chat message had before its author edited it — kept, never shown yet. */
+/**
+ * A wording a chat message had before its author edited it — kept, never shown yet.
+ */
 model MessageRevision {
   id         String   @id @default(cuid())
   body       String
@@ -985,25 +1003,26 @@ model Client {
   shortName String?
   notes     String?
 
-  category ClientCategory?
+  category         ClientCategory?
   /// The colleague who looks after this client.
-  accountManager   User?   @relation("ClientAccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
+  accountManager   User?           @relation("ClientAccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
   accountManagerId String?
   /// The company's general line, inbox and website — a person's own are on
   /// their contact.
-  phone   String?
-  email   String?
-  website String?
+  phone            String?
+  email            String?
+  website          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roomNights RoomNight[]
-  requests   RoomNightRequest[]
-  updates    Update[]
-  contacts   ClientContact[]
+  roomNights    RoomNight[]
+  requests      RoomNightRequest[]
+  updates       Update[]
+  contacts      ClientContact[]
   salesRequests SalesRequest[]
-  contracts  Contract[]
+  contracts     Contract[]
+  tasks         Task[]
 
   @@unique([name])
 }
@@ -1056,39 +1075,39 @@ model SalesRequest {
   id    String            @id @default(cuid())
   stage SalesRequestStage @default(INITIAL_INTEREST)
 
-  client   Client  @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  clientId String
+  client    Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId  String
   /// The person at the client who asked, if known.
   contact   ClientContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
   contactId String?
   /// Empty for a request not tied to one of our events.
-  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  eventId String?
-  owner   User?   @relation("SalesRequestOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  ownerId String?
+  event     Event?         @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventId   String?
+  owner     User?          @relation("SalesRequestOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId   String?
 
   // The initial interest, as the client put it — free text, because requests
   // arrive in every shape (doc §4.11).
-  description     String?
-  location        String?
-  rooms           String?
-  period          String?
-  budget          String?
-  prePost         String?
-  rateIncludes    String?
-  extraServices   String?
+  description   String?
+  location      String?
+  rooms         String?
+  period        String?
+  budget        String?
+  prePost       String?
+  rateIncludes  String?
+  extraServices String?
 
   /// Who to chase, and when (doc §4.11).
-  followUpOn      DateTime? @db.Date
-  nextStep        String?
+  followUpOn DateTime? @db.Date
+  nextStep   String?
 
-  proposalSentOn  DateTime? @db.Date
-  blockedUntil    DateTime? @db.Date
+  proposalSentOn DateTime? @db.Date
+  blockedUntil   DateTime? @db.Date
   /// Minor units, with an explicit currency (§4.5).
-  valueCents      Int?
-  valueCurrency   String?
+  valueCents     Int?
+  valueCurrency  String?
   /// When it closed — set on moving to a closing stage, cleared on reopening.
-  closedOn        DateTime? @db.Date
+  closedOn       DateTime? @db.Date
 
   // Contracting details, for the lawyers (doc §4.11). Filled in by us today;
   // by the client through a link later.
@@ -1123,6 +1142,7 @@ model SalesRequest {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tasks     Task[]
 
   @@index([clientId])
   @@index([eventId])
@@ -1137,9 +1157,9 @@ model SalesRequest {
 /// text at post time: mentions are a visual highlight only today, with no
 /// notification behind them, so there is nothing to join a `User` row for.
 model Update {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   body      String
-  createdAt DateTime @default(now())
+  createdAt DateTime         @default(now())
   // Set when the author last changed the text (doc §2.6). Every earlier
   // wording is kept in `UpdateRevision`, so an edit never loses what was said.
   editedAt  DateTime?
@@ -1162,7 +1182,9 @@ model Update {
 /// (doc §2.1). It is *not* the hotel's room number — that is learned at
 /// allocation time in Phase 3. A slot is a stable identity across events; the
 /// room-nights hanging off it each belong to exactly one event.
-/** A wording an update had before its author edited it — kept, never shown yet. */
+/**
+ * A wording an update had before its author edited it — kept, never shown yet.
+ */
 model UpdateRevision {
   id         String   @id @default(cuid())
   body       String
@@ -1337,14 +1359,14 @@ model LedgerEntry {
   beforeSnapshot Json?
   /// False only on the entry an undo itself writes, so undo can never chain
   /// into undoing an undo.
-  undoable       Boolean @default(true)
+  undoable       Boolean   @default(true)
   /// When this entry was undone, if it has been. An undone entry no longer
   /// stands in the way of undoing what came before it, and cannot be undone
   /// twice (doc §4.7).
   undoneAt       DateTime?
   /// True on the entry an undo writes — a record of the undo, which is never
   /// itself something that blocks undoing an earlier entry.
-  isUndo         Boolean @default(false)
+  isUndo         Boolean   @default(false)
 
   actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
   actorId String?
@@ -1381,4 +1403,83 @@ model AuditEntry {
   changes String?
 
   @@index([entity, entityId, createdAt])
+}
+
+// --- Tasks (doc §2.8) --------------------------------------------------------
+
+/// Where a task stands. In progress will hold each type's own steps later.
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+/// The kinds of task, named by the team as they need them — each will get its
+/// own workflow later (doc §2.8).
+model TaskType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  tasks     Task[]
+}
+
+/// A piece of work for one or more of the team (doc §2.8): who asked, who
+/// completes it, by when, and what it is about.
+model Task {
+  id       String     @id @default(cuid())
+  title    String
+  details  String?
+  status   TaskStatus @default(TODO)
+  priority Priority?
+  /// Optional: a calendar day.
+  deadline DateTime?  @db.Date
+  /// When it was last moved to Done; cleared when it leaves Done.
+  doneAt   DateTime?
+
+  type   TaskType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  typeId String?
+
+  /// To complete: the team members who do it.
+  assignees     User[]  @relation("TaskAssignees")
+  requestedBy   User?   @relation("TaskRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  requestedById String?
+  createdBy     User?   @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById   String?
+
+  // What it is about — each optional.
+  event          Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventId        String?
+  property       Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  propertyId     String?
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId       String?
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId String?
+
+  comments TaskComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([eventId])
+  @@index([propertyId])
+  @@index([clientId])
+  @@index([salesRequestId])
+}
+
+/// A comment on a task, with @mentions like an update (doc §2.6). Its author
+/// can edit it, which it then says.
+model TaskComment {
+  id        String    @id @default(cuid())
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  author    User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId  String?
+  body      String
+  editedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([taskId, createdAt])
 }
