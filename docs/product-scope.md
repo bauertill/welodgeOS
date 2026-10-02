@@ -488,24 +488,39 @@ library for other events — which is the point of scouting once.
 
 ### 3.6 Scouting → inventory
 
-Converting a contracted room category into inventory is an explicit act: pick the event,
-the category, a slot range (`#1..#30`) and a date range, and the system materialises those
-room-nights at acquisition state `NONE`. Nothing is contracted by this act. This is the
-only bridge between Phase 1 and Phase 2.
+**How the work runs** (as the owner described it, 2026-10-02). It can start from either
+side, but usually: a place of interest is defined — the venue, or a point a client asked
+for — and the hotels and apartments near it are researched and added to the event's
+**Properties** list (§3.5), by hand or found automatically. They are contacted to see
+whether they want to work with us, and those that do get a follow-up with more about We
+Lodge. Then the information is gathered: the room categories, their availability and
+details (bed configuration and the rest), the amenities, the payment and cancellation terms
+for this request, the rates — for the event period and for pre and post periods, which can
+each differ — what the rate includes, and any extra costs in words (cleaning fee, city
+tax…). That builds up the database of properties; the quotations each hotel sends are
+recorded against it (§3.10).
 
-The category's own `CONTRACTED` status is enforced, not advisory: materialising a category
-that is only in negotiation or in contracting is refused, and says so, naming the category
-rather than the property — one hotel can have one category ready and another still being
-drafted. Re-running the same conversion over an overlapping range is safe — it adds the
-missing nights and leaves the existing ones, and their commercial position, untouched.
+**There is no step that brings rooms into inventory.** Every room of every room category of
+a property on the event's Properties list is on the Inventory tab's stock sheet from the
+moment the category is there with its number of rooms — numbered #1 to that count, blank
+until something is recorded on it. Rooms of a property marked *Rejected* are left off; a
+category with no number of rooms has no rows. Whether a room category is marked
+*Contracted* (§3.5) is information for the team; it no longer decides what can be put on
+the sheet.
 
-**Removing a mistake.** The reverse of materialising: a rectangle of room-nights can be
-taken back out of inventory entirely, but only while every one of them is still completely
-untouched — acquisition state `NONE` and sales state `NONE`. Anything that has had a
-supplier or client relationship recorded against it is refused, and told to release or
-cancel it properly instead, which keeps the record rather than erasing it. Removal still
-writes a ledger entry (what was removed, by whom), even though the room-nights themselves
-are then deleted — the ledger's own summary stays readable as history.
+A room's night comes into being the first time something happens on it — bought, an option
+taken, blocked, sold or requested — as part of that change, in one step, and its "What
+changed" entry is the record. A blank cell and a night with nothing on it mean the same, so
+nothing is ever added or removed on its own. (Until 2026-10-02 a category had first to be
+marked *Contracted* and then **brought into inventory** for a range of rooms and dates, and
+untouched nights could be **removed from inventory**; both steps are gone. Entries they
+wrote stay in the ledger and can still be undone where nothing has happened since.)
+
+**Empty rooms are hidden until asked for.** With up to a hundred properties on an event,
+most of them never contracted, the stock sheet shows only the rooms with something on them
+in the dates shown — a supplier or client side, or a client asking. *Show empty rooms (n)*
+shows the rest, and *Hide empty rooms* hides them again. Choosing one property in the
+property filter shows all of its rooms, empty or not, to work on it.
 
 ### 3.7 Places of interest
 
@@ -1737,21 +1752,12 @@ the window's own check-out day, the sheet has one column more than it has nights
 after the last night, in lighter grey. Nothing is drawn in it except the CO of stays that
 leave that day.
 
-**Extending rooms from the sheet.** A selection may include nights a room does not have
-yet — dragging past the end of a stay to add a few nights. The panel says so first ("4 of 8
-room-nights aren't in inventory yet. Any change below adds them first, extending these
-rooms"), and then either:
-
-- **any change** — sell, block, buy, take an option — adds the missing nights and applies
-  itself to the whole selection, as **one step, all or nothing**: if the change is refused
-  for any night (a night already sold to someone else, a block to extend that is not
-  there), nothing is added either; or
-- **Only add them to inventory** adds the nights and nothing more, as "nothing started".
-
-The same rule applies as bringing rooms in (§3.6): only rooms of a room type this event
-has marked *Contracted* can be extended into new nights. The addition is recorded in "What
-changed" as its own entry ("Extended Hotel Carmel King Room 2 rooms (#1–#2) into 31 Jul –
-02 Aug"), followed by the change, and each can be undone. Extending a sale into nights we
+**Blank cells and extending.** A selection may include blank cells — rooms with nothing on
+them yet, or nights past the end of a stay. Any change — sell, block, buy, take an option —
+applies to the whole selection, blank cells included, as **one step, all or nothing**: if
+the change is refused for any night (a night already sold to someone else, a block to
+extend that is not there), nothing changes anywhere (§3.6). Only rooms of properties on the
+event's list can be used. Extending a sale into nights we
 have not yet bought from the hotel is allowed — it is a real situation — and those nights
 carry the red *needs attention* mark until they are bought. A
 selection can run past what is on screen: dragging to within a finger's width of an edge,
@@ -2298,7 +2304,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
-| §3.6 Scouting → inventory | **Built** | Contracted room category → room range → date range. Enforced per category, not per property; re-running is safe |
+| §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
 | §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |
 | §4.3 Exclusivity and contention | **Built** | One hard hold per night, enforced; requests are a set, and contention is counted on the stock sheet and per night |

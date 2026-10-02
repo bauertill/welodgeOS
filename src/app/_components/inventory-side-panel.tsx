@@ -30,7 +30,7 @@ import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_c
 import { isClosed, salesStageLabels } from "~/lib/sales";
 import { api } from "~/trpc/react";
 
-/** What the grid already knows about one selected, materialised room-night. */
+/** What the grid already knows about one selected room-night. */
 export type SelectedCell = {
   key: string;
   acquisitionState: AcquisitionState;
@@ -305,9 +305,7 @@ export function InventorySidePanel({
     onSuccess: (outcome) => {
       setError(null);
       setResult(
-        `${outcome.added ? `Added ${outcome.added} room-nights to inventory, then ` : ""}${
-          outcome.added ? actionLabels[action].toLowerCase() : actionLabels[action]
-        } applied to ${outcome.rooms} ${outcome.rooms === 1 ? "room" : "rooms"} — ${outcome.nights} room-nights.`,
+        `${actionLabels[action]} applied to ${outcome.rooms} ${outcome.rooms === 1 ? "room" : "rooms"} — ${outcome.nights} room-nights.`,
       );
       onApplied();
     },
@@ -326,30 +324,6 @@ export function InventorySidePanel({
     },
   });
 
-  const addNights = api.inventory.addNights.useMutation({
-    onSuccess: (outcome) => {
-      setError(null);
-      setResult(`Added ${outcome.added} room-nights to inventory. Nothing is contracted on them yet.`);
-      onApplied();
-    },
-    onError: (e) => {
-      setResult(null);
-      setError(e.message);
-    },
-  });
-
-  const remove = api.inventory.remove.useMutation({
-    onSuccess: (outcome) => {
-      setError(null);
-      setResult(`Removed ${outcome.removed} room-nights from inventory.`);
-      onApplied();
-    },
-    onError: (e) => {
-      setResult(null);
-      setError(e.message);
-    },
-  });
-
   const createClient = api.clients.create.useMutation({
     onSuccess: (client) => {
       void utils.clients.invalidate();
@@ -360,15 +334,6 @@ export function InventorySidePanel({
     },
     onError: (e) => setError(e.message),
   });
-
-  const missing = dateRangeEdited ? null : totalNights - cells.length;
-  const allUntouched =
-    !dateRangeEdited &&
-    cells.length > 0 &&
-    missing === 0 &&
-    cells.every(
-      (cell) => cell.acquisitionState === "NONE" && cell.salesState === "NONE",
-    );
 
   const shows = (field: string) => actionFields[action].includes(field);
   const nullableDay = (value: string | null | undefined) => (value === undefined ? undefined : value === null ? null : parseDay(value));
@@ -527,31 +492,7 @@ export function InventorySidePanel({
               <p className="text-ink-500 mt-1 text-xs font-light">
                 Adjusted from the highlighted range.
               </p>
-            ) : (
-              missing !== null &&
-              missing > 0 && (
-                <div className="bg-brand-50 text-brand-800 mt-2 rounded-lg px-3 py-2 text-xs font-light">
-                  <p>
-                    <span className="font-medium">
-                      {missing} of {totalNights} room-nights aren't in inventory yet.
-                    </span>{" "}
-                    Any change below adds them first, extending these rooms.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={addNights.isPending}
-                    onClick={() => {
-                      setError(null);
-                      setResult(null);
-                      addNights.mutate({ eventId, slotIds, checkIn, checkOut });
-                    }}
-                    className="text-brand-700 mt-1 font-medium underline disabled:opacity-50"
-                  >
-                    Only add them to inventory
-                  </button>
-                </div>
-              )
-            )}
+            ) : null}
           </div>
           <button
             type="button"
@@ -564,22 +505,6 @@ export function InventorySidePanel({
         </div>
 
         {!dateRangeEdited && cells.length > 0 && <Recorded cells={cells} />}
-
-        {allUntouched && (
-          <Button
-            type="button"
-            variant="danger"
-            className="mb-4 w-full justify-center"
-            disabled={remove.isPending}
-            onClick={() => {
-              setError(null);
-              setResult(null);
-              remove.mutate({ eventId, slotIds, checkIn, checkOut });
-            }}
-          >
-            {remove.isPending ? "Removing…" : "Remove from inventory"}
-          </Button>
-        )}
 
         <div className="border-ink-200/60 mb-4 flex gap-1 border-b">
           {(["acquisition", "sales"] as const).map((t) => (

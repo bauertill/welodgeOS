@@ -1467,7 +1467,7 @@ function AddRooms({
           {availability.data.free} of {availability.data.total} rooms are free for every night of the stay
           {availability.data.free > 0 && ` — ${availability.data.freeBought} of them bought`}.
           {availability.data.alreadyTheirs > 0 && ` ${availability.data.alreadyTheirs} are already this client's on some of those nights.`}
-          {availability.data.notInInventory > 0 && ` ${availability.data.notInInventory} are not in inventory for all those dates.`}
+
           {free !== undefined && free >= wanted && availability.data.freeBought < wanted && action !== "REQUEST" && (
             <span className="block text-[#a15c00]">
               Fewer than {wanted} are bought: {action === "SELL" ? "selling" : "blocking"} them sells ahead of what we hold, and makes us short.

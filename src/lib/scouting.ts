@@ -57,7 +57,7 @@ export const categoryContractStatusLabels: Record<CategoryContractStatus, string
 export const categoryContractStatusHints: Record<CategoryContractStatus, string> = {
   IN_NEGOTIATION: "Talking terms with the supplier. Not yet in Inventory.",
   IN_CONTRACTING: "Terms agreed, paperwork in progress. Not yet in Inventory.",
-  CONTRACTED: "Signed. This is what becomes Inventory.",
+  CONTRACTED: "Signed with the hotel for this room type.",
 };
 
 export const categoryContractStatusOrder: CategoryContractStatus[] = [

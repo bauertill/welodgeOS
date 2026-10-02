@@ -39,6 +39,10 @@ export function InventoryGrid({
 }) {
   const [propertyId, setPropertyId] = useState("");
   const [clientId, setClientId] = useState("");
+  // Every room of every property on the list is on the sheet (doc §3.6); with
+  // up to a hundred properties, the ones with nothing on them are hidden
+  // until asked for — or until one property is chosen to work on.
+  const [showEmpty, setShowEmpty] = useState(false);
   // The check-in/check-out window is remembered per event, in this browser,
   // so coming back to the tab does not snap it back to the event's dates.
   // Read after mount — storage only exists in the browser — and the sheet
@@ -279,10 +283,25 @@ export function InventoryGrid({
 
   // Clicking a "Look out for" count shows only the rooms with that issue.
   const [issueFilter, setIssueFilter] = useState<Severity | null>(null);
+  const emptyRooms = useMemo(
+    () => allProperties.reduce((sum, property) => sum + property.categories.reduce((n, category) => n + category.slots.filter((slot) => slot.empty).length, 0), 0),
+    [allProperties],
+  );
+  const shownProperties = useMemo(() => {
+    if (showEmpty || propertyId) return allProperties;
+    return allProperties
+      .map((property) => ({
+        ...property,
+        categories: property.categories
+          .map((category) => ({ ...category, slots: category.slots.filter((slot) => !slot.empty) }))
+          .filter((category) => category.slots.length > 0),
+      }))
+      .filter((property) => property.categories.length > 0);
+  }, [allProperties, showEmpty, propertyId]);
   const properties = useMemo(() => {
     const wanted = issueFilter ? issues.get(issueFilter)?.slots : null;
-    if (!wanted) return allProperties;
-    return allProperties
+    if (!wanted) return shownProperties;
+    return shownProperties
       .map((property) => ({
         ...property,
         categories: property.categories
@@ -290,7 +309,7 @@ export function InventoryGrid({
           .filter((category) => category.slots.length > 0),
       }))
       .filter((property) => property.categories.length > 0);
-  }, [allProperties, issueFilter, issues]);
+  }, [shownProperties, issueFilter, issues]);
   // ...and opens them, since the point is to see them.
   useEffect(() => {
     if (!issueFilter) return;
@@ -622,6 +641,20 @@ export function InventoryGrid({
           }))}
         />
 
+        {!propertyId && (emptyRooms > 0 || showEmpty) && (
+          <button
+            type="button"
+            onClick={() => setShowEmpty(!showEmpty)}
+            aria-pressed={showEmpty}
+            title="Rooms with nothing on them in these dates — no supplier or client side, and nobody asking"
+            className={`rounded-full px-4 py-2 text-[13px] font-light transition-colors ${
+              showEmpty ? "bg-brand-700 text-white" : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
+            }`}
+          >
+            {showEmpty ? "Hide empty rooms" : `Show empty rooms (${emptyRooms})`}
+          </button>
+        )}
+
         <div className="ml-auto flex items-center gap-2">
           {!isEventWindow && (
             <button
@@ -658,10 +691,22 @@ export function InventoryGrid({
       {properties.length > 0 && <Legend />}
 
       {properties.length === 0 ? (
-        <EmptyState
-          title="Nothing matches"
-          description="Nothing in this event's inventory matches the current filters and date window."
-        />
+        allProperties.length === 0 ? (
+          <EmptyState
+            title="No rooms yet"
+            description="Rooms appear here as soon as a property on the Properties tab has room categories with a number of rooms."
+          />
+        ) : !showEmpty && !propertyId && !clientId && !issueFilter ? (
+          <EmptyState
+            title="Nothing on any room in these dates yet"
+            description={`All ${emptyRooms} rooms are empty. Show the empty rooms, or choose a property, to start recording what is bought, blocked and sold.`}
+          />
+        ) : (
+          <EmptyState
+            title="Nothing matches"
+            description="Nothing in this event's inventory matches the current filters and date window."
+          />
+        )
       ) : (
         // Scrolls both ways inside a box no taller than the window, so the
         // date row can stay pinned along its top and the room column down

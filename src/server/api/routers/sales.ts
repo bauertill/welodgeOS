@@ -143,14 +143,20 @@ const changeVerbs = {
 
 /**
  * Every room of a category over a stay, and whether it could go to this
- * client: in inventory every night, and held by no other client. A room this
- * client already holds on any of those nights is theirs, not free.
+ * client: held by no other client on any of those nights. A room this client
+ * already holds on any of them is theirs, not free. Every room of the
+ * category counts, whether or not anything has happened on it yet (doc §3.6).
  */
 async function roomsFor(
   db: Prisma.TransactionClient,
   input: { eventId: string; categoryId: string; clientId: string; checkIn: Date; checkOut: Date },
 ) {
   const nightCount = nightsBetween(input.checkIn, input.checkOut);
+  const category = await db.roomCategory.findUniqueOrThrow({ where: { id: input.categoryId }, select: { unitCount: true } });
+  await db.roomSlot.createMany({
+    data: Array.from({ length: category.unitCount }, (_, i) => ({ categoryId: input.categoryId, slotNumber: i + 1 })),
+    skipDuplicates: true,
+  });
   const slots = await db.roomSlot.findMany({
     where: { categoryId: input.categoryId },
     orderBy: { slotNumber: "asc" },
@@ -164,7 +170,8 @@ async function roomsFor(
     },
   });
   const hard = (state: string) => state === "BLOCKED" || state === "SOLD";
-  return slots.map((slot) => {
+  // A room beyond a lowered count only while it still has nights here.
+  return slots.filter((slot) => slot.slotNumber <= category.unitCount || slot.roomNights.length > 0).map((slot) => {
     const present = slot.roomNights.length === nightCount;
     const heldByOther = slot.roomNights.some((night) => hard(night.salesState) && night.clientId !== input.clientId);
     const theirs = slot.roomNights.some((night) => hard(night.salesState) && night.clientId === input.clientId);
@@ -173,7 +180,7 @@ async function roomsFor(
       slotNumber: slot.slotNumber,
       present,
       theirs,
-      free: present && !heldByOther && !theirs,
+      free: !heldByOther && !theirs,
       bought: present && slot.roomNights.every((night) => night.acquisitionState === "BOUGHT"),
     };
   });
@@ -457,9 +464,16 @@ export const salesRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const request = await ctx.db.salesRequest.findUniqueOrThrow({ where: { id: input.id }, select: { eventId: true } });
       if (!request.eventId) return [];
+      // The room categories of the properties on the event's list (doc §3.6),
+      // and any other with nights here.
       const slots = await ctx.db.roomNight.groupBy({ by: ["slotId"], where: { eventId: request.eventId } });
       const categories = await ctx.db.roomCategory.findMany({
-        where: { slots: { some: { id: { in: slots.map((slot) => slot.slotId) } } } },
+        where: {
+          OR: [
+            { unitCount: { gt: 0 }, property: { scoutingEntries: { some: { eventId: request.eventId, status: { not: "REJECTED" } } } } },
+            { slots: { some: { id: { in: slots.map((slot) => slot.slotId) } } } },
+          ],
+        },
         select: { id: true, name: true, property: { select: { name: true } } },
         orderBy: [{ property: { name: "asc" } }, { sortOrder: "asc" }],
       });
@@ -468,7 +482,7 @@ export const salesRouter = createTRPCRouter({
 
   /**
    * How many rooms of a category could be given to this request for the whole
-   * stay — in inventory every night, and held by no other client — and how
+   * stay — held by no other client on any night — and how
    * many of those we have bought.
    */
   availability: protectedProcedure
@@ -485,7 +499,6 @@ export const salesRouter = createTRPCRouter({
         free: rooms.filter((room) => room.free).length,
         freeBought: rooms.filter((room) => room.free && room.bought).length,
         alreadyTheirs: rooms.filter((room) => room.theirs).length,
-        notInInventory: rooms.filter((room) => !room.present).length,
       };
     }),
 
@@ -539,9 +552,7 @@ export const salesRouter = createTRPCRouter({
           if (free.length < input.rooms) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Nothing was changed. Only ${free.length} of these rooms ${free.length === 1 ? "is" : "are"} free for every night of the stay${
-                rooms.some((room) => !room.present) ? " (some are not in inventory for all those dates)" : ""
-              }. Ask for fewer, or split the dates.`,
+              message: `Nothing was changed. Only ${free.length} of these rooms ${free.length === 1 ? "is" : "are"} free for every night of the stay. Ask for fewer, or split the dates.`,
             });
           }
           const chosen = free.slice(0, input.rooms);

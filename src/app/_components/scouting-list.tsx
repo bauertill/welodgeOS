@@ -410,7 +410,7 @@ export function ScoutingList({
                           const position = availabilityByCategory.get(categoryId);
                           return position && position.slots > 0
                             ? `${position.genuinelyFree} available`
-                            : "Not in inventory yet";
+                            : "Nothing bought yet";
                         }}
                         onStatusChange={(categoryId, status) =>
                           setCategoryStatusMutation.mutate({

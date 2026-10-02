@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 
-import { BringIntoInventory } from "~/app/_components/bring-into-inventory";
 import { Button } from "~/app/_components/form";
 import { InventoryGrid } from "~/app/_components/inventory-grid";
 import { Card, SectionHeading, Table, Td, Th } from "~/app/_components/ui";
@@ -10,15 +9,11 @@ import { formatDay } from "~/lib/format";
 import { api } from "~/trpc/react";
 
 /**
- * Phase 2 (doc §4): what we hold and what we have promised, changed two
- * ways — bringing rooms into inventory (§3.6) and editing them on the grid
- * (§4.8), which applies every bulk transition to a *rectangle* of rooms ×
- * nights, atomically.
- *
- * The stock sheet is where most of a rep's day happens, so it comes right
- * after the one prominent action above it — bringing rooms in, tucked
- * behind a button rather than left open by default. The headline numbers
- * moved to the Position tab.
+ * Phase 2 (doc §4): what we hold and what we have promised, changed on the
+ * stock sheet (§4.8), which applies every bulk transition to a *rectangle* of
+ * rooms × nights, atomically. Every room of the properties on the event's
+ * list is on it from the start (§3.6) — there is no step that brings rooms
+ * in. The headline numbers are on the Position tab.
  */
 export function InventoryBoard({
   eventId,
@@ -31,7 +26,6 @@ export function InventoryBoard({
 }) {
   const utils = api.useUtils();
   const ledger = api.inventory.ledger.useQuery({ eventId, limit: 25 });
-  const [showBringIntoInventory, setShowBringIntoInventory] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
 
   const refresh = () => {
@@ -49,33 +43,6 @@ export function InventoryBoard({
 
   return (
     <div className="space-y-8">
-      {showBringIntoInventory ? (
-        <div>
-          <div className="mb-2 flex justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setShowBringIntoInventory(false)}
-            >
-              Hide
-            </Button>
-          </div>
-          <BringIntoInventory
-            eventId={eventId}
-            defaultCheckIn={defaultCheckIn}
-            defaultCheckOut={defaultCheckOut}
-            onDone={refresh}
-          />
-        </div>
-      ) : (
-        <Button
-          type="button"
-          onClick={() => setShowBringIntoInventory(true)}
-        >
-          Bring rooms into inventory
-        </Button>
-      )}
-
       <InventoryGrid
         eventId={eventId}
         defaultCheckIn={defaultCheckIn}
