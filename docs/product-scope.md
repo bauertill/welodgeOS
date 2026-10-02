@@ -349,7 +349,7 @@ Common to every type:
 | --- | --- |
 | `name` | |
 | `type` | `HOTEL` \| `APARTMENT` \| `APARTHOTEL` |
-| `address`, `city`, `country` | |
+| `address`, `city`, `country` | The address box searches **Google Maps** as it is typed — a hotel's name or an address. Picking a suggestion fills in the address, city, country and coordinates from Google, and the name, website and phone where they are still empty (the name only when Google calls the place somewhere to stay). Anything not found is typed or pasted and kept as written; *Find coordinates from address* still looks the coordinates up (OpenStreetMap). The search needs Google's *Places API (New)* allowed on the server's Google key; until it is, the box says so and works as a plain one |
 | `latitude`, `longitude` | Optional. Present ⇒ pin on the map view. |
 | `distanceToVenue` | Derived: straight-line distance to the event's **nearest venue** (§3.7), when both have coordinates. |
 | `stars` | Hotels and aparthotels; optional. Not asked of a plain apartment. |
@@ -2276,6 +2276,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
+| §3.1 Address search on Google Maps | **Built, needs a key change** | On the property form (new and edit). Waits on *Places API (New)* being enabled and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till) — today Google refuses, so the box is a plain one with a note |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |

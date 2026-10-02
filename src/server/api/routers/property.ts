@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { env } from "~/env";
 import { contractingFields, propertyDetailFields, propertyServiceFields } from "~/lib/contracting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit, logFieldChanges } from "~/server/audit";
@@ -121,6 +122,84 @@ export const propertyRouter = createTRPCRouter({
    * request carries the User-Agent Nominatim's usage policy requires — and so
    * the endpoint it hits is not something the client has to know about.
    */
+  /**
+   * Search Google Maps for a property or an address as it is typed (doc
+   * §3.1), through Places API (New) on the server's key. `available` is false
+   * while Google refuses — the API not switched on, or no key — and the box
+   * is then an ordinary one to type or paste the address into.
+   */
+  placeSearch: protectedProcedure
+    .input(z.object({ query: z.string().trim().min(3).max(200), sessionToken: z.string().max(100) }))
+    .query(async ({ input }) => {
+      const key = env.GOOGLE_MAPS_SERVER_KEY;
+      if (!key) return { available: false, suggestions: [] };
+      const response = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": key,
+          "X-Goog-FieldMask": "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat",
+        },
+        body: JSON.stringify({ input: input.query, sessionToken: input.sessionToken }),
+      }).catch(() => null);
+      // Refused outright means not switched on; anything else is a passing failure.
+      const refused = response !== null && [400, 401, 403].includes(response.status);
+      if (!response?.ok) return { available: !refused, suggestions: [] };
+      const data = (await response.json()) as {
+        suggestions?: { placePrediction?: { placeId: string; structuredFormat?: { mainText?: { text: string }; secondaryText?: { text: string } } } }[];
+      };
+      return {
+        available: true,
+        suggestions: (data.suggestions ?? [])
+          .map((suggestion) => suggestion.placePrediction)
+          .filter((prediction): prediction is NonNullable<typeof prediction> => Boolean(prediction))
+          .map((prediction) => ({
+            placeId: prediction.placeId,
+            main: prediction.structuredFormat?.mainText?.text ?? "",
+            secondary: prediction.structuredFormat?.secondaryText?.text ?? "",
+          })),
+      };
+    }),
+
+  /** What Google Maps knows of the place picked: its address, city, country, coordinates, website and phone. */
+  placeDetails: protectedProcedure
+    .input(z.object({ placeId: z.string().min(1).max(300), sessionToken: z.string().max(100) }))
+    .mutation(async ({ input }) => {
+      const key = env.GOOGLE_MAPS_SERVER_KEY;
+      if (!key) return null;
+      const url = new URL(`https://places.googleapis.com/v1/places/${encodeURIComponent(input.placeId)}`);
+      url.searchParams.set("sessionToken", input.sessionToken);
+      const response = await fetch(url, {
+        headers: {
+          "X-Goog-Api-Key": key,
+          "X-Goog-FieldMask": "displayName,formattedAddress,addressComponents,location,websiteUri,internationalPhoneNumber,types",
+        },
+      }).catch(() => null);
+      if (!response?.ok) return null;
+      const place = (await response.json()) as {
+        displayName?: { text: string };
+        formattedAddress?: string;
+        addressComponents?: { longText: string; types: string[] }[];
+        location?: { latitude: number; longitude: number };
+        websiteUri?: string;
+        internationalPhoneNumber?: string;
+        types?: string[];
+      };
+      const part = (type: string) => place.addressComponents?.find((component) => component.types.includes(type))?.longText ?? null;
+      return {
+        name: place.displayName?.text ?? null,
+        address: place.formattedAddress ?? null,
+        city: part("locality") ?? part("postal_town") ?? part("administrative_area_level_2"),
+        country: part("country"),
+        latitude: place.location?.latitude ?? null,
+        longitude: place.location?.longitude ?? null,
+        website: place.websiteUri ?? null,
+        phone: place.internationalPhoneNumber ?? null,
+        /** Whether Google calls it somewhere to stay — then its name is the property's. */
+        lodging: (place.types ?? []).includes("lodging"),
+      };
+    }),
+
   geocode: protectedProcedure
     .input(
       z.object({

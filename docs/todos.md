@@ -248,6 +248,11 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       Routes key, and a budget alert like the Routes one — Till. Brandon asked
       (2026-10-01) for this not to be forgotten; it is the next part of the
       overhaul once the API is on.
+      *2026-10-02:* the property form's address box already searches Google
+      Maps through it (§3.1) — it needs Places API (New) **enabled in the
+      project and added to the allowed APIs of `GOOGLE_MAPS_SERVER_KEY`**
+      (today Google answers `API_KEY_SERVICE_BLOCKED`). The same switch serves
+      the nearby-hotels search.
 
 ## 3. Phase 3 — Operations
 
