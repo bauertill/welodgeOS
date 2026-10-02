@@ -49,6 +49,8 @@ enum ScoutingStatus {
 /// property is rarely all-or-nothing: one category can be signed while another
 /// is still being drafted (doc §3.5, §3.6).
 enum CategoryContractStatus {
+  /// Nobody has started with the hotel on this room type yet — the default.
+  NOT_STARTED
   IN_NEGOTIATION
   IN_CONTRACTING
   CONTRACTED
@@ -367,7 +369,7 @@ model ScoutingEntry {
 }
 
 /// One room category's supplier-contract status on one event's scouting list.
-/// Absent means `IN_NEGOTIATION` — a row only exists once someone has said
+/// Absent means `NOT_STARTED` (shown blank) — a row only exists once someone has said
 /// otherwise, so adding a property to a list never has to pre-create one of
 /// these per category (doc §3.5, §3.6).
 /** The colours a property group can have — a fixed palette, each legible on the page. */
@@ -422,7 +424,7 @@ enum Cleaning {
 
 model CategoryContract {
   id     String                 @id @default(cuid())
-  status CategoryContractStatus @default(IN_NEGOTIATION)
+  status CategoryContractStatus @default(NOT_STARTED)
 
   // The rates and taxes agreed for this room category on this event (doc
   // §3.9) — an LA28 rate never overwrites an EXPO 2030 one.

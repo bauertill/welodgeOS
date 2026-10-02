@@ -110,7 +110,7 @@ export function RoomCategoryTable({
           <tbody>
             {categories.map((category) => {
               const contract = contractOf(category.id);
-              const status = contract?.status ?? "IN_NEGOTIATION";
+              const status = contract?.status ?? "NOT_STARTED";
               const beds =
                 category.bedConfiguration ??
                 ([

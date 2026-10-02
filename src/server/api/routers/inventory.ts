@@ -19,7 +19,6 @@ import {
 } from "~/lib/inventory";
 import { positionOf } from "~/lib/position";
 import type { BlockNight } from "~/lib/stock-blocks";
-import { categoryContractStatusLabels } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
   axisOf,

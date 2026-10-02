@@ -476,10 +476,14 @@ mid-contract on some categories and not others, which one property-wide status c
 say.
 
 **Per-category contract status.** A `CategoryContract` row records one room category's own
-supplier-contract status on one event's list — `IN_NEGOTIATION` → `IN_CONTRACTING` →
-`CONTRACTED` — independent of its property's pursuit status and of every other category at
-the same property. A category with no row yet reads as `IN_NEGOTIATION`: adding a property
-to a list never has to pre-create one of these per category. The property's own screen
+supplier-contract status on one event's list — blank, then *In negotiation* → *In
+contracting* → *Contracted* — independent of its property's pursuit status and of every
+other category at the same property. **A room category starts blank**: nothing started
+with the hotel on it yet, shown as an empty choice and not mentioned in the property's
+summary line (the owner's call, 2026-10-02 — it used to start as *In negotiation*). A
+category with no row yet reads as blank: adding a property to a list never has to
+pre-create one of these per category. Rows that had become *In negotiation* only because a
+rate was saved, with no one ever choosing it, were set back to blank. The property's own screen
 shows a rolled-up summary — one line per category, e.g. "ROH · 30 rooms · Contracted" —
 rather than a single word for the whole property.
 

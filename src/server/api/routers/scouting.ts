@@ -16,6 +16,7 @@ const SCOUTING_STATUSES = [
 ] as const;
 
 const CATEGORY_CONTRACT_STATUSES = [
+  "NOT_STARTED",
   "IN_NEGOTIATION",
   "IN_CONTRACTING",
   "CONTRACTED",
@@ -378,13 +379,13 @@ export const scoutingRouter = createTRPCRouter({
             status: input.status,
           },
         });
-        const beforeStatus = before?.status ?? "IN_NEGOTIATION";
+        const beforeStatus = before?.status ?? "NOT_STARTED";
         if (beforeStatus !== input.status) {
           await logAudit(tx, {
             actorId: ctx.session.user.id,
             entity: "CategoryContract",
             entityId: contract.id,
-            summary: `Contract status: ${categoryContractStatusLabels[beforeStatus]} → ${categoryContractStatusLabels[input.status]}`,
+            summary: `Contract status: ${categoryContractStatusLabels[beforeStatus] || "—"} → ${categoryContractStatusLabels[input.status] || "—"}`,
           });
         }
         return contract;

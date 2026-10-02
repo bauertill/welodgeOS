@@ -136,7 +136,7 @@ export function ScoutingList({
     categoryId: string,
   ): CategoryContractStatus =>
     entry.categoryContracts.find((c) => c.categoryId === categoryId)
-      ?.status ?? "IN_NEGOTIATION";
+      ?.status ?? "NOT_STARTED";
 
   // An event can have several venues, so "to venue" means the nearest one and
   // has to name it (doc §3.7).
@@ -208,7 +208,8 @@ export function ScoutingList({
               // matters most at a glance, before how far the rest have got.
               const statusSummary = [...categoryContractStatusOrder]
                 .reverse()
-                .filter((status) => roomsByStatus.get(status))
+                // Rooms nothing has started on are not mentioned at all.
+                .filter((status) => status !== "NOT_STARTED" && roomsByStatus.get(status))
                 .map(
                   (status) =>
                     `${roomsByStatus.get(status)} rooms ${categoryContractStatusLabels[status].toLowerCase()}`,
