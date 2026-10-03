@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
 import { EventForm } from "~/app/_components/event-form";
+import { EventTeam } from "~/app/_components/event-team";
 import { PlacesOfInterest } from "~/app/_components/places-of-interest";
 import { Card, PageHeader } from "~/app/_components/ui";
 import { dayKey } from "~/lib/dates";
@@ -40,6 +41,14 @@ export default async function EditEventPage({
           status: event.status,
         }}
       />
+
+      <div id="team" className="mt-5 scroll-mt-6">
+        <EventTeam
+          eventId={event.id}
+          projectLeadId={event.projectLead?.id ?? null}
+          accommodationManagerIds={event.accommodationManagers.map((person) => person.id)}
+        />
+      </div>
 
       {/* Part of setting the event up (doc §3.7): the Properties tab only
           measures to these. */}

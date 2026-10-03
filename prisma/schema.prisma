@@ -74,13 +74,18 @@ model Event {
   /// single venue an event used to carry: a Games has several.
   placesOfInterest PlaceOfInterest[]
 
-  scoutingEntries ScoutingEntry[]
-  roomNights      RoomNight[]
-  ledger          LedgerEntry[]
-  propertyGroups  PropertyGroup[]
-  salesRequests   SalesRequest[]
-  contracts       Contract[]
-  tasks           Task[]
+  scoutingEntries       ScoutingEntry[]
+  roomNights            RoomNight[]
+  ledger                LedgerEntry[]
+  propertyGroups        PropertyGroup[]
+  salesRequests         SalesRequest[]
+  contracts             Contract[]
+  tasks                 Task[]
+  /// The event's team (doc §2.3): who leads it, and who sources its
+  /// accommodation — given each new sales request's sourcing task (§4.11).
+  projectLead           User?           @relation("EventProjectLead", fields: [projectLeadId], references: [id], onDelete: SetNull)
+  projectLeadId         String?
+  accommodationManagers User[]          @relation("EventAccommodationManagers")
 
   @@index([startDate])
 }
@@ -763,6 +768,8 @@ model User {
   /// Their own link for booking a call (Google Calendar appointment page,
   /// Calendly…), put in the email to a client (doc §4.11).
   bookingLink        String?
+  eventsLed          Event[]              @relation("EventProjectLead")
+  eventsSourced      Event[]              @relation("EventAccommodationManagers")
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
@@ -1523,6 +1530,7 @@ model TaskComment {
 
 /// What a notification is about.
 enum NotificationKind {
+  SALES_NEW_REQUEST
   SALES_FOLLOW_UP
   SALES_NEEDS_SENT
   SALES_CONTRACTING_SENT

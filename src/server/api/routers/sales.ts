@@ -19,6 +19,7 @@ import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/
 import { diffFields, logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
+import { ensureSourcingTask } from "~/server/sourcing";
 import { snapshotNight } from "~/server/inventory";
 
 /**
@@ -185,6 +186,8 @@ async function saveDetails(
     summary: before.detailedAt ? actor.summary : `${actor.summary} — now a sales request`,
     changes: diffFields(readable(before), readable(after), historyFields),
   });
+  // Now a sales request: its sourcing task goes on the board (doc §4.11).
+  await ensureSourcingTask(tx, id, actor.id);
   return { before, after };
 }
 
@@ -972,8 +975,8 @@ export const salesRouter = createTRPCRouter({
   /** Change any part of a request; the history records what changed. */
   update: protectedProcedure
     .input(requestInput.extend({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
+    .mutation(async ({ ctx, input }) => {
+      const updated = await ctx.db.$transaction(async (tx) => {
         const { id, ...fields } = input;
         const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
         await checkContact(tx, fields.contactId, before.clientId);
@@ -982,9 +985,13 @@ export const salesRouter = createTRPCRouter({
         if (changes) {
           await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: id, summary: "Updated", changes });
         }
+        // A sales request given its event only now gets its sourcing task now (doc §4.11).
+        if (after.eventId && after.eventId !== before.eventId) await ensureSourcingTask(tx, id, ctx.session.user.id);
         return after;
-      }),
-    ),
+      });
+      await deliverImmediate(ctx.db);
+      return updated;
+    }),
 
   /**
    * Move a request to another stage. Moving to *Proposal sent* dates the
@@ -1150,12 +1157,14 @@ export const salesRouter = createTRPCRouter({
   /** Fill in or change the details — after a call, say. The first time, the enquiry becomes a sales request. */
   saveDetails: protectedProcedure
     .input(detailsInput.extend({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
+    .mutation(async ({ ctx, input }) => {
+      const after = await ctx.db.$transaction(async (tx) => {
         const { id, ...details } = input;
         return (await saveDetails(tx, id, details, { id: ctx.session.user.id, summary: "Details updated" })).after;
-      }),
-    ),
+      });
+      await deliverImmediate(ctx.db);
+      return after;
+    }),
 
   /** A link for the client to tell us their needs. A new one replaces the old. */
   makeNeedsLink: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {

@@ -77,6 +77,19 @@ export default async function EventPropertiesPage({
         </Link>
       </p>
 
+      {/* Who leads the event, and who sources it (doc §2.3) — given each new sales request's sourcing task. */}
+      <p className="text-ink-500 -mt-2 mb-4 text-[13px] font-light">
+        Project lead: <span className="text-ink-700">{event.projectLead ? (event.projectLead.name ?? event.projectLead.email) : "nobody yet"}</span>
+        {" · "}Accommodation managers:{" "}
+        <span className="text-ink-700">
+          {event.accommodationManagers.length ? event.accommodationManagers.map((person) => person.name ?? person.email).join(", ") : "nobody yet"}
+        </span>
+        {" · "}
+        <Link href={`/events/${event.id}/edit#team`} className="text-brand-700 hover:underline">
+          {event.projectLead || event.accommodationManagers.length ? "Change the team" : "Set the team"}
+        </Link>
+      </p>
+
       <ScoutingList eventId={event.id} places={places} amenities={amenities} />
 
       <Card className="mt-8">

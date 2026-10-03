@@ -86,6 +86,11 @@ first-class and alertable.
 `Event → Property → Category → Slot → Room-night`. A property is scouted once and can be
 reused across events; its *inventory* always belongs to exactly one event.
 
+**An event's team** (2026-10-03), set in its settings under *Team* and shown on its page:
+its **project lead**, and its **accommodation managers** — one or more. The accommodation
+managers are given each new sales request's sourcing task, and the project lead is told
+of it (§4.11). Changes to the team are in the event's log.
+
 ### 2.4 Deadlines alert, they never auto-change state
 
 An expired option or block is **flagged**, never silently downgraded or released. The
@@ -1614,6 +1619,17 @@ the contract.
   one arrival and departure kept them as their first line. They are
   filled in by us after a call (*Fill in after a call*), or by the client on their needs
   form — which lands on the request, says so, and tells the account manager.
+- **The sourcing task.** When a request for one of our events becomes a sales request, a
+  task goes on the task board on its own (§2.8): *Source accommodation for [client] —
+  [event]*, of type *Sourcing*, given to the **event's accommodation managers** and asked by
+  its **project lead** (both set in the event's settings, *Team*), tied to the event, the
+  client and the request, with the units and periods, budget, places to be close to and
+  the client's comments written into it as they were then — the request itself always has
+  the latest. The accommodation managers are told they have a task, and the project lead
+  that a new sales request has come in (§2.9); with no accommodation manager set, the task
+  waits unassigned and the project lead is told to give it to someone. One task per request:
+  sending the details again makes no second one, and a request whose event is only chosen
+  later gets its task then. A request not for one of our events gets none.
 - **Once the details are in, the enquiry is a sales request** — the same request, its
   history kept. The list marks the ones still enquiries. Requests that had already moved
   past *Initial interest*, or had their rooms, period or budget written down, counted as
@@ -2447,6 +2463,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set on the live site (Till) |
+| §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 Address search on Google Maps | **Built, needs a key change** | On the property form (new and edit). Waits on *Places API (New)* being enabled and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till) — today Google refuses, so the box is a plain one with a note |
 | §3.1 Quick scouting screen | **Built, on trial** | A pop-up over the event's Properties tab; the default *Scout a property* screen: essentials only, map found from the address, quick room-type rows and amenity chips, *Save and scout another*; *Use the full form* for everything |
@@ -2475,7 +2492,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
