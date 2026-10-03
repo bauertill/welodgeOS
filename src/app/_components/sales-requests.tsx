@@ -11,6 +11,7 @@ import { contractHref, newContractHref } from "~/lib/finance";
 import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
+import { NewClientPopup } from "~/app/_components/new-client-popup";
 import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
 import { addDays, daysUntil, dayKey, today } from "~/lib/dates";
@@ -286,7 +287,7 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
   const events = api.event.list.useQuery();
   const people = api.user.list.useQuery();
   const [clientId, setClientId] = useState(presetClientId ?? "");
-  const [newClient, setNewClient] = useState<string | null>(null);
+  const [addingClient, setAddingClient] = useState(false);
   const [contactId, setContactId] = useState("");
   const [eventId, setEventId] = useState("");
   const [ownerId, setOwnerId] = useState(me);
@@ -308,13 +309,13 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
 
   const submit = () => {
     setProblem(null);
-    if (!clientId && !newClient?.trim()) {
+    if (!clientId) {
       setProblem("Choose the client, or add a new one.");
       return;
     }
     create.mutate({
-      ...(newClient !== null ? { newClientName: newClient } : { clientId }),
-      contactId: newClient !== null ? null : contactId || null,
+      clientId,
+      contactId: contactId || null,
       eventId: eventId || null,
       ownerId: ownerId || null,
       followUpOn,
@@ -330,32 +331,37 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-2">
             <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">Client</span>
-            {newClient === null ? (
-              <>
-                <Combobox
-                  value={clientId}
-                  onChange={(id) => {
-                    setClientId(id);
-                    setContactId("");
-                  }}
-                  placeholder="Choose a client"
-                  options={(clients.data ?? []).map((c) => ({ id: c.id, label: c.name, detail: c.shortName }))}
-                />
-                <button type="button" onClick={() => setNewClient("")} className="text-brand-700 mt-1 text-xs font-light hover:underline">
-                  + A client we have not dealt with yet
-                </button>
-              </>
-            ) : (
-              <>
-                <Input value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="The company's name" aria-label="New client" autoFocus />
-                <button type="button" onClick={() => setNewClient(null)} className="text-brand-700 mt-1 text-xs font-light hover:underline">
-                  Choose an existing client instead
-                </button>
-              </>
+            <Combobox
+              value={clientId}
+              onChange={(id) => {
+                setClientId(id);
+                setContactId("");
+              }}
+              placeholder="Choose a client"
+              options={(clients.data ?? []).map((c) => ({ id: c.id, label: c.name, detail: c.shortName }))}
+            />
+            <button type="button" onClick={() => setAddingClient(true)} className="text-brand-700 mt-1 text-xs font-light hover:underline">
+              + A client we have not dealt with yet
+            </button>
+            {addingClient && (
+              <NewClientPopup
+                accountManagerId={ownerId}
+                onClose={() => setAddingClient(false)}
+                onCreated={(created) => {
+                  setClientId(created.id);
+                  setContactId(created.contactId ?? "");
+                  setAddingClient(false);
+                }}
+                onChooseExisting={(id) => {
+                  setClientId(id);
+                  setContactId("");
+                  setAddingClient(false);
+                }}
+              />
             )}
           </div>
-          <Field label="Contact" hint={newClient !== null ? "Add their people on the client's page once it exists." : undefined}>
-            <Select value={contactId} onChange={(e) => setContactId(e.target.value)} disabled={newClient !== null || !clientId}>
+          <Field label="Contact">
+            <Select value={contactId} onChange={(e) => setContactId(e.target.value)} disabled={!clientId}>
               <option value="">{clientId && (client.data?.contacts.length ?? 0) === 0 ? "No contacts recorded" : "Not chosen"}</option>
               {(client.data?.contacts ?? []).map((contact) => (
                 <option key={contact.id} value={contact.id}>

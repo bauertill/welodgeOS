@@ -190,7 +190,8 @@ export const clientRouter = createTRPCRouter({
     ),
 
   create: protectedProcedure
-    .input(clientInput)
+    // With its first contact, when one is known — both saved together.
+    .input(clientInput.extend({ contact: contactInput.optional() }))
     .mutation(({ ctx, input }) =>
       ctx.db.$transaction(async (tx) => {
         const client = await tx.client.create({
@@ -211,7 +212,10 @@ export const clientRouter = createTRPCRouter({
           entityId: client.id,
           summary: "Added",
         });
-        return client;
+        if (!input.contact) return { ...client, contactId: null as string | null };
+        const contact = await tx.clientContact.create({ data: { ...contactData(input.contact), clientId: client.id } });
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Client", entityId: client.id, summary: `Contact added: ${contact.name}` });
+        return { ...client, contactId: contact.id as string | null };
       }),
     ),
 

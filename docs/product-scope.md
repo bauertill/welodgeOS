@@ -1682,8 +1682,13 @@ client, and the rate card sent back to a client.
 
 **What a request holds:**
 
-- **Who** — the client (an existing one, or a new one named on the spot, since enquiries
-  often come from companies we have never dealt with), the contact who asked (one of the
+- **Who** — the client (an existing one, or a new one added on the spot, since enquiries
+  often come from companies we have never dealt with: *+ A client we have not dealt with
+  yet* opens a popup with the company in full — name, short name, category, general phone,
+  email and website, account manager (the request's, unless changed), notes — and,
+  optionally, the person asking — name, title, email, mobile, phone. Both are saved
+  together and chosen on the request. A name we already have is caught, with *Choose them
+  instead*), the contact who asked (one of the
   client's contacts, §4.10), the event (or none — not every enquiry is for one of our
   events) and the account manager, who is whoever registers it unless they choose someone
   else.
