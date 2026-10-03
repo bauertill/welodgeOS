@@ -1633,6 +1633,18 @@ the contract.
   waits unassigned and the project lead is told to give it to someone. One task per request:
   sending the details again makes no second one, and a request whose event is only chosen
   later gets its task then. A request not for one of our events gets none.
+- **Where to source**, on the sourcing task: a map with the places the client wants to be
+  close to (or, if they chose none, the event's own, said so), and **the properties we
+  already have** around them — within 15 km, or on the event already — as pins and a list,
+  each judged against the request in four plain checks, said in words: **how far** from
+  the nearest of their places (within 8 km counts), **the kind** (hotel rooms, apartments,
+  or an aparthotel for either), **the units** (all its room categories together, against
+  the most units on any one line), and **the price** (its lowest indicative rate, against a
+  budget per room per night in the same currency). *Fits* when every check passes; *Not
+  enough known* when none fails but some could not be made (no price, no unit count); *Fits
+  in part* when one fails; *Does not fit* otherwise. Each can be opened, or added to the
+  event in one click. Finding hotels we do not have yet waits on Google Places (§3.1,
+  `docs/todos.md`).
 - **Once the details are in, the enquiry is a sales request** — the same request, its
   history kept. The list marks the ones still enquiries. Requests that had already moved
   past *Initial interest*, or had their rooms, period or budget written down, counted as
@@ -2495,7 +2507,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |

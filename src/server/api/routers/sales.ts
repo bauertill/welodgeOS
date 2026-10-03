@@ -20,6 +20,7 @@ import { diffFields, logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { ensureSourcingTask } from "~/server/sourcing";
+import { fit } from "~/lib/sourcing-fit";
 import { snapshotNight } from "~/server/inventory";
 
 /**
@@ -1224,6 +1225,89 @@ export const salesRouter = createTRPCRouter({
         closeToOther: request.closeToOther ?? "",
         clientComments: request.clientComments ?? "",
       },
+    };
+  }),
+
+  /**
+   * Sourcing a request (doc §4.11): the client's places on a map, and the
+   * properties we already have near them, each judged against the request.
+   * With no places chosen, the event's own places stand in, and it says so.
+   */
+  sourcing: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const request = await ctx.db.salesRequest.findUniqueOrThrow({
+      where: { id: input.id },
+      include: {
+        lines: true,
+        closeTo: { select: { name: true, latitude: true, longitude: true } },
+        closeToPoints: { select: { label: true, latitude: true, longitude: true } },
+        event: { select: { id: true, name: true, placesOfInterest: { select: { name: true, latitude: true, longitude: true } } } },
+      },
+    });
+    const chosen = [
+      ...request.closeTo.map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude })),
+      ...request.closeToPoints,
+    ];
+    const targets = chosen.length ? chosen : (request.event?.placesOfInterest ?? []).map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude }));
+    const wanted = {
+      units: Math.max(0, ...request.lines.map((line) => line.rooms)),
+      apartments: request.lines.some((line) => /apartment|studio/i.test(line.roomType ?? "")),
+      hotelRooms: request.lines.some((line) => line.roomType && !/apartment|studio/i.test(line.roomType)),
+      budgetCents: request.budgetCents,
+      budgetCurrency: request.budgetCurrency,
+      budgetPerNight: request.budgetBasis === "PER_ROOM_NIGHT",
+    };
+    const onList = new Set(
+      request.eventId
+        ? (await ctx.db.scoutingEntry.findMany({ where: { eventId: request.eventId }, select: { propertyId: true } })).map((entry) => entry.propertyId)
+        : [],
+    );
+    const properties = await ctx.db.property.findMany({
+      where: { latitude: { not: null }, longitude: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        stars: true,
+        city: true,
+        latitude: true,
+        longitude: true,
+        totalRooms: true,
+        categories: { select: { unitCount: true, bedrooms: true, indicativePriceMinCents: true, currency: true } },
+      },
+    });
+    const suggestions = properties
+      .map((property) => {
+        const judged = fit(
+          { type: property.type, latitude: property.latitude!, longitude: property.longitude!, categories: property.categories, stated: property.totalRooms },
+          targets,
+          wanted,
+        );
+        return {
+          id: property.id,
+          name: property.name,
+          type: property.type,
+          stars: property.stars,
+          city: property.city,
+          latitude: property.latitude!,
+          longitude: property.longitude!,
+          onEvent: onList.has(property.id),
+          ...judged,
+        };
+      })
+      // Near enough to matter: within reach of one of the places, or already on the event.
+      .filter((property) => property.onEvent || property.km === null || property.km <= 15)
+      .sort((a, b) => {
+        const order = { good: 0, unclear: 1, partly: 2, poor: 3 } as const;
+        return order[a.verdict] - order[b.verdict] || (a.km ?? 99) - (b.km ?? 99);
+      })
+      .slice(0, 25);
+    return {
+      eventId: request.eventId,
+      eventName: request.event?.name ?? null,
+      targets,
+      fromEventPlaces: !chosen.length && targets.length > 0,
+      wanted,
+      suggestions,
     };
   }),
 

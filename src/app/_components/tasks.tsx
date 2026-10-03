@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
+import { SourcingPanel } from "~/app/_components/sourcing-panel";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
 import { daysUntil, dayKey } from "~/lib/dates";
@@ -745,6 +746,17 @@ export function TaskView({ id }: { id: string }) {
           )}
           {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
         </div>
+        {t.salesRequest && t.type?.name === "Sourcing" && (
+          <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 className="text-ink-900 text-[15px] font-medium">Where to source</h2>
+              <Link href={`/sales/${t.salesRequest.id}`} className="text-brand-700 text-[13px] font-light hover:underline">
+                The sales request →
+              </Link>
+            </div>
+            <SourcingPanel salesRequestId={t.salesRequest.id} />
+          </div>
+        )}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Comments</h2>
           <TaskComments taskId={t.id} />
