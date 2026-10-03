@@ -376,11 +376,9 @@ who asked, priority, type, event and client.
 
 **On the board, a task opens in a popup** (2026-10-03) — the same as its own page below,
 with *Open as a page* for a link to keep or share; closed with ×, Escape or a click beside
-it. *+ New task* opens the full form in a popup too. **A task can be added straight from
-the board:** *+ Add task* at the foot of each Kanban column, and at the top of the List
-(into *To do*), takes just its name — Enter adds it to that column, and another can be
-typed at once. Whoever adds it asked for it; with *My tasks* on it is theirs to complete,
-otherwise nobody's yet. The rest is filled in by opening it. Notifications and *My work*
+it. *+ New task* opens the full form in a popup too, and so does **+ Add task** at the
+foot of each Kanban column — the task then starts in that column — and at the top of the
+List (into *To do*). With *My tasks* on, the new task is already yours to complete. Notifications and *My work*
 still link to the task's own page.
 
 **A task's own page** (laid out 2026-10-03): on the left, for a sourcing task, *Where to
@@ -2495,7 +2493,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
-| §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; quick *+ Add task* in each column and the list; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
+| §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set on the live site (Till) |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |

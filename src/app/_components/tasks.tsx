@@ -134,7 +134,8 @@ export function TaskBoard() {
   const me = api.user.me.useQuery();
   // A task opens in a popup over the board, and a new one is added in one too.
   const [openId, setOpenId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  // The new-task popup, started in a column's status (To do from the button or the list).
+  const [adding, setAdding] = useState<TaskStatus | null>(null);
   const [filters, setFilters] = useState<Filters>(noFilters);
   const [status, setStatus] = useState<TaskStatus | "">("");
   const [search, setSearch] = useState("");
@@ -202,7 +203,7 @@ export function TaskBoard() {
         </div>
         <button
           type="button"
-          onClick={() => setAdding(true)}
+          onClick={() => setAdding("TODO")}
           className="bg-brand-400 hover:bg-brand-500 ml-auto rounded-full px-5 py-2.5 text-[13px] font-medium text-white"
         >
           + New task
@@ -279,18 +280,18 @@ export function TaskBoard() {
       </div>
 
       {view === "board" ? (
-        <Kanban tasks={rows} onOpen={setOpenId} assigneeId={mine ? me.data!.id : undefined} />
+        <Kanban tasks={rows} onOpen={setOpenId} onAdd={setAdding} />
       ) : rows.length === 0 && !tasks.isLoading && filtered ? (
         <EmptyState title="No task matches" description="Nothing matches these filters." />
       ) : (
-        <TaskTable tasks={rows} onOpen={setOpenId} quickAdd={{ assigneeId: mine ? me.data!.id : undefined }} />
+        <TaskTable tasks={rows} onOpen={setOpenId} onAdd={() => setAdding("TODO")} />
       )}
 
       {openId && <TaskPopup id={openId} onClose={() => setOpenId(null)} />}
       {adding && (
-        <Popup title="New task" subtitle="What it is, who completes it, and by when." onClose={() => setAdding(false)}>
+        <Popup title="New task" subtitle="What it is, who completes it, and by when." onClose={() => setAdding(null)}>
           <div className="border-ink-200/60 rounded-xl border bg-white p-5">
-            <TaskForm onDone={() => setAdding(false)} />
+            <TaskForm preset={{ status: adding, assigneeIds: mine ? [me.data!.id] : undefined }} onDone={() => setAdding(null)} />
           </div>
         </Popup>
       )}
@@ -299,7 +300,7 @@ export function TaskBoard() {
 }
 
 /** Four columns by status; a card is dragged from one to another to move it. */
-function Kanban({ tasks, onOpen, assigneeId }: { tasks: Task[]; onOpen: (id: string) => void; assigneeId?: string }) {
+function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) => void; onAdd: (status: TaskStatus) => void }) {
   const utils = api.useUtils();
   const move = api.task.update.useMutation({
     onSettled: () => {
@@ -357,7 +358,7 @@ function Kanban({ tasks, onOpen, assigneeId }: { tasks: Task[]; onOpen: (id: str
                   onOpen={() => onOpen(task.id)}
                 />
               ))}
-              <QuickAdd status={column} assigneeId={assigneeId} />
+              <AddTaskButton onClick={() => onAdd(column)} />
             </div>
           </div>
         );
@@ -424,14 +425,14 @@ export function TaskTable({
   tasks,
   compact = false,
   onOpen,
-  quickAdd,
+  onAdd,
 }: {
   tasks: Task[];
   compact?: boolean;
   /** Open a task in a popup; without it, the task's own page. */
   onOpen?: (id: string) => void;
-  /** A line at the top to add a task by its name. */
-  quickAdd?: { assigneeId?: string };
+  /** "+ Add task" at the top of the list. */
+  onAdd?: () => void;
 }) {
   return (
     <div className="border-ink-200/60 overflow-x-auto rounded-xl border bg-white">
@@ -448,10 +449,10 @@ export function TaskTable({
           </tr>
         </thead>
         <tbody>
-          {quickAdd && (
+          {onAdd && (
             <tr>
               <td colSpan={compact ? 4 : 6} className="border-ink-200/40 border-b px-2 py-1.5">
-                <QuickAdd status="TODO" assigneeId={quickAdd.assigneeId} />
+                <AddTaskButton onClick={onAdd} />
               </td>
             </tr>
           )}
@@ -491,60 +492,16 @@ export function TaskTable({
   );
 }
 
-/**
- * Add a task by its name alone, straight into a column (or the list's To do):
- * whoever adds it asked for it, and with My tasks on it is theirs to complete.
- * The rest is filled in by opening it.
- */
-function QuickAdd({ status, assigneeId }: { status: TaskStatus; assigneeId?: string }) {
-  const utils = api.useUtils();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const create = api.task.create.useMutation({
-    onSuccess: () => {
-      setTitle("");
-      void utils.task.invalidate();
-      void utils.audit.invalidate();
-    },
-  });
-  const save = () => {
-    if (!title.trim() || create.isPending) return;
-    create.mutate({ title, status, assigneeIds: assigneeId ? [assigneeId] : [] });
-  };
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-ink-500 hover:text-brand-700 hover:bg-white/70 w-full rounded-lg px-2 py-1.5 text-left text-[13px] font-light"
-      >
-        + Add task
-      </button>
-    );
-  }
+/** "+ Add task" at the foot of a column or the top of the list: opens the new-task popup. */
+function AddTaskButton({ onClick }: { onClick: () => void }) {
   return (
-    <div className="space-y-1">
-      <input
-        autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            save();
-          }
-          if (e.key === "Escape") {
-            setTitle("");
-            setOpen(false);
-          }
-        }}
-        onBlur={() => !title.trim() && setOpen(false)}
-        placeholder="What needs doing? Enter to add"
-        aria-label="New task"
-        className="border-brand-300 focus:border-brand-400 w-full rounded-lg border bg-white px-3 py-2 text-[13px] font-light outline-none"
-      />
-      {create.error && <FormError message={friendlyError(create.error)} />}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-ink-500 hover:text-brand-700 w-full rounded-lg px-2 py-1.5 text-left text-[13px] font-light hover:bg-white/70"
+    >
+      + Add task
+    </button>
   );
 }
 
@@ -636,7 +593,14 @@ function TaskPopup({ id, onClose }: { id: string; onClose: () => void }) {
 
 // --- The form ----------------------------------------------------------------
 
-export type TaskPreset = { eventId?: string; propertyId?: string; clientId?: string; salesRequestId?: string };
+export type TaskPreset = {
+  eventId?: string;
+  propertyId?: string;
+  clientId?: string;
+  salesRequestId?: string;
+  status?: TaskStatus;
+  assigneeIds?: string[];
+};
 
 type Draft = {
   title: string;
@@ -668,11 +632,11 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
   const [draft, setDraft] = useState<Draft>({
     title: task?.title ?? "",
     details: task?.details ?? "",
-    status: task?.status ?? "TODO",
+    status: task?.status ?? preset?.status ?? "TODO",
     priority: task?.priority ?? "",
     deadline: task?.deadline ? dayKey(task.deadline) : "",
     typeId: task?.type?.id ?? "",
-    assigneeIds: task?.assignees.map((person) => person.id) ?? [],
+    assigneeIds: task?.assignees.map((person) => person.id) ?? preset?.assigneeIds ?? [],
     requestedById: task?.requestedBy?.id ?? "",
     eventId: task?.event?.id ?? preset?.eventId ?? "",
     propertyId: task?.property?.id ?? preset?.propertyId ?? "",
