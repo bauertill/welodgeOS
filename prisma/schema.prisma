@@ -1577,18 +1577,16 @@ enum BudgetBasis {
   TOTAL
 }
 
-/// One line of what a client asks for (doc §4.11): this many rooms, of this
-/// type, for this many people each, from arrival to departure. A pre or post
-/// period, or another room type, is another line.
+/// One line of what a client asks for (doc §4.11): this many units — hotel
+/// rooms, or whole apartments — of a type, from arrival to departure. A pre
+/// or post period, or another type, is another line. `rooms` counts units.
 model SalesRequestLine {
   id             String       @id @default(cuid())
   salesRequest   SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
   salesRequestId String
   rooms          Int
-  /// "Twin", "Single", "1-bedroom apartment" — in words.
+  /// "Twin room", "2-bedroom apartment" — chosen, or in words.
   roomType       String?
-  /// People per room.
-  occupancy      Int?
   checkIn        DateTime?    @db.Date
   checkOut       DateTime?    @db.Date
   position       Int          @default(0)

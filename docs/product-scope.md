@@ -1589,11 +1589,13 @@ the contract.
   a private link, like the contracting one, which the client opens without signing in.
   They check it and send it from their own mailbox. The link can also be made on its own,
   copied, or switched off.
-- **The details** are fields of their own: **the rooms and periods, as lines** — each
-  line a number, a type chosen from **hotel rooms** (single, double, twin, triple, suite)
-  or **apartments** (studio, 1 to 4 bedrooms) — or *something else*, in words — how many
-  people each (filled in from the type: twin 2, 2-bedroom apartment 4…, and changeable),
-  and an arrival and departure; a line for apartments counts apartments, not rooms; *+ Add another period or room type* adds a line, starting where
+- **The details** are fields of their own: **the units and periods, as lines** — each
+  line a number of **units**, a type chosen from **hotel rooms** (single, double, twin,
+  triple, suite) or **apartments** (studio, 1 to 4 bedrooms) — or *something else*, in
+  words — and an arrival and departure. **A unit is one hotel room or one whole
+  apartment**: a 3-bedroom apartment is 1 unit, and the form says so beside the word
+  (2026-10-03; "rooms" misled). How many people each was asked at first and dropped the
+  same day as unclear; *+ Add another period or room type* adds a line, starting where
   the last one ended, so a pre period or a second room type is simply another line (the
   owner's call, 2026-10-03) — the **budget** (an amount and currency, per room per night, per person per
   night, or in total — the currency starts as the event's country's: dollars for Los
@@ -2458,7 +2460,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of rooms × room type × people per room × period, budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print. Property suggestions and the rate card not built |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print. Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |

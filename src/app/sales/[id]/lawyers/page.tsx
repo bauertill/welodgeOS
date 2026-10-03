@@ -66,12 +66,11 @@ export default async function LawyersSummaryPage({ params }: { params: Promise<{
           <h2 className="text-ink-900 mb-2 text-[15px] font-medium">What they asked for</h2>
           <dl>
             {row(
-              "Rooms and periods",
+              "Units and periods",
               request.lines
                 .map((line) =>
                   [
-                    `${line.rooms} ${line.roomType ?? "rooms"}`,
-                    line.occupancy ? `for ${line.occupancy}` : null,
+                    `${line.rooms} × ${line.roomType ?? "units"}`,
                     line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : null,
                   ]
                     .filter(Boolean)

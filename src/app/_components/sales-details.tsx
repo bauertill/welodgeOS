@@ -9,7 +9,7 @@ import { CloseToPicker, type Point } from "~/app/_components/close-to-picker";
 import { Card } from "~/app/_components/ui";
 import { dayKey } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
-import { currencyForCountry, isApartment, roomTypeGroups } from "~/lib/sales";
+import { currencyForCountry, roomTypeGroups } from "~/lib/sales";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 /**
@@ -22,7 +22,31 @@ import { api, type RouterOutputs } from "~/trpc/react";
 type FullRequest = NonNullable<RouterOutputs["sales"]["byId"]>;
 type Place = { id: string; name: string; latitude?: number; longitude?: number };
 const knownRoomTypes = new Set<string>(roomTypeGroups.flatMap((group) => group.types.map((type) => type.name)));
-const sleepsOf = (name: string) => roomTypeGroups.flatMap((group) => [...group.types]).find((type) => type.name === name)?.sleeps;
+
+/** What a unit is — the number on each line counts these (doc §4.11). */
+const UNIT_HINT = "One unit is one hotel room or one whole apartment — a 3-bedroom apartment counts as 1 unit.";
+
+/** A small ⓘ that explains a word, on hover, or on tap and focus on a phone. */
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex align-middle">
+      <button
+        type="button"
+        aria-label={text}
+        onClick={(e) => e.preventDefault()}
+        className="border-ink-300 text-ink-500 hover:border-brand-400 hover:text-brand-700 focus:border-brand-400 ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border text-[9px] leading-none font-semibold"
+      >
+        i
+      </button>
+      <span
+        role="tooltip"
+        className="bg-ink-900 pointer-events-none invisible absolute bottom-full -left-2 z-30 mb-1.5 w-60 rounded-md px-2.5 py-1.5 text-[11px] leading-snug font-light whitespace-normal text-white normal-case opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
 
 const CURRENCIES = ["EUR", "USD", "CHF", "GBP"];
 export const budgetBasisLabels: Record<BudgetBasis, string> = {
@@ -31,11 +55,10 @@ export const budgetBasisLabels: Record<BudgetBasis, string> = {
   TOTAL: "in total",
 };
 
-export type LineDraft = { rooms: string; roomType: string; occupancy: string; checkIn: string; checkOut: string };
+export type LineDraft = { rooms: string; roomType: string; checkIn: string; checkOut: string };
 const blankLine = (from?: LineDraft): LineDraft => ({
   rooms: "",
   roomType: "",
-  occupancy: "",
   // Another period usually starts where the last one ended.
   checkIn: from?.checkOut ?? "",
   checkOut: "",
@@ -52,7 +75,7 @@ export type DetailsValues = {
   clientComments: string;
 };
 
-type StoredLine = { rooms: number; roomType: string | null; occupancy: number | null; checkIn: Date | string | null; checkOut: Date | string | null };
+type StoredLine = { rooms: number; roomType: string | null; checkIn: Date | string | null; checkOut: Date | string | null };
 
 export function detailsFrom(
   values: {
@@ -74,7 +97,6 @@ export function detailsFrom(
       ? values.lines.map((line) => ({
           rooms: line.rooms ? String(line.rooms) : "",
           roomType: line.roomType ?? "",
-          occupancy: line.occupancy?.toString() ?? "",
           checkIn: day(line.checkIn),
           checkOut: day(line.checkOut),
         }))
@@ -97,11 +119,9 @@ export function detailsInput(values: DetailsValues): { problem: string } | { inp
     if (!line.rooms.trim() && !line.roomType.trim() && !line.checkIn && !line.checkOut) continue;
     const label = values.lines.length > 1 ? `Line ${index + 1}: ` : "";
     const rooms = Number(line.rooms);
-    if (!line.rooms.trim() || !Number.isInteger(rooms) || rooms < 1) return { problem: `${label}say how many rooms, like 20.` };
-    const occupancy = line.occupancy.trim() ? Number(line.occupancy) : null;
-    if (occupancy !== null && (!Number.isInteger(occupancy) || occupancy < 1)) return { problem: `${label}people per room should be a whole number.` };
+    if (!line.rooms.trim() || !Number.isInteger(rooms) || rooms < 1) return { problem: `${label}say how many units, like 20.` };
     if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) return { problem: `${label}the departure must be after the arrival.` };
-    lines.push({ rooms, roomType: line.roomType, occupancy, checkIn: line.checkIn, checkOut: line.checkOut });
+    lines.push({ rooms, roomType: line.roomType, checkIn: line.checkIn, checkOut: line.checkOut });
   }
   const budget = values.budget.trim() ? Number(values.budget.replace(/[’'\s,]/g, "")) : null;
   if (budget !== null && (!Number.isFinite(budget) || budget < 0)) return { problem: "The budget should be an amount, like 180." };
@@ -109,7 +129,7 @@ export function detailsInput(values: DetailsValues): { problem: string } | { inp
 }
 function toInput(
   values: DetailsValues,
-  lines: { rooms: number; roomType: string; occupancy: number | null; checkIn: string; checkOut: string }[],
+  lines: { rooms: number; roomType: string; checkIn: string; checkOut: string }[],
   budget: number | null,
 ) {
   return {
@@ -148,13 +168,16 @@ export function DetailsFields({
   return (
     <div className="space-y-4">
       <div>
-        <Label>{forClient ? "The rooms you need, and when" : "Rooms and periods"}</Label>
+        <Label>{forClient ? "The units you need, and when" : "Units and periods"}</Label>
         <div className="space-y-2">
           {values.lines.map((line, index) => (
-            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[4.5rem_minmax(11rem,1fr)_4.75rem_8.75rem_8.75rem_1.25rem] sm:items-end sm:border-0 sm:p-0">
+            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[4.75rem_minmax(11rem,1fr)_8.75rem_8.75rem_1.25rem] sm:items-end sm:border-0 sm:p-0">
               <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">{isApartment(line.roomType) ? "Apartments" : "Rooms"}</span>
-                <Input value={line.rooms} onChange={(e) => setLine(index, { rooms: e.target.value })} inputMode="numeric" placeholder="20" aria-label={`Line ${index + 1} rooms`} className="px-2" />
+                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap">
+                  Units
+                  <InfoTip text={UNIT_HINT} />
+                </span>
+                <Input value={line.rooms} onChange={(e) => setLine(index, { rooms: e.target.value })} inputMode="numeric" placeholder="20" aria-label={`Line ${index + 1} units`} className="px-2" />
               </label>
               <label className="min-w-0">
                 <span className="text-ink-500 mb-1 block text-[11px]">Type</span>
@@ -165,11 +188,7 @@ export function DetailsFields({
                     value={line.roomType}
                     onChange={(e) => {
                       const name = e.target.value;
-                      if (name === "__other__") return setLine(index, { roomType: " " });
-                      const previous = sleepsOf(line.roomType);
-                      // A fitting number of people, unless one was typed.
-                      const occupancy = !line.occupancy || Number(line.occupancy) === previous ? String(sleepsOf(name) ?? "") : line.occupancy;
-                      setLine(index, { roomType: name, occupancy });
+                      setLine(index, { roomType: name === "__other__" ? " " : name });
                     }}
                     aria-label={`Line ${index + 1} room type`}
                   >
@@ -178,7 +197,7 @@ export function DetailsFields({
                       <optgroup key={group.kind} label={group.label}>
                         {group.types.map((type) => (
                           <option key={type.name} value={type.name}>
-                            {/* Short: the group, and the Rooms/Apartments column, say the rest. */}
+                            {/* Short: the group's name says the rest. */}
                             {type.short}
                           </option>
                         ))}
@@ -187,12 +206,6 @@ export function DetailsFields({
                     <option value="__other__">Something else…</option>
                   </Select>
                 )}
-              </label>
-              <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap" title={isApartment(line.roomType) ? "People per apartment" : "People per room"}>
-                  People each
-                </span>
-                <Input value={line.occupancy} onChange={(e) => setLine(index, { occupancy: e.target.value })} inputMode="numeric" placeholder="2" aria-label={`Line ${index + 1} people per room`} className="px-2" />
               </label>
               <label className="min-w-0">
                 <span className="text-ink-500 mb-1 block text-[11px]">Arrival</span>
@@ -362,9 +375,8 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
               <table className="w-full text-left text-[13px]">
                 <thead className="bg-ink-50/60">
                   <tr className="text-ink-500 text-[10px] tracking-wider uppercase">
-                    <th className="px-3 py-2 font-medium">Rooms</th>
-                    <th className="px-3 py-2 font-medium">Room type</th>
-                    <th className="px-3 py-2 font-medium">People/room</th>
+                    <th className="px-3 py-2 font-medium" title={UNIT_HINT}>Units</th>
+                    <th className="px-3 py-2 font-medium">Type</th>
                     <th className="px-3 py-2 font-medium">Period</th>
                   </tr>
                 </thead>
@@ -373,7 +385,6 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
                     <tr key={line.id} className="border-ink-200/40 border-t">
                       <td className="text-ink-900 px-3 py-2">{line.rooms}</td>
                       <td className="px-3 py-2">{line.roomType ?? "—"}</td>
-                      <td className="px-3 py-2">{line.occupancy ?? "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         {line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : line.checkIn ? `From ${formatDate(line.checkIn)}` : "—"}
                       </td>

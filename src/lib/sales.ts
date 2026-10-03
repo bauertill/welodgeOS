@@ -126,37 +126,34 @@ export function splitContractContacts(text: string | null): ContractContact[] {
 }
 
 /**
- * What a client can ask for, line by line (doc §4.11): a hotel room or an
- * apartment of a size, each with how many people it usually sleeps — offered,
- * and changeable. Anything else is said in words.
+ * What a client can ask for, line by line (doc §4.11): units — a hotel room,
+ * or a whole apartment of a size. Anything else is said in words.
  */
 export const roomTypeGroups = [
   {
     kind: "HOTEL",
     label: "Hotel rooms",
     types: [
-      { name: "Single room", short: "Single", sleeps: 1 },
-      { name: "Double room", short: "Double", sleeps: 2 },
-      { name: "Twin room", short: "Twin", sleeps: 2 },
-      { name: "Triple room", short: "Triple", sleeps: 3 },
-      { name: "Suite", short: "Suite", sleeps: 2 },
+      { name: "Single room", short: "Single" },
+      { name: "Double room", short: "Double" },
+      { name: "Twin room", short: "Twin" },
+      { name: "Triple room", short: "Triple" },
+      { name: "Suite", short: "Suite" },
     ],
   },
   {
     kind: "APARTMENT",
     label: "Apartments",
     types: [
-      { name: "Studio apartment", short: "Studio", sleeps: 2 },
-      { name: "1-bedroom apartment", short: "1 bedroom", sleeps: 2 },
-      { name: "2-bedroom apartment", short: "2 bedrooms", sleeps: 4 },
-      { name: "3-bedroom apartment", short: "3 bedrooms", sleeps: 6 },
-      { name: "4-bedroom apartment", short: "4 bedrooms", sleeps: 8 },
+      { name: "Studio apartment", short: "Studio" },
+      { name: "1-bedroom apartment", short: "1 bedroom" },
+      { name: "2-bedroom apartment", short: "2 bedrooms" },
+      { name: "3-bedroom apartment", short: "3 bedrooms" },
+      { name: "4-bedroom apartment", short: "4 bedrooms" },
     ],
   },
 ] as const;
 
-/** Whether a line is for apartments — then it counts apartments, and people per apartment. */
-export const isApartment = (roomType: string | null | undefined) => /apartment|studio/i.test(roomType ?? "");
 
 /** The currency of an event's country, to start a budget in (doc §4.11); euros when it is not known. */
 export function currencyForCountry(country: string | null | undefined) {

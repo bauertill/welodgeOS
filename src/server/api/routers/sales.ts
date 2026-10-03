@@ -103,9 +103,8 @@ export const budgetBasisLabels: Record<BudgetBasis, string> = {
 
 /** The request in detail (doc §4.11), as given after a call or by the client through their link. */
 const lineInput = z.object({
-  rooms: z.number().int().min(1, "Say how many rooms on each line, like 20").max(10_000),
+  rooms: z.number().int().min(1, "Say how many units on each line, like 20").max(10_000),
   roomType: z.string().max(200),
-  occupancy: z.number().int().min(1).max(20).nullable(),
   checkIn: day,
   checkOut: day,
 });
@@ -160,7 +159,6 @@ async function saveDetails(
         create: details.lines.map((line, position) => ({
           rooms: line.rooms,
           roomType: blank(line.roomType),
-          occupancy: line.occupancy,
           checkIn: line.checkIn ? parseDay(line.checkIn) : null,
           checkOut: line.checkOut ? parseDay(line.checkOut) : null,
           position,
@@ -209,8 +207,7 @@ function readable(request: Loaded) {
       request.lines
         .map((line) =>
           [
-            `${line.rooms} ${line.roomType ?? "rooms"}`,
-            line.occupancy ? `for ${line.occupancy}` : null,
+            `${line.rooms} × ${line.roomType ?? "units"}`,
             line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : null,
           ]
             .filter(Boolean)
@@ -1164,7 +1161,6 @@ export const salesRouter = createTRPCRouter({
         lines: request.lines.map((line) => ({
           rooms: line.rooms,
           roomType: line.roomType ?? "",
-          occupancy: line.occupancy,
           checkIn: line.checkIn ? dayKey(line.checkIn) : "",
           checkOut: line.checkOut ? dayKey(line.checkOut) : "",
         })),
