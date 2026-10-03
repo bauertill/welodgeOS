@@ -2,7 +2,7 @@
 
 import { AdvancedMarker, APIProvider, Map as GoogleMap, useMap } from "@vis.gl/react-google-maps";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { env } from "~/env";
 import { propertyTypeLabels } from "~/lib/scouting";
@@ -54,6 +54,15 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
   const [radiusKm, setRadiusKm] = useState(5);
   const discover = api.sales.sourcingDiscover.useQuery({ id: salesRequestId, radiusKm }, { staleTime: 3600_000, refetchOnWindowFocus: false });
   const found = discover.data?.found ?? [];
+  const addFound = useAddFound(salesRequestId, discover.data?.source ?? null);
+  // The map's hover card: open while the pointer is on a dot or on its card.
+  const [hovered, setHovered] = useState<string | null>(null);
+  const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hover = (key: string | null) => {
+    if (leaving.current) clearTimeout(leaving.current);
+    if (key) setHovered(key);
+    else leaving.current = setTimeout(() => setHovered(null), 200);
+  };
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   if (data.isLoading) return <p className="text-ink-500 text-sm font-light">Loading the map…</p>;
@@ -92,15 +101,51 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                   key={property.id}
                   position={{ lat: property.latitude, lng: property.longitude }}
                   title={property.name}
-                  zIndex={focus === property.id ? 60 : 10}
+                  zIndex={hovered === property.id ? 100 : focus === property.id ? 60 : 10}
                   onClick={() => {
                     setFocus(property.id);
                     document.getElementById(`suggestion-${property.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
                   }}
                 >
-                  <span
-                    className={`block rounded-full border-2 border-white shadow ${verdictStyles[property.verdict].dot} ${focus === property.id ? "h-5 w-5" : "h-3.5 w-3.5"}`}
-                  />
+                  <span className="relative block" onMouseEnter={() => hover(property.id)} onMouseLeave={() => hover(null)}>
+                    <span
+                      className={`block rounded-full border-2 border-white shadow ${verdictStyles[property.verdict].dot} ${focus === property.id || hovered === property.id ? "h-5 w-5" : "h-3.5 w-3.5"}`}
+                    />
+                    {hovered === property.id && (
+                      <MapCard>
+                        <span className={`mb-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${verdictStyles[property.verdict].badge}`}>
+                          {verdictStyles[property.verdict].label}
+                        </span>
+                        <span className="text-ink-900 block text-[13px] font-medium">{property.name}</span>
+                        <span className="text-ink-500 block text-xs font-light">
+                          {propertyTypeLabels[property.type]}
+                          {property.stars ? ` · ${property.stars}★` : ""}
+                          {property.km !== null ? ` · ${property.checks[0]?.text ?? ""}` : ""}
+                        </span>
+                        <span className="mt-2 flex items-center gap-3 text-xs">
+                          <Link href={`/properties/${property.id}${eventId ? `?back=${encodeURIComponent(`/events/${eventId}`)}` : ""}`} className="text-brand-700 hover:underline">
+                            Open
+                          </Link>
+                          {eventId &&
+                            (property.onEvent ? (
+                              <span className="text-ink-500">On {eventName}</span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={add.isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  add.mutate({ eventId, propertyId: property.id });
+                                }}
+                                className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white"
+                              >
+                                Add to {eventName}
+                              </button>
+                            ))}
+                        </span>
+                      </MapCard>
+                    )}
+                  </span>
                 </AdvancedMarker>
               ))}
               {found.map((place) => (
@@ -108,13 +153,33 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                   key={place.key}
                   position={{ lat: place.latitude, lng: place.longitude }}
                   title={`${place.name} — not in the system`}
-                  zIndex={focus === place.key ? 60 : 5}
+                  zIndex={hovered === place.key ? 100 : focus === place.key ? 60 : 5}
                   onClick={() => {
                     setFocus(place.key);
                     document.getElementById(`found-${place.key}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
                   }}
                 >
-                  <span className={`border-brand-500 block rounded-full border-2 bg-white shadow ${focus === place.key ? "h-4 w-4" : "h-2.5 w-2.5"}`} />
+                  <span className="relative block" onMouseEnter={() => hover(place.key)} onMouseLeave={() => hover(null)}>
+                    <span
+                      className={`border-brand-500 block rounded-full border-2 bg-white shadow ${focus === place.key || hovered === place.key ? "h-4 w-4" : "h-2.5 w-2.5"}`}
+                    />
+                    {hovered === place.key && (
+                      <MapCard>
+                        <span className="text-brand-700 mb-0.5 block text-[10px] font-medium tracking-wider uppercase">Not in the system</span>
+                        <span className="text-ink-900 block text-[13px] font-medium">{place.name}</span>
+                        <span className="text-ink-500 block text-xs font-light">
+                          {propertyTypeLabels[place.type]}
+                          {place.stars ? ` · ${place.stars}★` : ""}
+                          {place.rating ? ` · ${place.rating.toFixed(1)} rating` : ""}
+                          {place.priceLevel ? ` · ${place.priceLevel}` : ""}
+                          {place.checks[0] ? ` · ${place.checks[0].text}` : ""}
+                        </span>
+                        <span className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                          <FoundActions place={place} eventName={eventName} adder={addFound} />
+                        </span>
+                      </MapCard>
+                    )}
+                  </span>
                 </AdvancedMarker>
               ))}
             </GoogleMap>
@@ -215,6 +280,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
           onRetry={() => void discover.refetch()}
           source={discover.data?.source ?? null}
           found={found}
+          adder={addFound}
           focus={focus}
           setFocus={setFocus}
         />
@@ -244,6 +310,7 @@ function NotInSystem({
   onRetry,
   source,
   found,
+  adder,
   focus,
   setFocus,
 }: {
@@ -257,18 +324,11 @@ function NotInSystem({
   onRetry: () => void;
   source: "google" | "osm" | null;
   found: FoundPlace[];
+  adder: Adder;
   focus: string | null;
   setFocus: (key: string) => void;
 }) {
-  const utils = api.useUtils();
   const [all, setAll] = useState(false);
-  const [added, setAdded] = useState<Record<string, string>>({});
-  const add = api.sales.addFound.useMutation({
-    onSuccess: (property, variables) => {
-      setAdded((current) => ({ ...current, [variables.place.name]: property.id }));
-      void utils.sales.sourcing.invalidate();
-    },
-  });
   const shown = all ? found : found.slice(0, 8);
 
   return (
@@ -311,7 +371,6 @@ function NotInSystem({
         <>
           <ul className="space-y-1.5">
             {shown.map((place) => {
-              const propertyId = added[place.name];
               return (
                 <li
                   key={place.key}
@@ -340,47 +399,7 @@ function NotInSystem({
                     </span>
                   </span>
                   <span className="flex items-center gap-3 text-xs">
-                    <a href={place.mapUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
-                      Map ↗
-                    </a>
-                    {place.website && (
-                      <a href={place.website} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
-                        Website ↗
-                      </a>
-                    )}
-                    {propertyId ? (
-                      <Link href={`/properties/${propertyId}`} className="font-medium text-[#0a7a47] hover:underline">
-                        ✓ Added — open
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={add.isPending}
-                        onClick={() =>
-                          add.mutate({
-                            salesRequestId,
-                            place: {
-                              name: place.name,
-                              type: place.type,
-                              latitude: place.latitude,
-                              longitude: place.longitude,
-                              address: place.address,
-                              city: place.city,
-                              country: place.country,
-                              website: place.website,
-                              phone: place.phone,
-                              stars: place.stars,
-                              rooms: place.rooms,
-                              source: source ?? "osm",
-                            },
-                          })
-                        }
-                        title={eventName ? `Adds it to our properties and to ${eventName}` : "Adds it to our properties"}
-                        className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
-                      >
-                        {add.isPending && add.variables?.place.name === place.name ? "Adding…" : "Add to properties board"}
-                      </button>
-                    )}
+                    <FoundActions place={place} eventName={eventName} adder={adder} />
                   </span>
                 </li>
               );
@@ -391,9 +410,92 @@ function NotInSystem({
               {all ? "Show fewer" : `Show all ${found.length}`}
             </button>
           )}
-          {add.error && <p className="mt-2 text-xs text-[#c03654]">{add.error.message}</p>}
+          {adder.error && <p className="mt-2 text-xs text-[#c03654]">{adder.error}</p>}
         </>
       )}
     </div>
+  );
+}
+
+/** Adding a place found on the map to our properties (and the event), shared by its row and its map card. */
+function useAddFound(salesRequestId: string, source: "google" | "osm" | null) {
+  const utils = api.useUtils();
+  const [added, setAdded] = useState<Record<string, string>>({});
+  const add = api.sales.addFound.useMutation({
+    onSuccess: (property, variables) => {
+      setAdded((current) => ({ ...current, [variables.place.name]: property.id }));
+      void utils.sales.sourcing.invalidate();
+    },
+  });
+  return {
+    added,
+    pending: add.isPending ? (add.variables?.place.name ?? null) : null,
+    error: add.error?.message ?? null,
+    add: (place: FoundPlace) =>
+      add.mutate({
+        salesRequestId,
+        place: {
+          name: place.name,
+          type: place.type,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          address: place.address,
+          city: place.city,
+          country: place.country,
+          website: place.website,
+          phone: place.phone,
+          stars: place.stars,
+          rooms: place.rooms,
+          source: source ?? "osm",
+        },
+      }),
+  };
+}
+type Adder = ReturnType<typeof useAddFound>;
+
+/** A found place's links and its Add to properties board button. */
+function FoundActions({ place, eventName, adder }: { place: FoundPlace; eventName: string | null; adder: Adder }) {
+  const propertyId = adder.added[place.name];
+  return (
+    <>
+      <a href={place.mapUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+        Map ↗
+      </a>
+      {place.website && (
+        <a href={place.website} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+          Website ↗
+        </a>
+      )}
+      {propertyId ? (
+        <Link href={`/properties/${propertyId}`} className="font-medium text-[#0a7a47] hover:underline">
+          ✓ Added — open
+        </Link>
+      ) : (
+        <button
+          type="button"
+          disabled={adder.pending !== null}
+          onClick={(e) => {
+            e.stopPropagation();
+            adder.add(place);
+          }}
+          title={eventName ? `Adds it to our properties and to ${eventName}` : "Adds it to our properties"}
+          className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
+        >
+          {adder.pending === place.name ? "Adding…" : "Add to properties board"}
+        </button>
+      )}
+    </>
+  );
+}
+
+/** The card over a dot on the map, while the pointer is on it. */
+function MapCard({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="border-ink-200 absolute bottom-full left-1/2 mb-1.5 block w-72 -translate-x-1/2 cursor-default rounded-lg border bg-white px-3 py-2.5 text-left whitespace-normal shadow-lg"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+    </span>
   );
 }

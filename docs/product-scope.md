@@ -1665,7 +1665,10 @@ the contract.
 - **Properties not in the system**, under them (2026-10-03): places to stay within **5 km**
   of the client's places that are not among our properties — widened to 10 or 20 km with
   *Search within* — found on the map when the task is opened — hotels, and serviced apartments or aparthotels when apartments are asked for —
-  as hollow purple dots on the map and a list, nearest first: the name, the kind, Google's
+  as hollow purple dots on the map and a list, nearest first. Pointing at a dot opens a card
+  over it — the name, kind, rating and distance, its links and **Add to properties board**
+  (a dot for one of ours shows its verdict, *Open* and *Add to* the event); the card stays
+  while the pointer moves onto it, and closes when it leaves. In the list: the name, the kind, Google's
   guest rating and price level ($–$$$$), how far and from which place, the rooms when the
   map knows them, a link to it on the map and to its website. A place is left out when we
   already have one with the same name or address, or on the very same spot. The **Add to
