@@ -1658,16 +1658,18 @@ the contract.
   budget per room per night in the same currency). *Fits* when every check passes; *Not
   enough known* when none fails but some could not be made (no price, no unit count); *Fits
   in part* when one fails; *Does not fit* otherwise. Only the ones that *fit* are shown at
-  first, on the map and in the list; the others wait behind a tab each, with how many there
-  are. Each can be opened, or added to the event in one click.
-- **Properties not in the system**, under them (2026-10-03): places to stay within 8 km of
-  the client's places that are not among our properties, found on the map when the task is
-  opened — hotels, and serviced apartments or aparthotels when apartments are asked for —
+  first, on the map and in the list; those that *fit in part* wait behind their tab, with
+  how many there are. *Not enough known* and *Does not fit* are not shown at all (the
+  owner's call, 2026-10-03) — one with no unit count or price is left out until those are
+  filled in on its page. Each can be opened, or added to the event in one click.
+- **Properties not in the system**, under them (2026-10-03): places to stay within **5 km**
+  of the client's places that are not among our properties — widened to 10 or 20 km with
+  *Search within* — found on the map when the task is opened — hotels, and serviced apartments or aparthotels when apartments are asked for —
   as hollow purple dots on the map and a list, nearest first: the name, the kind, Google's
   guest rating and price level ($–$$$$), how far and from which place, the rooms when the
   map knows them, a link to it on the map and to its website. A place is left out when we
-  already have one with the same name or address, or on the very same spot. **Add to our
-  properties** creates the property from what the map knows (name, kind, address, city,
+  already have one with the same name or address, or on the very same spot. The **Add to
+  properties board** button creates the property from what the map knows (name, kind, address, city,
   country, coordinates, website, phone, stars, rooms) and puts it on the request's event,
   noted as found while sourcing for that client; it then shows among the properties we
   have, to be filled in on its page. The search uses **Google Maps** (Places API, New) —
@@ -1675,6 +1677,9 @@ the contract.
   whose list is patchier: the section says which. Flats without a website are left out of
   OpenStreetMap's, as homes rather than places we can contract. An answer is kept for six
   hours, so opening the task again does not search again (each Google search is paid).
+  OpenStreetMap's free server is often busy: it is asked twice, and if it still turns the
+  search away the section says so, with *Try again* — a failed search is never kept as
+  "nothing found".
 - **Once the details are in, the enquiry is a sales request** — the same request, its
   history kept. The list marks the ones still enquiries. Requests that had already moved
   past *Initial interest*, or had their rooms, period or budget written down, counted as

@@ -22,7 +22,7 @@ import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { ensureSourcingTask } from "~/server/sourcing";
 import { distanceKm } from "~/lib/scouting";
 import { looksLike } from "~/lib/similar-properties";
-import { fit, WITHIN_KM } from "~/lib/sourcing-fit";
+import { fit } from "~/lib/sourcing-fit";
 import { findNearby, type Source } from "~/server/discover";
 import { snapshotNight } from "~/server/inventory";
 
@@ -1334,11 +1334,18 @@ export const salesRouter = createTRPCRouter({
    * §4.11), from Google Maps — or OpenStreetMap while Google is not switched
    * on — each judged against the request as far as the map can tell.
    */
-  sourcingDiscover: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+  sourcingDiscover: protectedProcedure
+    // 5 km to start with; wider when asked.
+    .input(z.object({ id: z.string(), radiusKm: z.number().min(1).max(30).default(5) }))
+    .query(async ({ ctx, input }) => {
     const { targets, wanted } = await sourcingContext(ctx.db, input.id);
     if (targets.length === 0) return { source: null as Source | null, found: [] };
     const kinds = { hotels: wanted.hotelRooms || !wanted.apartments, apartments: wanted.apartments };
-    const results = await Promise.all(targets.slice(0, 4).map((target) => findNearby(target, WITHIN_KM, kinds)));
+    const answered = await Promise.all(targets.slice(0, 4).map((target) => findNearby(target, input.radiusKm, kinds)));
+    const results = answered.filter((result) => result !== null);
+    if (results.length === 0) {
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "The map search did not answer — its server is busy. Try again in a minute." });
+    }
     const source: Source | null = results.some((result) => result.source === "google") ? "google" : "osm";
     const ours = await ctx.db.property.findMany({ select: { id: true, name: true, address: true, latitude: true, longitude: true } });
     const seen = new Set<string>();
@@ -1354,9 +1361,9 @@ export const salesRouter = createTRPCRouter({
           }),
       )
       .map((place) => ({ ...place, ...fit({ type: place.type, latitude: place.latitude, longitude: place.longitude, categories: [], stated: place.rooms }, targets, wanted) }))
-      .filter((place) => place.km !== null && place.km <= WITHIN_KM)
+      .filter((place) => place.km !== null && place.km <= input.radiusKm)
       .sort((a, b) => (a.km ?? 99) - (b.km ?? 99) || (b.rating ?? 0) - (a.rating ?? 0))
-      .slice(0, 30);
+      .slice(0, 100);
     return { source, found };
   }),
 

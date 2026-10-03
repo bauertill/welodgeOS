@@ -8,7 +8,8 @@ import { distanceKm } from "~/lib/scouting";
  * a client's places: through Google Maps (Places API, New) on the server's
  * key, or — while Google refuses, the API not switched on for the key —
  * through OpenStreetMap, whose map of hotels is free but patchier. Each answer
- * is kept for a few hours, so opening a task again does not search again.
+ * is kept for a few hours, so opening a task again does not search again; a
+ * search that failed (OpenStreetMap's free server is often busy) is not kept.
  */
 
 export type Found = {
@@ -40,14 +41,19 @@ type Point = { latitude: number; longitude: number };
 const HOURS = 6;
 const cache = new Map<string, { at: number; value: { source: Source; found: Found[] } }>();
 
-/** Places to stay within `radiusKm` of a point: hotels, and apartments when asked for. */
+/** Places to stay within `radiusKm` of a point: hotels, and apartments when asked for; null when no map answered. */
 export async function findNearby(point: Point, radiusKm: number, kinds: { hotels: boolean; apartments: boolean }) {
   const key = `${point.latitude.toFixed(4)},${point.longitude.toFixed(4)},${radiusKm},${kinds.hotels},${kinds.apartments}`;
   const kept = cache.get(key);
   if (kept && Date.now() - kept.at < HOURS * 3600_000) return kept.value;
   const google = await fromGoogle(point, radiusKm, kinds);
-  const value = google ? { source: "google" as const, found: google } : { source: "osm" as const, found: (await fromOpenStreetMap(point, radiusKm, kinds)) ?? [] };
-  cache.set(key, { at: Date.now(), value });
+  let value: { source: Source; found: Found[] } | null = google ? { source: "google", found: google } : null;
+  if (!value) {
+    // OpenStreetMap's server turns requests away when busy: one more try, a moment later.
+    const osm = (await fromOpenStreetMap(point, radiusKm, kinds)) ?? (await new Promise((resolve) => setTimeout(resolve, 2000)).then(() => fromOpenStreetMap(point, radiusKm, kinds)));
+    if (osm) value = { source: "osm", found: osm };
+  }
+  if (value) cache.set(key, { at: Date.now(), value });
   return value;
 }
 
@@ -158,9 +164,11 @@ async function fromOpenStreetMap(point: Point, radiusKm: number, kinds: { hotels
     body: new URLSearchParams({ data: query }),
   }).catch(() => null);
   if (!response?.ok) return null;
-  const data = (await response.json().catch(() => null)) as { elements?: OsmElement[] } | null;
+  // A busy server can answer 200 with an error page, or JSON carrying a "remark" instead of results.
+  const data = (await response.json().catch(() => null)) as { elements?: OsmElement[]; remark?: string } | null;
+  if (!data?.elements || (data.remark && /error|timeout|busy/i.test(data.remark))) return null;
   const found: Found[] = [];
-  for (const element of data?.elements ?? []) {
+  for (const element of data.elements) {
     const tags = element.tags ?? {};
     const latitude = element.lat ?? element.center?.lat;
     const longitude = element.lon ?? element.center?.lon;

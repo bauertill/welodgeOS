@@ -17,7 +17,8 @@ const verdictStyles = {
   poor: { dot: "bg-[#9a9a9a]", badge: "bg-ink-50 text-ink-500", label: "Does not fit" },
 } as const;
 type Verdict = keyof typeof verdictStyles;
-const verdictOrder: Verdict[] = ["good", "unclear", "partly", "poor"];
+// Only those that fit, entirely or in part, are offered; the rest are left out.
+const verdictOrder: Verdict[] = ["good", "partly"];
 
 /** Frames the map around every pin once they are known. */
 function FitAll({ points }: { points: { latitude: number; longitude: number }[] }) {
@@ -50,13 +51,15 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
   // Only the ones that fit entirely are shown at first; the rest wait behind their tabs.
   const [tab, setTab] = useState<Verdict>("good");
   // Not in the system: searched on the map once per visit, kept for an hour.
-  const discover = api.sales.sourcingDiscover.useQuery({ id: salesRequestId }, { staleTime: 3600_000, refetchOnWindowFocus: false });
+  const [radiusKm, setRadiusKm] = useState(5);
+  const discover = api.sales.sourcingDiscover.useQuery({ id: salesRequestId, radiusKm }, { staleTime: 3600_000, refetchOnWindowFocus: false });
   const found = discover.data?.found ?? [];
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   if (data.isLoading) return <p className="text-ink-500 text-sm font-light">Loading the map…</p>;
   if (!data.data) return null;
-  const { targets, suggestions, fromEventPlaces, eventId, eventName } = data.data;
+  const { targets, fromEventPlaces, eventId, eventName } = data.data;
+  const suggestions = data.data.suggestions.filter((property) => verdictOrder.includes(property.verdict));
   const shown = suggestions.filter((property) => property.verdict === tab);
   const counts = Object.fromEntries(verdictOrder.map((verdict) => [verdict, suggestions.filter((property) => property.verdict === verdict).length])) as Record<Verdict, number>;
   const points = [...targets, ...shown.slice(0, 15)];
@@ -71,7 +74,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
       ) : (
         <p className="text-ink-500 text-xs font-light">
           {fromEventPlaces ? "The client chose no places, so these are the event's own. " : "Where the client wants to be close to. "}
-          The properties we already have around them that fit the request are shown; the others wait behind the tabs below. Hollow purple dots are places to stay we do not have yet.
+          The properties we already have around them that fit the request are shown, and those that fit in part behind their tab. Hollow purple dots are places to stay we do not have yet.
         </p>
       )}
       {apiKey && points.length > 0 && (
@@ -123,7 +126,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
         <h3 className="text-ink-900 mb-2 text-[14px] font-medium">Properties we already have nearby</h3>
         {suggestions.length === 0 ? (
           <p className="text-ink-500 text-sm font-light">
-            None within {WITHIN_KM * 2} km yet. Scout new ones on {eventName ? `${eventName}'s` : "the event's"} Properties tab.
+            None that fits within {WITHIN_KM * 2} km yet — see the places not in the system below, or scout new ones on {eventName ? `${eventName}'s` : "the event's"} Properties tab.
           </p>
         ) : (
           <>
@@ -145,7 +148,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
           {shown.length === 0 ? (
             <p className="text-ink-500 text-sm font-light">
               {tab === "good"
-                ? `None fits the request entirely yet.${counts.partly ? ` ${counts.partly} ${counts.partly === 1 ? "fits" : "fit"} in part.` : ""}${counts.unclear ? ` ${counts.unclear} may fit — not enough is known about ${counts.unclear === 1 ? "it" : "them"}.` : ""}`
+                ? `None fits the request entirely yet.${counts.partly ? ` ${counts.partly} ${counts.partly === 1 ? "fits" : "fit"} in part.` : ""}`
                 : "None here."}
             </p>
           ) : (
@@ -204,8 +207,12 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
         <NotInSystem
           salesRequestId={salesRequestId}
           eventName={eventName}
+          radiusKm={radiusKm}
+          setRadiusKm={setRadiusKm}
           loading={discover.isLoading}
           failed={discover.isError}
+          failedMessage={discover.error?.message ?? null}
+          onRetry={() => void discover.refetch()}
           source={discover.data?.source ?? null}
           found={found}
           focus={focus}
@@ -215,6 +222,9 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
     </div>
   );
 }
+
+/** How far to search for places not in the system: 5 km first, wider when asked. */
+const radiusOptions = [5, 10, 20];
 
 type FoundPlace = RouterOutputs["sales"]["sourcingDiscover"]["found"][number];
 
@@ -226,8 +236,12 @@ type FoundPlace = RouterOutputs["sales"]["sourcingDiscover"]["found"][number];
 function NotInSystem({
   salesRequestId,
   eventName,
+  radiusKm,
+  setRadiusKm,
   loading,
   failed,
+  failedMessage,
+  onRetry,
   source,
   found,
   focus,
@@ -235,8 +249,12 @@ function NotInSystem({
 }: {
   salesRequestId: string;
   eventName: string | null;
+  radiusKm: number;
+  setRadiusKm: (km: number) => void;
   loading: boolean;
   failed: boolean;
+  failedMessage: string | null;
+  onRetry: () => void;
   source: "google" | "osm" | null;
   found: FoundPlace[];
   focus: string | null;
@@ -255,19 +273,40 @@ function NotInSystem({
 
   return (
     <div>
-      <h3 className="text-ink-900 text-[14px] font-medium">Properties not in the system</h3>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-ink-900 text-[14px] font-medium">Properties not in the system</h3>
+        <span className="flex items-center gap-1.5 text-xs font-light">
+          <span className="text-ink-500">Search within</span>
+          {radiusOptions.map((km) => (
+            <button
+              key={km}
+              type="button"
+              onClick={() => setRadiusKm(km)}
+              aria-pressed={radiusKm === km}
+              className={`rounded-full border px-2.5 py-0.5 ${radiusKm === km ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 text-ink-700 hover:border-ink-500"}`}
+            >
+              {km} km
+            </button>
+          ))}
+        </span>
+      </div>
       <p className="text-ink-500 mb-2 text-xs font-light">
         {source === "osm"
-          ? "Places to stay within 8 km, from OpenStreetMap — Google Maps search is not switched on for us yet, so this list is patchier than it will be. "
-          : "Places to stay within 8 km, found on Google Maps. "}
-        Rooms and prices are not known until we ask; add one to our properties to start on it.
+          ? `Places to stay within ${radiusKm} km of the client's places, from OpenStreetMap — Google Maps search is not switched on for us yet, so this list is patchier than it will be. `
+          : `Places to stay within ${radiusKm} km of the client's places, found on Google Maps. `}
+        Rooms and prices are not known until we ask; add one to the properties board to start on it.
       </p>
       {loading ? (
         <p className="text-ink-500 text-sm font-light">Searching the map…</p>
       ) : failed ? (
-        <p className="text-ink-500 text-sm font-light">The map search did not answer. Try again later.</p>
+        <p className="text-ink-500 text-sm font-light">
+          {failedMessage ?? "The map search did not answer."}{" "}
+          <button type="button" onClick={onRetry} className="text-brand-700 font-medium hover:underline">
+            Try again
+          </button>
+        </p>
       ) : found.length === 0 ? (
-        <p className="text-ink-500 text-sm font-light">Nothing new found nearby — every place to stay around here is already in our properties.</p>
+        <p className="text-ink-500 text-sm font-light">{`Nothing new within ${radiusKm} km — every place to stay found there is already in our properties.${radiusKm < radiusOptions[radiusOptions.length - 1]! ? " Search wider above." : ""}`}</p>
       ) : (
         <>
           <ul className="space-y-1.5">
@@ -336,9 +375,10 @@ function NotInSystem({
                             },
                           })
                         }
-                        className="text-brand-700 font-medium hover:underline"
+                        title={eventName ? `Adds it to our properties and to ${eventName}` : "Adds it to our properties"}
+                        className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
                       >
-                        {add.isPending && add.variables?.place.name === place.name ? "Adding…" : `Add to our properties${eventName ? ` and ${eventName}` : ""}`}
+                        {add.isPending && add.variables?.place.name === place.name ? "Adding…" : "Add to properties board"}
                       </button>
                     )}
                   </span>
