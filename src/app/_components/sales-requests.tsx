@@ -157,6 +157,38 @@ export function SalesRequestList() {
   );
 }
 
+/**
+ * Delete a request that went nowhere (doc §4.11) — asked first, and refused
+ * by the server, with the reason, when it has rooms in inventory or a contract.
+ */
+export function DeleteRequest({ request, subtle = false, onDeleted }: { request: { id: string; client: { name: string } }; subtle?: boolean; onDeleted?: () => void }) {
+  const utils = api.useUtils();
+  const remove = api.sales.remove.useMutation({
+    onSuccess: () => {
+      void utils.sales.invalidate();
+      onDeleted?.();
+    },
+    onError: (error) => window.alert(friendlyError(error)),
+  });
+  return (
+    <button
+      type="button"
+      disabled={remove.isPending}
+      onClick={() =>
+        window.confirm(`Delete ${request.client.name}'s sales request? This cannot be undone. A request that went somewhere is better closed as Lost or No reply.`) &&
+        remove.mutate({ id: request.id })
+      }
+      className={
+        subtle
+          ? "text-ink-300 text-xs font-light group-hover:text-[#c03654] hover:underline"
+          : "text-xs font-light text-[#c03654] hover:underline"
+      }
+    >
+      {remove.isPending ? "Deleting…" : subtle ? "Delete" : "Delete this request"}
+    </button>
+  );
+}
+
 function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: Request[] }) {
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
@@ -178,11 +210,14 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
               <th className={th}>Follow up</th>
               <th className={th}>Account manager</th>
               <th className={th}>Days open</th>
+              <th className={th}>
+                <span className="sr-only">Delete</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {requests.map((request) => (
-              <tr key={request.id} className="hover:bg-ink-50/40">
+              <tr key={request.id} className="group hover:bg-ink-50/40">
                 <td className={`${td} min-w-44`}>
                   <Link href={`/sales/${request.id}`} className="text-ink-900 hover:text-brand-700 font-medium">
                     {request.client.name}
@@ -229,6 +264,9 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   <Manager person={request.owner} />
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{daysOpen(request)}</td>
+                <td className={`${td} text-right`}>
+                  <DeleteRequest request={request} subtle />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -974,6 +1012,7 @@ function DetailsEditor({
 }
 
 export function SalesRequestView({ request }: { request: FullRequest }) {
+  const router = useRouter();
   return (
     <div className="space-y-5">
       <StagePicker request={request} />
@@ -1009,6 +1048,9 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
           <FollowUpCard request={request} />
           <ContractCard request={request} />
           <DetailsCard request={request} />
+          <p className="px-1">
+            <DeleteRequest request={request} onDeleted={() => router.push("/sales")} />
+          </p>
         </div>
       </div>
     </div>

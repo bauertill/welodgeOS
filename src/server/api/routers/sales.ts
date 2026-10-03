@@ -1106,6 +1106,45 @@ export const salesRouter = createTRPCRouter({
       return result;
     }),
 
+  /**
+   * Delete a request that went nowhere (doc §4.11) — an enquiry made by
+   * mistake, or twice. One with rooms in inventory or a contract is refused:
+   * those are closed (Lost, Released…) so what happened stays on record. Its
+   * tasks stay, no longer tied to it; what it notified about is cleared.
+   */
+  remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(async (tx) => {
+      const request = await tx.salesRequest.findUniqueOrThrow({
+        where: { id: input.id },
+        select: {
+          id: true,
+          clientId: true,
+          client: { select: { name: true } },
+          event: { select: { name: true } },
+          _count: { select: { nights: true, nightRequests: true, contracts: true } },
+        },
+      });
+      if (request._count.nights || request._count.nightRequests) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This request has rooms in inventory — withdraw, release or cancel them first, or close the request as Lost or Released instead.",
+        });
+      }
+      if (request._count.contracts) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This request has a contract, so it cannot be deleted — close it instead." });
+      }
+      await tx.notification.deleteMany({ where: { link: `/sales/${request.id}` } });
+      await tx.salesRequest.delete({ where: { id: request.id } });
+      await logAudit(tx, {
+        actorId: ctx.session.user.id,
+        entity: "Client",
+        entityId: request.clientId,
+        summary: `Sales request deleted${request.event ? ` (${request.event.name})` : ""}`,
+      });
+      return { ok: true };
+    }),
+  ),
+
   // --- The request in detail (doc §4.11) ----------------------------------------
 
   /** Fill in or change the details — after a call, say. The first time, the enquiry becomes a sales request. */
