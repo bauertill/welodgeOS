@@ -65,9 +65,20 @@ export default async function LawyersSummaryPage({ params }: { params: Promise<{
         <div className={section}>
           <h2 className="text-ink-900 mb-2 text-[15px] font-medium">What they asked for</h2>
           <dl>
-            {row("Rooms", request.roomCount ? String(request.roomCount) : null)}
-            {row("Period", request.checkIn && request.checkOut ? formatRange(request.checkIn, request.checkOut) : null)}
-            {row("Room types and occupancy", request.rooms)}
+            {row(
+              "Rooms and periods",
+              request.lines
+                .map((line) =>
+                  [
+                    `${line.rooms} ${line.roomType ?? "rooms"}`,
+                    line.occupancy ? `for ${line.occupancy}` : null,
+                    line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", "),
+                )
+                .join("\n") || null,
+            )}
             {row(
               "Budget",
               request.budgetCents !== null && request.budgetCurrency

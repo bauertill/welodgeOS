@@ -195,10 +195,19 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   <span className="line-clamp-2">{request.description ?? request.rooms ?? "—"}</span>
                 </td>
                 <td className={`${td} max-w-44`}>
-                  <span className="line-clamp-2">
-                    {request.checkIn && request.checkOut ? formatRange(request.checkIn, request.checkOut) : (request.period ?? "—")}
-                  </span>
-                  {request.roomCount && <span className="text-ink-500 block text-xs">{request.roomCount} rooms</span>}
+                  {request.lines[0] ? (
+                    <>
+                      <span className="line-clamp-2">
+                        {request.lines[0].checkIn && request.lines[0].checkOut ? formatRange(request.lines[0].checkIn, request.lines[0].checkOut) : "—"}
+                      </span>
+                      <span className="text-ink-500 block text-xs">
+                        {request.lines[0].rooms} {request.lines[0].roomType ?? "rooms"}
+                        {request.lines.length > 1 ? ` · +${request.lines.length - 1} more` : ""}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="line-clamp-2">{request.period ?? "—"}</span>
+                  )}
                 </td>
                 <td className={`${td} whitespace-nowrap`}>
                   {request.nightsSold || request.nightsBlocked ? (

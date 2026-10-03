@@ -27,66 +27,87 @@ export const budgetBasisLabels: Record<BudgetBasis, string> = {
   TOTAL: "in total",
 };
 
+export type LineDraft = { rooms: string; roomType: string; occupancy: string; checkIn: string; checkOut: string };
+const blankLine = (from?: LineDraft): LineDraft => ({
+  rooms: "",
+  roomType: "",
+  occupancy: "",
+  // Another period usually starts where the last one ended.
+  checkIn: from?.checkOut ?? "",
+  checkOut: "",
+});
+
 export type DetailsValues = {
-  roomCount: string;
-  checkIn: string;
-  checkOut: string;
+  lines: LineDraft[];
   budget: string;
   budgetCurrency: string;
   budgetBasis: BudgetBasis;
   closeToIds: string[];
   closeToOther: string;
-  rooms: string;
   clientComments: string;
 };
 
+type StoredLine = { rooms: number; roomType: string | null; occupancy: number | null; checkIn: Date | string | null; checkOut: Date | string | null };
+
 export function detailsFrom(values: {
-  roomCount: number | null;
-  checkIn: Date | string | null;
-  checkOut: Date | string | null;
+  lines: StoredLine[];
   budgetCents: number | null;
   budgetCurrency: string | null;
   budgetBasis: BudgetBasis | null;
   closeToIds: string[];
   closeToOther: string | null;
-  rooms: string | null;
   clientComments: string | null;
 }): DetailsValues {
   const day = (value: Date | string | null) => (!value ? "" : typeof value === "string" ? value : dayKey(value));
   return {
-    roomCount: values.roomCount?.toString() ?? "",
-    checkIn: day(values.checkIn),
-    checkOut: day(values.checkOut),
+    lines: values.lines.length
+      ? values.lines.map((line) => ({
+          rooms: line.rooms ? String(line.rooms) : "",
+          roomType: line.roomType ?? "",
+          occupancy: line.occupancy?.toString() ?? "",
+          checkIn: day(line.checkIn),
+          checkOut: day(line.checkOut),
+        }))
+      : [blankLine()],
     budget: values.budgetCents !== null ? (values.budgetCents / 100).toFixed(2).replace(/\.00$/, "") : "",
     budgetCurrency: values.budgetCurrency ?? "EUR",
     budgetBasis: values.budgetBasis ?? "PER_ROOM_NIGHT",
     closeToIds: values.closeToIds,
     closeToOther: values.closeToOther ?? "",
-    rooms: values.rooms ?? "",
     clientComments: values.clientComments ?? "",
   };
 }
 
 /** The details as the server takes them; a problem in words when something does not read. */
 export function detailsInput(values: DetailsValues): { problem: string } | { input: ReturnType<typeof toInput> } {
-  const rooms = values.roomCount.trim() ? Number(values.roomCount) : null;
-  if (rooms !== null && (!Number.isInteger(rooms) || rooms < 1)) return { problem: "Say how many rooms as a whole number, like 20." };
+  const lines = [];
+  // A line with nothing in it is left out, not refused.
+  for (const [index, line] of values.lines.entries()) {
+    if (!line.rooms.trim() && !line.roomType.trim() && !line.checkIn && !line.checkOut) continue;
+    const label = values.lines.length > 1 ? `Line ${index + 1}: ` : "";
+    const rooms = Number(line.rooms);
+    if (!line.rooms.trim() || !Number.isInteger(rooms) || rooms < 1) return { problem: `${label}say how many rooms, like 20.` };
+    const occupancy = line.occupancy.trim() ? Number(line.occupancy) : null;
+    if (occupancy !== null && (!Number.isInteger(occupancy) || occupancy < 1)) return { problem: `${label}people per room should be a whole number.` };
+    if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) return { problem: `${label}the departure must be after the arrival.` };
+    lines.push({ rooms, roomType: line.roomType, occupancy, checkIn: line.checkIn, checkOut: line.checkOut });
+  }
   const budget = values.budget.trim() ? Number(values.budget.replace(/[’'\s,]/g, "")) : null;
   if (budget !== null && (!Number.isFinite(budget) || budget < 0)) return { problem: "The budget should be an amount, like 180." };
-  if (values.checkIn && values.checkOut && values.checkOut <= values.checkIn) return { problem: "The departure must be after the arrival." };
-  return { input: toInput(values, rooms, budget) };
+  return { input: toInput(values, lines, budget) };
 }
-function toInput(values: DetailsValues, rooms: number | null, budget: number | null) {
+function toInput(
+  values: DetailsValues,
+  lines: { rooms: number; roomType: string; occupancy: number | null; checkIn: string; checkOut: string }[],
+  budget: number | null,
+) {
   return {
-    roomCount: rooms,
-    checkIn: values.checkIn,
-    checkOut: values.checkOut,
+    lines,
     budgetCents: budget === null ? null : Math.round(budget * 100),
     budgetCurrency: budget === null ? null : values.budgetCurrency,
     budgetBasis: budget === null ? null : values.budgetBasis,
     closeToIds: values.closeToIds,
     closeToOther: values.closeToOther,
-    rooms: values.rooms,
     clientComments: values.clientComments,
   };
 }
@@ -104,18 +125,56 @@ export function DetailsFields({
   forClient?: boolean;
 }) {
   const set = <K extends keyof DetailsValues>(key: K, value: DetailsValues[K]) => onChange({ ...values, [key]: value });
+  const setLine = (index: number, patch: Partial<LineDraft>) =>
+    set(
+      "lines",
+      values.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    );
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-[8rem_1fr_1fr]">
-        <Field label={forClient ? "How many rooms?" : "Rooms"}>
-          <Input value={values.roomCount} onChange={(e) => set("roomCount", e.target.value)} inputMode="numeric" placeholder="20" />
-        </Field>
-        <Field label="Arrival">
-          <Input type="date" value={values.checkIn} onChange={(e) => set("checkIn", e.target.value)} />
-        </Field>
-        <Field label="Departure">
-          <Input type="date" value={values.checkOut} onChange={(e) => set("checkOut", e.target.value)} />
-        </Field>
+      <div>
+        <Label>{forClient ? "The rooms you need, and when" : "Rooms and periods"}</Label>
+        <div className="space-y-2">
+          {values.lines.map((line, index) => (
+            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[5rem_minmax(0,1fr)_5.5rem_9.5rem_9.5rem_1.5rem] sm:items-end sm:border-0 sm:p-0">
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px]">Rooms</span>
+                <Input value={line.rooms} onChange={(e) => setLine(index, { rooms: e.target.value })} inputMode="numeric" placeholder="20" aria-label={`Line ${index + 1} rooms`} className="px-2" />
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px]">Room type</span>
+                <Input value={line.roomType} onChange={(e) => setLine(index, { roomType: e.target.value })} placeholder="Twin" aria-label={`Line ${index + 1} room type`} />
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px]">People/room</span>
+                <Input value={line.occupancy} onChange={(e) => setLine(index, { occupancy: e.target.value })} inputMode="numeric" placeholder="2" aria-label={`Line ${index + 1} people per room`} className="px-2" />
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px]">Arrival</span>
+                <Input type="date" value={line.checkIn} onChange={(e) => setLine(index, { checkIn: e.target.value })} aria-label={`Line ${index + 1} arrival`} className="px-2" />
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px]">Departure</span>
+                <Input type="date" value={line.checkOut} onChange={(e) => setLine(index, { checkOut: e.target.value })} aria-label={`Line ${index + 1} departure`} className="px-2" />
+              </label>
+              {values.lines.length > 1 ? (
+                <button
+                  type="button"
+                  aria-label={`Remove line ${index + 1}`}
+                  onClick={() => set("lines", values.lines.filter((_, i) => i !== index))}
+                  className="text-ink-400 pb-2 text-lg leading-none hover:text-[#c03654]"
+                >
+                  ×
+                </button>
+              ) : (
+                <span />
+              )}
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={() => set("lines", [...values.lines, blankLine(values.lines.at(-1))])} className="text-brand-700 mt-2 text-[13px] font-medium hover:underline">
+          + Add another period or room type
+        </button>
       </div>
       <div>
         <Label>{forClient ? "Your budget" : "Budget"}</Label>
@@ -164,9 +223,6 @@ export function DetailsFields({
           aria-label="Close to, other"
         />
       </div>
-      <Field label={forClient ? "Room types and how many people per room" : "Room types and occupancy"}>
-        <Textarea rows={2} value={values.rooms} onChange={(e) => set("rooms", e.target.value)} placeholder="15 twin rooms for 2, 5 singles" />
-      </Field>
       <Field label={forClient ? "Anything else we should know" : "Client's comments"}>
         <Textarea rows={3} value={values.clientComments} onChange={(e) => set("clientComments", e.target.value)} placeholder="Breakfast needed, a meeting room, arriving in two groups…" />
       </Field>
@@ -198,7 +254,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const places = api.place.listForEvent.useQuery({ eventId: request.event?.id ?? "" }, { enabled: Boolean(request.event) });
   const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, closeToIds: request.closeTo.map((place) => place.id) }));
+  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id) }));
   const [problem, setProblem] = useState<string | null>(null);
   const save = api.sales.saveDetails.useMutation({
     onSuccess: () => {
@@ -219,7 +275,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
           <button
             type="button"
             onClick={() => {
-              setValues(detailsFrom({ ...request, closeToIds: request.closeTo.map((place) => place.id) }));
+              setValues(detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id) }));
               setEditing(true);
             }}
             className="text-brand-700 text-[13px] font-light hover:underline"
@@ -254,9 +310,33 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
         </form>
       ) : request.detailedAt ? (
         <dl className="space-y-2 text-sm font-light">
+          {request.lines.length > 0 && (
+            <div className="border-ink-200/60 mb-2 overflow-x-auto rounded-lg border">
+              <table className="w-full text-left text-[13px]">
+                <thead className="bg-ink-50/60">
+                  <tr className="text-ink-500 text-[10px] tracking-wider uppercase">
+                    <th className="px-3 py-2 font-medium">Rooms</th>
+                    <th className="px-3 py-2 font-medium">Room type</th>
+                    <th className="px-3 py-2 font-medium">People/room</th>
+                    <th className="px-3 py-2 font-medium">Period</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {request.lines.map((line) => (
+                    <tr key={line.id} className="border-ink-200/40 border-t">
+                      <td className="text-ink-900 px-3 py-2">{line.rooms}</td>
+                      <td className="px-3 py-2">{line.roomType ?? "—"}</td>
+                      <td className="px-3 py-2">{line.occupancy ?? "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : line.checkIn ? `From ${formatDate(line.checkIn)}` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {[
-            ["Rooms", request.roomCount ? String(request.roomCount) : null],
-            ["Period", request.checkIn && request.checkOut ? formatRange(request.checkIn, request.checkOut) : request.checkIn ? `From ${formatDate(request.checkIn)}` : null],
             [
               "Budget",
               request.budgetCents !== null && request.budgetCurrency
@@ -264,7 +344,6 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
                 : null,
             ],
             ["Close to", closeTo || null],
-            ["Room types", request.rooms],
             ["Client's comments", request.clientComments],
           ].map(([label, value]) => (
             <div key={label} className="flex gap-3">
@@ -432,7 +511,7 @@ export function NeedsForm({ token }: { token: string }) {
           onSubmit={(e) => {
             e.preventDefault();
             setProblem(null);
-            if (!values.roomCount.trim()) return setProblem("Please say how many rooms you need.");
+            if (!values.lines.some((line) => line.rooms.trim())) return setProblem("Please say how many rooms you need.");
             const result = detailsInput(values);
             if ("problem" in result) return setProblem(result.problem);
             submit.mutate({ token, ...result.input });

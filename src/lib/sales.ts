@@ -79,7 +79,7 @@ export type InterestKey = (typeof interestFields)[number]["key"];
  * What a request said in words before its details had fields of their own
  * (doc §4.11): kept, and shown under More detail where a request has any.
  */
-export const earlierInterestFields = interestFields.filter((field) => field.key !== "description" && field.key !== "rooms");
+export const earlierInterestFields = interestFields.filter((field) => field.key !== "description");
 export type ContractingKey = (typeof contractingFields)[number]["key"];
 
 /**

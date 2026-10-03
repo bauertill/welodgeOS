@@ -1108,14 +1108,13 @@ model SalesRequest {
 
   // The request in detail (doc §4.11) — after a call, or from the client
   // through their needs link. With these in, an enquiry is a sales request.
-  roomCount      Int?
-  checkIn        DateTime?         @db.Date
-  checkOut       DateTime?         @db.Date
+  /// What rooms, for when: a line per room type and period (doc §4.11).
+  lines          SalesRequestLine[]
   budgetCents    Int?
   budgetCurrency String?
   budgetBasis    BudgetBasis?
   /// Where they want to be close to: the event's places of interest…
-  closeTo        PlaceOfInterest[] @relation("SalesRequestCloseTo")
+  closeTo        PlaceOfInterest[]  @relation("SalesRequestCloseTo")
   /// …and anywhere else, in words.
   closeToOther   String?
   /// What the client adds in their own words.
@@ -1574,4 +1573,23 @@ enum BudgetBasis {
   PER_ROOM_NIGHT
   PER_PERSON_NIGHT
   TOTAL
+}
+
+/// One line of what a client asks for (doc §4.11): this many rooms, of this
+/// type, for this many people each, from arrival to departure. A pre or post
+/// period, or another room type, is another line.
+model SalesRequestLine {
+  id             String       @id @default(cuid())
+  salesRequest   SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  salesRequestId String
+  rooms          Int
+  /// "Twin", "Single", "1-bedroom apartment" — in words.
+  roomType       String?
+  /// People per room.
+  occupancy      Int?
+  checkIn        DateTime?    @db.Date
+  checkOut       DateTime?    @db.Date
+  position       Int          @default(0)
+
+  @@index([salesRequestId])
 }

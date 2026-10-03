@@ -1589,10 +1589,14 @@ the contract.
   a private link, like the contracting one, which the client opens without signing in.
   They check it and send it from their own mailbox. The link can also be made on its own,
   copied, or switched off.
-- **The details** are fields of their own: **number of rooms**, the **period** (arrival and
-  departure), the **budget** (an amount and currency, per room per night, per person per
+- **The details** are fields of their own: **the rooms and periods, as lines** — each
+  line a number of rooms, a room type in words ("Twin"), how many people per room, and an
+  arrival and departure; *+ Add another period or room type* adds a line, starting where
+  the last one ended, so a pre period or a second room type is simply another line (the
+  owner's call, 2026-10-03) — the **budget** (an amount and currency, per room per night, per person per
   night, or in total), **close to** (the event's places of interest, chosen, and anywhere
-  else in words), **room types and occupancy**, and the **client's comments**. They are
+  else in words), and the **client's comments**. Requests that had one number of rooms and
+  one arrival and departure kept them as their first line. They are
   filled in by us after a call (*Fill in after a call*), or by the client on their needs
   form — which lands on the request, says so, and tells the account manager.
 - **Once the details are in, the enquiry is a sales request** — the same request, its
@@ -2449,7 +2453,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (rooms, period, budget, close to, room types, comments); becomes a sales request once given; Summary for the lawyers to print. Property suggestions and the rate card not built |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of rooms × room type × people per room × period, budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print. Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |

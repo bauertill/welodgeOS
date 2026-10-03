@@ -84,6 +84,7 @@ const include = {
   event: { select: { id: true, name: true } },
   owner: { select: { id: true, name: true, email: true, image: true, bookingLink: true } },
   closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+  lines: { orderBy: [{ position: "asc" }] },
 } satisfies Prisma.SalesRequestInclude;
 
 export const budgetBasisLabels: Record<BudgetBasis, string> = {
@@ -93,17 +94,22 @@ export const budgetBasisLabels: Record<BudgetBasis, string> = {
 };
 
 /** The request in detail (doc §4.11), as given after a call or by the client through their link. */
-const detailsInput = z.object({
-  roomCount: z.number().int().min(1, "Say how many rooms, like 20").max(10_000).nullable(),
+const lineInput = z.object({
+  rooms: z.number().int().min(1, "Say how many rooms on each line, like 20").max(10_000),
+  roomType: z.string().max(200),
+  occupancy: z.number().int().min(1).max(20).nullable(),
   checkIn: day,
   checkOut: day,
+});
+
+const detailsInput = z.object({
+  lines: z.array(lineInput).max(50),
   budgetCents: z.number().int().min(0).nullable(),
   budgetCurrency: z.string().length(3).nullable(),
   budgetBasis: z.nativeEnum(BudgetBasis).nullable(),
   closeToIds: z.array(z.string()).max(50),
   closeToOther: z.string().max(2000),
   /** Room types and occupancy, in words. */
-  rooms: z.string().max(5000),
   clientComments: z.string().max(10_000),
 });
 
@@ -118,8 +124,10 @@ async function saveDetails(
   actor: { id: string | null; summary: string },
 ) {
   const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
-  if (details.checkIn && details.checkOut && details.checkOut <= details.checkIn) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "The departure must be after the arrival." });
+  for (const [index, line] of details.lines.entries()) {
+    if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Line ${index + 1}: the departure must be after the arrival.` });
+    }
   }
   const places = details.closeToIds.length
     ? await tx.placeOfInterest.findMany({ where: { id: { in: details.closeToIds }, eventId: before.eventId ?? "" }, select: { id: true } })
@@ -127,15 +135,23 @@ async function saveDetails(
   const after = await tx.salesRequest.update({
     where: { id },
     data: {
-      roomCount: details.roomCount,
-      checkIn: details.checkIn ? parseDay(details.checkIn) : null,
-      checkOut: details.checkOut ? parseDay(details.checkOut) : null,
+      // The lines are the request's own rows: replaced as a whole.
+      lines: {
+        deleteMany: {},
+        create: details.lines.map((line, position) => ({
+          rooms: line.rooms,
+          roomType: blank(line.roomType),
+          occupancy: line.occupancy,
+          checkIn: line.checkIn ? parseDay(line.checkIn) : null,
+          checkOut: line.checkOut ? parseDay(line.checkOut) : null,
+          position,
+        })),
+      },
       budgetCents: details.budgetCents,
       budgetCurrency: details.budgetCents === null ? null : (details.budgetCurrency ?? "EUR"),
       budgetBasis: details.budgetCents === null ? null : (details.budgetBasis ?? "PER_ROOM_NIGHT"),
       closeTo: { set: places },
       closeToOther: blank(details.closeToOther),
-      rooms: blank(details.rooms),
       clientComments: blank(details.clientComments),
       detailedAt: before.detailedAt ?? new Date(),
     },
@@ -166,8 +182,18 @@ function readable(request: Loaded) {
     proposalSentOn: date(request.proposalSentOn),
     blockedUntil: date(request.blockedUntil),
     closedOn: date(request.closedOn),
-    roomCount: request.roomCount !== null ? String(request.roomCount) : null,
-    stay: request.checkIn && request.checkOut ? formatRange(request.checkIn, request.checkOut) : request.checkIn ? `from ${formatDate(request.checkIn)}` : null,
+    asked:
+      request.lines
+        .map((line) =>
+          [
+            `${line.rooms} ${line.roomType ?? "rooms"}`,
+            line.occupancy ? `for ${line.occupancy}` : null,
+            line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : null,
+          ]
+            .filter(Boolean)
+            .join(", "),
+        )
+        .join("\n") || null,
     budgetAmount:
       request.budgetCents !== null && request.budgetCurrency
         ? `${formatMoney(request.budgetCents, request.budgetCurrency)}${request.budgetBasis ? ` ${budgetBasisLabels[request.budgetBasis]}` : ""}`
@@ -190,8 +216,7 @@ const historyFields = [
   { key: "proposalSentOn", label: "Proposal sent on" },
   { key: "blockedUntil", label: "Deadline" },
   { key: "value", label: "Value" },
-  { key: "roomCount", label: "Rooms" },
-  { key: "stay", label: "Period" },
+  { key: "asked", label: "Rooms and periods" },
   { key: "budgetAmount", label: "Budget" },
   { key: "closeToNames", label: "Close to" },
   { key: "clientComments", label: "Client's comments" },
@@ -1100,15 +1125,18 @@ export const salesRouter = createTRPCRouter({
       places: request.event?.placesOfInterest ?? [],
       submittedAt: request.needsSubmittedAt,
       values: {
-        roomCount: request.roomCount,
-        checkIn: request.checkIn ? dayKey(request.checkIn) : "",
-        checkOut: request.checkOut ? dayKey(request.checkOut) : "",
+        lines: request.lines.map((line) => ({
+          rooms: line.rooms,
+          roomType: line.roomType ?? "",
+          occupancy: line.occupancy,
+          checkIn: line.checkIn ? dayKey(line.checkIn) : "",
+          checkOut: line.checkOut ? dayKey(line.checkOut) : "",
+        })),
         budgetCents: request.budgetCents,
         budgetCurrency: request.budgetCurrency,
         budgetBasis: request.budgetBasis,
         closeToIds: request.closeTo.map((place) => place.id),
         closeToOther: request.closeToOther ?? "",
-        rooms: request.rooms ?? "",
         clientComments: request.clientComments ?? "",
       },
     };
@@ -1122,7 +1150,7 @@ export const salesRouter = createTRPCRouter({
       await ctx.db.$transaction(async (tx) => {
         const request = await tx.salesRequest.findUnique({ where: { needsToken: token }, select: { id: true, ownerId: true, client: { select: { name: true } } } });
         if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-        if (!details.roomCount) throw new TRPCError({ code: "BAD_REQUEST", message: "Please say how many rooms you need." });
+        if (details.lines.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Please say how many rooms you need." });
         await saveDetails(tx, request.id, details, { id: null, summary: "Needs sent by the client, through the link" });
         await tx.salesRequest.update({ where: { id: request.id }, data: { needsSubmittedAt: new Date() } });
         await notify(tx, {
@@ -1130,7 +1158,9 @@ export const salesRouter = createTRPCRouter({
           actorId: null,
           kind: "SALES_NEEDS_SENT",
           title: `${request.client.name} told us their needs`,
-          body: [`${details.roomCount} rooms`, details.checkIn && details.checkOut ? `${details.checkIn} – ${details.checkOut}` : null].filter(Boolean).join(" · "),
+          body: details.lines
+            .map((line) => [`${line.rooms} ${line.roomType || "rooms"}`, line.checkIn && line.checkOut ? `${line.checkIn} – ${line.checkOut}` : null].filter(Boolean).join(" · "))
+            .join("\n"),
           link: `/sales/${request.id}`,
         });
       });
