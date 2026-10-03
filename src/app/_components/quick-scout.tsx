@@ -4,6 +4,7 @@ import type { PropertyType } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { AddressSearch } from "~/app/_components/address-search";
 import { Button, FormError, friendlyError, Input, Label, Textarea } from "~/app/_components/form";
@@ -75,11 +76,20 @@ export function QuickScout({
   amenities,
   existingNames,
   event,
+  onSaved,
+  onCancel,
+  onDirtyChange,
 }: {
   amenities: { id: string; label: string }[];
   existingNames: { id: string; name: string }[];
   event: { id: string; name: string } | null;
+  /** In the pop-up: called once saved, instead of going to the event's page. */
+  onSaved?: () => void;
+  onCancel?: () => void;
+  /** In the pop-up: whether anything has been typed, so closing can ask first. */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
+  const inPopup = Boolean(onSaved);
   const router = useRouter();
   const utils = api.useUtils();
   const [draft, setDraft] = useState<Draft>(blank);
@@ -89,6 +99,9 @@ export function QuickScout({
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const setRoom = (index: number, patch: Partial<Room>) =>
     setDraft((current) => ({ ...current, rooms: current.rooms.map((room, i) => (i === index ? { ...room, ...patch } : room)) }));
+
+  const dirty = Boolean(draft.name.trim() || draft.address.trim() || draft.rooms.some((room) => room.name.trim()));
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const names = useMemo(() => new Map(existingNames.map((property) => [normalizePropertyName(property.name), property.id])), [existingNames]);
   const duplicateId = draft.name.trim() ? names.get(normalizePropertyName(draft.name)) : undefined;
@@ -171,8 +184,11 @@ export function QuickScout({
         setDraft(blank());
         setLocated("idle");
         lookedUp.current = "";
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        nameBox.current?.scrollIntoView({ block: "center", behavior: "smooth" });
         nameBox.current?.focus();
+      } else if (onSaved) {
+        router.refresh();
+        onSaved();
       } else {
         router.push(event ? `/events/${event.id}` : `/properties/${property.id}`);
         router.refresh();
@@ -193,7 +209,7 @@ export function QuickScout({
         e.preventDefault();
         void save(false);
       }}
-      className="pb-24"
+      className={inPopup ? "" : "pb-24"}
     >
       {added && (
         <p className="mb-4 rounded-lg bg-[#e3f8ee] px-4 py-2.5 text-[13px] text-[#0a7a47]">
@@ -387,11 +403,13 @@ export function QuickScout({
                     ? "Drag the pin if it is not quite right."
                     : "Found from the address as you type it."}
             </p>
-            <LocationPreview
-              latitude={draft.latitude}
-              longitude={draft.longitude}
-              onMove={(latitude, longitude) => setDraft((current) => ({ ...current, latitude, longitude }))}
-            />
+            {draft.latitude && draft.longitude && (
+              <LocationPreview
+                latitude={draft.latitude}
+                longitude={draft.longitude}
+                onMove={(latitude, longitude) => setDraft((current) => ({ ...current, latitude, longitude }))}
+              />
+            )}
           </div>
           <p className="text-ink-500 px-1 text-xs font-light">
             Bed set-ups, sizes, prices, services and contracting details are added later, on the property&apos;s page — each part edits in
@@ -400,7 +418,13 @@ export function QuickScout({
         </aside>
       </div>
 
-      <div className="border-ink-200/60 fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 backdrop-blur lg:left-60">
+      <div
+        className={
+          inPopup
+            ? "border-ink-200/60 sticky -bottom-6 z-20 -mx-6 mt-5 border-t bg-white/95 backdrop-blur"
+            : "border-ink-200/60 fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 backdrop-blur lg:left-60"
+        }
+      >
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-6 py-3">
           <Button type="submit" disabled={saving}>
             {saving ? "Saving…" : event ? `Save and add to ${event.name}` : "Save"}
@@ -408,12 +432,81 @@ export function QuickScout({
           <Button type="button" variant="secondary" disabled={saving} onClick={() => void save(true)}>
             Save and scout another
           </Button>
-          <Button type="button" variant="ghost" onClick={() => router.back()}>
+          <Button type="button" variant="ghost" onClick={() => (onCancel ? onCancel() : router.back())}>
             Cancel
           </Button>
           {problem && <span className="ml-2 min-w-0 flex-1"><FormError message={problem} /></span>}
         </div>
       </div>
     </form>
+  );
+}
+
+/**
+ * The quick screen as a pop-up over the event's Properties tab, so scouting
+ * does not leave the list (doc §3.1). Closing it asks first once anything has
+ * been typed.
+ */
+export function ScoutPopup({ event, onClose }: { event: { id: string; name: string }; onClose: () => void }) {
+  const amenities = api.amenity.list.useQuery();
+  const names = api.property.listNames.useQuery();
+  const dirty = useRef(false);
+  const close = () => {
+    if (dirty.current && !window.confirm("Close without saving this property?")) return;
+    onClose();
+  };
+  useEffect(() => {
+    const onEscape = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onEscape);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onEscape);
+      document.body.style.overflow = overflow;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- set up once
+  }, []);
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[1010] bg-black/30" onClick={close} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Scout a property"
+        className="bg-ink-50 fixed inset-x-3 top-4 bottom-4 z-[1020] mx-auto max-w-6xl overflow-y-auto rounded-2xl p-6 shadow-2xl sm:inset-x-6"
+        style={{ backgroundColor: "#f3f3f3" }}
+      >
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-ink-900 text-xl font-semibold">Scout a property</h2>
+            <p className="text-ink-500 mt-0.5 text-sm font-light">It is added to {event.name}&apos;s list once saved.</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href={`/properties/new?event=${event.id}&full=1`} className="text-brand-700 text-[13px] font-light hover:underline">
+              Use the full form
+            </Link>
+            <button type="button" onClick={close} aria-label="Close" className="text-ink-400 hover:text-ink-900 text-2xl leading-none">
+              ×
+            </button>
+          </div>
+        </div>
+        {amenities.data && names.data ? (
+          <QuickScout
+            amenities={amenities.data}
+            existingNames={names.data}
+            event={event}
+            onSaved={onClose}
+            onCancel={close}
+            onDirtyChange={(value) => {
+              dirty.current = value;
+            }}
+          />
+        ) : (
+          <p className="text-ink-500 text-sm font-light">Loading…</p>
+        )}
+      </div>
+    </>,
+    document.body,
   );
 }

@@ -55,7 +55,7 @@ export default async function EventPropertiesPage({
             >
               Edit
             </Link>
-            <AddToList eventId={event.id} />
+            <AddToList eventId={event.id} eventName={event.name} />
           </div>
         }
       />

@@ -10,8 +10,14 @@ export function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-const fieldStyles =
-  "w-full rounded-lg border bg-white px-3 py-2 text-sm font-light outline-none transition-colors focus:ring-4 disabled:opacity-50";
+const fieldBase =
+  "rounded-lg border bg-white px-3 py-2 text-sm font-light outline-none transition-colors focus:ring-4 disabled:opacity-50";
+/**
+ * Full width unless the field is given a width of its own ("w-auto", "w-64"):
+ * both at once leaves which wins to the order of the stylesheet, and a filter
+ * meant to sit in a row stretched across the page.
+ */
+const fieldWidth = (className?: string) => (className && /(^|\s)w-/.test(className) ? "" : "w-full");
 const fieldValidStyles =
   "border-ink-200 focus:border-brand-400 focus:ring-brand-400/20";
 const fieldInvalidStyles =
@@ -26,7 +32,7 @@ export function Input({
     <input
       ref={ref}
       {...props}
-      className={`${fieldStyles} ${invalid ? fieldInvalidStyles : fieldValidStyles} ${props.className ?? ""}`}
+      className={`${fieldBase} ${fieldWidth(props.className)} ${invalid ? fieldInvalidStyles : fieldValidStyles} ${props.className ?? ""}`}
     />
   );
 }
@@ -41,7 +47,7 @@ export function Textarea({
     <textarea
       ref={ref}
       {...props}
-      className={`${fieldStyles} ${fieldValidStyles} ${props.className ?? ""}`}
+      className={`${fieldBase} ${fieldWidth(props.className)} ${fieldValidStyles} ${props.className ?? ""}`}
     />
   );
 }
@@ -50,7 +56,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`${fieldStyles} ${fieldValidStyles} ${props.className ?? ""}`}
+      className={`${fieldBase} ${fieldWidth(props.className)} ${fieldValidStyles} ${props.className ?? ""}`}
     />
   );
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button, Select } from "~/app/_components/form";
+import { ScoutPopup } from "~/app/_components/quick-scout";
 import { propertyTypeLabels } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
@@ -12,9 +12,10 @@ import { api } from "~/trpc/react";
  * Puts an already-scouted property onto this event's list, or sends you off to
  * scout a new one. Properties are scouted once and reused (doc §2.3).
  */
-export function AddToList({ eventId }: { eventId: string }) {
+export function AddToList({ eventId, eventName }: { eventId: string; eventName: string }) {
   const router = useRouter();
   const [propertyId, setPropertyId] = useState("");
+  const [scouting, setScouting] = useState(false);
 
   const candidates = api.scouting.candidates.useQuery({ eventId });
   const add = api.scouting.add.useMutation({
@@ -56,12 +57,23 @@ export function AddToList({ eventId }: { eventId: string }) {
         </>
       )}
 
-      <Link
-        href={`/properties/new?event=${eventId}`}
+      <button
+        type="button"
+        onClick={() => setScouting(true)}
         className="bg-brand-400 hover:bg-brand-500 inline-flex rounded-full px-5 py-2.5 text-[13px] font-light text-white transition-colors"
       >
         Scout a new property
-      </Link>
+      </button>
+      {scouting && (
+        <ScoutPopup
+          event={{ id: eventId, name: eventName }}
+          onClose={() => {
+            setScouting(false);
+            void candidates.refetch();
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
