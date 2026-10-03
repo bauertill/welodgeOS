@@ -19,6 +19,7 @@ import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/
 import { diffFields, logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
+import { ensureHotelContactTask } from "~/server/hotel-contact";
 import { ensureSourcingTask } from "~/server/sourcing";
 import { distanceKm } from "~/lib/scouting";
 import { looksLike } from "~/lib/similar-properties";
@@ -1388,8 +1389,8 @@ export const salesRouter = createTRPCRouter({
         }),
       }),
     )
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.db.$transaction(async (tx) => {
         const { place } = input;
         const request = await tx.salesRequest.findUniqueOrThrow({
           where: { id: input.salesRequestId },
@@ -1420,13 +1421,19 @@ export const salesRouter = createTRPCRouter({
           entityId: property.id,
           summary: `Added — found on ${place.source === "google" ? "Google Maps" : "OpenStreetMap"} while sourcing for ${request.client.name}`,
         });
+        let taskId: string | null = null;
         if (request.eventId) {
           const entry = await tx.scoutingEntry.create({ data: { eventId: request.eventId, propertyId: property.id, addedById: ctx.session.user.id } });
           await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: entry.id, summary: "Added to the scouting list" });
+          // Someone now reaches out to it, to gather what we need (doc §4.11).
+          const task = await ensureHotelContactTask(tx, { propertyId: property.id, eventId: request.eventId, salesRequestId: input.salesRequestId, actorId: ctx.session.user.id });
+          taskId = task?.id ?? null;
         }
-        return { id: property.id, eventName: request.event?.name ?? null };
-      }),
-    ),
+        return { id: property.id, eventName: request.event?.name ?? null, taskId };
+      });
+      await deliverImmediate(ctx.db);
+      return result;
+    }),
 
   /** Searching an address, for a client on their needs link only — no link, no search. */
   needsPlaceSearch: publicProcedure

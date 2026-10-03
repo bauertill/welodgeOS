@@ -58,4 +58,5 @@ export const termTextFields = [
   { key: "deposit", label: "Deposit" },
   { key: "cancellationTerms", label: "Cancellation terms" },
   { key: "paymentTerms", label: "Payment terms" },
+  { key: "extraCosts", label: "Extra costs", hint: "What comes on top of the rate — resort fee, parking, city tax." },
 ] as const;

@@ -927,6 +927,7 @@ on the property's entry in the event's list (§3.5), beside its status:
 | Deposit | Deposit — *new* | Free text |
 | Block Expiration Date | Block expiry — *new* | A date: when the hotel's hold on our rooms runs out. Distinct from a client's block on a night (§4.2) |
 | Cancellation Terms, Payment Terms | Two text fields — *new* | |
+| — | Extra costs — *new*, 2026-10-03 | Free text: what comes on top of the rate — resort fee, parking, city tax. Asked for by the hotel contact task (§4.11) |
 | Deadline for RL | Rooming list deadline — *new* | A date, ahead of Phase 3 (§6) |
 | Minimum stay | Minimum stay — *new* | A number of nights, e.g. 3 |
 | Comments | Notes on the entry (§3.5) | Already event-specific |
@@ -1683,6 +1684,30 @@ the contract.
   OpenStreetMap's free server is often busy: it is asked twice, and if it still turns the
   search away the section says so, with *Try again* — a failed search is never kept as
   "nothing found".
+- **The hotel contact task** (2026-10-03). Adding a place with *Add to properties board*
+  also puts a **Hotel contact** task on the board: *Contact {property} — {event}*, to the
+  event's accommodation managers (or, with none set, to whoever added it), asked by whoever
+  added it, linked to the property, the event, the client and the sales request; the
+  managers are told (§2.9). One open task per property and event. Its point is to reach
+  out to the property and gather what we need. Its page shows **how to reach them** (the
+  property's phone, email, website and contacts) and **what to find out**, each item ticked
+  on its own once the information is where it belongs — never ticked by hand:
+
+  | To find out | Ticked when | Kept on |
+  | --- | --- | --- |
+  | Room categories and availability | It has categories, each with its number of units | The property (§3.2) |
+  | Details per category | Every category has its beds (bedrooms, for apartments) | The property |
+  | Amenities in general | At least one is recorded | The property |
+  | Payment terms | Said in its terms for the event, or on a quotation | Terms for the event (§3.9), or the quotation |
+  | Cancellation terms | The same | The same |
+  | Rate | A quotation with rates, or a buying rate on a category | A quotation (§3.10) |
+  | What is included in the rate | *Rates include* in its terms, or on a quotation or rate | The same |
+  | Extra costs | *Extra costs* in its terms, or taxes on a quotation or rate | The same |
+
+  *Rooms, amenities and quotations* opens the property's page; *Terms for {event}* opens its
+  terms panel right there. When all eight are in, the task says so — it is still marked
+  done by hand. Adding an existing property to the event from the sourcing task makes no
+  hotel contact task (not asked for).
 - **Once the details are in, the enquiry is a sales request** — the same request, its
   history kept. The list marks the ones still enquiries. Requests that had already moved
   past *Initial interest*, or had their rooms, period or budget written down, counted as
@@ -2551,7 +2576,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |

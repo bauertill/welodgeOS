@@ -8,6 +8,7 @@ import { formatDate } from "~/lib/format";
 import { taskStatusLabels } from "~/lib/tasks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
+import { hotelContactItems } from "~/server/hotel-contact";
 import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
 
 /**
@@ -156,6 +157,93 @@ export const taskRouter = createTRPCRouter({
         take: 500,
       });
     }),
+
+  /**
+   * A hotel contact task's checklist (doc §4.11): what has been gathered about
+   * the property for the event so far, read from where it is kept — the
+   * property itself, its terms for the event and its quotations. Nothing is
+   * ticked by hand, and the task is never closed on its own.
+   */
+  gathering: protectedProcedure.input(z.object({ propertyId: z.string(), eventId: z.string() })).query(async ({ ctx, input }) => {
+    const property = await ctx.db.property.findUniqueOrThrow({
+      where: { id: input.propertyId },
+      select: {
+        type: true,
+        phone: true,
+        website: true,
+        generalEmail: true,
+        contacts: { select: { id: true, name: true, role: true, email: true, phone: true } },
+        categories: { select: { unitCount: true, capacity: true, bedConfiguration: true, bedrooms: true, size: true } },
+        _count: { select: { amenities: true } },
+      },
+    });
+    const entry = await ctx.db.scoutingEntry.findUnique({
+      where: { eventId_propertyId: { eventId: input.eventId, propertyId: input.propertyId } },
+      select: {
+        id: true,
+        ratesInclude: true,
+        paymentTerms: true,
+        cancellationTerms: true,
+        extraCosts: true,
+        quotations: {
+          select: {
+            paymentTerms: true,
+            cancellationTerms: true,
+            rateIncludes: true,
+            rateIncludesOther: true,
+            cleaning: true,
+            totBasisPoints: true,
+            otherTaxes: true,
+            _count: { select: { lines: true } },
+          },
+        },
+        categoryContracts: {
+          select: { ratePerNightCents: true, rateIncludes: true, rateIncludesOther: true, cleaning: true, totBasisPoints: true, otherTaxes: true },
+        },
+      },
+    });
+    const quotes = entry?.quotations ?? [];
+    const rates = entry?.categoryContracts ?? [];
+    const categories = property.categories;
+    const units = categories.reduce((sum, category) => sum + category.unitCount, 0);
+    const detailed = categories.filter((category) => (property.type === "APARTMENT" ? category.bedrooms !== null : Boolean(category.bedConfiguration?.trim()))).length;
+    const has = (value: string | null | undefined) => Boolean(value?.trim());
+    const includes = [...quotes, ...rates].some((rate) => rate.rateIncludes.length > 0 || has(rate.rateIncludesOther) || rate.cleaning !== null);
+    const extras = [...quotes, ...rates].some((rate) => rate.totBasisPoints !== null || has(rate.otherTaxes));
+    const pricedQuotes = quotes.filter((quote) => quote._count.lines > 0).length;
+    const pricedCategories = rates.filter((rate) => rate.ratePerNightCents !== null).length;
+
+    const items: { key: (typeof hotelContactItems)[number]["key"]; ok: boolean; text: string }[] = [
+      {
+        key: "categories",
+        ok: categories.length > 0 && categories.every((category) => category.unitCount > 0),
+        text: categories.length ? `${categories.length} ${categories.length === 1 ? "category" : "categories"}, ${units} units` : "None yet",
+      },
+      {
+        key: "details",
+        ok: categories.length > 0 && detailed === categories.length,
+        text: categories.length ? `${detailed} of ${categories.length} with their ${property.type === "APARTMENT" ? "bedrooms" : "beds"}` : "Once there are categories",
+      },
+      { key: "amenities", ok: property._count.amenities > 0, text: property._count.amenities ? `${property._count.amenities} recorded` : "None yet" },
+      { key: "paymentTerms", ok: has(entry?.paymentTerms) || quotes.some((quote) => has(quote.paymentTerms)), text: "" },
+      { key: "cancellationTerms", ok: has(entry?.cancellationTerms) || quotes.some((quote) => has(quote.cancellationTerms)), text: "" },
+      {
+        key: "rate",
+        ok: pricedQuotes > 0 || pricedCategories > 0,
+        text: pricedQuotes ? `${pricedQuotes} ${pricedQuotes === 1 ? "quotation" : "quotations"}` : pricedCategories ? `Set for ${pricedCategories} ${pricedCategories === 1 ? "category" : "categories"}` : "No quotation yet",
+      },
+      { key: "included", ok: has(entry?.ratesInclude) || includes, text: "" },
+      { key: "extraCosts", ok: has(entry?.extraCosts) || extras, text: "" },
+    ];
+    return {
+      entryId: entry?.id ?? null,
+      reach: { phone: property.phone, website: property.website, email: property.generalEmail, contacts: property.contacts },
+      items: hotelContactItems.map((item) => {
+        const found = items.find((one) => one.key === item.key)!;
+        return { ...item, ok: found.ok, text: found.text || (found.ok ? "In" : "Not yet") };
+      }),
+    };
+  }),
 
   byId: protectedProcedure.input(z.object({ id: z.string() })).query(({ ctx, input }) =>
     ctx.db.task.findUnique({ where: { id: input.id }, include }),

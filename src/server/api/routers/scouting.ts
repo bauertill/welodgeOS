@@ -64,6 +64,7 @@ export const scoutingRouter = createTRPCRouter({
         deposit: z.string().max(5000),
         cancellationTerms: z.string().max(5000),
         paymentTerms: z.string().max(5000),
+        extraCosts: z.string().max(5000),
         blockExpiry: z.date().nullable(),
         roomingListDeadline: z.date().nullable(),
         minimumStayNights: z.number().int().min(1, "A minimum stay is at least one night.").max(365).nullable(),
@@ -81,6 +82,7 @@ export const scoutingRouter = createTRPCRouter({
           deposit: text(terms.deposit),
           cancellationTerms: text(terms.cancellationTerms),
           paymentTerms: text(terms.paymentTerms),
+          extraCosts: text(terms.extraCosts),
         },
       });
       await logAudit(ctx.db, {

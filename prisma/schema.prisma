@@ -366,6 +366,8 @@ model ScoutingEntry {
   deposit             String?
   cancellationTerms   String?
   paymentTerms        String?
+  /// What comes on top of the rate — resort fee, parking, city tax.
+  extraCosts          String?
   /// When the hotel's hold on our rooms runs out — not a client's block (§4.2).
   blockExpiry         DateTime? @db.Date
   roomingListDeadline DateTime? @db.Date

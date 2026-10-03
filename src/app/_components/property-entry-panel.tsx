@@ -32,6 +32,7 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
     deposit: "",
     cancellationTerms: "",
     paymentTerms: "",
+    extraCosts: "",
   });
   const [blockExpiry, setBlockExpiry] = useState("");
   const [roomingListDeadline, setRoomingListDeadline] = useState("");

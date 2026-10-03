@@ -12,6 +12,7 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
 import { Popup } from "~/app/_components/popup";
+import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { SourcingPanel } from "~/app/_components/sourcing-panel";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
@@ -810,6 +811,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
   ];
 
   const sourcing = t.salesRequest && t.type?.name === "Sourcing";
+  const hotelContact = t.property && t.event && t.type?.name === "Hotel contact";
 
   return (
     <div className="grid items-start gap-5 lg:grid-cols-3">
@@ -825,6 +827,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
             <SourcingPanel salesRequestId={t.salesRequest!.id} />
           </div>
         )}
+        {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Comments</h2>
           <TaskComments taskId={t.id} />
@@ -842,7 +845,8 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           {sourcing ? (
             <ClientRequest salesRequestId={t.salesRequest!.id} />
           ) : (
-            t.details && (
+            t.details &&
+            !hotelContact && (
               <div className="bg-ink-50/60 mb-4 rounded-lg px-3 py-2.5">
                 <p className="text-ink-500 mb-1 text-[11px] font-medium tracking-wider uppercase">What to do</p>
                 <p className="text-ink-900 text-sm font-light whitespace-pre-line">{t.details}</p>
@@ -872,6 +876,109 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A hotel contact task (doc §4.11): how to reach the property, and what is to
+ * be found out — each ticked once it is on the property, its terms for the
+ * event or a quotation, where the team fills it in.
+ */
+function HotelContactChecklist({ propertyId, propertyName, eventId, eventName }: { propertyId: string; propertyName: string; eventId: string; eventName: string }) {
+  const utils = api.useUtils();
+  const gathering = api.task.gathering.useQuery({ propertyId, eventId });
+  const [terms, setTerms] = useState(false);
+  const g = gathering.data;
+  const done = g ? g.items.filter((item) => item.ok).length : 0;
+  const website = g?.reach.website ? (/^https?:\/\//.test(g.reach.website) ? g.reach.website : `https://${g.reach.website}`) : null;
+  const back = encodeURIComponent(`/events/${eventId}`);
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <div className="mb-1 flex items-baseline justify-between gap-3">
+        <h2 className="text-ink-900 text-[15px] font-medium">What to find out</h2>
+        {g && (
+          <span className="text-ink-500 text-xs font-light">
+            {done} of {g.items.length} in
+          </span>
+        )}
+      </div>
+      <p className="text-ink-500 mb-3 text-xs font-light">
+        Reach out to {propertyName}. Each item is ticked once it is on the property — rooms and amenities on its page, terms for {eventName} in its terms, the
+        rate as a quotation.
+      </p>
+      {g && (g.reach.phone || g.reach.email || website || g.reach.contacts.length > 0) && (
+        <div className="bg-ink-50/60 mb-3 rounded-lg px-3 py-2 text-[13px] font-light">
+          <span className="text-ink-500 mr-2 text-[11px] font-medium tracking-wider uppercase">Reach them</span>
+          {[
+            g.reach.phone && <a key="p" href={`tel:${g.reach.phone}`} className="text-brand-700 hover:underline">{g.reach.phone}</a>,
+            g.reach.email && <a key="e" href={`mailto:${g.reach.email}`} className="text-brand-700 hover:underline">{g.reach.email}</a>,
+            website && <a key="w" href={website} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">Website ↗</a>,
+            ...g.reach.contacts.map((contact) => (
+              <span key={contact.id}>
+                {contact.name}
+                {contact.role ? ` (${contact.role})` : ""}
+                {contact.email && (
+                  <>
+                    {" "}
+                    <a href={`mailto:${contact.email}`} className="text-brand-700 hover:underline">{contact.email}</a>
+                  </>
+                )}
+                {contact.phone ? ` ${contact.phone}` : ""}
+              </span>
+            )),
+          ]
+            .filter(Boolean)
+            .map((part, index) => (
+              <span key={index}>
+                {index > 0 && <span className="text-ink-300"> · </span>}
+                {part}
+              </span>
+            ))}
+        </div>
+      )}
+      {!g ? (
+        <p className="text-ink-500 text-sm font-light">{gathering.isLoading ? "…" : "The property is no longer there."}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {g.items.map((item) => (
+            <li key={item.key} className="flex items-baseline gap-2.5 text-[13px]">
+              <span
+                className={`inline-flex h-4 w-4 shrink-0 translate-y-0.5 items-center justify-center rounded-full text-[10px] ${item.ok ? "bg-[#0a7a47] text-white" : "border-ink-200 border"}`}
+                aria-label={item.ok ? "In" : "Not yet"}
+              >
+                {item.ok ? "✓" : ""}
+              </span>
+              <span className={item.ok ? "text-ink-900" : "text-ink-700"}>{item.label}</span>
+              <span className={`ml-auto text-xs font-light whitespace-nowrap ${item.ok ? "text-[#0a7a47]" : "text-ink-500"}`}>{item.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {g && done === g.items.length && <p className="mt-3 text-[13px] font-medium text-[#0a7a47]">Everything is in — mark the task done when you are happy with it.</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link href={`/properties/${propertyId}?back=${back}`} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
+          Rooms, amenities and quotations →
+        </Link>
+        {g?.entryId && (
+          <button
+            type="button"
+            onClick={() => setTerms(true)}
+            className="border-ink-200 text-ink-700 hover:border-brand-400 rounded-full border bg-white px-4 py-2 text-[13px] font-light"
+          >
+            Terms for {eventName}
+          </button>
+        )}
+      </div>
+      {terms && g?.entryId && (
+        <PropertyEntryPanel
+          entryId={g.entryId}
+          onClose={() => {
+            setTerms(false);
+            void utils.task.gathering.invalidate();
+          }}
+        />
+      )}
     </div>
   );
 }
