@@ -267,6 +267,11 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       project and added to the allowed APIs of `GOOGLE_MAPS_SERVER_KEY`**
       (today Google answers `API_KEY_SERVICE_BLOCKED`). The same switch serves
       the nearby-hotels search.
+      *2026-10-03:* built on the sourcing task (§4.11, *Properties not in the
+      system*). It uses OpenStreetMap until Google answers, and switches to
+      Google by itself once the API is on — nothing else to change. Text Search
+      is paid per call (up to three per client place per six hours), so the
+      budget alert matters.
 
 ## 3. Phase 3 — Operations
 

@@ -1659,8 +1659,22 @@ the contract.
   enough known* when none fails but some could not be made (no price, no unit count); *Fits
   in part* when one fails; *Does not fit* otherwise. Only the ones that *fit* are shown at
   first, on the map and in the list; the others wait behind a tab each, with how many there
-  are. Each can be opened, or added to the event in one click. Finding hotels we do not have yet waits on Google Places (§3.1,
-  `docs/todos.md`).
+  are. Each can be opened, or added to the event in one click.
+- **Properties not in the system**, under them (2026-10-03): places to stay within 8 km of
+  the client's places that are not among our properties, found on the map when the task is
+  opened — hotels, and serviced apartments or aparthotels when apartments are asked for —
+  as hollow purple dots on the map and a list, nearest first: the name, the kind, Google's
+  guest rating and price level ($–$$$$), how far and from which place, the rooms when the
+  map knows them, a link to it on the map and to its website. A place is left out when we
+  already have one with the same name or address, or on the very same spot. **Add to our
+  properties** creates the property from what the map knows (name, kind, address, city,
+  country, coordinates, website, phone, stars, rooms) and puts it on the request's event,
+  noted as found while sourcing for that client; it then shows among the properties we
+  have, to be filled in on its page. The search uses **Google Maps** (Places API, New) —
+  and, until that is switched on for our key (Till; today Google refuses), **OpenStreetMap**,
+  whose list is patchier: the section says which. Flats without a website are left out of
+  OpenStreetMap's, as homes rather than places we can contract. An answer is kept for six
+  hours, so opening the task again does not search again (each Google search is paid).
 - **Once the details are in, the enquiry is a sales request** — the same request, its
   history kept. The list marks the ones still enquiries. Requests that had already moved
   past *Initial interest*, or had their rooms, period or budget written down, counted as
@@ -2529,7 +2543,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |

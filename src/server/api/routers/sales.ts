@@ -1,4 +1,4 @@
-import { BudgetBasis, SalesRequestStage, type Prisma } from "generated/prisma";
+import { BudgetBasis, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -20,7 +20,10 @@ import { diffFields, logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { ensureSourcingTask } from "~/server/sourcing";
-import { fit } from "~/lib/sourcing-fit";
+import { distanceKm } from "~/lib/scouting";
+import { looksLike } from "~/lib/similar-properties";
+import { fit, WITHIN_KM } from "~/lib/sourcing-fit";
+import { findNearby, type Source } from "~/server/discover";
 import { snapshotNight } from "~/server/inventory";
 
 /**
@@ -400,6 +403,33 @@ async function tieContract(tx: Prisma.TransactionClient, actorId: string, reques
   }
   await tx.contract.update({ where: { id: contractId }, data: { salesRequestId: requestId } });
   await logAudit(tx, { actorId, entity: "SalesRequest", entityId: requestId, summary: `Contract tied to the request: ${contract.name}` });
+}
+
+/** What sourcing a request starts from (doc §4.11): the places to be close to, and what is wanted. */
+async function sourcingContext(db: PrismaClient, id: string) {
+  const request = await db.salesRequest.findUniqueOrThrow({
+    where: { id },
+    include: {
+      lines: true,
+      closeTo: { select: { name: true, latitude: true, longitude: true } },
+      closeToPoints: { select: { label: true, latitude: true, longitude: true } },
+      event: { select: { id: true, name: true, placesOfInterest: { select: { name: true, latitude: true, longitude: true } } } },
+    },
+  });
+  const chosen = [
+    ...request.closeTo.map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude })),
+    ...request.closeToPoints,
+  ];
+  const targets = chosen.length ? chosen : (request.event?.placesOfInterest ?? []).map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude }));
+  const wanted = {
+    units: Math.max(0, ...request.lines.map((line) => line.rooms)),
+    apartments: request.lines.some((line) => /apartment|studio/i.test(line.roomType ?? "")),
+    hotelRooms: request.lines.some((line) => line.roomType && !/apartment|studio/i.test(line.roomType)),
+    budgetCents: request.budgetCents,
+    budgetCurrency: request.budgetCurrency,
+    budgetPerNight: request.budgetBasis === "PER_ROOM_NIGHT",
+  };
+  return { request, chosen, targets, wanted };
 }
 
 export const salesRouter = createTRPCRouter({
@@ -1243,28 +1273,7 @@ export const salesRouter = createTRPCRouter({
    * With no places chosen, the event's own places stand in, and it says so.
    */
   sourcing: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    const request = await ctx.db.salesRequest.findUniqueOrThrow({
-      where: { id: input.id },
-      include: {
-        lines: true,
-        closeTo: { select: { name: true, latitude: true, longitude: true } },
-        closeToPoints: { select: { label: true, latitude: true, longitude: true } },
-        event: { select: { id: true, name: true, placesOfInterest: { select: { name: true, latitude: true, longitude: true } } } },
-      },
-    });
-    const chosen = [
-      ...request.closeTo.map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude })),
-      ...request.closeToPoints,
-    ];
-    const targets = chosen.length ? chosen : (request.event?.placesOfInterest ?? []).map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude }));
-    const wanted = {
-      units: Math.max(0, ...request.lines.map((line) => line.rooms)),
-      apartments: request.lines.some((line) => /apartment|studio/i.test(line.roomType ?? "")),
-      hotelRooms: request.lines.some((line) => line.roomType && !/apartment|studio/i.test(line.roomType)),
-      budgetCents: request.budgetCents,
-      budgetCurrency: request.budgetCurrency,
-      budgetPerNight: request.budgetBasis === "PER_ROOM_NIGHT",
-    };
+    const { request, chosen, targets, wanted } = await sourcingContext(ctx.db, input.id);
     const onList = new Set(
       request.eventId
         ? (await ctx.db.scoutingEntry.findMany({ where: { eventId: request.eventId }, select: { propertyId: true } })).map((entry) => entry.propertyId)
@@ -1319,6 +1328,98 @@ export const salesRouter = createTRPCRouter({
       suggestions,
     };
   }),
+
+  /**
+   * Places to stay near the client's places that we do not have yet (doc
+   * §4.11), from Google Maps — or OpenStreetMap while Google is not switched
+   * on — each judged against the request as far as the map can tell.
+   */
+  sourcingDiscover: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const { targets, wanted } = await sourcingContext(ctx.db, input.id);
+    if (targets.length === 0) return { source: null as Source | null, found: [] };
+    const kinds = { hotels: wanted.hotelRooms || !wanted.apartments, apartments: wanted.apartments };
+    const results = await Promise.all(targets.slice(0, 4).map((target) => findNearby(target, WITHIN_KM, kinds)));
+    const source: Source | null = results.some((result) => result.source === "google") ? "google" : "osm";
+    const ours = await ctx.db.property.findMany({ select: { id: true, name: true, address: true, latitude: true, longitude: true } });
+    const seen = new Set<string>();
+    const found = results
+      .flatMap((result) => result.found)
+      .filter((place) => !seen.has(place.key) && seen.add(place.key))
+      // Not one we have: not the same name or address, and not on the very same spot.
+      .filter(
+        (place) =>
+          !ours.some((property) => {
+            if (looksLike({ name: place.name, address: place.address }, { ...property, latitude: null, longitude: null })) return true;
+            return property.latitude !== null && property.longitude !== null && distanceKm(place, { latitude: property.latitude, longitude: property.longitude }) < 0.04;
+          }),
+      )
+      .map((place) => ({ ...place, ...fit({ type: place.type, latitude: place.latitude, longitude: place.longitude, categories: [], stated: place.rooms }, targets, wanted) }))
+      .filter((place) => place.km !== null && place.km <= WITHIN_KM)
+      .sort((a, b) => (a.km ?? 99) - (b.km ?? 99) || (b.rating ?? 0) - (a.rating ?? 0))
+      .slice(0, 30);
+    return { source, found };
+  }),
+
+  /** A place found on the map, added to our properties — and to the request's event, when it has one. */
+  addFound: protectedProcedure
+    .input(
+      z.object({
+        salesRequestId: z.string(),
+        place: z.object({
+          name: z.string().trim().min(1).max(300),
+          type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]),
+          latitude: z.number().min(-90).max(90),
+          longitude: z.number().min(-180).max(180),
+          address: z.string().max(500).nullable(),
+          city: z.string().max(200).nullable(),
+          country: z.string().max(200).nullable(),
+          website: z.string().max(2000).nullable(),
+          phone: z.string().max(200).nullable(),
+          stars: z.number().int().min(1).max(5).nullable(),
+          rooms: z.number().int().min(1).nullable(),
+          source: z.enum(["google", "osm"]),
+        }),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const { place } = input;
+        const request = await tx.salesRequest.findUniqueOrThrow({
+          where: { id: input.salesRequestId },
+          select: { eventId: true, event: { select: { name: true } }, client: { select: { name: true } } },
+        });
+        const already = await tx.property.findFirst({ where: { name: { equals: place.name, mode: "insensitive" } }, select: { id: true } });
+        if (already) throw new TRPCError({ code: "BAD_REQUEST", message: `${place.name} is already in our properties.` });
+        const property = await tx.property.create({
+          data: {
+            name: place.name,
+            type: place.type,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            address: place.address,
+            city: place.city,
+            country: place.country,
+            website: place.website,
+            phone: place.phone,
+            stars: place.type === "HOTEL" ? place.stars : null,
+            totalRooms: place.rooms,
+            scoutedById: ctx.session.user.id,
+            notes: `Found on ${place.source === "google" ? "Google Maps" : "OpenStreetMap"} while sourcing for ${request.client.name}.`,
+          },
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Property",
+          entityId: property.id,
+          summary: `Added — found on ${place.source === "google" ? "Google Maps" : "OpenStreetMap"} while sourcing for ${request.client.name}`,
+        });
+        if (request.eventId) {
+          const entry = await tx.scoutingEntry.create({ data: { eventId: request.eventId, propertyId: property.id, addedById: ctx.session.user.id } });
+          await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: entry.id, summary: "Added to the scouting list" });
+        }
+        return { id: property.id, eventName: request.event?.name ?? null };
+      }),
+    ),
 
   /** Searching an address, for a client on their needs link only — no link, no search. */
   needsPlaceSearch: publicProcedure
