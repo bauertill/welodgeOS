@@ -12,9 +12,9 @@ import { MentionTextarea } from "~/app/_components/mention-textarea";
 import { SourcingPanel } from "~/app/_components/sourcing-panel";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
-import { daysUntil, dayKey } from "~/lib/dates";
+import { daysUntil, dayKey, nightsBetween } from "~/lib/dates";
 import { priorityLabels, priorityOrder } from "~/lib/clients";
-import { formatDate, formatDay, formatMomentInWords } from "~/lib/format";
+import { formatDate, formatDay, formatMomentInWords, formatMoney, formatRange } from "~/lib/format";
 import { taskStatusHints, taskStatusLabels, taskStatusOrder, taskStatusStyles } from "~/lib/tasks";
 import { renderUpdateBody } from "~/lib/updates";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -742,23 +742,21 @@ export function TaskView({ id }: { id: string }) {
 
       <div className="space-y-5">
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
-          <h2 className="text-ink-900 mb-4 text-[15px] font-medium">Status</h2>
-          <TaskStatusSteps status={t.status} pending={setStatus.isPending} onMove={(status) => setStatus.mutate({ id: t.id, status })} />
-          {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
-        </div>
-
-        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-ink-900 text-[15px] font-medium">Details</h2>
             <button type="button" onClick={() => setEditing(true)} className="text-brand-700 text-[13px] font-light hover:underline">
               Edit
             </button>
           </div>
-          {t.details && (
-            <div className="bg-ink-50/60 mb-4 rounded-lg px-3 py-2.5">
-              <p className="text-ink-500 mb-1 text-[11px] font-medium tracking-wider uppercase">{sourcing ? "What the client asked" : "What to do"}</p>
-              <p className="text-ink-900 text-sm font-light whitespace-pre-line">{t.details}</p>
-            </div>
+          {sourcing ? (
+            <ClientRequest salesRequestId={t.salesRequest!.id} />
+          ) : (
+            t.details && (
+              <div className="bg-ink-50/60 mb-4 rounded-lg px-3 py-2.5">
+                <p className="text-ink-500 mb-1 text-[11px] font-medium tracking-wider uppercase">What to do</p>
+                <p className="text-ink-900 text-sm font-light whitespace-pre-line">{t.details}</p>
+              </div>
+            )
           )}
           <dl className="space-y-2 text-sm font-light">
             {rows.map(([label, value]) => (
@@ -776,10 +774,77 @@ export function TaskView({ id }: { id: string }) {
             Remove task
           </button>
         </div>
+
+        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+          <h2 className="text-ink-900 mb-4 text-[15px] font-medium">Status</h2>
+          <TaskStatusSteps status={t.status} pending={setStatus.isPending} onMove={(status) => setStatus.mutate({ id: t.id, status })} />
+          {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
+        </div>
       </div>
     </div>
   );
 }
+
+/**
+ * What the client asked, on a sourcing task (doc §4.11) — read from the
+ * sales request itself, so it is always the latest: each line large, its
+ * dates beneath; then the budget, the places and the client's words.
+ */
+function ClientRequest({ salesRequestId }: { salesRequestId: string }) {
+  const request = api.sales.byId.useQuery({ id: salesRequestId });
+  const r = request.data;
+  if (!r) return <p className="text-ink-500 mb-4 text-sm font-light">{request.isLoading ? "…" : "The sales request is no longer there."}</p>;
+  const places = [...r.closeTo.map((place) => place.name), ...r.closeToPoints.map((point) => point.label), r.closeToOther].filter(Boolean) as string[];
+  return (
+    <div className="border-brand-200 bg-brand-50/50 mb-4 rounded-lg border px-4 py-3">
+      <p className="text-brand-800 mb-2 text-[11px] font-medium tracking-wider uppercase">What the client asked</p>
+      {r.lines.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">No units given yet.</p>
+      ) : (
+        <ul className="space-y-2.5">
+          {r.lines.map((line) => (
+            <li key={line.id}>
+              <span className="text-ink-900 block text-[15px] font-semibold">
+                {line.rooms} × {line.roomType ?? "units"}
+              </span>
+              <span className="text-ink-500 block text-xs font-light">
+                {line.checkIn && line.checkOut
+                  ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
+                  : line.checkIn
+                    ? `From ${formatDate(line.checkIn)}`
+                    : "Dates not given"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(r.budgetCents !== null || places.length > 0 || r.clientComments) && (
+        <div className="border-brand-200/70 mt-3 space-y-2 border-t pt-3 text-sm font-light">
+          {r.budgetCents !== null && r.budgetCurrency && (
+            <p>
+              <span className="text-ink-500">Budget </span>
+              <span className="text-ink-900 font-medium">{formatMoney(r.budgetCents, r.budgetCurrency)}</span>
+              {r.budgetBasis && <span className="text-ink-500"> {budgetBasisWords[r.budgetBasis]}</span>}
+            </p>
+          )}
+          {places.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-ink-500">Close to</span>
+              {places.map((place) => (
+                <span key={place} className="bg-ink-900 rounded-full px-2.5 py-0.5 text-xs text-white">
+                  {place}
+                </span>
+              ))}
+            </div>
+          )}
+          {r.clientComments && <p className="text-ink-700 italic">“{r.clientComments}”</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const budgetBasisWords = { PER_ROOM_NIGHT: "per room per night", PER_PERSON_NIGHT: "per person per night", TOTAL: "in total" } as const;
 
 const nextMove: Record<TaskStatus, { to: TaskStatus; label: string } | null> = {
   BACKLOG: { to: "TODO", label: "Move to To do" },

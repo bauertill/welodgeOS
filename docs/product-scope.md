@@ -375,11 +375,14 @@ team asks of each other. **Tasks** in the menu opens **one board that everyone s
 who asked, priority, type, event and client.
 
 **A task's own page** (laid out 2026-10-03): on the left, for a sourcing task, *Where to
-source* first (§4.11), then the comments; on the right, its **status as steps** — *Backlog →
-To do → In progress → Done*, passed ones ticked, each a click away, with the next move as one
-button (*Move to To do*, *Start it*, *Mark done*; *Reopen* once done) — and its **details**:
-what is asked (for a sourcing task, what the client asked), who completes it, who asked,
-deadline, priority, type and what it is about. Below, its *Log* — every change, who made it
+source* first (§4.11), then the comments; on the right, its **details** — on a sourcing
+task, **what the client asked**, read from the sales request so it is always the latest:
+each line large ("20 × Single room") with its dates and nights beneath, then the budget,
+the places as labels and the client's words; on another task, what to do — then who
+completes it, who asked, deadline, priority, type and what it is about; and under them its
+**status as steps** — *Backlog → To do → In progress → Done*, passed ones ticked, each a
+click away, with the next move as one button (*Move to To do*, *Start it*, *Mark done*;
+*Reopen* once done). Below, its *Log* — every change, who made it
 and when. It can be edited or removed.
 
 **My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
