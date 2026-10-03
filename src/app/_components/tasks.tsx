@@ -4,7 +4,10 @@ import { keepPreviousData } from "@tanstack/react-query";
 import type { Priority, TaskStatus } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+import { ActivityLog } from "~/app/_components/activity-log";
 
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
@@ -129,6 +132,9 @@ export function TaskBoard() {
   };
 
   const me = api.user.me.useQuery();
+  // A task opens in a popup over the board, and a new one is added in one too.
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const [filters, setFilters] = useState<Filters>(noFilters);
   const [status, setStatus] = useState<TaskStatus | "">("");
   const [search, setSearch] = useState("");
@@ -194,9 +200,13 @@ export function TaskBoard() {
         <div className="w-56">
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" />
         </div>
-        <Link href="/tasks/new" className="bg-brand-400 hover:bg-brand-500 ml-auto rounded-full px-5 py-2.5 text-[13px] font-medium text-white">
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="bg-brand-400 hover:bg-brand-500 ml-auto rounded-full px-5 py-2.5 text-[13px] font-medium text-white"
+        >
           + New task
-        </Link>
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -268,22 +278,28 @@ export function TaskBoard() {
         </span>
       </div>
 
-      {rows.length === 0 && !tasks.isLoading ? (
-        <EmptyState
-          title={filtered ? "No task matches" : "No tasks yet"}
-          description={filtered ? "Nothing matches these filters." : "Add the first with + New task — say who completes it, and by when."}
-        />
-      ) : view === "board" ? (
-        <Kanban tasks={rows} />
+      {view === "board" ? (
+        <Kanban tasks={rows} onOpen={setOpenId} assigneeId={mine ? me.data!.id : undefined} />
+      ) : rows.length === 0 && !tasks.isLoading && filtered ? (
+        <EmptyState title="No task matches" description="Nothing matches these filters." />
       ) : (
-        <TaskTable tasks={rows} />
+        <TaskTable tasks={rows} onOpen={setOpenId} quickAdd={{ assigneeId: mine ? me.data!.id : undefined }} />
+      )}
+
+      {openId && <TaskPopup id={openId} onClose={() => setOpenId(null)} />}
+      {adding && (
+        <Popup title="New task" subtitle="What it is, who completes it, and by when." onClose={() => setAdding(false)}>
+          <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+            <TaskForm onDone={() => setAdding(false)} />
+          </div>
+        </Popup>
       )}
     </div>
   );
 }
 
 /** Four columns by status; a card is dragged from one to another to move it. */
-function Kanban({ tasks }: { tasks: Task[] }) {
+function Kanban({ tasks, onOpen, assigneeId }: { tasks: Task[]; onOpen: (id: string) => void; assigneeId?: string }) {
   const utils = api.useUtils();
   const move = api.task.update.useMutation({
     onSettled: () => {
@@ -338,9 +354,10 @@ function Kanban({ tasks }: { tasks: Task[] }) {
                     setDragging(task.id);
                   }}
                   onDragEnd={() => setDragging(null)}
+                  onOpen={() => onOpen(task.id)}
                 />
               ))}
-              {inColumn.length === 0 && <p className="text-ink-400 px-1.5 py-3 text-xs font-light">Nothing here.</p>}
+              <QuickAdd status={column} assigneeId={assigneeId} />
             </div>
           </div>
         );
@@ -359,22 +376,23 @@ function TaskCard({
   faded,
   onDragStart,
   onDragEnd,
+  onOpen,
 }: {
   task: Task;
   faded: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
+  onOpen: () => void;
 }) {
-  const router = useRouter();
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onClick={() => router.push(`/tasks/${task.id}`)}
-      role="link"
+      onClick={onOpen}
+      role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && router.push(`/tasks/${task.id}`)}
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
       className={`border-ink-200/60 hover:border-brand-300 cursor-pointer rounded-lg border bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition ${faded ? "opacity-40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -402,7 +420,19 @@ function TaskCard({
   );
 }
 
-export function TaskTable({ tasks, compact = false }: { tasks: Task[]; compact?: boolean }) {
+export function TaskTable({
+  tasks,
+  compact = false,
+  onOpen,
+  quickAdd,
+}: {
+  tasks: Task[];
+  compact?: boolean;
+  /** Open a task in a popup; without it, the task's own page. */
+  onOpen?: (id: string) => void;
+  /** A line at the top to add a task by its name. */
+  quickAdd?: { assigneeId?: string };
+}) {
   return (
     <div className="border-ink-200/60 overflow-x-auto rounded-xl border bg-white">
       <table className="w-full text-left">
@@ -418,12 +448,25 @@ export function TaskTable({ tasks, compact = false }: { tasks: Task[]; compact?:
           </tr>
         </thead>
         <tbody>
+          {quickAdd && (
+            <tr>
+              <td colSpan={compact ? 4 : 6} className="border-ink-200/40 border-b px-2 py-1.5">
+                <QuickAdd status="TODO" assigneeId={quickAdd.assigneeId} />
+              </td>
+            </tr>
+          )}
           {tasks.map((task) => (
-            <tr key={task.id} className="hover:bg-ink-50/40">
+            <tr key={task.id} className={`hover:bg-ink-50/40 ${onOpen ? "cursor-pointer" : ""}`} onClick={onOpen ? () => onOpen(task.id) : undefined}>
               <td className={`${td} text-ink-900`}>
-                <Link href={`/tasks/${task.id}`} className="hover:text-brand-700 font-medium">
-                  {task.title}
-                </Link>
+                {onOpen ? (
+                  <button type="button" onClick={() => onOpen(task.id)} className="hover:text-brand-700 text-left font-medium">
+                    {task.title}
+                  </button>
+                ) : (
+                  <Link href={`/tasks/${task.id}`} className="hover:text-brand-700 font-medium">
+                    {task.title}
+                  </Link>
+                )}
                 <span className="block">
                   <About task={task} />
                 </span>
@@ -445,6 +488,149 @@ export function TaskTable({ tasks, compact = false }: { tasks: Task[]; compact?:
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Add a task by its name alone, straight into a column (or the list's To do):
+ * whoever adds it asked for it, and with My tasks on it is theirs to complete.
+ * The rest is filled in by opening it.
+ */
+function QuickAdd({ status, assigneeId }: { status: TaskStatus; assigneeId?: string }) {
+  const utils = api.useUtils();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const create = api.task.create.useMutation({
+    onSuccess: () => {
+      setTitle("");
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
+    },
+  });
+  const save = () => {
+    if (!title.trim() || create.isPending) return;
+    create.mutate({ title, status, assigneeIds: assigneeId ? [assigneeId] : [] });
+  };
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-ink-500 hover:text-brand-700 hover:bg-white/70 w-full rounded-lg px-2 py-1.5 text-left text-[13px] font-light"
+      >
+        + Add task
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            save();
+          }
+          if (e.key === "Escape") {
+            setTitle("");
+            setOpen(false);
+          }
+        }}
+        onBlur={() => !title.trim() && setOpen(false)}
+        placeholder="What needs doing? Enter to add"
+        aria-label="New task"
+        className="border-brand-300 focus:border-brand-400 w-full rounded-lg border bg-white px-3 py-2 text-[13px] font-light outline-none"
+      />
+      {create.error && <FormError message={friendlyError(create.error)} />}
+    </div>
+  );
+}
+
+/** A popup over the page: closed with ×, Escape or a click beside it. */
+function Popup({
+  title,
+  subtitle,
+  aside,
+  onClose,
+  children,
+}: {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  aside?: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    // Escape closes, unless it is closing something inside first (a dropdown, a comment being written).
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement) return;
+      close.current();
+    };
+    window.addEventListener("keydown", onEscape);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onEscape);
+      document.body.style.overflow = overflow;
+    };
+  }, []);
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[1010] bg-black/30" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="fixed inset-x-3 top-4 bottom-4 z-[1020] mx-auto max-w-6xl overflow-y-auto rounded-2xl p-6 shadow-2xl sm:inset-x-6"
+        style={{ backgroundColor: "#f3f3f3" }}
+      >
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-ink-900 text-xl font-semibold">{title}</h2>
+            {subtitle && <p className="text-ink-500 mt-0.5 text-sm font-light">{subtitle}</p>}
+          </div>
+          <div className="flex shrink-0 items-center gap-4">
+            {aside}
+            <button type="button" onClick={onClose} aria-label="Close" className="text-ink-400 hover:text-ink-900 text-2xl leading-none">
+              ×
+            </button>
+          </div>
+        </div>
+        {children}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+/** One task in a popup over the board: the same as its own page, which is a click away. */
+function TaskPopup({ id, onClose }: { id: string; onClose: () => void }) {
+  const task = api.task.byId.useQuery({ id });
+  const t = task.data;
+  return (
+    <Popup
+      title={t?.title ?? (task.isLoading ? "…" : "Task")}
+      subtitle={t ? (t.type ? `${t.type.name} task` : "Task") : undefined}
+      aside={
+        <Link href={`/tasks/${id}`} className="text-brand-700 text-[13px] font-light hover:underline">
+          Open as a page
+        </Link>
+      }
+      onClose={onClose}
+    >
+      <TaskView id={id} onRemoved={onClose} />
+      {t && (
+        <div className="border-ink-200/60 mt-5 rounded-xl border bg-white p-5">
+          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Log</h2>
+          <ActivityLog entity="Task" entityId={id} />
+        </div>
+      )}
+    </Popup>
   );
 }
 
@@ -679,7 +865,7 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
 
 // --- One task ----------------------------------------------------------------
 
-export function TaskView({ id }: { id: string }) {
+export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void }) {
   const router = useRouter();
   const utils = api.useUtils();
   const task = api.task.byId.useQuery({ id });
@@ -693,7 +879,8 @@ export function TaskView({ id }: { id: string }) {
   const remove = api.task.remove.useMutation({
     onSuccess: () => {
       void utils.task.invalidate();
-      router.push("/tasks");
+      if (onRemoved) onRemoved();
+      else router.push("/tasks");
     },
   });
   if (task.isLoading) return <p className="text-ink-500 text-sm font-light">Loading…</p>;
