@@ -19,10 +19,12 @@ const fieldInvalidStyles =
 
 export function Input({
   invalid,
+  ref,
   ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) {
+}: React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean; ref?: React.Ref<HTMLInputElement> }) {
   return (
     <input
+      ref={ref}
       {...props}
       className={`${fieldStyles} ${invalid ? fieldInvalidStyles : fieldValidStyles} ${props.className ?? ""}`}
     />

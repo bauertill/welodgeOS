@@ -111,8 +111,10 @@ export function AddressSearch({
         </ul>
       )}
       {details.isPending && <p className="text-ink-500 mt-1 text-xs font-light">Filling in from Google Maps…</p>}
+      {/* Over the page, not in it: shown and hidden as the box is used, it
+          must not move what is below — a click would land somewhere else. */}
       {search.data && !search.data.available && open && value.trim().length >= 3 && (
-        <p className="text-ink-500 mt-1 text-xs font-light">
+        <p className="border-ink-200 text-ink-500 absolute z-30 mt-1 w-full rounded-lg border bg-white px-3 py-2 text-xs font-light shadow-lg">
           Searching Google Maps is not switched on yet — type or paste the address.
         </p>
       )}

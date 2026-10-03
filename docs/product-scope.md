@@ -386,6 +386,19 @@ It is research, not inventory: nothing here implies a commercial position.
 
 ### 3.1 Property
 
+**Scouting a property is quick by default** (2026-10-03, on trial). *Scout a property* opens
+one short screen with only what is known on a first look: the name (warned at once if the
+library already has it), the type and stars as one-click buttons, the address — searched on
+Google Maps where that is switched on — with city and country, website and phone; the room
+types as quick rows of name, number of rooms and how many each sleeps, with one-click
+names (*+ King*, *+ Twin*, *+ Studio*…); the amenities as chips; one contact; and notes. The
+position on the map is found from the address as it is typed and shown beside the form,
+where the pin can be dragged. *Save and add to [event]* saves and goes back to the event;
+*Save and scout another* saves and clears the screen for the next one. Bed set-ups, sizes,
+indicative prices, services, the provider and contracting details are added afterwards on
+the property's page, each part editing in place (§3.9). *Use the full form* still opens the
+complete form, with every field at once.
+
 Common to every type:
 
 | Field | Notes |
@@ -2331,6 +2344,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 Address search on Google Maps | **Built, needs a key change** | On the property form (new and edit). Waits on *Places API (New)* being enabled and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till) — today Google refuses, so the box is a plain one with a note |
+| §3.1 Quick scouting screen | **Built, on trial** | The default *Scout a property* screen: essentials only, map found from the address, quick room-type rows and amenity chips, *Save and scout another*; *Use the full form* for everything |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
