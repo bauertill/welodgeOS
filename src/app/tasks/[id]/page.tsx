@@ -19,7 +19,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       <div className="mt-5">
         <Card>
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Log</h2>
-          <ActivityLog entity="Task" entityId={task.id} />
+          <ActivityLog latestOnly entity="Task" entityId={task.id} />
         </Card>
       </div>
     </>

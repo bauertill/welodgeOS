@@ -584,7 +584,7 @@ function TaskPopup({ id, onClose }: { id: string; onClose: () => void }) {
       {t && (
         <div className="border-ink-200/60 mt-5 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Log</h2>
-          <ActivityLog entity="Task" entityId={id} />
+          <ActivityLog latestOnly entity="Task" entityId={id} />
         </div>
       )}
     </Popup>

@@ -390,7 +390,7 @@ completes it, who asked, deadline, priority, type and what it is about; and unde
 **status as steps** — *Backlog → To do → In progress → Done*, passed ones ticked, each a
 click away, with the next move as one button (*Move to To do*, *Start it*, *Mark done*;
 *Reopen* once done). Below, its *Log* — every change, who made it
-and when. It can be edited or removed.
+and when; only the latest shows, with *Show all* for the rest. It can be edited or removed.
 
 **My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
 you asked of others, each with a link to the board.
