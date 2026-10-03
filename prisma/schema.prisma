@@ -1114,7 +1114,9 @@ model SalesRequest {
   budgetCurrency String?
   budgetBasis    BudgetBasis?
   /// Where they want to be close to: the event's places of interest…
-  closeTo        PlaceOfInterest[]  @relation("SalesRequestCloseTo")
+  closeTo        PlaceOfInterest[]   @relation("SalesRequestCloseTo")
+  /// …places of their own, found by address or picked on a map…
+  closeToPoints  SalesRequestPoint[]
   /// …and anywhere else, in words.
   closeToOther   String?
   /// What the client adds in their own words.
@@ -1589,6 +1591,23 @@ model SalesRequestLine {
   occupancy      Int?
   checkIn        DateTime?    @db.Date
   checkOut       DateTime?    @db.Date
+  position       Int          @default(0)
+
+  @@index([salesRequestId])
+}
+
+/// A place a client wants to be close to that is not one of the event's own
+/// (doc §4.11) — their office, a team hotel — found by its address or picked
+/// on a map, so it has a position to measure from.
+model SalesRequestPoint {
+  id             String       @id @default(cuid())
+  salesRequest   SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  salesRequestId String
+  /// What the client calls it: "Our office".
+  label          String
+  address        String?
+  latitude       Float
+  longitude      Float
   position       Int          @default(0)
 
   @@index([salesRequestId])

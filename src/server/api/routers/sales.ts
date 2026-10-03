@@ -8,6 +8,7 @@ import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import {
   clientContractingKeys,
   contractingFields,
+  currencyForCountry,
   interestFields,
   isClosed,
   openStages,
@@ -17,6 +18,7 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/
 import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
+import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { snapshotNight } from "~/server/inventory";
 
 /**
@@ -81,11 +83,17 @@ const person = { select: { id: true, name: true, email: true, image: true } } as
 const include = {
   client: { select: { id: true, name: true, shortName: true } },
   contact: { select: { id: true, name: true, title: true, email: true } },
-  event: { select: { id: true, name: true } },
+  event: { select: { id: true, name: true, country: true } },
   owner: { select: { id: true, name: true, email: true, image: true, bookingLink: true } },
   closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
   lines: { orderBy: [{ position: "asc" }] },
+  closeToPoints: { orderBy: [{ position: "asc" }] },
 } satisfies Prisma.SalesRequestInclude;
+
+async function needsLinkInUse(db: Prisma.TransactionClient, token: string) {
+  const found = await db.salesRequest.count({ where: { needsToken: token } });
+  if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+}
 
 export const budgetBasisLabels: Record<BudgetBasis, string> = {
   PER_ROOM_NIGHT: "per room per night",
@@ -108,6 +116,17 @@ const detailsInput = z.object({
   budgetCurrency: z.string().length(3).nullable(),
   budgetBasis: z.nativeEnum(BudgetBasis).nullable(),
   closeToIds: z.array(z.string()).max(50),
+  /** Their own places, found by address or picked on a map. */
+  points: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1, "Give each place a name, like Our office").max(200),
+        address: z.string().max(500),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+      }),
+    )
+    .max(20),
   closeToOther: z.string().max(2000),
   /** Room types and occupancy, in words. */
   clientComments: z.string().max(10_000),
@@ -151,6 +170,10 @@ async function saveDetails(
       budgetCurrency: details.budgetCents === null ? null : (details.budgetCurrency ?? "EUR"),
       budgetBasis: details.budgetCents === null ? null : (details.budgetBasis ?? "PER_ROOM_NIGHT"),
       closeTo: { set: places },
+      closeToPoints: {
+        deleteMany: {},
+        create: details.points.map((point, position) => ({ ...point, address: blank(point.address), position })),
+      },
       closeToOther: blank(details.closeToOther),
       clientComments: blank(details.clientComments),
       detailedAt: before.detailedAt ?? new Date(),
@@ -198,7 +221,9 @@ function readable(request: Loaded) {
       request.budgetCents !== null && request.budgetCurrency
         ? `${formatMoney(request.budgetCents, request.budgetCurrency)}${request.budgetBasis ? ` ${budgetBasisLabels[request.budgetBasis]}` : ""}`
         : null,
-    closeToNames: [...request.closeTo.map((place) => place.name), request.closeToOther].filter(Boolean).join(", ") || null,
+    closeToNames:
+      [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther].filter(Boolean).join(", ") ||
+      null,
     value:
       request.valueCents !== null && request.valueCurrency
         ? formatMoney(request.valueCents, request.valueCurrency)
@@ -1116,13 +1141,24 @@ export const salesRouter = createTRPCRouter({
   needsForm: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
     const request = await ctx.db.salesRequest.findUnique({
       where: { needsToken: input.token },
-      include: { ...include, event: { select: { id: true, name: true, placesOfInterest: { select: { id: true, name: true }, orderBy: { name: "asc" } } } } },
+      include: {
+        ...include,
+        event: {
+          select: {
+            id: true,
+            name: true,
+            country: true,
+            placesOfInterest: { select: { id: true, name: true, latitude: true, longitude: true }, orderBy: { name: "asc" } },
+          },
+        },
+      },
     });
     if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
     return {
       clientName: request.client.name,
       eventName: request.event?.name ?? null,
       places: request.event?.placesOfInterest ?? [],
+      currency: currencyForCountry(request.event?.country),
       submittedAt: request.needsSubmittedAt,
       values: {
         lines: request.lines.map((line) => ({
@@ -1136,11 +1172,34 @@ export const salesRouter = createTRPCRouter({
         budgetCurrency: request.budgetCurrency,
         budgetBasis: request.budgetBasis,
         closeToIds: request.closeTo.map((place) => place.id),
+        points: request.closeToPoints.map(({ label, address, latitude, longitude }) => ({ label, address: address ?? "", latitude, longitude })),
         closeToOther: request.closeToOther ?? "",
         clientComments: request.clientComments ?? "",
       },
     };
   }),
+
+  /** Searching an address, for a client on their needs link only — no link, no search. */
+  needsPlaceSearch: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), query: z.string().trim().min(3).max(200), sessionToken: z.string().max(100) }))
+    .query(async ({ ctx, input }) => {
+      await needsLinkInUse(ctx.db, input.token);
+      return searchPlaces(input.query, input.sessionToken);
+    }),
+
+  needsPlaceDetails: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), placeId: z.string().min(1).max(300), sessionToken: z.string().max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      await needsLinkInUse(ctx.db, input.token);
+      return placeDetails(input.placeId, input.sessionToken);
+    }),
+
+  needsGeocode: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), address: z.string().trim().min(3).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      await needsLinkInUse(ctx.db, input.token);
+      return geocode([input.address]);
+    }),
 
   /** The client sends their needs: they land on the request, which becomes a sales request, and its owner is told. */
   submitNeeds: publicProcedure

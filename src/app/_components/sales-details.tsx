@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
+import { CloseToPicker, type Point } from "~/app/_components/close-to-picker";
 import { Card } from "~/app/_components/ui";
 import { dayKey } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
+import { currencyForCountry, isApartment, roomTypeGroups } from "~/lib/sales";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 /**
@@ -18,7 +20,9 @@ import { api, type RouterOutputs } from "~/trpc/react";
  */
 
 type FullRequest = NonNullable<RouterOutputs["sales"]["byId"]>;
-type Place = { id: string; name: string };
+type Place = { id: string; name: string; latitude?: number; longitude?: number };
+const knownRoomTypes = new Set<string>(roomTypeGroups.flatMap((group) => group.types.map((type) => type.name)));
+const sleepsOf = (name: string) => roomTypeGroups.flatMap((group) => [...group.types]).find((type) => type.name === name)?.sleeps;
 
 const CURRENCIES = ["EUR", "USD", "CHF", "GBP"];
 export const budgetBasisLabels: Record<BudgetBasis, string> = {
@@ -43,13 +47,15 @@ export type DetailsValues = {
   budgetCurrency: string;
   budgetBasis: BudgetBasis;
   closeToIds: string[];
+  points: Point[];
   closeToOther: string;
   clientComments: string;
 };
 
 type StoredLine = { rooms: number; roomType: string | null; occupancy: number | null; checkIn: Date | string | null; checkOut: Date | string | null };
 
-export function detailsFrom(values: {
+export function detailsFrom(
+  values: {
   lines: StoredLine[];
   budgetCents: number | null;
   budgetCurrency: string | null;
@@ -57,7 +63,11 @@ export function detailsFrom(values: {
   closeToIds: string[];
   closeToOther: string | null;
   clientComments: string | null;
-}): DetailsValues {
+  points?: { label: string; address: string | null; latitude: number; longitude: number }[];
+  },
+  /** The event's currency, for a budget not given yet. */
+  defaultCurrency = "EUR",
+): DetailsValues {
   const day = (value: Date | string | null) => (!value ? "" : typeof value === "string" ? value : dayKey(value));
   return {
     lines: values.lines.length
@@ -70,10 +80,11 @@ export function detailsFrom(values: {
         }))
       : [blankLine()],
     budget: values.budgetCents !== null ? (values.budgetCents / 100).toFixed(2).replace(/\.00$/, "") : "",
-    budgetCurrency: values.budgetCurrency ?? "EUR",
+    budgetCurrency: values.budgetCurrency ?? defaultCurrency,
     budgetBasis: values.budgetBasis ?? "PER_ROOM_NIGHT",
     closeToIds: values.closeToIds,
     closeToOther: values.closeToOther ?? "",
+    points: (values.points ?? []).map((point) => ({ ...point, address: point.address ?? "" })),
     clientComments: values.clientComments ?? "",
   };
 }
@@ -107,6 +118,7 @@ function toInput(
     budgetCurrency: budget === null ? null : values.budgetCurrency,
     budgetBasis: budget === null ? null : values.budgetBasis,
     closeToIds: values.closeToIds,
+    points: values.points,
     closeToOther: values.closeToOther,
     clientComments: values.clientComments,
   };
@@ -118,11 +130,14 @@ export function DetailsFields({
   onChange,
   places,
   forClient = false,
+  find,
 }: {
   values: DetailsValues;
   onChange: (values: DetailsValues) => void;
   places: Place[];
   forClient?: boolean;
+  /** An address → its position: through the client's link, or ours. */
+  find: (address: string) => Promise<{ latitude: number; longitude: number; address: string | null } | null>;
 }) {
   const set = <K extends keyof DetailsValues>(key: K, value: DetailsValues[K]) => onChange({ ...values, [key]: value });
   const setLine = (index: number, patch: Partial<LineDraft>) =>
@@ -136,17 +151,47 @@ export function DetailsFields({
         <Label>{forClient ? "The rooms you need, and when" : "Rooms and periods"}</Label>
         <div className="space-y-2">
           {values.lines.map((line, index) => (
-            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[5rem_minmax(0,1fr)_5.5rem_9.5rem_9.5rem_1.5rem] sm:items-end sm:border-0 sm:p-0">
+            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[4.5rem_minmax(11rem,1fr)_4.75rem_8.75rem_8.75rem_1.25rem] sm:items-end sm:border-0 sm:p-0">
               <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">Rooms</span>
+                <span className="text-ink-500 mb-1 block text-[11px]">{isApartment(line.roomType) ? "Apartments" : "Rooms"}</span>
                 <Input value={line.rooms} onChange={(e) => setLine(index, { rooms: e.target.value })} inputMode="numeric" placeholder="20" aria-label={`Line ${index + 1} rooms`} className="px-2" />
               </label>
               <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">Room type</span>
-                <Input value={line.roomType} onChange={(e) => setLine(index, { roomType: e.target.value })} placeholder="Twin" aria-label={`Line ${index + 1} room type`} />
+                <span className="text-ink-500 mb-1 block text-[11px]">Type</span>
+                {line.roomType && !knownRoomTypes.has(line.roomType) && line.roomType !== "__other__" ? (
+                  <Input value={line.roomType} onChange={(e) => setLine(index, { roomType: e.target.value })} aria-label={`Line ${index + 1} room type`} autoFocus />
+                ) : (
+                  <Select
+                    value={line.roomType}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      if (name === "__other__") return setLine(index, { roomType: " " });
+                      const previous = sleepsOf(line.roomType);
+                      // A fitting number of people, unless one was typed.
+                      const occupancy = !line.occupancy || Number(line.occupancy) === previous ? String(sleepsOf(name) ?? "") : line.occupancy;
+                      setLine(index, { roomType: name, occupancy });
+                    }}
+                    aria-label={`Line ${index + 1} room type`}
+                  >
+                    <option value="">Choose…</option>
+                    {roomTypeGroups.map((group) => (
+                      <optgroup key={group.kind} label={group.label}>
+                        {group.types.map((type) => (
+                          <option key={type.name} value={type.name}>
+                            {/* Short: the group, and the Rooms/Apartments column, say the rest. */}
+                            {type.short}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                    <option value="__other__">Something else…</option>
+                  </Select>
+                )}
               </label>
               <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">People/room</span>
+                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap" title={isApartment(line.roomType) ? "People per apartment" : "People per room"}>
+                  People each
+                </span>
                 <Input value={line.occupancy} onChange={(e) => setLine(index, { occupancy: e.target.value })} inputMode="numeric" placeholder="2" aria-label={`Line ${index + 1} people per room`} className="px-2" />
               </label>
               <label className="min-w-0">
@@ -181,7 +226,7 @@ export function DetailsFields({
         <div className="flex flex-wrap gap-2">
           <Input value={values.budget} onChange={(e) => set("budget", e.target.value)} inputMode="decimal" placeholder="180" aria-label="Budget" className="w-32" />
           <Select value={values.budgetCurrency} onChange={(e) => set("budgetCurrency", e.target.value)} aria-label="Currency" className="w-24">
-            {CURRENCIES.map((code) => (
+            {(CURRENCIES.includes(values.budgetCurrency) ? CURRENCIES : [values.budgetCurrency, ...CURRENCIES]).map((code) => (
               <option key={code}>{code}</option>
             ))}
           </Select>
@@ -216,12 +261,11 @@ export function DetailsFields({
             })}
           </div>
         )}
-        <Input
-          value={values.closeToOther}
-          onChange={(e) => set("closeToOther", e.target.value)}
-          placeholder={places.length ? "Anywhere else — a neighbourhood, an office, a team hotel…" : "A venue, a neighbourhood, an office…"}
-          aria-label="Close to, other"
-        />
+        <CloseToPicker points={values.points} onChange={(points) => set("points", points)} places={places} find={find} />
+        {values.closeToOther && (
+          // Said in words before places could be found on a map.
+          <Input value={values.closeToOther} onChange={(e) => set("closeToOther", e.target.value)} aria-label="Close to, in words" className="mt-2" />
+        )}
       </div>
       <Field label={forClient ? "Anything else we should know" : "Client's comments"}>
         <Textarea rows={3} value={values.clientComments} onChange={(e) => set("clientComments", e.target.value)} placeholder="Breakfast needed, a meeting room, arriving in two groups…" />
@@ -254,7 +298,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const places = api.place.listForEvent.useQuery({ eventId: request.event?.id ?? "" }, { enabled: Boolean(request.event) });
   const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id) }));
+  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
   const [problem, setProblem] = useState<string | null>(null);
   const save = api.sales.saveDetails.useMutation({
     onSuccess: () => {
@@ -262,8 +306,11 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
       setEditing(false);
     },
   });
-  const placeList = (places.data ?? []).map((place) => ({ id: place.id, name: place.name }));
-  const closeTo = [...request.closeTo.map((place) => place.name), request.closeToOther].filter(Boolean).join(", ");
+  const placeList = (places.data ?? []).map((place) => ({ id: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }));
+  const geocode = api.property.geocode.useMutation();
+  const closeTo = [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <Card>
@@ -275,7 +322,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
           <button
             type="button"
             onClick={() => {
-              setValues(detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id) }));
+              setValues(detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
               setEditing(true);
             }}
             className="text-brand-700 text-[13px] font-light hover:underline"
@@ -295,7 +342,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
             save.mutate({ id: request.id, ...result.input });
           }}
         >
-          <DetailsFields values={values} onChange={setValues} places={placeList} />
+          <DetailsFields values={values} onChange={setValues} places={placeList} find={(address) => geocode.mutateAsync({ address })} />
           <div className="mt-4 space-y-2">
             <FormError message={problem ?? (save.error ? friendlyError(save.error) : null)} />
             <div className="flex gap-2">
@@ -468,8 +515,9 @@ export function NeedsForm({ token }: { token: string }) {
   const [problem, setProblem] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   useEffect(() => {
-    if (form.data && !values) setValues(detailsFrom(form.data.values));
+    if (form.data && !values) setValues(detailsFrom(form.data.values, form.data.currency));
   }, [form.data, values]);
+  const geocode = api.sales.needsGeocode.useMutation();
   const submit = api.sales.submitNeeds.useMutation({
     onSuccess: () => {
       setSent(true);
@@ -517,7 +565,13 @@ export function NeedsForm({ token }: { token: string }) {
             submit.mutate({ token, ...result.input });
           }}
         >
-          <DetailsFields values={values} onChange={setValues} places={form.data.places} forClient />
+          <DetailsFields
+            values={values}
+            onChange={setValues}
+            places={form.data.places}
+            forClient
+            find={(address) => geocode.mutateAsync({ token, address })}
+          />
           <div className="mt-5 space-y-2">
             <FormError message={problem ?? (submit.error ? friendlyError(submit.error) : null)} />
             <Button type="submit" disabled={submit.isPending}>

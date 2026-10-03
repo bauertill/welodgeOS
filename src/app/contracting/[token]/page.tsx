@@ -12,7 +12,7 @@ export default async function ContractingPage({ params }: { params: Promise<{ to
   return (
     <div className="mx-auto max-w-3xl">
       {/* eslint-disable-next-line @next/next/no-img-element -- an SVG needs no optimisation */}
-      <img src="/welodge-logo.svg" alt="We Lodge" width={784} height={146} className="mb-8 h-7 w-auto" />
+      <img src="/welodge-logo.svg" alt="We Lodge" width={784} height={146} className="mx-auto mb-8 h-7 w-auto" />
       <ContractingForm token={token} />
     </div>
   );

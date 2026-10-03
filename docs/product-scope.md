@@ -1590,12 +1590,17 @@ the contract.
   They check it and send it from their own mailbox. The link can also be made on its own,
   copied, or switched off.
 - **The details** are fields of their own: **the rooms and periods, as lines** — each
-  line a number of rooms, a room type in words ("Twin"), how many people per room, and an
-  arrival and departure; *+ Add another period or room type* adds a line, starting where
+  line a number, a type chosen from **hotel rooms** (single, double, twin, triple, suite)
+  or **apartments** (studio, 1 to 4 bedrooms) — or *something else*, in words — how many
+  people each (filled in from the type: twin 2, 2-bedroom apartment 4…, and changeable),
+  and an arrival and departure; a line for apartments counts apartments, not rooms; *+ Add another period or room type* adds a line, starting where
   the last one ended, so a pre period or a second room type is simply another line (the
   owner's call, 2026-10-03) — the **budget** (an amount and currency, per room per night, per person per
-  night, or in total), **close to** (the event's places of interest, chosen, and anywhere
-  else in words), and the **client's comments**. Requests that had one number of rooms and
+  night, or in total — the currency starts as the event's country's: dollars for Los
+  Angeles, francs for Switzerland, euros where it is not known), **close to** (the event's
+  places of interest, chosen; and **places of the client's own** — their office, a team
+  hotel — found by typing the address, or by clicking the spot on a map, each kept with
+  its position so it can be measured from), and the **client's comments**. Requests that had one number of rooms and
   one arrival and departure kept them as their first line. They are
   filled in by us after a call (*Fill in after a call*), or by the client on their needs
   form — which lands on the request, says so, and tells the account manager.

@@ -124,3 +124,48 @@ export function splitContractContacts(text: string | null): ContractContact[] {
       return parts.length === 2 ? { name: parts[0]!, jobTitle: parts[1]!, email } : { name: parts.join(", "), jobTitle: "", email };
     });
 }
+
+/**
+ * What a client can ask for, line by line (doc §4.11): a hotel room or an
+ * apartment of a size, each with how many people it usually sleeps — offered,
+ * and changeable. Anything else is said in words.
+ */
+export const roomTypeGroups = [
+  {
+    kind: "HOTEL",
+    label: "Hotel rooms",
+    types: [
+      { name: "Single room", short: "Single", sleeps: 1 },
+      { name: "Double room", short: "Double", sleeps: 2 },
+      { name: "Twin room", short: "Twin", sleeps: 2 },
+      { name: "Triple room", short: "Triple", sleeps: 3 },
+      { name: "Suite", short: "Suite", sleeps: 2 },
+    ],
+  },
+  {
+    kind: "APARTMENT",
+    label: "Apartments",
+    types: [
+      { name: "Studio apartment", short: "Studio", sleeps: 2 },
+      { name: "1-bedroom apartment", short: "1 bedroom", sleeps: 2 },
+      { name: "2-bedroom apartment", short: "2 bedrooms", sleeps: 4 },
+      { name: "3-bedroom apartment", short: "3 bedrooms", sleeps: 6 },
+      { name: "4-bedroom apartment", short: "4 bedrooms", sleeps: 8 },
+    ],
+  },
+] as const;
+
+/** Whether a line is for apartments — then it counts apartments, and people per apartment. */
+export const isApartment = (roomType: string | null | undefined) => /apartment|studio/i.test(roomType ?? "");
+
+/** The currency of an event's country, to start a budget in (doc §4.11); euros when it is not known. */
+export function currencyForCountry(country: string | null | undefined) {
+  const name = (country ?? "").trim().toLowerCase();
+  const byCountry: Record<string, string> = {
+    "united states": "USD", usa: "USD", us: "USD", "united states of america": "USD",
+    switzerland: "CHF", "united kingdom": "GBP", uk: "GBP", england: "GBP", scotland: "GBP",
+    "saudi arabia": "SAR", "united arab emirates": "AED", uae: "AED", qatar: "QAR",
+    canada: "CAD", australia: "AUD", japan: "JPY", "new zealand": "NZD", norway: "NOK", sweden: "SEK", denmark: "DKK",
+  };
+  return byCountry[name] ?? "EUR";
+}
