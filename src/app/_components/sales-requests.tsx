@@ -757,38 +757,139 @@ function SignNeedsContract({
   );
 }
 
-/** The stage, as buttons: open stages in order, then the ways it can close. */
+/** The way a request goes when it goes well (doc §4.11) — Blocked is a step some skip. */
+const pipeline: SalesRequestStage[] = ["INITIAL_INTEREST", "PROPOSAL_SENT", "BLOCKED", "SIGNED"];
+/** The ways it ends without being signed. */
+const closings: SalesRequestStage[] = ["RELEASED", "NO_REPLY", "LOST"];
+const moveOnLabels: Partial<Record<SalesRequestStage, string>> = {
+  PROPOSAL_SENT: "Mark proposal sent",
+  BLOCKED: "Mark blocked",
+  SIGNED: "Mark signed",
+};
+
+/**
+ * Where a request stands (doc §4.11), as the steps of the pipeline — done,
+ * current, still to come — each a click away, with the next one offered as a
+ * button; the other ways it can end are under Close as…, and a closed one says
+ * so, with Reopen.
+ */
 function StagePicker({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const setStage = api.sales.setStage.useMutation({ onSuccess: saved });
   const sign = useSign(request, saved);
-  const button = (stage: SalesRequestStage) => {
-    const current = request.stage === stage;
-    return (
-      <button
-        key={stage}
-        type="button"
-        title={salesStageHints[stage]}
-        disabled={setStage.isPending}
-        onClick={() => !current && (stage === "SIGNED" ? sign.start() : setStage.mutate({ id: request.id, stage }))}
-        aria-pressed={current}
-        className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
-          current ? `${salesStageStyles[stage]} border-transparent font-medium` : "border-ink-200 text-ink-500 hover:text-ink-900 bg-white font-light"
-        }`}
-      >
-        {salesStageLabels[stage]}
-      </button>
-    );
+  const [closing, setClosing] = useState(false);
+  const move = (stage: SalesRequestStage) => {
+    setClosing(false);
+    if (stage === request.stage) return;
+    if (stage === "SIGNED") sign.start();
+    else setStage.mutate({ id: request.id, stage });
   };
+  const closedOtherwise = closings.includes(request.stage);
+  const at = pipeline.indexOf(request.stage);
+  const nextSteps = at === 0 ? ["PROPOSAL_SENT"] : at === 1 ? ["SIGNED", "BLOCKED"] : at === 2 ? ["SIGNED"] : [];
+
   return (
     <Card>
-      <div className="flex flex-wrap items-center gap-2">
-        {openStages.map(button)}
-        <span className="text-ink-300 px-1">|</span>
-        <span className="text-ink-500 text-xs font-light">Closed as</span>
-        {closedStages.map(button)}
-      </div>
-      <p className="text-ink-500 mt-2 text-xs font-light">{salesStageHints[request.stage]}</p>
+      {closedOtherwise ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <StageBadge stage={request.stage} />
+            <span className="text-ink-700 text-sm font-light">
+              Closed{request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""} — {salesStageHints[request.stage].replace(/ Closed\.$/, "")}
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={setStage.isPending}
+            onClick={() => move(request.proposalSentOn ? "PROPOSAL_SENT" : "INITIAL_INTEREST")}
+          >
+            Reopen
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <ol className="flex min-w-0 flex-1 items-start">
+              {pipeline.map((stage, index) => {
+                const done = index < at || request.stage === "SIGNED";
+                const current = index === at;
+                const last = index === pipeline.length - 1;
+                return (
+                  <li key={stage} className={`flex items-start ${last ? "" : "flex-1"}`}>
+                    <button
+                      type="button"
+                      onClick={() => move(stage)}
+                      disabled={setStage.isPending}
+                      title={salesStageHints[stage]}
+                      aria-current={current ? "step" : undefined}
+                      className="group flex w-24 shrink-0 flex-col items-center gap-1.5 text-center"
+                    >
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-[13px] font-semibold transition-colors ${
+                          request.stage === "SIGNED"
+                            ? "border-[#0a7a47] bg-[#0a7a47] text-white"
+                            : current
+                              ? "border-brand-400 bg-brand-400 text-white"
+                              : done
+                                ? "border-brand-400 bg-white text-brand-700"
+                                : "border-ink-200 group-hover:border-brand-300 bg-white text-ink-400"
+                        }`}
+                      >
+                        {done && !current ? "✓" : index + 1}
+                      </span>
+                      <span className={`text-[12px] leading-tight ${current ? "text-ink-900 font-medium" : done ? "text-ink-700" : "text-ink-400 group-hover:text-ink-700"}`}>
+                        {salesStageLabels[stage]}
+                      </span>
+                    </button>
+                    {!last && (
+                      <span
+                        aria-hidden
+                        className={`mt-4 h-0.5 min-w-4 flex-1 rounded ${index < at || request.stage === "SIGNED" ? (request.stage === "SIGNED" ? "bg-[#0a7a47]" : "bg-brand-400") : "bg-ink-200"}`}
+                      />
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {nextSteps.map((stage, index) => (
+                <Button key={stage} type="button" variant={index === 0 ? "primary" : "secondary"} disabled={setStage.isPending} onClick={() => move(stage as SalesRequestStage)}>
+                  {moveOnLabels[stage as SalesRequestStage]} {index === 0 ? "→" : ""}
+                </Button>
+              ))}
+              {request.stage !== "SIGNED" && (
+                <div className="relative">
+                  <Button type="button" variant="ghost" onClick={() => setClosing(!closing)} aria-expanded={closing}>
+                    Close as… ▾
+                  </Button>
+                  {closing && (
+                    <div className="border-ink-200 absolute right-0 z-20 mt-1 w-72 overflow-hidden rounded-xl border bg-white shadow-lg">
+                      {closings.map((stage) => (
+                        <button
+                          key={stage}
+                          type="button"
+                          onClick={() => move(stage)}
+                          className="hover:bg-ink-50 block w-full px-4 py-2.5 text-left"
+                        >
+                          <span className="text-ink-900 block text-[13px] font-medium">{salesStageLabels[stage]}</span>
+                          <span className="text-ink-500 block text-xs font-light">{salesStageHints[stage].replace(/ Closed\.$/, "")}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            {request.stage === "SIGNED"
+              ? `Signed${request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""}. Click a step to move it back.`
+              : salesStageHints[request.stage]}
+          </p>
+        </>
+      )}
       {sign.panel}
       {setStage.error && <FormError message={friendlyError(setStage.error)} />}
     </Card>

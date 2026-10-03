@@ -1550,6 +1550,14 @@ stored on the request, so it cannot disagree with the stock sheet.
 | *No reply* | Closed: the client never came back to us |
 | *Lost* | Closed: the client went elsewhere or dropped the plan |
 
+**On a request's page the stage is a progress bar** (2026-10-03): *Initial interest →
+Proposal sent → Blocked → Signed*, the steps passed ticked and the current one marked,
+each a click away. The next move is a button — *Mark proposal sent*, then *Mark signed* or
+*Mark blocked* — and the other ways a request ends (*Released*, *No reply*, *Lost*) are under
+*Close as…*, each with what it means. A request closed that way shows as such — "Lost —
+closed on 3 Oct" — with *Reopen*, which takes it back to *Proposal sent* if one was sent,
+or else *Initial interest*. A signed one shows every step done.
+
 The stage is changed by hand, with one click, in any direction: a released request can be
 reopened. Moving to *Proposal sent* dates the proposal today, unless a date is already
 there. Moving to a closing stage records the day it closed; reopening clears that. Nothing
