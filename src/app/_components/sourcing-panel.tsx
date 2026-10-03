@@ -14,8 +14,10 @@ const verdictStyles = {
   good: { dot: "bg-[#0a7a47]", badge: "bg-[#e3f8ee] text-[#0a7a47]", label: "Fits" },
   unclear: { dot: "bg-[#1d5fa8]", badge: "bg-[#e6f0fb] text-[#1d5fa8]", label: "Not enough known" },
   partly: { dot: "bg-[#e5a400]", badge: "bg-[#fff4e0] text-[#8a5a00]", label: "Fits in part" },
-  poor: { dot: "bg-ink-400", badge: "bg-ink-50 text-ink-500", label: "Does not fit" },
+  poor: { dot: "bg-[#9a9a9a]", badge: "bg-ink-50 text-ink-500", label: "Does not fit" },
 } as const;
+type Verdict = keyof typeof verdictStyles;
+const verdictOrder: Verdict[] = ["good", "unclear", "partly", "poor"];
 
 /** Frames the map around every pin once they are known. */
 function FitAll({ points }: { points: { latitude: number; longitude: number }[] }) {
@@ -45,12 +47,16 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
   const data = api.sales.sourcing.useQuery({ id: salesRequestId });
   const add = api.scouting.add.useMutation({ onSuccess: () => void utils.sales.sourcing.invalidate() });
   const [focus, setFocus] = useState<string | null>(null);
+  // Only the ones that fit entirely are shown at first; the rest wait behind their tabs.
+  const [tab, setTab] = useState<Verdict>("good");
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   if (data.isLoading) return <p className="text-ink-500 text-sm font-light">Loading the map…</p>;
   if (!data.data) return null;
   const { targets, suggestions, fromEventPlaces, eventId, eventName } = data.data;
-  const points = [...targets, ...suggestions.slice(0, 15)];
+  const shown = suggestions.filter((property) => property.verdict === tab);
+  const counts = Object.fromEntries(verdictOrder.map((verdict) => [verdict, suggestions.filter((property) => property.verdict === verdict).length])) as Record<Verdict, number>;
+  const points = [...targets, ...shown.slice(0, 15)];
   const center = points.length
     ? { lat: points.reduce((sum, p) => sum + p.latitude, 0) / points.length, lng: points.reduce((sum, p) => sum + p.longitude, 0) / points.length }
     : { lat: 34.05, lng: -118.25 };
@@ -62,7 +68,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
       ) : (
         <p className="text-ink-500 text-xs font-light">
           {fromEventPlaces ? "The client chose no places, so these are the event's own. " : "Where the client wants to be close to. "}
-          Properties we already have are around them — green fits the request, blue may (not enough is known about it), amber fits in part.
+          The properties we already have around them that fit the request are shown; the others wait behind the tabs below.
         </p>
       )}
       {apiKey && points.length > 0 && (
@@ -75,7 +81,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                   <span className="bg-ink-900 rounded-full px-2.5 py-1 text-[12px] font-medium text-white shadow-lg">★ {target.label}</span>
                 </AdvancedMarker>
               ))}
-              {suggestions.map((property) => (
+              {shown.map((property) => (
                 <AdvancedMarker
                   key={property.id}
                   position={{ lat: property.latitude, lng: property.longitude }}
@@ -103,8 +109,31 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
             None within {WITHIN_KM * 2} km yet. Scout new ones on {eventName ? `${eventName}'s` : "the event's"} Properties tab.
           </p>
         ) : (
+          <>
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {verdictOrder.map((verdict) => (
+              <button
+                key={verdict}
+                type="button"
+                onClick={() => setTab(verdict)}
+                className={`rounded-full border px-3 py-1 text-xs ${
+                  tab === verdict ? "border-ink-900 bg-ink-900 text-white" : counts[verdict] ? "border-ink-200 text-ink-700 hover:border-ink-400" : "border-ink-200/60 text-ink-500/50"
+                }`}
+              >
+                <span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${verdictStyles[verdict].dot}`} />
+                {verdictStyles[verdict].label} · {counts[verdict]}
+              </button>
+            ))}
+          </div>
+          {shown.length === 0 ? (
+            <p className="text-ink-500 text-sm font-light">
+              {tab === "good"
+                ? `None fits the request entirely yet.${counts.partly ? ` ${counts.partly} ${counts.partly === 1 ? "fits" : "fit"} in part.` : ""}${counts.unclear ? ` ${counts.unclear} may fit — not enough is known about ${counts.unclear === 1 ? "it" : "them"}.` : ""}`
+                : "None here."}
+            </p>
+          ) : (
           <ul className="space-y-1.5">
-            {suggestions.map((property) => (
+            {shown.map((property) => (
               <li
                 key={property.id}
                 id={`suggestion-${property.id}`}
@@ -149,6 +178,8 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
               </li>
             ))}
           </ul>
+          )}
+          </>
         )}
       </div>
     </div>

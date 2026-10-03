@@ -1650,8 +1650,9 @@ the contract.
   the most units on any one line), and **the price** (its lowest indicative rate, against a
   budget per room per night in the same currency). *Fits* when every check passes; *Not
   enough known* when none fails but some could not be made (no price, no unit count); *Fits
-  in part* when one fails; *Does not fit* otherwise. Each can be opened, or added to the
-  event in one click. Finding hotels we do not have yet waits on Google Places (§3.1,
+  in part* when one fails; *Does not fit* otherwise. Only the ones that *fit* are shown at
+  first, on the map and in the list; the others wait behind a tab each, with how many there
+  are. Each can be opened, or added to the event in one click. Finding hotels we do not have yet waits on Google Places (§3.1,
   `docs/todos.md`).
 - **Once the details are in, the enquiry is a sales request** — the same request, its
   history kept. The list marks the ones still enquiries. Requests that had already moved
