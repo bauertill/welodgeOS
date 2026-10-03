@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { ProfileForm } from "~/app/_components/profile-form";
 import { EmailPreferenceCard } from "~/app/_components/notification-bell";
+import { BookingLinkCard } from "~/app/_components/sales-details";
 import { MyWork } from "~/app/_components/tasks";
 import { PageHeader } from "~/app/_components/ui";
 import { auth } from "~/server/auth";
@@ -23,6 +24,7 @@ export default async function ProfilePage() {
         <MyWork />
       </div>
       <EmailPreferenceCard />
+      <BookingLinkCard />
       <ProfileForm />
     </>
   );

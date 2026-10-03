@@ -11,12 +11,14 @@ import { contractHref, newContractHref } from "~/lib/finance";
 import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
+import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
 import { addDays, daysUntil, dayKey, today } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import {
   closedStages,
   contractingFields,
+  earlierInterestFields,
   interestFields,
   isClosed,
   openStages,
@@ -184,7 +186,8 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                 <td className={`${td} min-w-44`}>
                   <Link href={`/sales/${request.id}`} className="text-ink-900 hover:text-brand-700 font-medium">
                     {request.client.name}
-                  </Link>
+                  </Link>{" "}
+                  {!request.detailedAt && <RequestKind request={request} />}
                   {request.contact && <span className="text-ink-500 block text-xs">{request.contact.name}</span>}
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{request.event?.name ?? "—"}</td>
@@ -192,7 +195,10 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   <span className="line-clamp-2">{request.description ?? request.rooms ?? "—"}</span>
                 </td>
                 <td className={`${td} max-w-44`}>
-                  <span className="line-clamp-2">{request.period ?? "—"}</span>
+                  <span className="line-clamp-2">
+                    {request.checkIn && request.checkOut ? formatRange(request.checkIn, request.checkOut) : (request.period ?? "—")}
+                  </span>
+                  {request.roomCount && <span className="text-ink-500 block text-xs">{request.roomCount} rooms</span>}
                 </td>
                 <td className={`${td} whitespace-nowrap`}>
                   {request.nightsSold || request.nightsBlocked ? (
@@ -336,15 +342,24 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
       </Card>
 
       <Card>
-        <h2 className="text-ink-900 mb-1 text-[15px] font-medium">Their initial interest</h2>
-        <p className="text-ink-500 mb-3 text-xs font-light">As the client put it — fill in what you know; the rest can come later.</p>
-        <InterestFields values={interest} onChange={(key, value) => setInterest((current) => ({ ...current, [key]: value }))} />
+        <h2 className="text-ink-900 mb-1 text-[15px] font-medium">What they asked for</h2>
+        <p className="text-ink-500 mb-3 text-xs font-light">
+          As the client put it, however vague. It is an enquiry until the details are in — rooms, dates, budget, where to be — after a call, or
+          from the client through a form you send them from the request.
+        </p>
+        <Textarea
+          rows={5}
+          value={interest.description}
+          onChange={(e) => setInterest((current) => ({ ...current, description: e.target.value }))}
+          placeholder={interestFields[0].placeholder}
+          aria-label="What they asked for"
+        />
       </Card>
 
       <Card>
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Follow up</h2>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Follow up on">
+          <Field label="Remind me on" hint="The account manager is reminded that morning.">
             <Input type="date" value={followUpOn} onChange={(e) => setFollowUpOn(e.target.value)} />
           </Field>
           <Field label="Next step" className="sm:col-span-2">
@@ -357,30 +372,13 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
         <FormError message={problem ?? (create.error ? friendlyError(create.error) : null)} />
         <div className="flex gap-2">
           <Button type="button" onClick={submit} disabled={create.isPending}>
-            {create.isPending ? "Registering…" : "Register sales request"}
+            {create.isPending ? "Registering…" : "Register the enquiry"}
           </Button>
           <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancel
           </Button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function InterestFields({ values, onChange }: { values: Record<InterestKey, string>; onChange: (key: InterestKey, value: string) => void }) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {interestFields.map((field) => (
-        <Field key={field.key} label={field.label} className={field.key === "description" ? "sm:col-span-2" : ""}>
-          <Textarea
-            rows={field.key === "description" ? 4 : 2}
-            value={values[field.key]}
-            onChange={(e) => onChange(field.key, e.target.value)}
-            placeholder={field.placeholder}
-          />
-        </Field>
-      ))}
     </div>
   );
 }
@@ -483,6 +481,9 @@ function TextSection<K extends InterestKey | ContractingKey>({
     >
       {filled.length === 0 ? (
         <p className="text-ink-500 text-sm font-light">{empty}</p>
+      ) : fields.length === 1 ? (
+        // One field: the card's title already says what it is.
+        <p className="text-ink-900 text-sm font-light whitespace-pre-line">{request[fields[0]!.key]}</p>
       ) : (
         <dl className="space-y-2 text-sm font-light">
           {filled.map((field) => (
@@ -969,14 +970,30 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
       <StagePicker request={request} />
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-          <TextSection request={request} title="Initial interest" fields={interestFields} empty="Nothing recorded yet — Edit to add what the client asked for." />
+          <TextSection
+            request={request}
+            title="What they asked for"
+            fields={interestFields.filter((field) => field.key === "description")}
+            empty="Nothing recorded yet — Edit to add what the client asked for, in their words."
+          />
+          <RequestDetailsCard request={request} />
+          {earlierInterestFields.some((field) => request[field.key]) && (
+            <TextSection request={request} title="More detail" fields={earlierInterestFields} empty="" />
+          )}
           <RoomsCard request={request} />
           <TextSection
             request={request}
             title="Contracting details"
             fields={contractingFields}
             empty="None yet. These are what the lawyers need to draw up the contract — the client's legal name, address, VAT and registration numbers, and who signs."
-            extra={<ContractingLink request={request} />}
+            extra={
+              <>
+                <ContractingLink request={request} />
+                <Link href={`/sales/${request.id}/lawyers`} className="text-brand-700 mt-3 inline-block text-[13px] font-medium hover:underline">
+                  Summary for the lawyers →
+                </Link>
+              </>
+            }
           />
         </div>
         <div className="space-y-5">

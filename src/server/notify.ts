@@ -100,6 +100,27 @@ export async function runDaily(db: PrismaClient) {
       reminders += 1;
     }
   }
+  // Sales requests whose follow-up date has come (doc §4.11): their owner is
+  // reminded once for each date set.
+  const due = await db.salesRequest.findMany({
+    where: { followUpOn: { lte: day }, ownerId: { not: null }, stage: { in: ["INITIAL_INTEREST", "PROPOSAL_SENT", "BLOCKED"] } },
+    select: { id: true, ownerId: true, followUpOn: true, nextStep: true, client: { select: { name: true } } },
+  });
+  for (const request of due) {
+    const when = formatDate(request.followUpOn!);
+    const link = `/sales/${request.id}`;
+    const already = await db.notification.count({ where: { userId: request.ownerId!, kind: "SALES_FOLLOW_UP", link, body: { startsWith: `Follow up on ${when}` } } });
+    if (already) continue;
+    await notify(db, {
+      to: [request.ownerId],
+      actorId: null,
+      kind: "SALES_FOLLOW_UP",
+      title: `Follow up with ${request.client.name}`,
+      body: `Follow up on ${when}${request.nextStep ? ` — ${request.nextStep}` : ""}`,
+      link,
+    });
+    reminders += 1;
+  }
   await deliverImmediate(db);
 
   const waiting = await db.notification.findMany({

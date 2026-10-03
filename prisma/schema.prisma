@@ -118,8 +118,9 @@ model PlaceOfInterest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  eventId String
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId       String
+  salesRequests SalesRequest[] @relation("SalesRequestCloseTo")
 
   /// One name per event — two "Gare de Lyon" pins on one map is a mistake,
   /// not a distinction.
@@ -759,6 +760,9 @@ model User {
   emailNotifications EmailPreference      @default(DAILY)
   notifications      Notification[]       @relation("NotificationFor")
   notificationsSent  Notification[]       @relation("NotificationBy")
+  /// Their own link for booking a call (Google Calendar appointment page,
+  /// Calendly…), put in the email to a client (doc §4.11).
+  bookingLink        String?
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
@@ -1101,6 +1105,30 @@ model SalesRequest {
   prePost       String?
   rateIncludes  String?
   extraServices String?
+
+  // The request in detail (doc §4.11) — after a call, or from the client
+  // through their needs link. With these in, an enquiry is a sales request.
+  roomCount      Int?
+  checkIn        DateTime?         @db.Date
+  checkOut       DateTime?         @db.Date
+  budgetCents    Int?
+  budgetCurrency String?
+  budgetBasis    BudgetBasis?
+  /// Where they want to be close to: the event's places of interest…
+  closeTo        PlaceOfInterest[] @relation("SalesRequestCloseTo")
+  /// …and anywhere else, in words.
+  closeToOther   String?
+  /// What the client adds in their own words.
+  clientComments String?
+  /// When it became a sales request — its details first given. Empty while it
+  /// is still an enquiry.
+  detailedAt     DateTime?
+
+  /// The client's private link to tell us their needs (doc §4.11), like the
+  /// contracting link: empty means none, or switched off.
+  needsToken       String?   @unique
+  needsLinkMadeAt  DateTime?
+  needsSubmittedAt DateTime?
 
   /// Who to chase, and when (doc §4.11).
   followUpOn DateTime? @db.Date
@@ -1494,6 +1522,9 @@ model TaskComment {
 
 /// What a notification is about.
 enum NotificationKind {
+  SALES_FOLLOW_UP
+  SALES_NEEDS_SENT
+  SALES_CONTRACTING_SENT
   TASK_ASSIGNED
   TASK_COMMENT
   TASK_MENTION
@@ -1536,4 +1567,11 @@ model Notification {
   @@index([userId, readAt])
   @@index([userId, emailedAt])
   @@index([taskId, kind])
+}
+
+/// What a sales request's budget is counted per (doc §4.11).
+enum BudgetBasis {
+  PER_ROOM_NIGHT
+  PER_PERSON_NIGHT
+  TOTAL
 }

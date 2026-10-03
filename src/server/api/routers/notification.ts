@@ -32,6 +32,26 @@ export const notificationRouter = createTRPCRouter({
     return me.emailNotifications;
   }),
 
+  /** Your own link for clients to book a call with you (doc §4.11). */
+  bookingLink: protectedProcedure.query(async ({ ctx }) => {
+    const me = await ctx.db.user.findUniqueOrThrow({ where: { id: ctx.session.user.id }, select: { bookingLink: true } });
+    return me.bookingLink ?? "";
+  }),
+
+  setBookingLink: protectedProcedure
+    .input(
+      z.object({
+        link: z
+          .string()
+          .trim()
+          .max(1000)
+          .refine((value) => value === "" || /^https?:\/\//.test(value), "Paste the whole link, starting with https://"),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.db.user.update({ where: { id: ctx.session.user.id }, data: { bookingLink: input.link || null }, select: { bookingLink: true } }),
+    ),
+
   setEmailPreference: protectedProcedure
     .input(z.object({ preference: z.nativeEnum(EmailPreference) }))
     .mutation(({ ctx, input }) =>

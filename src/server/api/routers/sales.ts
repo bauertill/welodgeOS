@@ -1,9 +1,9 @@
-import { SalesRequestStage, type Prisma } from "generated/prisma";
+import { BudgetBasis, SalesRequestStage, type Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 
-import { addDays, nightsBetween, parseDay, today } from "~/lib/dates";
+import { addDays, dayKey, nightsBetween, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import {
   clientContractingKeys,
@@ -16,6 +16,7 @@ import {
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
+import { deliverImmediate, notify } from "~/server/notify";
 import { snapshotNight } from "~/server/inventory";
 
 /**
@@ -81,8 +82,74 @@ const include = {
   client: { select: { id: true, name: true, shortName: true } },
   contact: { select: { id: true, name: true, title: true, email: true } },
   event: { select: { id: true, name: true } },
-  owner: person,
+  owner: { select: { id: true, name: true, email: true, image: true, bookingLink: true } },
+  closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
 } satisfies Prisma.SalesRequestInclude;
+
+export const budgetBasisLabels: Record<BudgetBasis, string> = {
+  PER_ROOM_NIGHT: "per room per night",
+  PER_PERSON_NIGHT: "per person per night",
+  TOTAL: "in total",
+};
+
+/** The request in detail (doc §4.11), as given after a call or by the client through their link. */
+const detailsInput = z.object({
+  roomCount: z.number().int().min(1, "Say how many rooms, like 20").max(10_000).nullable(),
+  checkIn: day,
+  checkOut: day,
+  budgetCents: z.number().int().min(0).nullable(),
+  budgetCurrency: z.string().length(3).nullable(),
+  budgetBasis: z.nativeEnum(BudgetBasis).nullable(),
+  closeToIds: z.array(z.string()).max(50),
+  closeToOther: z.string().max(2000),
+  /** Room types and occupancy, in words. */
+  rooms: z.string().max(5000),
+  clientComments: z.string().max(10_000),
+});
+
+/**
+ * Save a request's details; the first time makes the enquiry a sales request.
+ * Places to be close to must be the request's own event's.
+ */
+async function saveDetails(
+  tx: Prisma.TransactionClient,
+  id: string,
+  details: z.infer<typeof detailsInput>,
+  actor: { id: string | null; summary: string },
+) {
+  const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
+  if (details.checkIn && details.checkOut && details.checkOut <= details.checkIn) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "The departure must be after the arrival." });
+  }
+  const places = details.closeToIds.length
+    ? await tx.placeOfInterest.findMany({ where: { id: { in: details.closeToIds }, eventId: before.eventId ?? "" }, select: { id: true } })
+    : [];
+  const after = await tx.salesRequest.update({
+    where: { id },
+    data: {
+      roomCount: details.roomCount,
+      checkIn: details.checkIn ? parseDay(details.checkIn) : null,
+      checkOut: details.checkOut ? parseDay(details.checkOut) : null,
+      budgetCents: details.budgetCents,
+      budgetCurrency: details.budgetCents === null ? null : (details.budgetCurrency ?? "EUR"),
+      budgetBasis: details.budgetCents === null ? null : (details.budgetBasis ?? "PER_ROOM_NIGHT"),
+      closeTo: { set: places },
+      closeToOther: blank(details.closeToOther),
+      rooms: blank(details.rooms),
+      clientComments: blank(details.clientComments),
+      detailedAt: before.detailedAt ?? new Date(),
+    },
+    include,
+  });
+  await logAudit(tx, {
+    actorId: actor.id,
+    entity: "SalesRequest",
+    entityId: id,
+    summary: before.detailedAt ? actor.summary : `${actor.summary} — now a sales request`,
+    changes: diffFields(readable(before), readable(after), historyFields),
+  });
+  return { before, after };
+}
 
 type Loaded = Prisma.SalesRequestGetPayload<{ include: typeof include }>;
 
@@ -99,6 +166,13 @@ function readable(request: Loaded) {
     proposalSentOn: date(request.proposalSentOn),
     blockedUntil: date(request.blockedUntil),
     closedOn: date(request.closedOn),
+    roomCount: request.roomCount !== null ? String(request.roomCount) : null,
+    stay: request.checkIn && request.checkOut ? formatRange(request.checkIn, request.checkOut) : request.checkIn ? `from ${formatDate(request.checkIn)}` : null,
+    budgetAmount:
+      request.budgetCents !== null && request.budgetCurrency
+        ? `${formatMoney(request.budgetCents, request.budgetCurrency)}${request.budgetBasis ? ` ${budgetBasisLabels[request.budgetBasis]}` : ""}`
+        : null,
+    closeToNames: [...request.closeTo.map((place) => place.name), request.closeToOther].filter(Boolean).join(", ") || null,
     value:
       request.valueCents !== null && request.valueCurrency
         ? formatMoney(request.valueCents, request.valueCurrency)
@@ -116,6 +190,11 @@ const historyFields = [
   { key: "proposalSentOn", label: "Proposal sent on" },
   { key: "blockedUntil", label: "Deadline" },
   { key: "value", label: "Value" },
+  { key: "roomCount", label: "Rooms" },
+  { key: "stay", label: "Period" },
+  { key: "budgetAmount", label: "Budget" },
+  { key: "closeToNames", label: "Close to" },
+  { key: "clientComments", label: "Client's comments" },
   ...interestFields.map(({ key, label }) => ({ key, label })),
   ...contractingFields.map(({ key, label }) => ({ key, label })),
 ] as { key: keyof ReturnType<typeof readable>; label: string }[];
@@ -947,8 +1026,8 @@ export const salesRouter = createTRPCRouter({
         >),
       }),
     )
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.db.$transaction(async (tx) => {
         const before = await tx.salesRequest.findUnique({ where: { contractingToken: input.token }, include });
         if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
         if (!input.values.tradeName.trim()) {
@@ -967,7 +1046,95 @@ export const salesRouter = createTRPCRouter({
           summary: "Contracting details sent by the client, through the link",
           changes: diffFields(readable(before), readable(after), historyFields),
         });
+        await notify(tx, {
+          to: [before.ownerId],
+          actorId: null,
+          kind: "SALES_CONTRACTING_SENT",
+          title: `${before.client.name} sent their contracting details`,
+          link: `/sales/${before.id}`,
+        });
         return { ok: true };
+      });
+      await deliverImmediate(ctx.db);
+      return result;
+    }),
+
+  // --- The request in detail (doc §4.11) ----------------------------------------
+
+  /** Fill in or change the details — after a call, say. The first time, the enquiry becomes a sales request. */
+  saveDetails: protectedProcedure
+    .input(detailsInput.extend({ id: z.string() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const { id, ...details } = input;
+        return (await saveDetails(tx, id, details, { id: ctx.session.user.id, summary: "Details updated" })).after;
       }),
     ),
+
+  /** A link for the client to tell us their needs. A new one replaces the old. */
+  makeNeedsLink: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const updated = await ctx.db.salesRequest.update({
+      where: { id: input.id },
+      data: { needsToken: randomBytes(24).toString("base64url"), needsLinkMadeAt: new Date() },
+      select: { needsToken: true },
+    });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.id, summary: "Needs link made" });
+    return updated;
+  }),
+
+  switchOffNeedsLink: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.salesRequest.update({ where: { id: input.id }, data: { needsToken: null } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.id, summary: "Needs link switched off" });
+  }),
+
+  /** What the client's needs page shows, by the link alone: their name, the event and its places — nothing else of ours. */
+  needsForm: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
+    const request = await ctx.db.salesRequest.findUnique({
+      where: { needsToken: input.token },
+      include: { ...include, event: { select: { id: true, name: true, placesOfInterest: { select: { id: true, name: true }, orderBy: { name: "asc" } } } } },
+    });
+    if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+    return {
+      clientName: request.client.name,
+      eventName: request.event?.name ?? null,
+      places: request.event?.placesOfInterest ?? [],
+      submittedAt: request.needsSubmittedAt,
+      values: {
+        roomCount: request.roomCount,
+        checkIn: request.checkIn ? dayKey(request.checkIn) : "",
+        checkOut: request.checkOut ? dayKey(request.checkOut) : "",
+        budgetCents: request.budgetCents,
+        budgetCurrency: request.budgetCurrency,
+        budgetBasis: request.budgetBasis,
+        closeToIds: request.closeTo.map((place) => place.id),
+        closeToOther: request.closeToOther ?? "",
+        rooms: request.rooms ?? "",
+        clientComments: request.clientComments ?? "",
+      },
+    };
+  }),
+
+  /** The client sends their needs: they land on the request, which becomes a sales request, and its owner is told. */
+  submitNeeds: publicProcedure
+    .input(detailsInput.extend({ token: z.string().min(20).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const { token, ...details } = input;
+      await ctx.db.$transaction(async (tx) => {
+        const request = await tx.salesRequest.findUnique({ where: { needsToken: token }, select: { id: true, ownerId: true, client: { select: { name: true } } } });
+        if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+        if (!details.roomCount) throw new TRPCError({ code: "BAD_REQUEST", message: "Please say how many rooms you need." });
+        await saveDetails(tx, request.id, details, { id: null, summary: "Needs sent by the client, through the link" });
+        await tx.salesRequest.update({ where: { id: request.id }, data: { needsSubmittedAt: new Date() } });
+        await notify(tx, {
+          to: [request.ownerId],
+          actorId: null,
+          kind: "SALES_NEEDS_SENT",
+          title: `${request.client.name} told us their needs`,
+          body: [`${details.roomCount} rooms`, details.checkIn && details.checkOut ? `${details.checkIn} – ${details.checkOut}` : null].filter(Boolean).join(" · "),
+          link: `/sales/${request.id}`,
+        });
+      });
+      await deliverImmediate(ctx.db);
+      return { ok: true };
+    }),
 });

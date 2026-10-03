@@ -46,7 +46,7 @@ export const salesStageStyles: Record<SalesRequestStage, string> = {
 
 /** The client's initial interest, as they put it. */
 export const interestFields = [
-  { key: "description", label: "What they need", placeholder: "15 twin rooms for 30 people, close to the Expo" },
+  { key: "description", label: "What they asked for", placeholder: "In their words — \"About 15 rooms for our team, close to the Expo, in July\"" },
   { key: "location", label: "Location and/or property", placeholder: "Santa Monica, within an hour by public transport" },
   { key: "rooms", label: "No. of rooms / room category / occupancy", placeholder: "35–40 twin rooms, 10–20 single rooms" },
   { key: "period", label: "Period", placeholder: "7 – 31 July 2028" },
@@ -74,6 +74,12 @@ export const contractingFields = [
 ] as const;
 
 export type InterestKey = (typeof interestFields)[number]["key"];
+
+/**
+ * What a request said in words before its details had fields of their own
+ * (doc §4.11): kept, and shown under More detail where a request has any.
+ */
+export const earlierInterestFields = interestFields.filter((field) => field.key !== "description" && field.key !== "rooms");
 export type ContractingKey = (typeof contractingFields)[number]["key"];
 
 /**

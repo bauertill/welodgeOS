@@ -1573,6 +1573,39 @@ A request with no event cannot be signed until its event is chosen, as a contrac
 event. Requests marked signed before this rule (2026-10-02) keep their stage; their
 *Contract* card says, in red, that no contract is registered, with a link to register it.
 
+**From enquiry to sales request** (the owner's description, 2026-10-03). A request runs the
+whole way: a client's first, vague interest ("about this many rooms, near this place, for
+these dates"); the sales manager getting the details, by a call or by email; properties
+proposed; and, at contracting, the client's legal details sent to our lawyers to draw up
+the contract.
+
+- **An enquiry** is registered with just the client, what they asked for in their own
+  words, an account manager, and a date to follow up. On that date the account manager is
+  reminded (§2.9) — once for each date set — until the request closes.
+- **Getting the details.** On the request, **Email the client** opens the account manager's
+  own email with a message already written — to the contact's address when there is one —
+  with their **link to book a call** (each person keeps theirs on *My profile*: a Google
+  Calendar appointment page, Calendly or similar) and/or a **form to tell us their needs**:
+  a private link, like the contracting one, which the client opens without signing in.
+  They check it and send it from their own mailbox. The link can also be made on its own,
+  copied, or switched off.
+- **The details** are fields of their own: **number of rooms**, the **period** (arrival and
+  departure), the **budget** (an amount and currency, per room per night, per person per
+  night, or in total), **close to** (the event's places of interest, chosen, and anywhere
+  else in words), **room types and occupancy**, and the **client's comments**. They are
+  filled in by us after a call (*Fill in after a call*), or by the client on their needs
+  form — which lands on the request, says so, and tells the account manager.
+- **Once the details are in, the enquiry is a sales request** — the same request, its
+  history kept. The list marks the ones still enquiries. Requests that had already moved
+  past *Initial interest*, or had their rooms, period or budget written down, counted as
+  sales requests when this came in (2026-10-03).
+- **For the lawyers**, *Summary for the lawyers* on the request is one page to print or
+  save as a PDF: the client and who signs (their contracting details, §below), what they
+  asked for, the rooms blocked and sold for them with stays and prices, and our terms.
+
+Not built yet: suggesting the properties that meet a request's criteria to share with the
+client, and the rate card sent back to a client.
+
 **What a request holds:**
 
 - **Who** — the client (an existing one, or a new one named on the spot, since enquiries
@@ -1580,11 +1613,10 @@ event. Requests marked signed before this rule (2026-10-02) keep their stage; th
   client's contacts, §4.10), the event (or none — not every enquiry is for one of our
   events) and the account manager, who is whoever registers it unless they choose someone
   else.
-- **The initial interest, as the client put it** — what they need, location and/or property,
-  number of rooms / room category / occupancy, period, budget or proposed rate, pre and
-  post, what the rate should include, and extra services. All free text: requests arrive in
-  every shape, from "30 rooms" to two pages of requirements, and forcing them into numbers
-  would lose what the client said.
+- **What they asked for**, in their words — however vague — and **the details** above.
+  Requests registered before 2026-10-03 also kept their earlier free-text boxes (location,
+  period, budget, pre and post, what the rate should include, extra services), shown under
+  *More detail* where they have any.
 - **The follow-up** — the date to get back to the client, and the next step in words ("Look
   for units near the Expo, then send a proposal").
 - **Dates and value** — when the proposal was sent, until when the client is blocked, and
@@ -2417,6 +2449,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (rooms, period, budget, close to, room types, comments); becomes a sales request once given; Summary for the lawyers to print. Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |

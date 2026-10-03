@@ -28,7 +28,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         </>
       )}
       <TeamChrome>
-      <aside className="bg-ink-700 sticky top-0 hidden h-screen w-60 shrink-0 flex-col py-6 md:flex">
+      <aside className="bg-ink-700 sticky top-0 hidden h-screen w-60 shrink-0 flex-col py-6 md:flex print:hidden">
         {/* The brand mark sits on a white card, as it does on welodge.net. */}
         <Link href="/" className="mb-8 block px-5">
           <span className="inline-flex rounded-lg bg-white px-3 py-2.5">
@@ -59,7 +59,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TeamChrome>
-        <header className="bg-ink-700 flex h-14 items-center justify-between gap-4 px-6 md:h-16">
+        <header className="bg-ink-700 flex h-14 items-center justify-between gap-4 px-6 md:h-16 print:hidden">
           <Link href="/" className="md:hidden">
             <span className="inline-flex rounded-lg bg-white px-3 py-2">
               {/* eslint-disable-next-line @next/next/no-img-element -- an SVG needs no optimisation */}

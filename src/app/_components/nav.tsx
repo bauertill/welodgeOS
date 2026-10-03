@@ -30,7 +30,7 @@ const salesPaths = ["/sales", "/clients"];
  * contracting details (doc §4.11) — show none of our own menus or header.
  */
 export function isPublicPath(pathname: string) {
-  return pathname.startsWith("/contracting/");
+  return pathname.startsWith("/contracting/") || pathname.startsWith("/needs/");
 }
 
 /** The team's own sidebar and header, left out on a public page. */
