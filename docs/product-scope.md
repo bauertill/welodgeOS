@@ -375,9 +375,40 @@ every change, who made it and when, field by field. It can be edited or removed.
 **My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
 you asked of others, each with a link to the board.
 
-Not built yet: each type's own workflow; telling someone when a task is given to them or
-they are mentioned (there is no notification path yet, §2.5); tasks shown on the property,
-client and sales-request pages they are about.
+Not built yet: each type's own workflow; tasks shown on the property, client and
+sales-request pages they are about. Who is told what about tasks is §2.9.
+
+### 2.9 Notifications — the bell, and email
+
+**What people are told, about tasks** (the owner's choice, 2026-10-03). Nobody is told
+about what they did themselves.
+
+| When | Who is told |
+| --- | --- |
+| A task is given to someone — on adding it, or later | The people newly put on it |
+| Someone is `@mentioned` in a task's comment | Each person mentioned |
+| A task is commented on | Whoever asked for it and whoever completes it, apart from those mentioned (told above) |
+| A task moves to another status | Whoever asked for it and whoever completes it |
+| A task is due tomorrow | Whoever completes it — or, with nobody on it, whoever asked. Once |
+| A task becomes overdue | The same people. Once |
+
+**The bell** in the header shows how many are unread and the latest thirty, newest first;
+opening one marks it read and goes to the task; *Mark all read* clears the count. It checks
+for new ones every half minute.
+
+**By email, as each person chooses** on *My profile*: **At once** (an email for each, as it
+happens), **Daily summary** (one email each morning with everything since the last — the
+default, so nobody is flooded), or **No email** (the bell only). The bell shows everything
+whichever is chosen. Emails link straight to the task.
+
+**The morning run.** Each day at 06:00 UTC (08:00 in Switzerland in summer) the system
+writes the *due tomorrow* and *overdue* notifications, then sends each person who chose the
+daily summary their email. Run twice, it sends nothing twice.
+
+**Emails are sent through Resend**, from a We Lodge address, and **only by the live site**:
+staging runs on a copy of the live data, real addresses included, and never emails anyone.
+Until Resend is set up (Till, `docs/todos.md`), nothing is emailed and the bell works on its
+own.
 
 ## 3. Phase 1 — Scouting
 
@@ -385,6 +416,17 @@ A scouting list is the long list of properties that *could* be contracted for an
 It is research, not inventory: nothing here implies a commercial position.
 
 ### 3.1 Property
+
+**The same property twice is refused, as far as it can be told.** While a property is
+scouted — on the quick screen and on the full form — it is compared with every property
+already in the system, and anything that looks like it is shown, with why: **a very
+similar name** (the same distinctive words, so *Residence Inn Burbank Downtown* and
+*Residence Inn by Marriott Los Angeles Burbank/Downtown* match, while words every chain
+uses, like *Inn* or *Marriott*, are not enough on their own), **the same street address**,
+or **within 150 m on the map**. Each can be opened, or added to the event instead in one
+click — or it says it is on the event already. Saving it anyway takes ticking *It is a
+different property*; without that the system refuses it, on the server too. An exactly
+equal name is always refused.
 
 **Scouting a property is quick by default** (2026-10-03, on trial). *Scout a new property* on
 an event opens it as a **pop-up over the Properties tab**, so the list stays where it was;
@@ -2346,9 +2388,11 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
+| §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set on the live site (Till) |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 Address search on Google Maps | **Built, needs a key change** | On the property form (new and edit). Waits on *Places API (New)* being enabled and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till) — today Google refuses, so the box is a plain one with a note |
 | §3.1 Quick scouting screen | **Built, on trial** | A pop-up over the event's Properties tab; the default *Scout a property* screen: essentials only, map found from the address, quick room-type rows and amenity chips, *Save and scout another*; *Use the full form* for everything |
+| §3.1 Duplicate properties | **Built** | Compared by distinctive name words, street address and 150 m on the map, on the quick screen, the full form and the server; shown with why, to open or add instead; saving anyway needs *It is a different property* |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |

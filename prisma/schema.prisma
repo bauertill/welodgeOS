@@ -726,34 +726,39 @@ model User {
 
   // The team profile (doc §2.7). The sign-in email above is the contact
   // email: it is what Google vouches for, so it is shown, never edited.
-  jobTitle          String?
-  phones            UserPhone[]
+  jobTitle           String?
+  phones             UserPhone[]
   // Presence (doc §2.7). When the person last used the system — "Active" or
   // "Away" is judged from this on read, never stored — and the status they
   // set by hand, if any; empty means automatic. A status whose `statusUntil`
   // has passed is ignored on read rather than cleared: nothing changes on its
   // own.
-  lastSeenAt        DateTime?
-  status            UserStatus?
-  statusUntil       DateTime?
+  lastSeenAt         DateTime?
+  status             UserStatus?
+  statusUntil        DateTime?
   // A status in the person's own words, shown beside their name, with an
   // emoji and an optional time after which it no longer shows.
-  customStatusEmoji String?
-  customStatusText  String?
-  customStatusUntil DateTime?
-  conversations     ConversationMember[]
-  messages          Message[]
-  reactions         MessageReaction[]
-  customEmoji       CustomEmoji[]
-  accountManaged    ScoutingEntry[]      @relation("AccountManager")
-  clientsManaged    Client[]             @relation("ClientAccountManager")
-  contractsManaged  Contract[]           @relation("ContractOwner")
-  salesRequests     SalesRequest[]       @relation("SalesRequestOwner")
-  contactsManaged   ClientContact[]      @relation("ContactAccountManager")
-  tasksAssigned     Task[]               @relation("TaskAssignees")
-  tasksRequested    Task[]               @relation("TaskRequestedBy")
-  tasksCreated      Task[]               @relation("TaskCreatedBy")
-  taskComments      TaskComment[]
+  customStatusEmoji  String?
+  customStatusText   String?
+  customStatusUntil  DateTime?
+  conversations      ConversationMember[]
+  messages           Message[]
+  reactions          MessageReaction[]
+  customEmoji        CustomEmoji[]
+  accountManaged     ScoutingEntry[]      @relation("AccountManager")
+  clientsManaged     Client[]             @relation("ClientAccountManager")
+  contractsManaged   Contract[]           @relation("ContractOwner")
+  salesRequests      SalesRequest[]       @relation("SalesRequestOwner")
+  contactsManaged    ClientContact[]      @relation("ContactAccountManager")
+  tasksAssigned      Task[]               @relation("TaskAssignees")
+  tasksRequested     Task[]               @relation("TaskRequestedBy")
+  tasksCreated       Task[]               @relation("TaskCreatedBy")
+  taskComments       TaskComment[]
+  /// How this person wants notifications by email (doc §2.9); the bell in the
+  /// app always shows them.
+  emailNotifications EmailPreference      @default(DAILY)
+  notifications      Notification[]       @relation("NotificationFor")
+  notificationsSent  Notification[]       @relation("NotificationBy")
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
@@ -1459,8 +1464,9 @@ model Task {
 
   comments TaskComment[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notifications Notification[]
 
   @@index([status])
   @@index([eventId])
@@ -1482,4 +1488,52 @@ model TaskComment {
   createdAt DateTime  @default(now())
 
   @@index([taskId, createdAt])
+}
+
+// --- Notifications (doc §2.9) -------------------------------------------------
+
+/// What a notification is about.
+enum NotificationKind {
+  TASK_ASSIGNED
+  TASK_COMMENT
+  TASK_MENTION
+  TASK_STATUS
+  TASK_DUE_SOON
+  TASK_OVERDUE
+}
+
+/// By email: each one as it happens, one summary a day, or none.
+enum EmailPreference {
+  IMMEDIATE
+  DAILY
+  NONE
+}
+
+/// Something one person should know about, shown under the bell and sent by
+/// email as they chose (doc §2.9).
+model Notification {
+  id    String           @id @default(cuid())
+  kind  NotificationKind
+  /// "Brandon gave you a task: Get photos of Hotel Carmel"
+  title String
+  /// A comment's words, a new status — anything worth reading in the bell.
+  body  String?
+  /// Where clicking it goes.
+  link  String
+
+  user    User    @relation("NotificationFor", fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+  actor   User?   @relation("NotificationBy", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId String?
+  task    Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId  String?
+
+  readAt    DateTime?
+  /// When it went out by email, at once or in a summary; empty while it has not.
+  emailedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, emailedAt])
+  @@index([taskId, kind])
 }

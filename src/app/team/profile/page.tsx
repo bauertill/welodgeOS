@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "~/app/_components/profile-form";
+import { EmailPreferenceCard } from "~/app/_components/notification-bell";
 import { MyWork } from "~/app/_components/tasks";
 import { PageHeader } from "~/app/_components/ui";
 import { auth } from "~/server/auth";
@@ -21,6 +22,7 @@ export default async function ProfilePage() {
       <div className="border-ink-200/60 mb-8 rounded-xl border bg-white p-5">
         <MyWork />
       </div>
+      <EmailPreferenceCard />
       <ProfileForm />
     </>
   );

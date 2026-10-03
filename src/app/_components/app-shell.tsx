@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { HeaderAuth } from "~/app/_components/header-auth";
+import { NotificationBell } from "~/app/_components/notification-bell";
 import { Nav, TeamChrome } from "~/app/_components/nav";
 import {
   MessageSound,
@@ -75,6 +76,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex items-center gap-4">
             {session?.user && <TeamHeaderLink />}
             {session?.user && <StatusPicker />}
+            {session?.user && <NotificationBell />}
             <HeaderAuth email={session?.user?.name ?? session?.user?.email ?? null} />
           </div>
         </header>

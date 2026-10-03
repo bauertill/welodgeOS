@@ -22,6 +22,7 @@ import {
 import { LocationPreview } from "~/app/_components/location-preview";
 import { normalizePropertyName } from "~/lib/scouting";
 import { AddressSearch } from "~/app/_components/address-search";
+import { SimilarProperties, useSimilarProperties } from "~/app/_components/similar-properties";
 import { api } from "~/trpc/react";
 
 type CategoryDraft = {
@@ -166,6 +167,11 @@ export function PropertyForm({
     values.name.trim().length > 0 &&
     otherPropertyNames.has(normalizePropertyName(values.name));
 
+  // A new property that looks like one we have, typed another way (doc §3.1).
+  const similarFound = useSimilarProperties(values);
+  const similar = isEdit ? [] : similarFound;
+  const [different, setDifferent] = useState(false);
+
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const geocode = api.property.geocode.useMutation({
     onSuccess: (result) => {
@@ -309,6 +315,10 @@ export function PropertyForm({
       );
       return;
     }
+    if (similar.length && !different) {
+      setError("This looks like a property we already have — use that one, or tick that it is a different property.");
+      return;
+    }
     if ((payload.latitude === undefined) !== (payload.longitude === undefined)) {
       setError(
         "Give both a latitude and a longitude, or neither — one on its own cannot be put on the map.",
@@ -317,7 +327,7 @@ export function PropertyForm({
     }
 
     if (initial.id) update.mutate({ ...payload, id: initial.id });
-    else create.mutate(payload);
+    else create.mutate({ ...payload, confirmedDifferent: different });
   };
 
   return (
@@ -363,6 +373,21 @@ export function PropertyForm({
               </p>
             )}
           </Field>
+
+          {!isDuplicateProperty && similar.length > 0 && (
+            <div className="sm:col-span-2">
+              <SimilarProperties
+                matches={similar}
+                event={addToEventId ? { id: addToEventId, name: "this event" } : null}
+                confirmed={different}
+                onConfirmedChange={setDifferent}
+                onUsed={() => {
+                  router.push(addToEventId ? `/events/${addToEventId}` : "/events");
+                  router.refresh();
+                }}
+              />
+            </div>
+          )}
 
           <Field label="Type">
             <Select

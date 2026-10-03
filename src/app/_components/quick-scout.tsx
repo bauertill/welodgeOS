@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { AddressSearch } from "~/app/_components/address-search";
 import { Button, FormError, friendlyError, Input, Label, Textarea } from "~/app/_components/form";
 import { LocationPreview } from "~/app/_components/location-preview";
+import { SimilarProperties, useSimilarProperties } from "~/app/_components/similar-properties";
 import { normalizePropertyName, propertyTypeLabels } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
@@ -105,6 +106,10 @@ export function QuickScout({
 
   const names = useMemo(() => new Map(existingNames.map((property) => [normalizePropertyName(property.name), property.id])), [existingNames]);
   const duplicateId = draft.name.trim() ? names.get(normalizePropertyName(draft.name)) : undefined;
+  // The same hotel typed another way, by name, address or map (doc §3.1).
+  const similar = useSimilarProperties(draft);
+  const [different, setDifferent] = useState(false);
+  useEffect(() => setDifferent(false), [similar.map((match) => match.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps -- asked again for new matches
 
   // Where it is, found from the address once typing stops — unless Google
   // Maps has already given the coordinates, or they were set on the map.
@@ -147,6 +152,10 @@ export function QuickScout({
       setProblem("A property with this name is already in the library — open it and add it to the list from there.");
       return;
     }
+    if (similar.length && !different) {
+      setProblem("This looks like a property we already have — use that one, or tick that it is a different property.");
+      return;
+    }
     const categories = draft.rooms
       .filter((room) => room.name.trim())
       .map((room) => ({
@@ -159,6 +168,7 @@ export function QuickScout({
       }));
     try {
       const property = await create.mutateAsync({
+        confirmedDifferent: different,
         name: draft.name.trim(),
         type: draft.type,
         stars: draft.type === "APARTMENT" ? undefined : (draft.stars ?? undefined),
@@ -184,6 +194,7 @@ export function QuickScout({
         setDraft(blank());
         setLocated("idle");
         lookedUp.current = "";
+        setDifferent(false);
         nameBox.current?.scrollIntoView({ block: "center", behavior: "smooth" });
         nameBox.current?.focus();
       } else if (onSaved) {
@@ -299,6 +310,20 @@ export function QuickScout({
               <Input value={draft.website} onChange={(e) => set("website", e.target.value)} placeholder="Website — https://…" aria-label="Website" />
               <Input value={draft.phone} onChange={(e) => set("phone", e.target.value)} placeholder="Phone" aria-label="Phone" />
             </div>
+            {!duplicateId && (
+              <SimilarProperties
+                matches={similar}
+                event={event}
+                confirmed={different}
+                onConfirmedChange={setDifferent}
+                onUsed={(propertyId) => {
+                  if (onSaved) {
+                    router.refresh();
+                    onSaved();
+                  } else router.push(event ? `/events/${event.id}` : `/properties/${propertyId}`);
+                }}
+              />
+            )}
           </section>
 
           {/* The rooms, as a quick list — details and prices later. */}

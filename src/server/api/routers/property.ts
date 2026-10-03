@@ -1,8 +1,10 @@
+import type { Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { env } from "~/env";
 import { contractingFields, propertyDetailFields, propertyServiceFields } from "~/lib/contracting";
+import { looksLike, type Scouted } from "~/lib/similar-properties";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit, logFieldChanges } from "~/server/audit";
 
@@ -34,6 +36,28 @@ const contactInput = z.object({
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional(),
 });
+
+/** The properties a new one looks like (doc §3.1), most alike first. */
+async function similarTo(db: Prisma.TransactionClient, scouted: Scouted, excludeId?: string) {
+  const all = await db.property.findMany({
+    where: excludeId ? { id: { not: excludeId } } : {},
+    select: {
+      id: true,
+      name: true,
+      address: true,
+      city: true,
+      type: true,
+      latitude: true,
+      longitude: true,
+      scoutingEntries: { select: { eventId: true } },
+    },
+  });
+  return all
+    .map((property) => ({ ...property, reason: looksLike(scouted, property) }))
+    .filter((property): property is typeof property & { reason: string } => property.reason !== null)
+    .map(({ scoutingEntries, ...property }) => ({ ...property, eventIds: scoutingEntries.map((entry) => entry.eventId) }))
+    .slice(0, 5);
+}
 
 const propertyInput = z.object({
   name: z.string().min(1, "A property needs a name"),
@@ -275,10 +299,35 @@ export const propertyRouter = createTRPCRouter({
       }),
     ),
 
+  /** What a property being scouted looks like, among those we have (doc §3.1). */
+  similar: protectedProcedure
+    .input(
+      z.object({
+        name: z.string().max(300),
+        address: z.string().max(500).optional(),
+        latitude: z.number().nullable().optional(),
+        longitude: z.number().nullable().optional(),
+        excludeId: z.string().optional(),
+      }),
+    )
+    .query(({ ctx, input }) => (input.name.trim().length < 3 && !input.address?.trim() ? [] : similarTo(ctx.db, input, input.excludeId))),
+
   create: protectedProcedure
-    .input(propertyInput)
+    .input(propertyInput.extend({ confirmedDifferent: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const { amenityIds, categories, contacts, ...property } = input;
+      const { amenityIds, categories, contacts, confirmedDifferent, ...property } = input;
+
+      // The same hotel typed another way is refused too, unless the person
+      // scouting it has said it is a different one (doc §3.1).
+      if (!confirmedDifferent) {
+        const alike = await similarTo(ctx.db, property);
+        if (alike.length) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `This looks like ${alike[0]!.name}, which is already in the system (${alike[0]!.reason}). Use that one, or say it is a different property.`,
+          });
+        }
+      }
 
       const duplicate = await ctx.db.property.findFirst({
         where: { name: { equals: property.name.trim(), mode: "insensitive" } },

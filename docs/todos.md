@@ -240,6 +240,20 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       an upgrade request only for public apps.
       *2026-09-30:* Brandon has a key and it works locally; it still has to be
       added to the Vercel project (someone with Vercel access — Till).
+- [ ] **Resend for notification emails** (`product-scope.md` §2.9) — Till.
+      1. Create a Resend account (resend.com) for We Lodge, and add the domain
+         `welodge.net` under *Domains*; it gives three DNS records (SPF, DKIM,
+         and optionally DMARC) to add where welodge.net's DNS is managed, then
+         *Verify*.
+      2. Create an API key (sending access only).
+      3. On the Vercel project, **Production only** (never Preview — staging
+         runs on a copy of the live data with real addresses): set
+         `RESEND_API_KEY`, `NOTIFICATIONS_FROM` = `We Lodge OS
+         <notifications@welodge.net>`, and `APP_URL` = `https://os.welodge.net`.
+      4. Set `CRON_SECRET` (any long random text) on the project, so only
+         Vercel can start the morning run in `vercel.json`
+         (`/api/cron/daily`, 06:00 UTC).
+      Until then the bell works and emails are only written to the server log.
 - [ ] **Google Places, to find hotels near a venue automatically**
       (`product-scope.md` §3.10, the Properties overhaul). The plan: enter an
       event's venue and get the hotels around it as a list and on the map,

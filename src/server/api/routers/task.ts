@@ -8,6 +8,7 @@ import { formatDate } from "~/lib/format";
 import { taskStatusLabels } from "~/lib/tasks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
+import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
 
 /**
  * Tasks (doc §2.8): a board of work everyone can see — who asked for it, who
@@ -105,6 +106,9 @@ function dataFrom(input: z.infer<typeof taskInput>) {
   };
 }
 
+/** "Brandon" — who did it, as a notification says it. */
+const firstNameOf = (user: { name?: string | null; email?: string | null }) => (user.name ?? user.email ?? "Someone").split(" ")[0]!;
+
 export const taskRouter = createTRPCRouter({
   /** The board: every task, filtered. Open ones first by deadline, then the newest. */
   list: protectedProcedure
@@ -168,8 +172,8 @@ export const taskRouter = createTRPCRouter({
       return existing ?? ctx.db.taskType.create({ data: { name: input.name } });
     }),
 
-  create: protectedProcedure.input(taskInput).mutation(({ ctx, input }) =>
-    ctx.db.$transaction(async (tx) => {
+  create: protectedProcedure.input(taskInput).mutation(async ({ ctx, input }) => {
+    const created = await ctx.db.$transaction(async (tx) => {
       const status = input.status ?? "TODO";
       const task = await tx.task.create({
         data: {
@@ -192,13 +196,25 @@ export const taskRouter = createTRPCRouter({
         summary: `Task added: ${task.title}`,
         changes: task.assignees.length ? `To complete: ${readable(task).assignees}` : null,
       });
+      // Doc §2.9: whoever is given it hears about it.
+      await notify(tx, {
+        to: task.assignees.map((person) => person.id),
+        actorId: ctx.session.user.id,
+        kind: "TASK_ASSIGNED",
+        title: `${firstNameOf(ctx.session.user)} gave you a task: ${task.title}`,
+        body: [task.deadline ? `Due ${formatDate(task.deadline)}` : null, task.details].filter(Boolean).join("\n") || null,
+        link: `/tasks/${task.id}`,
+        taskId: task.id,
+      });
       return task;
-    }),
-  ),
+    });
+    await deliverImmediate(ctx.db);
+    return created;
+  }),
 
   /** Change a task: only the fields given. */
-  update: protectedProcedure.input(taskInput.partial().extend({ id: z.string() })).mutation(({ ctx, input }) =>
-    ctx.db.$transaction(async (tx) => {
+  update: protectedProcedure.input(taskInput.partial().extend({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const updated = await ctx.db.$transaction(async (tx) => {
       const { id, ...fields } = input;
       const before = await tx.task.findUniqueOrThrow({ where: { id }, include });
       const after = await tx.task.update({
@@ -218,9 +234,33 @@ export const taskRouter = createTRPCRouter({
       if (changes) {
         await logAudit(tx, { actorId: ctx.session.user.id, entity: "Task", entityId: id, summary: "Updated", changes });
       }
+      // Doc §2.9: newly given it; and a move on, to whoever asked and whoever completes it.
+      const had = new Set(before.assignees.map((person) => person.id));
+      const added = after.assignees.filter((person) => !had.has(person.id)).map((person) => person.id);
+      await notify(tx, {
+        to: added,
+        actorId: ctx.session.user.id,
+        kind: "TASK_ASSIGNED",
+        title: `${firstNameOf(ctx.session.user)} gave you a task: ${after.title}`,
+        body: after.deadline ? `Due ${formatDate(after.deadline)}` : null,
+        link: `/tasks/${id}`,
+        taskId: id,
+      });
+      if (before.status !== after.status) {
+        await notify(tx, {
+          to: [after.requestedBy?.id, ...after.assignees.map((person) => person.id)].filter((person) => !added.includes(person ?? "")),
+          actorId: ctx.session.user.id,
+          kind: "TASK_STATUS",
+          title: `${firstNameOf(ctx.session.user)} moved "${after.title}" to ${taskStatusLabels[after.status]}`,
+          link: `/tasks/${id}`,
+          taskId: id,
+        });
+      }
       return after;
-    }),
-  ),
+    });
+    await deliverImmediate(ctx.db);
+    return updated;
+  }),
 
   remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
     const removed = await ctx.db.task.delete({ where: { id: input.id } });
@@ -240,12 +280,43 @@ export const taskRouter = createTRPCRouter({
 
   comment: protectedProcedure
     .input(z.object({ taskId: z.string(), body: z.string().trim().min(1, "A comment needs some text.").max(10_000) }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.taskComment.create({
-        data: { taskId: input.taskId, body: input.body, authorId: ctx.session.user.id },
-        include: { author: person },
-      }),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const comment = await ctx.db.$transaction(async (tx) => {
+        const created = await tx.taskComment.create({
+          data: { taskId: input.taskId, body: input.body, authorId: ctx.session.user.id },
+          include: { author: person },
+        });
+        const task = await tx.task.findUniqueOrThrow({
+          where: { id: input.taskId },
+          select: { title: true, requestedById: true, assignees: { select: { id: true } } },
+        });
+        // Doc §2.9: whoever is @mentioned, then everyone else on the task.
+        const mentioned = await mentionedIn(tx, input.body);
+        const who = firstNameOf(ctx.session.user);
+        const words = plainMentions(input.body);
+        await notify(tx, {
+          to: mentioned,
+          actorId: ctx.session.user.id,
+          kind: "TASK_MENTION",
+          title: `${who} mentioned you on "${task.title}"`,
+          body: words,
+          link: `/tasks/${input.taskId}`,
+          taskId: input.taskId,
+        });
+        await notify(tx, {
+          to: [task.requestedById, ...task.assignees.map((assignee) => assignee.id)].filter((id) => !mentioned.includes(id ?? "")),
+          actorId: ctx.session.user.id,
+          kind: "TASK_COMMENT",
+          title: `${who} commented on "${task.title}"`,
+          body: words,
+          link: `/tasks/${input.taskId}`,
+          taskId: input.taskId,
+        });
+        return created;
+      });
+      await deliverImmediate(ctx.db);
+      return comment;
+    }),
 
   /** Change your own comment's words; it then says it was edited. */
   editComment: protectedProcedure

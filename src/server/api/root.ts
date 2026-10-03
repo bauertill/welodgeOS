@@ -12,6 +12,7 @@ import { providerRouter } from "~/server/api/routers/provider";
 import { reportingRouter } from "~/server/api/routers/reporting";
 import { salesRouter } from "~/server/api/routers/sales";
 import { scoutingRouter } from "~/server/api/routers/scouting";
+import { notificationRouter } from "~/server/api/routers/notification";
 import { taskRouter } from "~/server/api/routers/task";
 import { travelRouter } from "~/server/api/routers/travel";
 import { updateRouter } from "~/server/api/routers/update";
@@ -41,6 +42,7 @@ export const appRouter = createTRPCRouter({
   audit: auditRouter,
   chat: chatRouter,
   task: taskRouter,
+  notification: notificationRouter,
 });
 
 export type AppRouter = typeof appRouter;

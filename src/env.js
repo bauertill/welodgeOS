@@ -19,6 +19,17 @@ export const env = createEnv({
     AUTH_RESEND_KEY: z.string().optional(),
     EMAIL_FROM: z.string().optional(),
     DATABASE_URL: z.string().url(),
+    // Resend, for notification emails (doc §2.9) — separate from the sign-in
+    // key so setting it does not bring back email sign-in. Set on the live
+    // site only: staging runs on a copy of the live data, real addresses
+    // included, and must never email them. Without it emails go to the log.
+    RESEND_API_KEY: z.string().optional(),
+    // "We Lodge OS <notifications@welodge.net>" — a domain verified in Resend.
+    NOTIFICATIONS_FROM: z.string().optional(),
+    // The site's own address, for links in emails.
+    APP_URL: z.string().url().optional(),
+    // Vercel sends it with the daily run (doc §2.9), so nobody else can start it.
+    CRON_SECRET: z.string().optional(),
     // Google Routes API, for travel times (doc §3.8). Never sent to the
     // browser. Not used yet.
     GOOGLE_MAPS_SERVER_KEY: z.string().optional(),
@@ -60,6 +71,10 @@ export const env = createEnv({
     AUTH_RESEND_KEY: process.env.AUTH_RESEND_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
     DATABASE_URL: process.env.DATABASE_URL,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    NOTIFICATIONS_FROM: process.env.NOTIFICATIONS_FROM,
+    APP_URL: process.env.APP_URL,
+    CRON_SECRET: process.env.CRON_SECRET,
     GOOGLE_MAPS_SERVER_KEY: process.env.GOOGLE_MAPS_SERVER_KEY,
     GIPHY_API_KEY: process.env.GIPHY_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
