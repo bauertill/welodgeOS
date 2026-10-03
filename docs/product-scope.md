@@ -1660,7 +1660,10 @@ the contract.
   enough known* when none fails but some could not be made (no price, no unit count); *Fits
   in part* when one fails; *Does not fit* otherwise. Only the ones that *fit* are shown at
   first, on the map and in the list; those that *fit in part* wait behind their tab, with
-  how many there are. *Not enough known* and *Does not fit* are not shown at all (the
+  how many there are, and so do those **To be contacted** — on the event with their hotel
+  contact task still open (below), shown there whatever they would be judged, with a link
+  to the task; adding a place with *Add to properties board* opens that tab. Once the task
+  is done the property is judged like any other. *Not enough known* and *Does not fit* are not shown at all (the
   owner's call, 2026-10-03) — one with no unit count or price is left out until those are
   filled in on its page. Each can be opened, or added to the event in one click.
 - **Properties not in the system**, under them (2026-10-03): places to stay within **5 km**

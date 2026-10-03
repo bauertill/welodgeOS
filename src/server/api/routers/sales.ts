@@ -19,7 +19,7 @@ import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/
 import { diffFields, logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
-import { ensureHotelContactTask } from "~/server/hotel-contact";
+import { ensureHotelContactTask, HOTEL_CONTACT } from "~/server/hotel-contact";
 import { ensureSourcingTask } from "~/server/sourcing";
 import { distanceKm } from "~/lib/scouting";
 import { looksLike } from "~/lib/similar-properties";
@@ -1280,6 +1280,17 @@ export const salesRouter = createTRPCRouter({
         ? (await ctx.db.scoutingEntry.findMany({ where: { eventId: request.eventId }, select: { propertyId: true } })).map((entry) => entry.propertyId)
         : [],
     );
+    // Those still to be contacted: an open hotel contact task on this event (doc §4.11).
+    const contactTasks = new Map(
+      request.eventId
+        ? (
+            await ctx.db.task.findMany({
+              where: { eventId: request.eventId, status: { not: "DONE" }, type: { name: HOTEL_CONTACT }, propertyId: { not: null } },
+              select: { id: true, propertyId: true },
+            })
+          ).map((task) => [task.propertyId!, task.id])
+        : [],
+    );
     const properties = await ctx.db.property.findMany({
       where: { latitude: { not: null }, longitude: { not: null } },
       select: {
@@ -1310,6 +1321,7 @@ export const salesRouter = createTRPCRouter({
           latitude: property.latitude!,
           longitude: property.longitude!,
           onEvent: onList.has(property.id),
+          contactTaskId: contactTasks.get(property.id) ?? null,
           ...judged,
         };
       })
@@ -1319,7 +1331,8 @@ export const salesRouter = createTRPCRouter({
         const order = { good: 0, unclear: 1, partly: 2, poor: 3 } as const;
         return order[a.verdict] - order[b.verdict] || (a.km ?? 99) - (b.km ?? 99);
       })
-      .slice(0, 25);
+      // Every one still to be contacted, then the best of the rest.
+      .filter((property, index, all) => property.contactTaskId !== null || all.slice(0, index).filter((other) => other.contactTaskId === null).length < 25);
     return {
       eventId: request.eventId,
       eventName: request.event?.name ?? null,

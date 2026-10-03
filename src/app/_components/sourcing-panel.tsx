@@ -15,10 +15,13 @@ const verdictStyles = {
   unclear: { dot: "bg-[#1d5fa8]", badge: "bg-[#e6f0fb] text-[#1d5fa8]", label: "Not enough known" },
   partly: { dot: "bg-[#e5a400]", badge: "bg-[#fff4e0] text-[#8a5a00]", label: "Fits in part" },
   poor: { dot: "bg-[#9a9a9a]", badge: "bg-ink-50 text-ink-500", label: "Does not fit" },
+  /** Added to the board, its hotel contact task still open: not judged until we hear back. */
+  contact: { dot: "bg-brand-500", badge: "bg-brand-50 text-brand-800", label: "To be contacted" },
 } as const;
 type Verdict = keyof typeof verdictStyles;
-// Only those that fit, entirely or in part, are offered; the rest are left out.
-const verdictOrder: Verdict[] = ["good", "partly"];
+// Only those that fit, entirely or in part, are offered, and those still to be contacted; the rest are left out.
+const verdictOrder: Verdict[] = ["good", "partly", "contact"];
+const standing = (property: { verdict: Verdict; contactTaskId: string | null }): Verdict => (property.contactTaskId ? "contact" : property.verdict);
 
 /** Frames the map around every pin once they are known. */
 function FitAll({ points }: { points: { latitude: number; longitude: number }[] }) {
@@ -54,7 +57,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
   const [radiusKm, setRadiusKm] = useState(5);
   const discover = api.sales.sourcingDiscover.useQuery({ id: salesRequestId, radiusKm }, { staleTime: 3600_000, refetchOnWindowFocus: false });
   const found = discover.data?.found ?? [];
-  const addFound = useAddFound(salesRequestId, discover.data?.source ?? null);
+  const addFound = useAddFound(salesRequestId, discover.data?.source ?? null, () => setTab("contact"));
   // The map's hover card: open while the pointer is on a dot or on its card.
   const [hovered, setHovered] = useState<string | null>(null);
   const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,9 +71,9 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
   if (data.isLoading) return <p className="text-ink-500 text-sm font-light">Loading the map…</p>;
   if (!data.data) return null;
   const { targets, fromEventPlaces, eventId, eventName } = data.data;
-  const suggestions = data.data.suggestions.filter((property) => verdictOrder.includes(property.verdict));
-  const shown = suggestions.filter((property) => property.verdict === tab);
-  const counts = Object.fromEntries(verdictOrder.map((verdict) => [verdict, suggestions.filter((property) => property.verdict === verdict).length])) as Record<Verdict, number>;
+  const suggestions = data.data.suggestions.filter((property) => verdictOrder.includes(standing(property)));
+  const shown = suggestions.filter((property) => standing(property) === tab);
+  const counts = Object.fromEntries(verdictOrder.map((verdict) => [verdict, suggestions.filter((property) => standing(property) === verdict).length])) as Record<Verdict, number>;
   const points = [...targets, ...shown.slice(0, 15)];
   const center = points.length
     ? { lat: points.reduce((sum, p) => sum + p.latitude, 0) / points.length, lng: points.reduce((sum, p) => sum + p.longitude, 0) / points.length }
@@ -83,7 +86,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
       ) : (
         <p className="text-ink-500 text-xs font-light">
           {fromEventPlaces ? "The client chose no places, so these are the event's own. " : "Where the client wants to be close to. "}
-          The properties we already have around them that fit the request are shown, and those that fit in part behind their tab. Hollow purple dots are places to stay we do not have yet.
+          The properties we already have around them that fit the request are shown; those that fit in part, and those still to be contacted, behind their tabs. Hollow purple dots are places to stay we do not have yet.
         </p>
       )}
       {apiKey && points.length > 0 && (
@@ -109,12 +112,12 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                 >
                   <span className="relative block" onMouseEnter={() => hover(property.id)} onMouseLeave={() => hover(null)}>
                     <span
-                      className={`block rounded-full border-2 border-white shadow ${verdictStyles[property.verdict].dot} ${focus === property.id || hovered === property.id ? "h-5 w-5" : "h-3.5 w-3.5"}`}
+                      className={`block rounded-full border-2 border-white shadow ${verdictStyles[standing(property)].dot} ${focus === property.id || hovered === property.id ? "h-5 w-5" : "h-3.5 w-3.5"}`}
                     />
                     {hovered === property.id && (
                       <MapCard>
-                        <span className={`mb-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${verdictStyles[property.verdict].badge}`}>
-                          {verdictStyles[property.verdict].label}
+                        <span className={`mb-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${verdictStyles[standing(property)].badge}`}>
+                          {verdictStyles[standing(property)].label}
                         </span>
                         <span className="text-ink-900 block text-[13px] font-medium">{property.name}</span>
                         <span className="text-ink-500 block text-xs font-light">
@@ -214,7 +217,9 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
             <p className="text-ink-500 text-sm font-light">
               {tab === "good"
                 ? `None fits the request entirely yet.${counts.partly ? ` ${counts.partly} ${counts.partly === 1 ? "fits" : "fit"} in part.` : ""}`
-                : "None here."}
+                : tab === "contact"
+                  ? "Nothing waiting — a place added from below, with Add to properties board, is here until its hotel contact task is done."
+                  : "None here."}
             </p>
           ) : (
           <ul className="space-y-1.5">
@@ -225,7 +230,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                 onMouseEnter={() => setFocus(property.id)}
                 className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 ${focus === property.id ? "border-brand-300 bg-brand-50/40" : "border-ink-200/60"}`}
               >
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${verdictStyles[property.verdict].badge}`}>{verdictStyles[property.verdict].label}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${verdictStyles[standing(property)].badge}`}>{verdictStyles[standing(property)].label}</span>
                 <span className="min-w-0 flex-1">
                   <span className="text-ink-900 text-[13px] font-medium">{property.name}</span>
                   <span className="text-ink-500 ml-2 text-xs font-light">
@@ -246,6 +251,11 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                   <Link href={`/properties/${property.id}${eventId ? `?back=${encodeURIComponent(`/events/${eventId}`)}` : ""}`} className="text-brand-700 hover:underline">
                     Open
                   </Link>
+                  {property.contactTaskId && (
+                    <Link href={`/tasks/${property.contactTaskId}`} className="text-brand-700 font-medium hover:underline">
+                      Contact task →
+                    </Link>
+                  )}
                   {eventId &&
                     (property.onEvent ? (
                       <span className="text-ink-500">On {eventName}</span>
@@ -418,13 +428,15 @@ function NotInSystem({
 }
 
 /** Adding a place found on the map to our properties (and the event), shared by its row and its map card. */
-function useAddFound(salesRequestId: string, source: "google" | "osm" | null) {
+function useAddFound(salesRequestId: string, source: "google" | "osm" | null, onAdded: () => void) {
   const utils = api.useUtils();
   const [added, setAdded] = useState<Record<string, string>>({});
   const add = api.sales.addFound.useMutation({
     onSuccess: (property, variables) => {
       setAdded((current) => ({ ...current, [variables.place.name]: property.id }));
       void utils.sales.sourcing.invalidate();
+      void utils.task.invalidate();
+      onAdded();
     },
   });
   return {
