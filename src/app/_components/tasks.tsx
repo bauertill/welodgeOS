@@ -718,43 +718,20 @@ export function TaskView({ id }: { id: string }) {
     ["Added", `${formatDay(t.createdAt)}${t.createdBy ? ` by ${t.createdBy.name ?? t.createdBy.email}` : ""}`],
   ];
 
+  const sourcing = t.salesRequest && t.type?.name === "Sourcing";
+
   return (
     <div className="grid items-start gap-5 lg:grid-cols-3">
       <div className="space-y-5 lg:col-span-2">
-        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
-          <div className="flex flex-wrap items-center gap-2">
-            {taskStatusOrder.map((option) => (
-              <button
-                key={option}
-                type="button"
-                title={taskStatusHints[option]}
-                disabled={setStatus.isPending}
-                onClick={() => t.status !== option && setStatus.mutate({ id: t.id, status: option })}
-                aria-pressed={t.status === option}
-                className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
-                  t.status === option ? `${taskStatusStyles[option]} border-transparent font-medium` : "border-ink-200 text-ink-500 hover:text-ink-900 bg-white font-light"
-                }`}
-              >
-                {taskStatusLabels[option]}
-              </button>
-            ))}
-          </div>
-          {t.details ? (
-            <p className="text-ink-700 mt-4 text-sm font-light whitespace-pre-line">{t.details}</p>
-          ) : (
-            <p className="text-ink-400 mt-4 text-sm font-light">No details.</p>
-          )}
-          {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
-        </div>
-        {t.salesRequest && t.type?.name === "Sourcing" && (
+        {sourcing && (
           <div className="border-ink-200/60 rounded-xl border bg-white p-5">
             <div className="mb-3 flex items-baseline justify-between gap-3">
               <h2 className="text-ink-900 text-[15px] font-medium">Where to source</h2>
-              <Link href={`/sales/${t.salesRequest.id}`} className="text-brand-700 text-[13px] font-light hover:underline">
+              <Link href={`/sales/${t.salesRequest!.id}`} className="text-brand-700 text-[13px] font-light hover:underline">
                 The sales request →
               </Link>
             </div>
-            <SourcingPanel salesRequestId={t.salesRequest.id} />
+            <SourcingPanel salesRequestId={t.salesRequest!.id} />
           </div>
         )}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
@@ -762,28 +739,118 @@ export function TaskView({ id }: { id: string }) {
           <TaskComments taskId={t.id} />
         </div>
       </div>
-      <div className="border-ink-200/60 rounded-xl border bg-white p-5">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-ink-900 text-[15px] font-medium">Details</h2>
-          <button type="button" onClick={() => setEditing(true)} className="text-brand-700 text-[13px] font-light hover:underline">
-            Edit
+
+      <div className="space-y-5">
+        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+          <h2 className="text-ink-900 mb-4 text-[15px] font-medium">Status</h2>
+          <TaskStatusSteps status={t.status} pending={setStatus.isPending} onMove={(status) => setStatus.mutate({ id: t.id, status })} />
+          {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
+        </div>
+
+        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-ink-900 text-[15px] font-medium">Details</h2>
+            <button type="button" onClick={() => setEditing(true)} className="text-brand-700 text-[13px] font-light hover:underline">
+              Edit
+            </button>
+          </div>
+          {t.details && (
+            <div className="bg-ink-50/60 mb-4 rounded-lg px-3 py-2.5">
+              <p className="text-ink-500 mb-1 text-[11px] font-medium tracking-wider uppercase">{sourcing ? "What the client asked" : "What to do"}</p>
+              <p className="text-ink-900 text-sm font-light whitespace-pre-line">{t.details}</p>
+            </div>
+          )}
+          <dl className="space-y-2 text-sm font-light">
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex gap-3">
+                <dt className="text-ink-500 w-28 shrink-0">{label}</dt>
+                <dd className="text-ink-900 min-w-0">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <button
+            type="button"
+            onClick={() => window.confirm(`Remove the task "${t.title}"? Its comments go with it.`) && remove.mutate({ id: t.id })}
+            className="mt-5 text-xs text-[#c03654] hover:underline"
+          >
+            Remove task
           </button>
         </div>
-        <dl className="space-y-2 text-sm font-light">
-          {rows.map(([label, value]) => (
-            <div key={label} className="flex gap-3">
-              <dt className="text-ink-500 w-28 shrink-0">{label}</dt>
-              <dd className="text-ink-900 min-w-0">{value}</dd>
-            </div>
-          ))}
-        </dl>
-        <button
-          type="button"
-          onClick={() => window.confirm(`Remove the task "${t.title}"? Its comments go with it.`) && remove.mutate({ id: t.id })}
-          className="mt-5 text-xs text-[#c03654] hover:underline"
-        >
-          Remove task
-        </button>
+      </div>
+    </div>
+  );
+}
+
+const nextMove: Record<TaskStatus, { to: TaskStatus; label: string } | null> = {
+  BACKLOG: { to: "TODO", label: "Move to To do" },
+  TODO: { to: "IN_PROGRESS", label: "Start it" },
+  IN_PROGRESS: { to: "DONE", label: "Mark done" },
+  DONE: null,
+};
+
+/**
+ * Where a task stands (doc §2.8), as steps — passed ones ticked, the current
+ * one marked, each a click away — with the next move as one button.
+ */
+function TaskStatusSteps({ status, pending, onMove }: { status: TaskStatus; pending: boolean; onMove: (status: TaskStatus) => void }) {
+  const at = taskStatusOrder.indexOf(status);
+  const done = status === "DONE";
+  const next = nextMove[status];
+  return (
+    <div>
+      <ol className="flex items-start">
+        {taskStatusOrder.map((step, index) => {
+          const passed = index < at || done;
+          const current = index === at;
+          const last = index === taskStatusOrder.length - 1;
+          return (
+            <li key={step} className={`flex items-start ${last ? "" : "flex-1"}`}>
+              <button
+                type="button"
+                onClick={() => !current && onMove(step)}
+                disabled={pending}
+                title={taskStatusHints[step]}
+                aria-current={current ? "step" : undefined}
+                className="group flex w-16 shrink-0 flex-col items-center gap-1.5 text-center"
+              >
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[12px] font-semibold transition-colors ${
+                    done
+                      ? "border-[#0a7a47] bg-[#0a7a47] text-white"
+                      : current
+                        ? "border-brand-400 bg-brand-400 text-white"
+                        : passed
+                          ? "border-brand-400 text-brand-700 bg-white"
+                          : "border-ink-200 group-hover:border-brand-300 text-ink-400 bg-white"
+                  }`}
+                >
+                  {passed && !current ? "✓" : done ? "✓" : index + 1}
+                </span>
+                <span className={`text-[11px] leading-tight ${current ? "text-ink-900 font-medium" : passed ? "text-ink-700" : "text-ink-400 group-hover:text-ink-700"}`}>
+                  {taskStatusLabels[step]}
+                </span>
+              </button>
+              {!last && (
+                <span
+                  aria-hidden
+                  className={`mt-3.5 h-0.5 min-w-2 flex-1 rounded ${index < at || done ? (done ? "bg-[#0a7a47]" : "bg-brand-400") : "bg-ink-200"}`}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-ink-500 text-xs font-light">{taskStatusHints[status]}</p>
+        {next ? (
+          <Button type="button" disabled={pending} onClick={() => onMove(next.to)} className="shrink-0 whitespace-nowrap">
+            {next.label} →
+          </Button>
+        ) : (
+          <Button type="button" variant="secondary" disabled={pending} onClick={() => onMove("IN_PROGRESS")} className="shrink-0">
+            Reopen
+          </Button>
+        )}
       </div>
     </div>
   );

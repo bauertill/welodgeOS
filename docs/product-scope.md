@@ -374,8 +374,13 @@ team asks of each other. **Tasks** in the menu opens **one board that everyone s
 **Filters**, on both views: *My tasks* (the ones you complete), search, who completes it,
 who asked, priority, type, event and client.
 
-**A task's own page** has its status as buttons, its details, its comments, and its *Log* —
-every change, who made it and when, field by field. It can be edited or removed.
+**A task's own page** (laid out 2026-10-03): on the left, for a sourcing task, *Where to
+source* first (§4.11), then the comments; on the right, its **status as steps** — *Backlog →
+To do → In progress → Done*, passed ones ticked, each a click away, with the next move as one
+button (*Move to To do*, *Start it*, *Mark done*; *Reopen* once done) — and its **details**:
+what is asked (for a sourcing task, what the client asked), who completes it, who asked,
+deadline, priority, type and what it is about. Below, its *Log* — every change, who made it
+and when. It can be edited or removed.
 
 **My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
 you asked of others, each with a link to the board.
