@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { CloseToPicker, type Point } from "~/app/_components/close-to-picker";
+import { DatePicker } from "~/app/_components/date-picker";
 import { Card } from "~/app/_components/ui";
 import { dayKey } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
@@ -151,6 +152,7 @@ export function DetailsFields({
   places,
   forClient = false,
   find,
+  eventStart,
 }: {
   values: DetailsValues;
   onChange: (values: DetailsValues) => void;
@@ -158,6 +160,8 @@ export function DetailsFields({
   forClient?: boolean;
   /** An address → its position: through the client's link, or ours. */
   find: (address: string) => Promise<{ latitude: number; longitude: number; address: string | null } | null>;
+  /** "2028-07-10": the event's first day — the calendars open on its month. */
+  eventStart?: string | null;
 }) {
   const set = <K extends keyof DetailsValues>(key: K, value: DetailsValues[K]) => onChange({ ...values, [key]: value });
   const setLine = (index: number, patch: Partial<LineDraft>) =>
@@ -209,11 +213,21 @@ export function DetailsFields({
               </label>
               <label className="min-w-0">
                 <span className="text-ink-500 mb-1 block text-[11px]">Arrival</span>
-                <Input type="date" value={line.checkIn} onChange={(e) => setLine(index, { checkIn: e.target.value })} aria-label={`Line ${index + 1} arrival`} className="px-2" />
+                <DatePicker
+                  value={line.checkIn}
+                  onChange={(day) => setLine(index, { checkIn: day })}
+                  openAt={values.lines[index - 1]?.checkOut || eventStart}
+                  ariaLabel={`Line ${index + 1} arrival`}
+                />
               </label>
               <label className="min-w-0">
                 <span className="text-ink-500 mb-1 block text-[11px]">Departure</span>
-                <Input type="date" value={line.checkOut} onChange={(e) => setLine(index, { checkOut: e.target.value })} aria-label={`Line ${index + 1} departure`} className="px-2" />
+                <DatePicker
+                  value={line.checkOut}
+                  onChange={(day) => setLine(index, { checkOut: day })}
+                  openAt={line.checkIn || eventStart}
+                  ariaLabel={`Line ${index + 1} departure`}
+                />
               </label>
               {values.lines.length > 1 ? (
                 <button
@@ -297,6 +311,10 @@ function useSaved() {
   };
 }
 
+/** The event's own dates, where a first line starts. */
+const eventStay = (event: { startDate: Date; endDate: Date } | null) =>
+  event ? { checkIn: dayKey(event.startDate), checkOut: dayKey(event.endDate) } : null;
+
 /** Whether a request is still an enquiry, or a sales request with its details in. */
 export function RequestKind({ request }: { request: { detailedAt: Date | null } }) {
   return request.detailedAt ? (
@@ -355,7 +373,13 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
             save.mutate({ id: request.id, ...result.input });
           }}
         >
-          <DetailsFields values={values} onChange={setValues} places={placeList} find={(address) => geocode.mutateAsync({ address })} />
+          <DetailsFields
+            values={values}
+            onChange={setValues}
+            places={placeList}
+            find={(address) => geocode.mutateAsync({ address })}
+            eventStart={eventStay(request.event)?.checkIn}
+          />
           <div className="mt-4 space-y-2">
             <FormError message={problem ?? (save.error ? friendlyError(save.error) : null)} />
             <div className="flex gap-2">
@@ -582,6 +606,7 @@ export function NeedsForm({ token }: { token: string }) {
             places={form.data.places}
             forClient
             find={(address) => geocode.mutateAsync({ token, address })}
+            eventStart={form.data.stay?.checkIn}
           />
           <div className="mt-5 space-y-2">
             <FormError message={problem ?? (submit.error ? friendlyError(submit.error) : null)} />

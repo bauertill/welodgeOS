@@ -84,7 +84,7 @@ const person = { select: { id: true, name: true, email: true, image: true } } as
 const include = {
   client: { select: { id: true, name: true, shortName: true } },
   contact: { select: { id: true, name: true, title: true, email: true } },
-  event: { select: { id: true, name: true, country: true } },
+  event: { select: { id: true, name: true, country: true, startDate: true, endDate: true } },
   owner: { select: { id: true, name: true, email: true, image: true, bookingLink: true } },
   closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
   lines: { orderBy: [{ position: "asc" }] },
@@ -1193,6 +1193,8 @@ export const salesRouter = createTRPCRouter({
             id: true,
             name: true,
             country: true,
+            startDate: true,
+            endDate: true,
             placesOfInterest: { select: { id: true, name: true, latitude: true, longitude: true }, orderBy: { name: "asc" } },
           },
         },
@@ -1204,6 +1206,8 @@ export const salesRouter = createTRPCRouter({
       eventName: request.event?.name ?? null,
       places: request.event?.placesOfInterest ?? [],
       currency: currencyForCountry(request.event?.country),
+      /** Where a first line's dates start: the event's own. */
+      stay: request.event ? { checkIn: dayKey(request.event.startDate), checkOut: dayKey(request.event.endDate) } : null,
       submittedAt: request.needsSubmittedAt,
       values: {
         lines: request.lines.map((line) => ({
