@@ -175,7 +175,7 @@ export function DeleteRequest({ request, subtle = false, onDeleted }: { request:
       type="button"
       disabled={remove.isPending}
       onClick={() =>
-        window.confirm(`Delete ${request.client.name}'s sales request? This cannot be undone. A request that went somewhere is better closed as Lost or No reply.`) &&
+        window.confirm(`Delete ${request.client.name}'s sales request? Its sourcing task goes too, unless it is done. This cannot be undone. A request that went somewhere is better closed as Lost or No reply.`) &&
         remove.mutate({ id: request.id })
       }
       className={

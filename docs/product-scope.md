@@ -1666,8 +1666,9 @@ the contract.
 that went nowhere: an enquiry made by mistake, or twice. It asks first. One with rooms in
 the event's inventory (requested, blocked, sold or cancelled for it) or a contract is
 refused, with the reason: those are closed instead (*Lost*, *Released*…), so what happened
-stays on record. A deleted request's tasks stay, no longer tied to it, and the deletion is
-recorded on the client's history.
+stays on record. Its sourcing task is deleted with it, unless that task is already done
+(the confirmation says so); its other tasks, and a done sourcing task, stay, no longer tied
+to it. The deletion is recorded on the client's history.
 
 Not built yet: suggesting the properties that meet a request's criteria to share with the
 client, and the rate card sent back to a client.
