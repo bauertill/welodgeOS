@@ -431,8 +431,11 @@ function NotInSystem({
 function useAddFound(salesRequestId: string, source: "google" | "osm" | null, onAdded: () => void) {
   const utils = api.useUtils();
   const [added, setAdded] = useState<Record<string, string>>({});
+  // Its phone, email and website looked up as soon as it is added — for the hotel contact task.
+  const findContacts = api.property.findContacts.useMutation({ onSettled: () => void utils.task.invalidate() });
   const add = api.sales.addFound.useMutation({
     onSuccess: (property, variables) => {
+      findContacts.mutate({ id: property.id });
       setAdded((current) => ({ ...current, [variables.place.name]: property.id }));
       void utils.sales.sourcing.invalidate();
       void utils.task.invalidate();

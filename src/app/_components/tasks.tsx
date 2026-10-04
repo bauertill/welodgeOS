@@ -897,6 +897,7 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
   const [people, setPeople] = useState<ContactDraft[]>([]);
   const patch = api.property.patch.useMutation();
   const setContacts = api.property.setContacts.useMutation();
+  const find = api.property.findContacts.useMutation({ onSuccess: () => void utils.task.gathering.invalidate() });
   const saving = patch.isPending || setContacts.isPending;
   const error = patch.error ?? setContacts.error;
 
@@ -929,9 +930,21 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="text-ink-900 text-[15px] font-medium">Contact details</h2>
         {!editing && (
-          <button type="button" onClick={startEditing} className="text-brand-700 text-[13px] font-light hover:underline">
-            {nothing ? "Add them" : "Edit"}
-          </button>
+          <span className="flex items-center gap-4">
+            {(!r.phone || !r.email || !r.website) && (
+              <button
+                type="button"
+                disabled={find.isPending}
+                onClick={() => find.mutate({ id: propertyId })}
+                className="text-brand-700 text-[13px] font-light hover:underline disabled:opacity-60"
+              >
+                {find.isPending ? "Looking…" : "Find automatically"}
+              </button>
+            )}
+            <button type="button" onClick={startEditing} className="text-brand-700 text-[13px] font-light hover:underline">
+              {nothing ? "Add them" : "Edit"}
+            </button>
+          </span>
         )}
       </div>
       {editing ? (
@@ -1008,6 +1021,13 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
                 </li>
               ))}
             </ul>
+          )}
+          {find.data && (
+            <p className={`mt-3 text-xs font-light ${find.data.found.length ? "text-[#0a7a47]" : "text-ink-500"}`}>
+              {find.data.found.length
+                ? `Found the ${find.data.found.join(" and ")} on ${find.data.from.map((source) => (source === "google" ? "Google Maps" : "its website")).join(" and ")}.`
+                : `Nothing new found${r.website ? " on its website" : " — no website is known for it"}${find.data.googleOn ? " or on Google Maps" : ", and Google Maps search is not switched on for us yet"}.`}
+            </p>
           )}
           {(nothing || !r.phone || !r.email) && (
             <p className="text-ink-500 mt-3 text-xs font-light">

@@ -1696,7 +1696,17 @@ the contract.
   **contact details** — phone, email, website, address and the people there — always shown,
   "Not known" where missing, with links to look it up on Google and Google Maps when
   something is; *Edit* (or *Add them*) changes them right there, and they are kept on the
-  property, as if changed on its page. Below them, **what to find out**, each item ticked
+  property, as if changed on its page. **They are also found on their own** (2026-10-04):
+  as soon as a place is added with *Add to properties board*, and again with *Find
+  automatically* on the task, its phone and website are asked of **Google Maps** (once
+  Places API is switched on for our key — until then Google refuses and this step is
+  skipped), then its phone and email are read from **its own website**: the details
+  hotels publish for search engines, its phone and email links, and its contact page
+  when the home page links to one. An email on the hotel's own domain, and a reservations
+  or sales one, is preferred. Only what is empty is filled in — nothing the team typed is
+  replaced — and what was found is recorded in the property's Log. Big chains' websites
+  often turn such reading away; Google covers those once it is on. The task says what was
+  found, or why nothing was (no website known, Google not on yet). Below them, **what to find out**, each item ticked
   on its own once the information is where it belongs — never ticked by hand:
 
   | To find out | Ticked when | Kept on |

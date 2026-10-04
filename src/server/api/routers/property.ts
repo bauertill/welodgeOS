@@ -5,6 +5,7 @@ import { z } from "zod";
 import { contractingFields, propertyDetailFields, propertyServiceFields } from "~/lib/contracting";
 import { looksLike, type Scouted } from "~/lib/similar-properties";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { findContacts } from "~/server/find-contacts";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { logAudit, logFieldChanges } from "~/server/audit";
 
@@ -527,6 +528,11 @@ export const propertyRouter = createTRPCRouter({
         return updated;
       });
     }),
+
+  /** Fill in its phone, email and website from Google Maps and its own website, where empty (doc §4.11). */
+  findContacts: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) => findContacts(ctx.db, input.id, ctx.session.user.id)),
 
   setAmenities: protectedProcedure
     .input(z.object({ id: z.string(), amenityIds: z.array(z.string()) }))
