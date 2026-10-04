@@ -1694,9 +1694,11 @@ the contract.
   managers are told (§2.9). One open task per property and event. Its point is to reach
   out to the property and gather what we need. Its page starts with the property's
   **contact details** — phone, email, website, address and the people there — always shown,
-  "Not known" where missing, with links to look it up on Google and Google Maps when
-  something is; *Edit* (or *Add them*) changes them right there, and they are kept on the
-  property, as if changed on its page. **They are also found on their own** (2026-10-04):
+  with links to look it up on Google and Google Maps while something is missing. **A
+  detail not known yet is a box to type it straight into** (2026-10-04) — saved on Enter or
+  on leaving the box, an email checked first; once known it is shown as a link, and *Edit*
+  changes it. People at the property are added with *+ Add a person at the property*, or
+  under *Edit*. All of it is kept on the property, as if changed on its page. **They are also found on their own** (2026-10-04):
   as soon as a place is added with *Add to properties board*, and again with *Find
   automatically* on the task, its phone and website are asked of **Google Maps** (once
   Places API is switched on for our key — until then Google refuses and this step is

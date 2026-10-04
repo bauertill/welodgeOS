@@ -882,6 +882,48 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
 }
 
 type ContactDraft = { name: string; role: string; email: string; phone: string };
+type QuickKey = "phone" | "generalEmail" | "website" | "address";
+
+/** One empty contact detail, typed in and saved on Enter or on leaving the box. */
+function QuickField({ propertyId, field, label, placeholder, onSaved }: { propertyId: string; field: QuickKey; label: string; placeholder: string; onSaved: () => void }) {
+  const [value, setValue] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const save = api.property.patch.useMutation({ onSuccess: onSaved, onError: (error) => setProblem(friendlyError(error)) });
+  const commit = () => {
+    const text = value.trim();
+    if (!text || save.isPending) return;
+    if (field === "generalEmail" && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(text)) {
+      setProblem("That email address does not look right.");
+      return;
+    }
+    setProblem(null);
+    save.mutate({ id: propertyId, [field]: text });
+  };
+  return (
+    <span className="block">
+      <input
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setProblem(null);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        disabled={save.isPending}
+        type={field === "generalEmail" ? "email" : "text"}
+        placeholder={save.isPending ? "Saving…" : placeholder}
+        aria-label={label}
+        className="border-ink-200/80 hover:border-ink-300 focus:border-brand-400 placeholder:text-ink-500/60 w-full max-w-sm rounded-md border border-dashed bg-transparent px-2 py-1 text-sm font-light outline-none focus:border-solid focus:bg-white"
+      />
+      {problem && <span className="mt-0.5 block text-xs text-[#c03654]">{problem}</span>}
+    </span>
+  );
+}
 
 /**
  * How to reach the property, on its hotel contact task (doc §4.11): its
@@ -918,10 +960,24 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
     void utils.property.invalidate();
     setEditing(false);
   };
-  const row = (label: string, value: React.ReactNode) => (
-    <div className="flex gap-3">
+  // A detail not known yet is a box to type it straight into; once known, Edit changes it.
+  const row = (label: string, value: React.ReactNode, field: QuickKey, placeholder: string) => (
+    <div className="flex items-center gap-3">
       <dt className="text-ink-500 w-20 shrink-0">{label}</dt>
-      <dd className="text-ink-900 min-w-0 break-words">{value ?? <span className="text-ink-500/60">Not known</span>}</dd>
+      <dd className="text-ink-900 min-w-0 flex-1 break-words">
+        {value || (
+          <QuickField
+            propertyId={propertyId}
+            field={field}
+            label={label}
+            placeholder={placeholder}
+            onSaved={() => {
+              void utils.task.gathering.invalidate();
+              void utils.property.invalidate();
+            }}
+          />
+        )}
+      </dd>
     </div>
   );
 
@@ -942,7 +998,7 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
               </button>
             )}
             <button type="button" onClick={startEditing} className="text-brand-700 text-[13px] font-light hover:underline">
-              {nothing ? "Add them" : "Edit"}
+              Edit
             </button>
           </span>
         )}
@@ -995,11 +1051,16 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
       ) : (
         <>
           <dl className="space-y-1.5 text-sm font-light">
-            {row("Phone", r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">{r.phone}</a>)}
-            {row("Email", r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">{r.email}</a>)}
-            {row("Website", r.website && <a href={href(r.website)} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">{r.website.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗</a>)}
-            {row("Address", r.address)}
+            {row("Phone", r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">{r.phone}</a>, "phone", "Type the phone number")}
+            {row("Email", r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">{r.email}</a>, "generalEmail", "Type the email address")}
+            {row("Website", r.website && <a href={href(r.website)} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">{r.website.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗</a>, "website", "Paste the website")}
+            {row("Address", r.address, "address", "Type the address")}
           </dl>
+          {r.contacts.length === 0 && (
+            <button type="button" onClick={startEditing} className="text-brand-700 mt-3 text-xs font-light hover:underline">
+              + Add a person at the property
+            </button>
+          )}
           {r.contacts.length > 0 && (
             <ul className="border-ink-200/60 mt-3 space-y-1 border-t pt-3 text-sm font-light">
               {r.contacts.map((contact) => (
