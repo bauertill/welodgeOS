@@ -1692,8 +1692,11 @@ the contract.
   event's accommodation managers (or, with none set, to whoever added it), asked by whoever
   added it, linked to the property, the event, the client and the sales request; the
   managers are told (§2.9). One open task per property and event. Its point is to reach
-  out to the property and gather what we need. Its page shows **how to reach them** (the
-  property's phone, email, website and contacts) and **what to find out**, each item ticked
+  out to the property and gather what we need. Its page starts with the property's
+  **contact details** — phone, email, website, address and the people there — always shown,
+  "Not known" where missing, with links to look it up on Google and Google Maps when
+  something is; *Edit* (or *Add them*) changes them right there, and they are kept on the
+  property, as if changed on its page. Below them, **what to find out**, each item ticked
   on its own once the information is where it belongs — never ticked by hand:
 
   | To find out | Ticked when | Kept on |

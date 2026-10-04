@@ -169,6 +169,10 @@ export const taskRouter = createTRPCRouter({
       where: { id: input.propertyId },
       select: {
         type: true,
+        name: true,
+        address: true,
+        city: true,
+        country: true,
         phone: true,
         website: true,
         generalEmail: true,
@@ -237,7 +241,15 @@ export const taskRouter = createTRPCRouter({
     ];
     return {
       entryId: entry?.id ?? null,
-      reach: { phone: property.phone, website: property.website, email: property.generalEmail, contacts: property.contacts },
+      reach: {
+        name: property.name,
+        address: [property.address, property.city, property.country].filter(Boolean).join(", ") || null,
+        city: property.city,
+        phone: property.phone,
+        website: property.website,
+        email: property.generalEmail,
+        contacts: property.contacts,
+      },
       items: hotelContactItems.map((item) => {
         const found = items.find((one) => one.key === item.key)!;
         return { ...item, ok: found.ok, text: found.text || (found.ok ? "In" : "Not yet") };

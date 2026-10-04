@@ -827,6 +827,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
             <SourcingPanel salesRequestId={t.salesRequest!.id} />
           </div>
         )}
+        {hotelContact && <PropertyContactDetails propertyId={t.property!.id} eventId={t.event!.id} />}
         {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Comments</h2>
@@ -880,6 +881,152 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
   );
 }
 
+type ContactDraft = { name: string; role: string; email: string; phone: string };
+
+/**
+ * How to reach the property, on its hotel contact task (doc §4.11): its
+ * phone, email, website and address, and the people there — changed right
+ * here, and kept on the property. With nothing known yet, a search for it.
+ */
+function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; eventId: string }) {
+  const utils = api.useUtils();
+  const gathering = api.task.gathering.useQuery({ propertyId, eventId });
+  const r = gathering.data?.reach;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ phone: "", email: "", website: "" });
+  const [people, setPeople] = useState<ContactDraft[]>([]);
+  const patch = api.property.patch.useMutation();
+  const setContacts = api.property.setContacts.useMutation();
+  const saving = patch.isPending || setContacts.isPending;
+  const error = patch.error ?? setContacts.error;
+
+  if (!r) return null;
+  const href = (url: string) => (/^https?:\/\//.test(url) ? url : `https://${url}`);
+  const lookup = encodeURIComponent([r.name, r.city].filter(Boolean).join(" "));
+  const nothing = !r.phone && !r.email && !r.website && r.contacts.length === 0;
+
+  const startEditing = () => {
+    setDraft({ phone: r.phone ?? "", email: r.email ?? "", website: r.website ?? "" });
+    setPeople(r.contacts.map((contact) => ({ name: contact.name, role: contact.role ?? "", email: contact.email ?? "", phone: contact.phone ?? "" })));
+    setEditing(true);
+  };
+  const save = async () => {
+    await patch.mutateAsync({ id: propertyId, phone: draft.phone, generalEmail: draft.email, website: draft.website });
+    await setContacts.mutateAsync({ id: propertyId, contacts: people.filter((person) => person.name.trim()) });
+    void utils.task.gathering.invalidate();
+    void utils.property.invalidate();
+    setEditing(false);
+  };
+  const row = (label: string, value: React.ReactNode) => (
+    <div className="flex gap-3">
+      <dt className="text-ink-500 w-20 shrink-0">{label}</dt>
+      <dd className="text-ink-900 min-w-0 break-words">{value ?? <span className="text-ink-500/60">Not known</span>}</dd>
+    </div>
+  );
+
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-ink-900 text-[15px] font-medium">Contact details</h2>
+        {!editing && (
+          <button type="button" onClick={startEditing} className="text-brand-700 text-[13px] font-light hover:underline">
+            {nothing ? "Add them" : "Edit"}
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Phone">
+              <Input value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="+1 818 555 0100" />
+            </Field>
+            <Field label="Email">
+              <Input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="reservations@hotel.com" />
+            </Field>
+            <Field label="Website">
+              <Input value={draft.website} onChange={(e) => setDraft({ ...draft, website: e.target.value })} placeholder="hotel.com" />
+            </Field>
+          </div>
+          <div>
+            <Label>People there</Label>
+            <div className="space-y-2">
+              {people.map((person, index) => {
+                const change = (key: keyof ContactDraft, value: string) => setPeople(people.map((one, i) => (i === index ? { ...one, [key]: value } : one)));
+                return (
+                  <div key={index} className="grid items-center gap-2 sm:grid-cols-[1fr_1fr_1.3fr_1fr_auto]">
+                    <Input value={person.name} onChange={(e) => change("name", e.target.value)} placeholder="Name" aria-label="Name" />
+                    <Input value={person.role} onChange={(e) => change("role", e.target.value)} placeholder="Sales manager" aria-label="Role" />
+                    <Input type="email" value={person.email} onChange={(e) => change("email", e.target.value)} placeholder="name@hotel.com" aria-label="Email" />
+                    <Input value={person.phone} onChange={(e) => change("phone", e.target.value)} placeholder="Phone" aria-label="Phone" />
+                    <button type="button" onClick={() => setPeople(people.filter((_, i) => i !== index))} className="text-xs text-[#c03654] hover:underline">
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
+              <button type="button" onClick={() => setPeople([...people, { name: "", role: "", email: "", phone: "" }])} className="text-brand-700 text-xs font-light hover:underline">
+                + Add a person
+              </button>
+            </div>
+          </div>
+          <FormError message={error ? friendlyError(error) : null} />
+          <div className="flex gap-2">
+            <Button type="button" disabled={saving} onClick={() => void save()}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <dl className="space-y-1.5 text-sm font-light">
+            {row("Phone", r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">{r.phone}</a>)}
+            {row("Email", r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">{r.email}</a>)}
+            {row("Website", r.website && <a href={href(r.website)} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">{r.website.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗</a>)}
+            {row("Address", r.address)}
+          </dl>
+          {r.contacts.length > 0 && (
+            <ul className="border-ink-200/60 mt-3 space-y-1 border-t pt-3 text-sm font-light">
+              {r.contacts.map((contact) => (
+                <li key={contact.id}>
+                  <span className="text-ink-900 font-medium">{contact.name}</span>
+                  {contact.role && <span className="text-ink-500"> · {contact.role}</span>}
+                  {contact.email && (
+                    <>
+                      {" · "}
+                      <a href={`mailto:${contact.email}`} className="text-brand-700 hover:underline">{contact.email}</a>
+                    </>
+                  )}
+                  {contact.phone && (
+                    <>
+                      {" · "}
+                      <a href={`tel:${contact.phone}`} className="text-brand-700 hover:underline">{contact.phone}</a>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {(nothing || !r.phone || !r.email) && (
+            <p className="text-ink-500 mt-3 text-xs font-light">
+              {nothing ? "Nothing known yet — look them up: " : "Missing some — look them up: "}
+              <a href={`https://www.google.com/search?q=${lookup}`} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                Google ↗
+              </a>
+              {" · "}
+              <a href={`https://www.google.com/maps/search/?api=1&query=${lookup}`} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                Google Maps ↗
+              </a>
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /**
  * A hotel contact task (doc §4.11): how to reach the property, and what is to
  * be found out — each ticked once it is on the property, its terms for the
@@ -891,7 +1038,6 @@ function HotelContactChecklist({ propertyId, propertyName, eventId, eventName }:
   const [terms, setTerms] = useState(false);
   const g = gathering.data;
   const done = g ? g.items.filter((item) => item.ok).length : 0;
-  const website = g?.reach.website ? (/^https?:\/\//.test(g.reach.website) ? g.reach.website : `https://${g.reach.website}`) : null;
   const back = encodeURIComponent(`/events/${eventId}`);
   return (
     <div className="border-ink-200/60 rounded-xl border bg-white p-5">
@@ -907,36 +1053,6 @@ function HotelContactChecklist({ propertyId, propertyName, eventId, eventName }:
         Reach out to {propertyName}. Each item is ticked once it is on the property — rooms and amenities on its page, terms for {eventName} in its terms, the
         rate as a quotation.
       </p>
-      {g && (g.reach.phone || g.reach.email || website || g.reach.contacts.length > 0) && (
-        <div className="bg-ink-50/60 mb-3 rounded-lg px-3 py-2 text-[13px] font-light">
-          <span className="text-ink-500 mr-2 text-[11px] font-medium tracking-wider uppercase">Reach them</span>
-          {[
-            g.reach.phone && <a key="p" href={`tel:${g.reach.phone}`} className="text-brand-700 hover:underline">{g.reach.phone}</a>,
-            g.reach.email && <a key="e" href={`mailto:${g.reach.email}`} className="text-brand-700 hover:underline">{g.reach.email}</a>,
-            website && <a key="w" href={website} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">Website ↗</a>,
-            ...g.reach.contacts.map((contact) => (
-              <span key={contact.id}>
-                {contact.name}
-                {contact.role ? ` (${contact.role})` : ""}
-                {contact.email && (
-                  <>
-                    {" "}
-                    <a href={`mailto:${contact.email}`} className="text-brand-700 hover:underline">{contact.email}</a>
-                  </>
-                )}
-                {contact.phone ? ` ${contact.phone}` : ""}
-              </span>
-            )),
-          ]
-            .filter(Boolean)
-            .map((part, index) => (
-              <span key={index}>
-                {index > 0 && <span className="text-ink-300"> · </span>}
-                {part}
-              </span>
-            ))}
-        </div>
-      )}
       {!g ? (
         <p className="text-ink-500 text-sm font-light">{gathering.isLoading ? "…" : "The property is no longer there."}</p>
       ) : (
