@@ -272,6 +272,8 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       Google by itself once the API is on — nothing else to change. Text Search
       is paid per call (up to three per client place per six hours), so the
       budget alert matters.
+      *2026-10-05:* **done** — Till switched Places API (New) on and allowed it
+      on the server key; Google answers (checked from the app's own code).
 
 ## 3. Phase 3 — Operations
 

@@ -5,6 +5,7 @@ import type { PrismaClient } from "generated/prisma";
 
 import { env } from "~/env";
 import { logAudit } from "~/server/audit";
+import { cleanWebsite } from "~/server/discover";
 
 /**
  * A property's contact details found on their own (doc §4.11): its phone and
@@ -98,7 +99,7 @@ async function fromGoogle(property: { name: string; city: string | null; latitud
   if (!response?.ok) return null;
   const data = (await response.json().catch(() => null)) as { places?: { internationalPhoneNumber?: string; websiteUri?: string }[] } | null;
   const place = data?.places?.[0];
-  return { phone: place?.internationalPhoneNumber, website: place?.websiteUri };
+  return { phone: place?.internationalPhoneNumber, website: place?.websiteUri ? cleanWebsite(place.websiteUri) : undefined };
 }
 
 // --- The property's website ----------------------------------------------------

@@ -135,7 +135,7 @@ async function fromGoogle(point: Point, radiusKm: number, kinds: { hotels: boole
         address: place.formattedAddress ?? null,
         city: part("locality") ?? part("postal_town") ?? part("administrative_area_level_2"),
         country: part("country"),
-        website: place.websiteUri ?? null,
+        website: place.websiteUri ? cleanWebsite(place.websiteUri) : null,
         phone: place.internationalPhoneNumber ?? null,
         rating: place.rating ?? null,
         ratingCount: place.userRatingCount ?? null,
@@ -204,4 +204,15 @@ async function fromOpenStreetMap(point: Point, radiusKm: number, kinds: { hotels
 /** The nearest of several points, and how far. */
 export function nearest<T extends Point & { label: string }>(from: Point, targets: T[]) {
   return targets.map((target) => ({ target, km: distanceKm(from, target) })).sort((a, b) => a.km - b.km)[0] ?? null;
+}
+
+/** A website as Google gives it, without its tracking tags (?utm_source=google…). */
+export function cleanWebsite(url: string) {
+  try {
+    const parsed = new URL(url);
+    for (const key of [...parsed.searchParams.keys()]) if (/^utm_|^gclid$|^fbclid$/i.test(key)) parsed.searchParams.delete(key);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
 }

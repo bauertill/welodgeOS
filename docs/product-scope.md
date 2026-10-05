@@ -1678,7 +1678,8 @@ the contract.
   already have one with the same name or address, or on the very same spot. The **Add to
   properties board** button creates the property from what the map knows (name, kind, address, city,
   country, coordinates, website, phone, stars, rooms) and puts it on the request's event,
-  noted as found while sourcing for that client; it then shows among the properties we
+  noted as found while sourcing for that client (a website from Google is kept without its
+  tracking tags); it then shows among the properties we
   have, to be filled in on its page. The search uses **Google Maps** (Places API, New) —
   and, until that is switched on for our key (Till; today Google refuses), **OpenStreetMap**,
   whose list is patchier: the section says which. Flats without a website are left out of
@@ -2567,7 +2568,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set on the live site (Till) |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
-| §3.1 Address search on Google Maps | **Built, needs a key change** | On the property form (new and edit). Waits on *Places API (New)* being enabled and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till) — today Google refuses, so the box is a plain one with a note |
+| §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |
 | §3.1 Quick scouting screen | **Built, on trial** | A pop-up over the event's Properties tab; the default *Scout a property* screen: essentials only, map found from the address, quick room-type rows and amenity chips, *Save and scout another*; *Use the full form* for everything |
 | §3.1 Duplicate properties | **Built** | Compared by distinctive name words, street address and 150 m on the map, on the quick screen, the full form and the server; shown with why, to open or add instead; saving anyway needs *It is a different property* |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
