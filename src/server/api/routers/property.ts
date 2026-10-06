@@ -5,6 +5,7 @@ import { z } from "zod";
 import { contractingFields, propertyDetailFields, propertyServiceFields } from "~/lib/contracting";
 import { looksLike, type Scouted } from "~/lib/similar-properties";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { eventRates } from "~/server/event-rates";
 import { findContacts } from "~/server/find-contacts";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { logAudit, logFieldChanges } from "~/server/audit";
@@ -193,16 +194,29 @@ export const propertyRouter = createTRPCRouter({
 
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(({ ctx, input }) =>
-      ctx.db.property.findUnique({
+    .query(async ({ ctx, input }) => {
+      const property = await ctx.db.property.findUnique({
         where: { id: input.id },
         include: {
           ...detail,
           scoutingEntries: { include: { event: true, _count: { select: { quotations: true } } } },
           _count: { select: { contracts: true } },
         },
-      }),
-    ),
+      });
+      if (!property) return null;
+      // Each room category's rate for each event it is on, from the agreed rate or the quotations (doc §3.9).
+      const rates = await eventRates(ctx.db, { propertyIds: [property.id] });
+      return {
+        ...property,
+        eventRates: property.scoutingEntries.map((entry) => ({
+          eventId: entry.eventId,
+          eventName: entry.event.name,
+          startDate: entry.event.startDate,
+          endDate: entry.event.endDate,
+          byCategory: Object.fromEntries(rates.get(entry.eventId) ?? []),
+        })),
+      };
+    }),
 
   /** What a property being scouted looks like, among those we have (doc §3.1). */
   similar: protectedProcedure

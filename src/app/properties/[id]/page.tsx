@@ -104,6 +104,13 @@ export default async function PropertyPage({
           <PropertyTabs
             tabs={[
               {
+                key: "rooms",
+                label: property.type === "HOTEL" ? "Room categories" : "Unit types",
+                count: property.categories.length,
+                content: <RoomCategoriesCard property={property} bare />,
+              },
+              { key: "updates", label: "Updates", content: <UpdateThread propertyId={property.id} /> },
+              {
                 key: "quotations",
                 label: "Quotations",
                 highlight: true,
@@ -116,13 +123,6 @@ export default async function PropertyPage({
                 count: property._count.contracts,
                 content: <PropertyContracts propertyId={property.id} events={entries.map((entry) => entry.event)} />,
               },
-              {
-                key: "rooms",
-                label: property.type === "HOTEL" ? "Room categories" : "Unit types",
-                count: property.categories.length,
-                content: <RoomCategoriesCard property={property} bare />,
-              },
-              { key: "feedback", label: "Feedback", content: <UpdateThread propertyId={property.id} /> },
               // Kept for the record, rarely read: a tab of its own, out of the way.
               { key: "log", label: "Log", content: <ActivityLog entity="Property" entityId={property.id} /> },
             ]}

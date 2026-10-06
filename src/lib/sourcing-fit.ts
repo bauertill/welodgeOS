@@ -7,7 +7,7 @@ import { distanceKm } from "~/lib/scouting";
  * by four plain checks, each said in words, so a suggestion can be judged at
  * a glance: how near it is to the client's places, whether it is the kind
  * they want (hotel rooms or apartments), whether it has the units, and
- * whether its indicative price is within their budget. A check that cannot be
+ * whether its event rate is within their budget. A check that cannot be
  * made — no coordinates, no price, a different currency — is said, not guessed.
  */
 
@@ -29,7 +29,12 @@ export type Candidate = {
   type: PropertyType;
   latitude: number;
   longitude: number;
-  categories: { unitCount: number; bedrooms: number | null; indicativePriceMinCents: number | null; currency: string }[];
+  /**
+   * Its categories, each with its price for a night: the event rate (agreed,
+   * or quoted for the event's dates) — or, for a property scouted before the
+   * event rate, its old indicative price, said so.
+   */
+  categories: { unitCount: number; bedrooms: number | null; priceCents: number | null; currency: string; indicative?: boolean }[];
   stated: number | null;
 };
 
@@ -66,14 +71,17 @@ export function fit(candidate: Candidate, targets: Target[], wanted: Wanted) {
     checks.push(units ? { ok: units >= wanted.units, text: `${units} units (${wanted.units} wanted)` } : { ok: null, text: "Units not known" });
   }
 
-  // The price: its lowest indicative rate, against a per-night budget in the same currency.
+  // The price: its lowest event rate, against a per-night budget in the same currency.
   if (wanted.budgetCents !== null && wanted.budgetPerNight) {
-    const priced = candidate.categories.filter((category) => category.indicativePriceMinCents !== null && category.currency === wanted.budgetCurrency);
-    const lowest = priced.length ? Math.min(...priced.map((category) => category.indicativePriceMinCents!)) : null;
+    const priced = candidate.categories.filter((category) => category.priceCents !== null && category.currency === wanted.budgetCurrency);
+    const cheapest = priced.length ? priced.reduce((low, category) => (category.priceCents! < low.priceCents! ? category : low)) : null;
     checks.push(
-      lowest === null
-        ? { ok: null, text: "No indicative price to compare" }
-        : { ok: lowest <= wanted.budgetCents, text: `From ${(lowest / 100).toFixed(0)} ${wanted.budgetCurrency} a night` },
+      cheapest === null
+        ? { ok: null, text: "No quote for the event to compare" }
+        : {
+            ok: cheapest.priceCents! <= wanted.budgetCents,
+            text: `From ${(cheapest.priceCents! / 100).toFixed(0)} ${wanted.budgetCurrency} a night${cheapest.indicative ? " (indicative)" : ""}`,
+          },
     );
   }
 

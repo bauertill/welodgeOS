@@ -44,7 +44,7 @@ export default async function ClientPage({
 
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Feedback
+              Updates
             </h2>
             <UpdateThread clientId={client.id} />
           </Card>

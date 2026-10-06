@@ -158,10 +158,10 @@ Magic-link sign-in by email is built and deliberately switched off: at launch no
 outside the Workspace needs an account. It becomes available again by configuring an email
 sender, without any code change. See `docs/todos.md` §2.
 
-### 2.6 Feedback — a running history per property and client
+### 2.6 Updates — a running history per property and client
 
-Called **Feedback** on screen (it was *Updates* until 2026-10-01); a single post is still
-referred to below as an update.
+Called **Updates** on screen (it was *Feedback* from 2026-10-01 to 2026-10-06, at the owner's
+request each time); a single post is an update.
 
 A property or a client keeps a running, append-only feed of free-text posts — a meeting
 note, a call summary, feedback from the field — the same way `LedgerEntry` keeps a
@@ -530,7 +530,7 @@ A hotel has one or more **room categories**:
 | `roomCount` | Total rooms in that category at the property |
 | `capacity` | Standard occupancy (pax) |
 | `bedConfiguration` | e.g. 1×King, 2×Twin — drives Operations checks (§6.4) |
-| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | A price *range* per night at scouting time — indicative only, not a contracted rate. Either bound may be entered alone |
+| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | **No longer entered** (2026-10-06). It was a price *range* per night at scouting time; what was entered is kept, and still read where nothing better exists (see *Event rate* below, and §5.2), but the forms no longer ask for it |
 
 `Property.totalRooms` = Σ `roomCount` across categories, and must be recorded even where
 categories are not yet broken out.
@@ -545,7 +545,7 @@ An apartment is modelled as a category whose units are whole flats:
 | `bathrooms` | Required; allow halves (`1.5`) |
 | `unitCount` | How many identical units |
 | `capacity` | Sleeps N |
-| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | Same indicative range as §3.2 |
+| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | No longer entered, as §3.2 |
 
 **Simplification:** an apartment unit behaves exactly like a hotel room slot — an
 indivisible, sellable, occupiable thing. Bedrooms/bathrooms are attributes of the unit, not
@@ -794,7 +794,8 @@ details* — has an
 **Edit** button in its corner that turns it into a small form of just that card's fields,
 saved on their own; the full Edit page still changes everything at once. *Room categories*
 has **Add room category** and an Edit on each row, for the name, rooms, sleeps, beds (or
-bedrooms and bathrooms), size, notes and indicative price, and Remove. The rules are the
+bedrooms and bathrooms), size and notes, and Remove — no price: its rate is the event rate, read from the quotations
+(§3.9). The rules are the
 full form's: a room category with inventory booked against it cannot be removed, and its
 room count cannot drop below the highest room number already in use; a number that is not a
 number is refused with the reason.
@@ -975,10 +976,16 @@ order. A category's **notes**
 on the property's own page.
 
 The per-event ones live with the category's contract status for that event (§3.5), so an
-LA28 rate never overwrites an EXPO 2030 rate for the same room type. The indicative,
-Booking-style price range from scouting (§3.2) is kept, but **shown only on the property's
-own page**, labelled indicative: on the Properties tab a rate always means the buying rate,
-so the tab's old *From* column, which showed the indicative price, is gone.
+LA28 rate never overwrites an EXPO 2030 rate for the same room type. **The event rate** (2026-10-06) replaced the indicative price range on the property's page.
+For each room category and each event the property is on, it is what a night costs us
+during **the event's period — its dates on the event's setup page** — read, never typed:
+the buying rate agreed for the event when there is one (*Agreed*); otherwise the rates of
+the event's quotations (§3.10) whose periods fall in those dates (*Quoted*, with the
+quotation's name), accepted quotations before those only received, declined ones never.
+Several periods at different rates show as a range ("US$ 295 – US$ 325"); quoted periods
+that leave some of the event's nights uncovered say *part of the event*. With nothing
+agreed or quoted it says *No quote for the event dates*. The indicative range is no longer
+entered (§3.2); on the Properties tab a rate always means the buying rate, as before.
 
 #### What is deliberately not in the first version
 
@@ -1008,9 +1015,10 @@ to the tab.
 stack of cards:
 
 - Under the name, the events the property is on, each with its status, as links.
-- On the left, one card of tabs: **Quotations**, **Contracts** (§7.1), **Room categories** (or *Unit types*),
-  **Feedback** and **Log**. The address remembers the tab, so a link can open one.
-  The Feedback box is one line until something is typed into it.
+- On the left, one card of tabs (in this order since 2026-10-06): **Room categories** (or
+  *Unit types*, with their event rates), **Updates** (§2.6), **Quotations**, **Contracts**
+  (§7.1) and **Log**. The address remembers the tab, so a link can open one.
+  The Updates box is one line until something is typed into it.
 - On the right, one **Details** panel instead of a card per subject: Notes, Where it is,
   Contacts, Amenities, More about the property and Contracting details, each a section
   that folds shut. The last two start shut, saying how many of their fields are filled.
@@ -1655,7 +1663,9 @@ the contract.
   each judged against the request in four plain checks, said in words: **how far** from
   the nearest of their places (within 8 km counts), **the kind** (hotel rooms, apartments,
   or an aparthotel for either), **the units** (all its room categories together, against
-  the most units on any one line), and **the price** (its lowest indicative rate, against a
+  the most units on any one line), and **the price** (its lowest event rate on the request's
+  event — agreed or quoted, §3.9 — or, for a property scouted before the event rate, its old
+  indicative price, said so; against a
   budget per room per night in the same currency). *Fits* when every check passes; *Not
   enough known* when none fails but some could not be made (no price, no unit count); *Fits
   in part* when one fails; *Does not fit* otherwise. Only the ones that *fit* are shown at
@@ -2242,7 +2252,9 @@ Derived:
   never added to realised margin.
 - **Cost at risk** = Σ estimated `buyPrice` over `SOLD`-not-`BOUGHT` nights, using the
   category's indicative price where no negotiated price exists. This is the number that
-  makes short exposure concrete.
+  makes short exposure concrete. *Since the indicative price is no longer entered
+  (2026-10-06), a category scouted after that adds nothing here until its nights carry a
+  buying price — not yet changed to use the event rate (§3.9); to decide.*
 - **Idle cost** = Σ `buyPrice` over `BOUGHT` nights with no hard hold.
 
 Aggregations must be available by event, property, category, client, party and date range.
@@ -2553,7 +2565,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
-| §2.6 Feedback (was Updates) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
+| §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
 | §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |
@@ -2571,20 +2583,20 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |
 | §3.1 Quick scouting screen | **Built, on trial** | A pop-up over the event's Properties tab; the default *Scout a property* screen: essentials only, map found from the address, quick room-type rows and amenity chips, *Save and scout another*; *Use the full form* for everything |
 | §3.1 Duplicate properties | **Built** | Compared by distinctive name words, street address and 150 m on the map, on the quick screen, the full form and the server; shown with why, to open or add instead; saving anyway needs *It is a different property* |
-| §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
+| §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, size, notes; the event rate per event read from the agreed rate or the quotations (§3.9) — the indicative price range is no longer entered (2026-10-06) |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
 | §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status, type and amenity; per-category contract status (`CategoryContract`), independent of the property's own status |
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
-| Booking.com-style price auto-fetch | **Not built** | The indicative price range is entered by hand; open question, see §9 |
+| Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
-| §3.10 Quotations | **Built** | On the property's page, first of its tabs (Quotations, Contracts, Room categories, Feedback, Log), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Feedback showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 Quotations | **Built** | On the property's page, third of its tabs (Room categories, Updates, Quotations, Contracts, Log — since 2026-10-06), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |

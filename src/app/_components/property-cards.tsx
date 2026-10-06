@@ -4,7 +4,7 @@ import type { PropertyType } from "generated/prisma";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useState } from "react";
 
-import { Button, Field, FormError, friendlyError, Input, Select } from "~/app/_components/form";
+import { Button, Field, FormError, friendlyError, Input } from "~/app/_components/form";
 import { LocationPreview } from "~/app/_components/location-preview";
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { ProviderPicker } from "~/app/_components/property-form";
@@ -15,7 +15,7 @@ import {
   propertyServiceFields,
   type Contracting,
 } from "~/lib/contracting";
-import { formatMoneyRange } from "~/lib/format";
+import { formatMoneyRange, formatRange } from "~/lib/format";
 import { api } from "~/trpc/react";
 
 /**
@@ -58,6 +58,14 @@ export type PropertyForCards = Contracting &
     contacts: Contact[];
     amenities: { id: string; label: string }[];
     categories: Category[];
+    /** Each event it is on, with each category's event rate (doc §3.9). */
+    eventRates?: {
+      eventId: string;
+      eventName: string;
+      startDate: Date;
+      endDate: Date;
+      byCategory: Record<string, { minCents: number; maxCents: number; currency: string; from: "agreed" | "quotation"; label: string; wholeEvent: boolean }>;
+    }[];
   };
 
 /**
@@ -564,7 +572,6 @@ function ContactsEditor({ property, onDone }: { property: PropertyForCards; onDo
 
 // --- Room categories ---------------------------------------------------------------
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
 export function RoomCategoriesCard({ property, bare = false }: { property: PropertyForCards; /** In a tab: no card, no title. */ bare?: boolean }) {
   const hotel = property.type === "HOTEL";
@@ -581,6 +588,18 @@ export function RoomCategoriesCard({ property, bare = false }: { property: Prope
         )}
       </div>
 
+      {(property.eventRates?.length ?? 0) > 0 && property.categories.length > 0 && (
+        <p className="text-ink-500 mb-2 text-xs font-light">
+          The event rate is what a night costs us during{" "}
+          {property.eventRates!.map((event, index) => (
+            <span key={event.eventId}>
+              {index > 0 && (index === property.eventRates!.length - 1 ? " and " : ", ")}
+              {event.eventName} ({formatRange(event.startDate, event.endDate)})
+            </span>
+          ))}{" "}
+          — the rate agreed for the event, or else the quotations for those dates.
+        </p>
+      )}
       {property.categories.length === 0 && editing !== "new" ? (
         <p className="text-ink-500 text-sm font-light">
           No categories recorded.{property.totalRooms ? ` The property has ${property.totalRooms} in total.` : ""}
@@ -594,7 +613,7 @@ export function RoomCategoriesCard({ property, bare = false }: { property: Prope
               <Th>Sleeps</Th>
               <Th>{hotel ? "Beds" : "Bed / bath"}</Th>
               <Th>Size</Th>
-              <Th>Indicative price</Th>
+              <Th>Event rate</Th>
               <Th>{""}</Th>
             </tr>
           </thead>
@@ -622,9 +641,29 @@ export function RoomCategoriesCard({ property, bare = false }: { property: Prope
                   </Td>
                   <Td>{category.size ?? "—"}</Td>
                   <Td>
-                    {formatMoneyRange(category.indicativePriceMinCents, category.indicativePriceMaxCents, category.currency)}
-                    {(category.indicativePriceMinCents !== null || category.indicativePriceMaxCents !== null) && (
-                      <span className="text-ink-500 block text-xs font-light">Indicative</span>
+                    {(property.eventRates ?? []).length === 0 ? (
+                      <span className="text-ink-500/70 text-xs font-light">Not on an event</span>
+                    ) : (
+                      property.eventRates!.map((event) => {
+                        const rate = event.byCategory[category.id];
+                        const several = property.eventRates!.length > 1;
+                        return (
+                          <span key={event.eventId} className="block">
+                            {several && <span className="text-ink-500 text-xs font-light">{event.eventName}: </span>}
+                            {rate ? (
+                              <>
+                                <span className="whitespace-nowrap">{formatMoneyRange(rate.minCents, rate.maxCents, rate.currency)}</span>
+                                <span className="text-ink-500 block text-xs font-light">
+                                  {rate.from === "agreed" ? "Agreed" : `Quoted · ${rate.label}`}
+                                  {!rate.wholeEvent && " · part of the event"}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-ink-500/70 text-xs font-light">No quote for the event dates</span>
+                            )}
+                          </span>
+                        );
+                      })
                     )}
                   </Td>
                   <Td>
@@ -670,8 +709,6 @@ function CategoryEditor({
     bedConfiguration: category?.bedConfiguration ?? "",
     bedrooms: text(category?.bedrooms),
     bathrooms: text(category?.bathrooms),
-    priceMin: text(category?.indicativePriceMinCents, 100),
-    priceMax: text(category?.indicativePriceMaxCents, 100),
     currency: category?.currency ?? "USD",
     size: category?.size ?? "",
     notes: category?.notes ?? "",
@@ -689,9 +726,9 @@ function CategoryEditor({
       setProblem("Give the category a name.");
       return;
     }
-    const numbers = [draft.unitCount, draft.capacity, draft.bedrooms, draft.bathrooms, draft.priceMin, draft.priceMax];
+    const numbers = [draft.unitCount, draft.capacity, draft.bedrooms, draft.bathrooms];
     if (numbers.some((value) => value.trim() && !Number.isFinite(Number(value.replace(",", "."))))) {
-      setProblem("Rooms, sleeps, bedrooms, bathrooms and prices should be numbers.");
+      setProblem("Rooms, sleeps, bedrooms and bathrooms should be numbers.");
       return;
     }
     save.mutate({
@@ -704,9 +741,7 @@ function CategoryEditor({
         bedConfiguration: hotel ? draft.bedConfiguration.trim() || undefined : undefined,
         bedrooms: hotel ? undefined : num(draft.bedrooms),
         bathrooms: hotel ? undefined : num(draft.bathrooms),
-        // Typed in whole currency units, stored in minor units (§4.5).
-        indicativePriceMinCents: draft.priceMin.trim() ? Math.round((num(draft.priceMin) ?? 0) * 100) : undefined,
-        indicativePriceMaxCents: draft.priceMax.trim() ? Math.round((num(draft.priceMax) ?? 0) * 100) : undefined,
+        // No indicative price any more (doc §3.9): the event rate comes from the quotations.
         currency: draft.currency,
         size: draft.size,
         notes: draft.notes,
@@ -743,19 +778,6 @@ function CategoryEditor({
           )}
           <Field label="Size">
             <Input value={draft.size} onChange={(e) => set("size", e.target.value)} placeholder="28 m²" />
-          </Field>
-          <Field label="Currency">
-            <Select value={draft.currency} onChange={(e) => set("currency", e.target.value)}>
-              {(CURRENCIES.includes(draft.currency) ? CURRENCIES : [draft.currency, ...CURRENCIES]).map((currency) => (
-                <option key={currency}>{currency}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Indicative price, from">
-            <Input inputMode="decimal" value={draft.priceMin} onChange={(e) => set("priceMin", e.target.value)} placeholder="220" />
-          </Field>
-          <Field label="Indicative price, to">
-            <Input inputMode="decimal" value={draft.priceMax} onChange={(e) => set("priceMax", e.target.value)} placeholder="280" />
           </Field>
           <Field label="Notes" className="sm:col-span-4">
             <Input value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="King suite with separate living room" />

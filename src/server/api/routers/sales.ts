@@ -25,6 +25,7 @@ import { distanceKm } from "~/lib/scouting";
 import { looksLike } from "~/lib/similar-properties";
 import { fit } from "~/lib/sourcing-fit";
 import { findNearby, type Source } from "~/server/discover";
+import { eventRates } from "~/server/event-rates";
 import { snapshotNight } from "~/server/inventory";
 
 /**
@@ -1302,13 +1303,22 @@ export const salesRouter = createTRPCRouter({
         latitude: true,
         longitude: true,
         totalRooms: true,
-        categories: { select: { unitCount: true, bedrooms: true, indicativePriceMinCents: true, currency: true } },
+        categories: { select: { id: true, unitCount: true, bedrooms: true, indicativePriceMinCents: true, currency: true } },
       },
     });
+    // Each category's event rate on the request's event (doc §3.9); the old indicative price only where there is none.
+    const rates = request.eventId ? (await eventRates(ctx.db, { propertyIds: properties.map((property) => property.id), eventId: request.eventId })).get(request.eventId) : undefined;
+    const priced = (categories: (typeof properties)[number]["categories"]) =>
+      categories.map((category) => {
+        const rate = rates?.get(category.id);
+        return rate
+          ? { unitCount: category.unitCount, bedrooms: category.bedrooms, priceCents: rate.minCents, currency: rate.currency }
+          : { unitCount: category.unitCount, bedrooms: category.bedrooms, priceCents: category.indicativePriceMinCents, currency: category.currency, indicative: true };
+      });
     const suggestions = properties
       .map((property) => {
         const judged = fit(
-          { type: property.type, latitude: property.latitude!, longitude: property.longitude!, categories: property.categories, stated: property.totalRooms },
+          { type: property.type, latitude: property.latitude!, longitude: property.longitude!, categories: priced(property.categories), stated: property.totalRooms },
           targets,
           wanted,
         );
