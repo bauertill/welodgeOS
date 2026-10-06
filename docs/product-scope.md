@@ -984,7 +984,8 @@ the event's quotations (§3.10) whose periods fall in those dates (*Quoted*, wit
 quotation's name), accepted quotations before those only received, declined ones never.
 Several periods at different rates show as a range ("US$ 295 – US$ 325"); quoted periods
 that leave some of the event's nights uncovered say *part of the event*. With nothing
-agreed or quoted it says *No quote for the event dates*. The indicative range is no longer
+agreed or quoted it says *No quote for the event dates*. What the column means — with the
+event's name and dates — is an ⓘ on its heading, not a line on the page. The indicative range is no longer
 entered (§3.2); on the Properties tab a rate always means the buying rate, as before.
 
 #### What is deliberately not in the first version

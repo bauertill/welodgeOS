@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useContext, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input } from "~/app/_components/form";
+import { InfoTip } from "~/app/_components/info-tip";
 import { LocationPreview } from "~/app/_components/location-preview";
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { ProviderPicker } from "~/app/_components/property-form";
@@ -588,18 +589,6 @@ export function RoomCategoriesCard({ property, bare = false }: { property: Prope
         )}
       </div>
 
-      {(property.eventRates?.length ?? 0) > 0 && property.categories.length > 0 && (
-        <p className="text-ink-500 mb-2 text-xs font-light">
-          The event rate is what a night costs us during{" "}
-          {property.eventRates!.map((event, index) => (
-            <span key={event.eventId}>
-              {index > 0 && (index === property.eventRates!.length - 1 ? " and " : ", ")}
-              {event.eventName} ({formatRange(event.startDate, event.endDate)})
-            </span>
-          ))}{" "}
-          — the rate agreed for the event, or else the quotations for those dates.
-        </p>
-      )}
       {property.categories.length === 0 && editing !== "new" ? (
         <p className="text-ink-500 text-sm font-light">
           No categories recorded.{property.totalRooms ? ` The property has ${property.totalRooms} in total.` : ""}
@@ -613,7 +602,16 @@ export function RoomCategoriesCard({ property, bare = false }: { property: Prope
               <Th>Sleeps</Th>
               <Th>{hotel ? "Beds" : "Bed / bath"}</Th>
               <Th>Size</Th>
-              <Th>Event rate</Th>
+              <Th>
+                Event rate
+                {(property.eventRates?.length ?? 0) > 0 && (
+                  <InfoTip
+                    text={`What a night costs us during ${property
+                      .eventRates!.map((event) => `${event.eventName} (${formatRange(event.startDate, event.endDate)})`)
+                      .join(" and ")} — the rate agreed for the event, or else the quotations for those dates.`}
+                  />
+                )}
+              </Th>
               <Th>{""}</Th>
             </tr>
           </thead>

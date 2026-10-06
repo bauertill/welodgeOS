@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { CloseToPicker, type Point } from "~/app/_components/close-to-picker";
+import { InfoTip } from "~/app/_components/info-tip";
 import { DatePicker } from "~/app/_components/date-picker";
 import { Card } from "~/app/_components/ui";
 import { dayKey } from "~/lib/dates";
@@ -26,28 +27,6 @@ const knownRoomTypes = new Set<string>(roomTypeGroups.flatMap((group) => group.t
 
 /** What a unit is — the number on each line counts these (doc §4.11). */
 const UNIT_HINT = "One unit is one hotel room or one whole apartment — a 3-bedroom apartment counts as 1 unit.";
-
-/** A small ⓘ that explains a word, on hover, or on tap and focus on a phone. */
-function InfoTip({ text }: { text: string }) {
-  return (
-    <span className="group relative inline-flex align-middle">
-      <button
-        type="button"
-        aria-label={text}
-        onClick={(e) => e.preventDefault()}
-        className="border-ink-300 text-ink-500 hover:border-brand-400 hover:text-brand-700 focus:border-brand-400 ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border text-[9px] leading-none font-semibold"
-      >
-        i
-      </button>
-      <span
-        role="tooltip"
-        className="bg-ink-900 pointer-events-none invisible absolute bottom-full -left-2 z-30 mb-1.5 w-60 rounded-md px-2.5 py-1.5 text-[11px] leading-snug font-light whitespace-normal text-white normal-case opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
-      >
-        {text}
-      </span>
-    </span>
-  );
-}
 
 const CURRENCIES = ["EUR", "USD", "CHF", "GBP"];
 export const budgetBasisLabels: Record<BudgetBasis, string> = {
