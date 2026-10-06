@@ -103,13 +103,13 @@ export default async function PropertyPage({
         <div className="min-w-0 lg:col-span-2">
           <PropertyTabs
             tabs={[
+              { key: "updates", label: "Updates", content: <UpdateThread propertyId={property.id} /> },
               {
                 key: "rooms",
                 label: property.type === "HOTEL" ? "Room categories" : "Unit types",
                 count: property.categories.length,
                 content: <RoomCategoriesCard property={property} bare />,
               },
-              { key: "updates", label: "Updates", content: <UpdateThread propertyId={property.id} /> },
               {
                 key: "quotations",
                 label: "Quotations",
