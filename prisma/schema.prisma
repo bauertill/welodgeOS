@@ -205,6 +205,16 @@ model Property {
   scoutedById String?
   tasks       Task[]
 
+  /// The hotel's own contracting-details form (doc §3.9): the unguessable
+  /// part of its link; empty means no link, or switched off.
+  contractingToken        String?   @unique
+  contractingLinkMadeAt   DateTime?
+  /// Who made the link — told when the hotel sends its details.
+  contractingLinkMadeBy   User?     @relation("PropertyContractingLinkMadeBy", fields: [contractingLinkMadeById], references: [id], onDelete: SetNull)
+  contractingLinkMadeById String?
+  /// When the hotel last sent the form.
+  contractingSubmittedAt  DateTime?
+
   @@index([name])
   @@index([city])
 }
@@ -721,9 +731,10 @@ model User {
   accounts      Account[]
   sessions      Session[]
 
-  scoutedProperties Property[]
-  quotationsAdded   Quotation[]     @relation("QuotationAddedBy")
-  scoutingEntries   ScoutingEntry[] @relation("AddedBy")
+  scoutedProperties        Property[]
+  propertyContractingLinks Property[]      @relation("PropertyContractingLinkMadeBy")
+  quotationsAdded          Quotation[]     @relation("QuotationAddedBy")
+  scoutingEntries          ScoutingEntry[] @relation("AddedBy")
 
   acquisitionNights RoomNight[]        @relation("AcquisitionOwner")
   salesNights       RoomNight[]        @relation("SalesOwner")
@@ -1536,6 +1547,7 @@ enum NotificationKind {
   SALES_FOLLOW_UP
   SALES_NEEDS_SENT
   SALES_CONTRACTING_SENT
+  PROPERTY_CONTRACTING_SENT
   TASK_ASSIGNED
   TASK_COMMENT
   TASK_MENTION

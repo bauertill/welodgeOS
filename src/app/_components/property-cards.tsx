@@ -2,7 +2,7 @@
 
 import type { PropertyType } from "generated/prisma";
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input } from "~/app/_components/form";
 import { InfoTip } from "~/app/_components/info-tip";
@@ -16,7 +16,7 @@ import {
   propertyServiceFields,
   type Contracting,
 } from "~/lib/contracting";
-import { formatMoneyRange, formatRange } from "~/lib/format";
+import { formatDate, formatMoneyRange, formatRange } from "~/lib/format";
 import { api } from "~/trpc/react";
 
 /**
@@ -59,6 +59,11 @@ export type PropertyForCards = Contracting &
     contacts: Contact[];
     amenities: { id: string; label: string }[];
     categories: Category[];
+    name?: string;
+    /** The hotel's own contracting-details form, by link (doc §3.9). */
+    contractingToken?: string | null;
+    contractingLinkMadeAt?: Date | null;
+    contractingSubmittedAt?: Date | null;
     /** Each event it is on, with each category's event rate (doc §3.9). */
     eventRates?: {
       eventId: string;
@@ -399,10 +404,13 @@ export function MoreAboutCard({ property, backTo }: { property: PropertyForCards
 }
 
 export function ContractingCard({ property }: { property: PropertyForCards }) {
+  const filled = filledOf(property, contractingFields.map((field) => field.key));
   return (
     <EditableCard
       title="Contracting details"
-      summary={filledOf(property, contractingFields.map((field) => field.key)) ?? (property.provider ? `from ${property.provider.name}` : "none recorded")}
+      summary={filled ?? (property.provider ? `from ${property.provider.name}` : "none recorded — send the hotel the form")}
+      // Open while the hotel has the form and has not answered yet.
+      defaultOpen={Boolean(property.contractingToken && !property.contractingSubmittedAt)}
       editor={(done) => (
         <>
           <p className="text-ink-500 mb-3 text-xs font-light">
@@ -422,7 +430,105 @@ export function ContractingCard({ property }: { property: PropertyForCards }) {
       )}
     >
       <ContractingDetails property={property} />
+      <HotelContractingLink property={property} />
     </EditableCard>
+  );
+}
+
+/**
+ * Sending the hotel its contracting-details form (doc §3.9): a private link,
+ * emailed from your own mailbox, that the hotel fills in without signing in —
+ * its answers land on the property. A new link replaces the old one.
+ */
+function HotelContractingLink({ property }: { property: PropertyForCards }) {
+  const saved = useSaved();
+  const me = api.user.me.useQuery();
+  const [origin, setOrigin] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => setOrigin(window.location.origin), []);
+  const make = api.property.makeContractingLink.useMutation({ onSuccess: saved });
+  const off = api.property.switchOffContractingLink.useMutation({ onSuccess: saved });
+  const url = (token: string | null | undefined) => (token ? `${origin}/contracting/hotel/${token}` : null);
+  const link = url(property.contractingToken);
+  const record = property as unknown as Record<string, string | null>;
+  const to = [record.contractEmail, record.generalEmail, ...property.contacts.map((contact) => contact.email)].find((email) => email?.trim()) ?? "";
+  const name = property.name ?? "your property";
+
+  const email = (target: string) => {
+    const subject = `Contracting details for ${name} — We Lodge`;
+    const body = [
+      "Hello,",
+      "",
+      `To draw up our agreement, could you please fill in ${name}'s contracting details — the company, its bank details and who signs — on this page:`,
+      "",
+      target,
+      "",
+      "It takes a few minutes, and no account is needed.",
+      "",
+      "Thank you,",
+      me.data?.name ?? "",
+      "We Lodge",
+    ].join("\n");
+    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  return (
+    <div className="border-ink-200/60 mt-3 border-t pt-3">
+      <p className="text-ink-900 text-[13px] font-medium">Ask the hotel to fill them in</p>
+      <p className="text-ink-500 mb-2 text-xs font-light">
+        {property.contractingSubmittedAt
+          ? `The hotel sent its details on ${formatDate(property.contractingSubmittedAt)}. `
+          : link
+            ? "The hotel has a link to its form and has not sent it yet. "
+            : "A private link to a form for the hotel — no account needed; what it sends lands here. "}
+        {!to && "No email is known for the hotel — add one under Contacts, or copy the link."}
+      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
+        <button
+          type="button"
+          disabled={make.isPending}
+          onClick={() => {
+            if (link) email(link);
+            else make.mutate({ id: property.id }, { onSuccess: (made) => email(url(made.contractingToken)!) });
+          }}
+          className="bg-brand-400 hover:bg-brand-500 rounded-full px-3.5 py-1.5 font-medium text-white disabled:opacity-60"
+        >
+          {make.isPending ? "Making the link…" : "Email it to the hotel"}
+        </button>
+        {link ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(link).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+              }}
+              className="text-brand-700 font-light hover:underline"
+            >
+              {copied ? "Copied" : "Copy link"}
+            </button>
+            <a href={link} target="_blank" rel="noreferrer" className="text-brand-700 font-light hover:underline">
+              Open ↗
+            </a>
+            <button
+              type="button"
+              disabled={off.isPending}
+              onClick={() => window.confirm("Switch the link off? It will open nothing any more; what the hotel sent stays.") && off.mutate({ id: property.id })}
+              className="font-light text-[#c03654] hover:underline"
+            >
+              Switch off
+            </button>
+          </>
+        ) : (
+          <button type="button" disabled={make.isPending} onClick={() => make.mutate({ id: property.id })} className="text-brand-700 font-light hover:underline">
+            {property.contractingLinkMadeAt ? "Make a new link" : "Just make the link"}
+          </button>
+        )}
+      </div>
+      <FormError message={friendlyError(make.error) ?? friendlyError(off.error)} />
+    </div>
   );
 }
 

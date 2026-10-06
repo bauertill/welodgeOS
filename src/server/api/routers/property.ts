@@ -1,14 +1,16 @@
 import type { Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 
 import { contractingFields, propertyDetailFields, propertyServiceFields } from "~/lib/contracting";
 import { looksLike, type Scouted } from "~/lib/similar-properties";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { eventRates } from "~/server/event-rates";
 import { findContacts } from "~/server/find-contacts";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
-import { logAudit, logFieldChanges } from "~/server/audit";
+import { diffFields, logAudit, logFieldChanges } from "~/server/audit";
+import { deliverImmediate, notify } from "~/server/notify";
 
 /**
  * A room category. Hotels fill in `bedConfiguration`; apartments fill in
@@ -541,6 +543,81 @@ export const propertyRouter = createTRPCRouter({
         );
         return updated;
       });
+    }),
+
+  // --- The hotel fills in its contracting details by link (doc §3.9) ---------
+
+  /** A link for the hotel to fill in its contracting details; a new one replaces the old. */
+  makeContractingLink: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const updated = await ctx.db.property.update({
+      where: { id: input.id },
+      data: { contractingToken: randomBytes(24).toString("base64url"), contractingLinkMadeAt: new Date(), contractingLinkMadeById: ctx.session.user.id },
+      select: { contractingToken: true },
+    });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: input.id, summary: "Contracting details link made" });
+    return updated;
+  }),
+
+  switchOffContractingLink: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.property.update({ where: { id: input.id }, data: { contractingToken: null } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: input.id, summary: "Contracting details link switched off" });
+    return { ok: true };
+  }),
+
+  /** The hotel's form, by its link only — what is already recorded, to check or complete. */
+  contractingForm: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
+    const property = await ctx.db.property.findUnique({
+      where: { contractingToken: input.token },
+      select: { name: true, contractingSubmittedAt: true, ...Object.fromEntries(contractingFields.map((field) => [field.key, true])) },
+    });
+    if (!property) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+    const record = property as Record<string, unknown>;
+    return {
+      propertyName: property.name,
+      submittedAt: property.contractingSubmittedAt,
+      values: Object.fromEntries(contractingFields.map((field) => [field.key, (record[field.key] as string | null) ?? ""])) as Record<(typeof contractingFields)[number]["key"], string>,
+    };
+  }),
+
+  /** The hotel sends its contracting details: they land on the property, and whoever sent the link is told. */
+  submitContracting: publicProcedure
+    .input(
+      z.object({
+        token: z.string().min(20).max(100),
+        values: z.object(Object.fromEntries(contractingFields.map((field) => [field.key, z.string().max(2000)])) as Record<(typeof contractingFields)[number]["key"], z.ZodString>),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(async (tx) => {
+        const before = await tx.property.findUnique({ where: { contractingToken: input.token } });
+        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+        if (!input.values.tradeName.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Please give the company's trade name." });
+        const email = input.values.contractEmail.trim();
+        if (email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "The email address for contracts does not look right." });
+        }
+        const after = await tx.property.update({
+          where: { id: before.id },
+          data: { ...Object.fromEntries(contractingFields.map((field) => [field.key, blank(input.values[field.key])])), contractingSubmittedAt: new Date() },
+        });
+        const readable = (property: Record<string, unknown>) => Object.fromEntries(contractingFields.map((field) => [field.key, (property[field.key] as string | null) ?? null]));
+        await logAudit(tx, {
+          actorId: null,
+          entity: "Property",
+          entityId: before.id,
+          summary: "Contracting details sent by the hotel, through the link",
+          changes: diffFields(readable(before), readable(after), [...contractingFields]),
+        });
+        await notify(tx, {
+          to: [before.contractingLinkMadeById],
+          actorId: null,
+          kind: "PROPERTY_CONTRACTING_SENT",
+          title: `${before.name} sent its contracting details`,
+          link: `/properties/${before.id}`,
+        });
+      });
+      await deliverImmediate(ctx.db);
+      return { ok: true };
     }),
 
   /** Fill in its phone, email and website from Google Maps and its own website, where empty (doc §4.11). */
