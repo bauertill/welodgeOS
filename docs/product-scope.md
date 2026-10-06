@@ -1775,6 +1775,12 @@ the contract.
   | What is included in the rate | *Rates include* in its terms, or on a quotation or rate | The same |
   | Extra costs | *Extra costs* in its terms, or taxes on a quotation or rate | The same |
 
+  **It can also be asked for by hand, from the event's map** (2026-10-06): clicking a
+  property on the Properties tab's map opens its panel, which has **Contact task** — who
+  contacts it (the event's first accommodation manager by default, else you; any colleague
+  can be chosen) and a note for them — and **Create contact task** makes the same task, to
+  that person, with the note as its first comment and in the notification they get. While
+  one is open, the panel shows who has it and links to it instead.
   *Rooms, amenities and quotations* opens the property's page; *Terms for {event}* opens its
   terms panel right there. When all eight are in, the task says so — it is still marked
   done by hand. Adding an existing property to the event from the sourcing task makes no

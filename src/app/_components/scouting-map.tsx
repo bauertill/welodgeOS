@@ -263,6 +263,8 @@ function SidePanel({
             Open →
           </Link>
 
+          {eventId && <ContactTaskBox key={pin.propertyId} propertyId={pin.propertyId} eventId={eventId} />}
+
           <div className="mt-5">
             <PanelHeading>Rooms still available</PanelHeading>
             <RoomsAvailable
@@ -440,6 +442,80 @@ export function ScoutingMap({
           eventId={eventId}
           onClose={() => setOpenId(null)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Asking a colleague to contact a property, from the event's map (doc
+ * §4.11): who does it and a note make a hotel contact task — the same one
+ * sourcing makes, with its checklist. An open one is shown instead, with a link.
+ */
+function ContactTaskBox({ propertyId, eventId }: { propertyId: string; eventId: string }) {
+  const utils = api.useUtils();
+  const existing = api.task.hotelContactFor.useQuery({ propertyId, eventId });
+  const people = api.user.list.useQuery();
+  const me = api.user.me.useQuery();
+  const event = api.event.byId.useQuery({ id: eventId });
+  const [assigneeId, setAssigneeId] = useState("");
+  const [note, setNote] = useState("");
+  const create = api.task.createHotelContact.useMutation({
+    onSuccess: () => {
+      setNote("");
+      void utils.task.invalidate();
+    },
+  });
+  // Whoever sources the event's accommodation, by default; otherwise you.
+  const fallback = event.data?.accommodationManagers[0]?.id ?? me.data?.id ?? "";
+  const chosen = assigneeId || fallback;
+
+  if (existing.isLoading) return null;
+  const task = existing.data;
+  return (
+    <div className="border-ink-200/60 mt-5 rounded-lg border p-3">
+      <PanelHeading>Contact task</PanelHeading>
+      {task ? (
+        <p className="text-ink-700 text-[13px] font-light">
+          {task.assignees.length ? `With ${task.assignees.map((person) => person.name ?? person.email).join(", ")}` : "Nobody on it yet"}
+          {" · "}
+          <Link href={`/tasks/${task.id}`} className="text-brand-700 font-medium hover:underline">
+            Open the task →
+          </Link>
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <select
+            value={chosen}
+            onChange={(e) => setAssigneeId(e.target.value)}
+            aria-label="Who contacts it"
+            className="border-ink-200 w-full rounded-lg border bg-white px-2.5 py-1.5 text-[13px] font-light"
+          >
+            {(people.data ?? []).map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name ?? person.email}
+                {person.id === me.data?.id ? " (me)" : ""}
+              </option>
+            ))}
+          </select>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            placeholder="A note for them — what to ask, who to speak to"
+            aria-label="Note"
+            className="border-ink-200 focus:border-brand-400 w-full rounded-lg border bg-white px-2.5 py-1.5 text-[13px] font-light outline-none"
+          />
+          <button
+            type="button"
+            disabled={!chosen || create.isPending}
+            onClick={() => create.mutate({ propertyId, eventId, assigneeId: chosen, note })}
+            className="bg-brand-400 hover:bg-brand-500 w-full rounded-full px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-60"
+          >
+            {create.isPending ? "Creating…" : "Create contact task"}
+          </button>
+          {create.error && <p className="text-xs text-[#c03654]">{create.error.message}</p>}
+        </div>
       )}
     </div>
   );

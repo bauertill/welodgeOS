@@ -29,7 +29,16 @@ export const hotelContactItems = [
 
 export async function ensureHotelContactTask(
   tx: Prisma.TransactionClient,
-  input: { propertyId: string; eventId: string; salesRequestId: string | null; actorId: string },
+  input: {
+    propertyId: string;
+    eventId: string;
+    salesRequestId: string | null;
+    actorId: string;
+    /** Chosen by hand (from the event's map); otherwise the event's accommodation managers. */
+    assigneeIds?: string[];
+    /** A word for whoever does it — kept as the task's first comment. */
+    note?: string;
+  },
 ) {
   // One open task per property and event: adding it again makes no second.
   const open = await tx.task.findFirst({
@@ -49,11 +58,15 @@ export async function ensureHotelContactTask(
     (await tx.taskType.findFirst({ where: { name: { equals: HOTEL_CONTACT, mode: "insensitive" } } })) ??
     (await tx.taskType.create({ data: { name: HOTEL_CONTACT } }));
   // With no accommodation manager set on the event, it is for whoever added the property.
-  const managers = event.accommodationManagers.length ? event.accommodationManagers.map((person) => person.id) : [input.actorId];
+  const managers = input.assigneeIds?.length
+    ? input.assigneeIds
+    : event.accommodationManagers.length
+      ? event.accommodationManagers.map((person) => person.id)
+      : [input.actorId];
   const details = [
     `Reach out to ${property.name} and find out:`,
     ...hotelContactItems.map((item) => `• ${item.label}`),
-    request ? `Found while sourcing for ${request.client.name}.` : null,
+    request ? `Found while sourcing for ${request.client.name}.` : input.salesRequestId === null && input.assigneeIds ? "Asked for from the event's map." : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -78,14 +91,16 @@ export async function ensureHotelContactTask(
     entity: "Task",
     entityId: task.id,
     summary: `Task added: ${task.title}`,
-    changes: "Made on its own when the property was added to the properties board",
+    changes: input.assigneeIds ? "Asked for from the event's map" : "Made on its own when the property was added to the properties board",
   });
+  const note = input.note?.trim();
+  if (note) await tx.taskComment.create({ data: { taskId: task.id, authorId: input.actorId, body: note } });
   await notify(tx, {
     to: managers,
     actorId: input.actorId,
     kind: "TASK_ASSIGNED",
     title: `New hotel contact task: ${property.name} for ${event.name}`,
-    body: "Reach out to the property and gather its rooms, terms and rate.",
+    body: note || "Reach out to the property and gather its rooms, terms and rate.",
     link: `/tasks/${task.id}`,
     taskId: task.id,
   });

@@ -8,7 +8,7 @@ import { formatDate } from "~/lib/format";
 import { taskStatusLabels } from "~/lib/tasks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
-import { hotelContactItems } from "~/server/hotel-contact";
+import { ensureHotelContactTask, HOTEL_CONTACT, hotelContactItems } from "~/server/hotel-contact";
 import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
 
 /**
@@ -256,6 +256,33 @@ export const taskRouter = createTRPCRouter({
       }),
     };
   }),
+
+  /** The open hotel contact task for a property on an event, if any (doc §4.11) — for the event's map. */
+  hotelContactFor: protectedProcedure.input(z.object({ propertyId: z.string(), eventId: z.string() })).query(({ ctx, input }) =>
+    ctx.db.task.findFirst({
+      where: { propertyId: input.propertyId, eventId: input.eventId, status: { not: "DONE" }, type: { name: HOTEL_CONTACT } },
+      select: { id: true, status: true, assignees: { select: { id: true, name: true, email: true } } },
+    }),
+  ),
+
+  /** A hotel contact task asked for by hand, from the event's map: to someone chosen, with a note. */
+  createHotelContact: protectedProcedure
+    .input(z.object({ propertyId: z.string(), eventId: z.string(), assigneeId: z.string().min(1, "Choose who contacts the property."), note: z.string().max(5000) }))
+    .mutation(async ({ ctx, input }) => {
+      const task = await ctx.db.$transaction((tx) =>
+        ensureHotelContactTask(tx, {
+          propertyId: input.propertyId,
+          eventId: input.eventId,
+          salesRequestId: null,
+          actorId: ctx.session.user.id,
+          assigneeIds: [input.assigneeId],
+          note: input.note,
+        }),
+      );
+      if (!task) throw new TRPCError({ code: "BAD_REQUEST", message: "There is already an open contact task for this property." });
+      await deliverImmediate(ctx.db);
+      return { id: task.id };
+    }),
 
   byId: protectedProcedure.input(z.object({ id: z.string() })).query(({ ctx, input }) =>
     ctx.db.task.findUnique({ where: { id: input.id }, include }),
