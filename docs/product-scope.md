@@ -188,9 +188,12 @@ is replaced, so nothing that was said is lost, and the "Edited" note means a rea
 knows the text is not what was first posted. The earlier wordings are not shown anywhere yet
 — there is no "see previous versions" — but they are there if they are ever needed.
 
-**Only the latest update shows.** The feed only grows, so the rest sit behind *View more*,
-which says how many earlier ones there are and opens them all, newest first. This holds on
-a property's page and on a client's.
+**Every update shows, as one line** (2026-10-06; until then only the latest showed, the
+rest behind *View more*). Newest first, each update is a single line — its kind, who wrote
+it, the day it took place and how it begins — so all the activity can be seen at a glance;
+**Read more** opens that one in full, and *Show less* folds it again. A short note that fits
+on its line has nothing more to open. Ten show at first; *Show 10 older* adds more. This
+holds on a property's page and on a client's.
 
 **Kinds of update, each with its template** (2026-10-06), as the team had them on
 monday.com, **all in the one feed**, newest first. The box is a **note**, as before; beneath it,
@@ -2604,7 +2607,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
-| §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
+| §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9 |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |

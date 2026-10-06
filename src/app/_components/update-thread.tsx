@@ -9,7 +9,7 @@ import { Popup } from "~/app/_components/popup";
 import { dayKey, today } from "~/lib/dates";
 import { formatDate, formatDay, formatMomentInWords } from "~/lib/format";
 import { composeBody, isHeading, updateKindOrder, updateKinds } from "~/lib/update-kinds";
-import { renderUpdateBody } from "~/lib/updates";
+import { MENTION_PATTERN, renderUpdateBody } from "~/lib/updates";
 import { api } from "~/trpc/react";
 
 type Scope = { propertyId: string; clientId?: undefined } | { clientId: string; propertyId?: undefined };
@@ -17,10 +17,13 @@ type Scope = { propertyId: string; clientId?: undefined } | { clientId: string; 
 /**
  * The Updates feed (doc §2.6; called Feedback from 2026-10-01 to 2026-10-06): a running history of meeting notes and
  * feedback on a property or a client, with @mentions of colleagues. Newest
- * first, same convention as the inventory ledger; only the latest shows
- * until "View more" opens the rest. An author can edit their
+ * first, same convention as the inventory ledger; each update one line —
+ * its kind, who, when and how it begins — opened on its own with Read more. An author can edit their
  * own post, which then says it was edited, and when.
  */
+/** A body's mentions as a reader sees them: "@[Ami Rossi]" → "@Ami Rossi". */
+const plainMentions = (text: string) => text.replace(MENTION_PATTERN, "@$1");
+
 export function UpdateThread(scope: Scope) {
   const utils = api.useUtils();
   const updates = api.update.list.useQuery(scope);
@@ -42,9 +45,18 @@ export function UpdateThread(scope: Scope) {
   };
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   // Only the latest shows until asked: the feed only grows.
-  const [showAll, setShowAll] = useState(false);
-  const shown = showAll ? updates.data : updates.data?.slice(0, 1);
-  const earlier = (updates.data?.length ?? 0) - 1;
+  // Every update as one line — its kind, who, when and how it begins — each opened on its own.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(10);
+  const shown = updates.data?.slice(0, limit);
+  const more = (updates.data?.length ?? 0) - limit;
+  const toggle = (id: string) =>
+    setOpen((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const edit = api.update.edit.useMutation({
     onSuccess: () => {
@@ -142,22 +154,38 @@ export function UpdateThread(scope: Scope) {
       )}
 
       {updates.data && updates.data.length > 0 ? (
-        <ul className="space-y-3">
-          {shown!.map((entry) => (
-            <li key={entry.id} className="border-ink-200/60 rounded-lg border p-3">
+        <ul className="space-y-1.5">
+          {shown!.map((entry) => {
+            const isOpen = open.has(entry.id) || editing?.id === entry.id;
+            const lines = entry.body.split("\n").filter((line) => line.trim() && !isHeading(entry.kind, line));
+            const preview = plainMentions(lines[0] ?? "");
+            const longer = lines.length > 1 || preview.length > 90;
+            return (
+            <li key={entry.id} className="border-ink-200/60 rounded-lg border px-3 py-2.5">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="flex min-w-0 flex-1 items-baseline gap-x-2">
                   {entry.kind !== "NOTE" && (
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${updateKinds[entry.kind].badge}`}>{updateKinds[entry.kind].label}</span>
                   )}
                   <span className="text-ink-900 text-[13px] font-medium">{entry.author?.name ?? entry.author?.email ?? "—"}</span>
                   {entry.happenedOn && (
-                    <span className="text-ink-500 text-xs font-light">
+                    <span className="text-ink-500 shrink-0 text-xs font-light whitespace-nowrap">
                       {updateKinds[entry.kind].short} on {formatDate(entry.happenedOn)}
                     </span>
                   )}
+                  {!isOpen && (
+                    <span className="text-ink-700 min-w-0 truncate text-[13px] font-light" title={preview}>
+                      {entry.kind !== "NOTE" || entry.happenedOn ? "— " : ""}
+                      {preview}
+                    </span>
+                  )}
                 </span>
-                <span className="text-ink-500 flex items-baseline gap-3 text-xs font-light whitespace-nowrap">
+                <span className="text-ink-500 flex shrink-0 items-baseline gap-3 text-xs font-light whitespace-nowrap">
+                  {(longer || isOpen) && editing?.id !== entry.id && (
+                    <button type="button" onClick={() => toggle(entry.id)} className="text-brand-700 hover:underline">
+                      {isOpen ? "Show less" : "Read more"}
+                    </button>
+                  )}
                   {entry.author?.id === me.data?.id && editing?.id !== entry.id && (
                     <button
                       type="button"
@@ -199,6 +227,7 @@ export function UpdateThread(scope: Scope) {
                   </div>
                 </div>
               ) : (
+                isOpen && (
                 <>
                   {entry.kind === "NOTE" ? (
                     <p className="text-ink-700 mt-1 text-sm font-light whitespace-pre-line">{renderUpdateBody(entry.body)}</p>
@@ -227,17 +256,15 @@ export function UpdateThread(scope: Scope) {
                     </p>
                   )}
                 </>
+                )
               )}
             </li>
-          ))}
-          {earlier > 0 && (
+            );
+          })}
+          {more > 0 && (
             <li>
-              <button
-                type="button"
-                onClick={() => setShowAll((current) => !current)}
-                className="text-brand-700 text-[13px] font-light hover:underline"
-              >
-                {showAll ? "Show only the latest" : `View more — ${earlier} earlier`}
+              <button type="button" onClick={() => setLimit((current) => current + 10)} className="text-brand-700 text-[13px] font-light hover:underline">
+                Show {Math.min(10, more)} older
               </button>
             </li>
           )}
