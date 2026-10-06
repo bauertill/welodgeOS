@@ -192,6 +192,28 @@ knows the text is not what was first posted. The earlier wordings are not shown 
 which says how many earlier ones there are and opens them all, newest first. This holds on
 a property's page and on a client's.
 
+**Kinds of update, each with its template** (2026-10-06), as the team had them on
+monday.com. Above the box, the kind is chosen — **Note** (the default: one free-text box, as
+before), **Meeting feedback**, **Call summary** and, on a property only, **Site inspection
+feedback**. Every kind but the note opens its template: the day it took place (today unless
+changed) and a box per heading, each with an example, @mentions working in all of them:
+
+| Kind | Headings |
+| --- | --- |
+| Meeting feedback | Who was there · What was discussed · What was agreed · Next steps |
+| Call summary | Who we spoke to · Summary · Next steps |
+| Site inspection feedback | Who visited · First impression · Rooms · Common areas and amenities · Location and surroundings · Fit for our clients · Photos and video · Next steps |
+
+*These headings are a first draft; the team's monday.com templates replace them when the
+owner sends them.* Headings left empty are left out. A posted template is kept as the
+update's text, each answer under its heading, so it is edited like any update; in the feed
+it carries its kind as a coloured label and "Meeting on 3 Oct", with the headings in bold.
+
+**Not built yet: emails in the feed.** The plan is for the emails exchanged with a
+property's or a client's contacts to appear in the same feed, as on monday.com. It needs the
+Gmail link (Gmail API with read access, set up by Till — `docs/todos.md`), which is not in
+place yet.
+
 ### 2.7 The team — profiles and internal chat
 
 Like Feedback, this sits outside the three phases: it is about the people at We Lodge, not
@@ -2582,6 +2604,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
+| §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
 | §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |

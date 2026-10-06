@@ -1210,14 +1210,25 @@ model SalesRequest {
 /// database. `@[Full Name]` inside `body` is a mention, written as literal
 /// text at post time: mentions are a visual highlight only today, with no
 /// notification behind them, so there is nothing to join a `User` row for.
+/// What kind of update a post is (doc §2.6) — each but a note has its own template.
+enum UpdateKind {
+  NOTE
+  MEETING
+  CALL
+  SITE_INSPECTION
+}
+
 model Update {
-  id        String           @id @default(cuid())
-  body      String
-  createdAt DateTime         @default(now())
+  id         String           @id @default(cuid())
+  kind       UpdateKind       @default(NOTE)
+  body       String
+  /// The day the meeting, call or visit took place — not when it was written up.
+  happenedOn DateTime?        @db.Date
+  createdAt  DateTime         @default(now())
   // Set when the author last changed the text (doc §2.6). Every earlier
   // wording is kept in `UpdateRevision`, so an edit never loses what was said.
-  editedAt  DateTime?
-  revisions UpdateRevision[]
+  editedAt   DateTime?
+  revisions  UpdateRevision[]
 
   author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
   authorId String?
