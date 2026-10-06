@@ -8,12 +8,15 @@ export function Popup({
   title,
   subtitle,
   aside,
+  size = "large",
   onClose,
   children,
 }: {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   aside?: React.ReactNode;
+  /** Large fills the screen (a task); medium is a form's width, as tall as it needs. */
+  size?: "large" | "medium";
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -41,7 +44,9 @@ export function Popup({
       <div
         role="dialog"
         aria-modal="true"
-        className="fixed inset-x-3 top-4 bottom-4 z-[1020] mx-auto max-w-6xl overflow-y-auto rounded-2xl p-6 shadow-2xl sm:inset-x-6"
+        className={`fixed inset-x-3 z-[1020] mx-auto overflow-y-auto rounded-2xl p-6 shadow-2xl sm:inset-x-6 ${
+          size === "large" ? "top-4 bottom-4 max-w-6xl" : "top-[6vh] max-h-[88vh] max-w-2xl"
+        }`}
         style={{ backgroundColor: "#f3f3f3" }}
       >
         <div className="mb-5 flex items-start justify-between gap-4">

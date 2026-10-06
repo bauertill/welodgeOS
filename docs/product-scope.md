@@ -193,10 +193,11 @@ which says how many earlier ones there are and opens them all, newest first. Thi
 a property's page and on a client's.
 
 **Kinds of update, each with its template** (2026-10-06), as the team had them on
-monday.com. Above the box, the kind is chosen — **Note** (the default: one free-text box, as
-before), **Meeting feedback**, **Call summary** and, on a property only, **Site inspection
-feedback**. Every kind but the note opens its template: the day it took place (today unless
-changed) and a box per heading, each with an example, @mentions working in all of them:
+monday.com, **all in the one feed**, newest first. The box is a **note**, as before; beneath it,
+**+ Meeting feedback**, **+ Call summary** and, on a property only, **+ Site inspection
+feedback** each open their template **in a popup**: the day it took place (today unless
+changed) and a box per heading, each with an example, @mentions working in all of them.
+Closing it with something written asks first. Posted, it lands in the feed with the rest:
 
 | Kind | Headings |
 | --- | --- |

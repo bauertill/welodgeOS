@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button, Input } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
+import { Popup } from "~/app/_components/popup";
 import { dayKey, today } from "~/lib/dates";
 import { formatDate, formatDay, formatMomentInWords } from "~/lib/format";
 import { composeBody, isHeading, updateKindOrder, updateKinds } from "~/lib/update-kinds";
@@ -26,13 +27,19 @@ export function UpdateThread(scope: Scope) {
   const people = api.user.list.useQuery();
   const me = api.user.me.useQuery();
   const [body, setBody] = useState("");
-  // A note by default; the other kinds open their template (doc §2.6).
-  const [kind, setKind] = useState<UpdateKind>("NOTE");
+  // The box is a note; the other kinds open their template in a popup (doc §2.6).
+  const [form, setForm] = useState<UpdateKind | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [happenedOn, setHappenedOn] = useState(dayKey(today()));
   const kinds = updateKindOrder.filter((option) => !updateKinds[option].propertyOnly || scope.propertyId);
-  const template = updateKinds[kind];
-  const composed = kind === "NOTE" ? body : composeBody(kind, answers);
+  const template = form ? updateKinds[form] : null;
+  const composed = form ? composeBody(form, answers) : "";
+  const closeForm = () => {
+    if (composed.trim() && !window.confirm("Close without posting? What you wrote is lost.")) return;
+    setForm(null);
+    setAnswers({});
+    post.reset();
+  };
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   // Only the latest shows until asked: the feed only grows.
   const [showAll, setShowAll] = useState(false);
@@ -50,7 +57,7 @@ export function UpdateThread(scope: Scope) {
     onSuccess: () => {
       setBody("");
       setAnswers({});
-      setKind("NOTE");
+      setForm(null);
       void utils.update.list.invalidate(scope);
     },
   });
@@ -58,39 +65,53 @@ export function UpdateThread(scope: Scope) {
   return (
     <div className="space-y-4">
       <div>
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {kinds.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setKind(option)}
-              aria-pressed={kind === option}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                kind === option ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 text-ink-700 hover:border-ink-400 bg-white"
-              }`}
-            >
-              {updateKinds[option].label}
-            </button>
-          ))}
+        <MentionTextarea
+          value={body}
+          onChange={setBody}
+          people={people.data ?? []}
+          placeholder="Write an update — @ to mention a colleague"
+          // One line until something is typed, so an empty box takes no room.
+          rows={body ? 3 : 1}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          {/* The other kinds, each a form in a popup; all land in the one feed below. */}
+          <span className="flex flex-wrap items-center gap-1.5">
+            {kinds
+              .filter((option) => option !== "NOTE")
+              .map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => {
+                    post.reset();
+                    setHappenedOn(dayKey(today()));
+                    setForm(option);
+                  }}
+                  className="border-ink-200 text-ink-700 hover:border-brand-400 hover:text-brand-700 rounded-full border bg-white px-3 py-1 text-xs transition-colors"
+                >
+                  + {updateKinds[option].label}
+                </button>
+              ))}
+          </span>
+          {!form && post.error && <p className="text-xs text-[#c03654]">{post.error.message}</p>}
+          {body.trim() && (
+            <Button type="button" className="ml-auto" disabled={post.isPending} onClick={() => post.mutate({ ...scope, body, kind: "NOTE" })}>
+              {post.isPending ? "Posting…" : "Post update"}
+            </Button>
+          )}
         </div>
-        {kind === "NOTE" ? (
-          <MentionTextarea
-            value={body}
-            onChange={setBody}
-            people={people.data ?? []}
-            placeholder="Write an update — @ to mention a colleague"
-            // One line until something is typed, so an empty box takes no room.
-            rows={body ? 3 : 1}
-          />
-        ) : (
-          <div className="border-ink-200/60 bg-ink-50/40 space-y-3 rounded-lg border p-3">
+      </div>
+
+      {form && template && (
+        <Popup title={template.label} subtitle="Shows in the updates with the rest." size="medium" onClose={closeForm}>
+          <div className="border-ink-200/60 space-y-3 rounded-xl border bg-white p-5">
             <label className="flex items-center gap-2 text-[13px]">
               <span className="text-ink-700 font-medium">{template.short} on</span>
               <span className="w-40">
                 <Input type="date" value={happenedOn} onChange={(e) => setHappenedOn(e.target.value)} aria-label="When it took place" />
               </span>
             </label>
-            {template.sections.map((section) => (
+            {template.sections.map((section, index) => (
               <div key={section.heading}>
                 <span className="text-ink-700 mb-1 block text-[13px] font-medium">{section.heading}</span>
                 <MentionTextarea
@@ -99,30 +120,26 @@ export function UpdateThread(scope: Scope) {
                   people={people.data ?? []}
                   placeholder={section.placeholder}
                   rows={2}
+                  autoFocus={index === 0}
                 />
               </div>
             ))}
           </div>
-        )}
-        {(composed.trim() || post.error || kind !== "NOTE") && (
-          <div className="mt-2 flex items-center justify-between gap-3">
+          <div className="mt-4 flex items-center gap-2">
             {post.error && <p className="text-xs text-[#c03654]">{post.error.message}</p>}
-            {kind !== "NOTE" && (
-              <Button type="button" variant="ghost" className="ml-auto" onClick={() => setKind("NOTE")}>
-                Cancel
-              </Button>
-            )}
+            <Button type="button" variant="ghost" className="ml-auto" onClick={closeForm}>
+              Cancel
+            </Button>
             <Button
               type="button"
-              className={kind === "NOTE" ? "ml-auto" : ""}
               disabled={!composed.trim() || post.isPending}
-              onClick={() => post.mutate({ ...scope, body: composed, kind, happenedOn: kind === "NOTE" ? undefined : happenedOn || undefined })}
+              onClick={() => post.mutate({ ...scope, body: composed, kind: form, happenedOn: happenedOn || undefined })}
             >
-              {post.isPending ? "Posting…" : kind === "NOTE" ? "Post update" : `Post ${template.label.toLowerCase()}`}
+              {post.isPending ? "Posting…" : `Post ${template.label.toLowerCase()}`}
             </Button>
           </div>
-        )}
-      </div>
+        </Popup>
+      )}
 
       {updates.data && updates.data.length > 0 ? (
         <ul className="space-y-3">
