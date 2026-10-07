@@ -416,7 +416,12 @@ completes it, who asked, deadline, priority, type and what it is about; and unde
 **status as steps** — *Backlog → To do → In progress → Done*, passed ones ticked, each a
 click away, with the next move as one button (*Move to To do*, *Start it*, *Mark done*;
 *Reopen* once done). Below, its *Log* — every change, who made it
-and when; only the latest shows, with *Show all* for the rest. It can be edited or removed.
+and when; only the latest shows, with *Show all* for the rest. It can be edited or deleted.
+
+**Deleting a task** (2026-10-07): *Delete task* at the foot of its details, and on the board —
+*Delete* on a Kanban card (it shows when the pointer is on the card) and at the end of each
+row of the List. It always asks first; the task's comments go with it, and it cannot be
+undone. Anyone can delete any task, as anyone can edit one.
 
 **My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
 you asked of others, each with a link to the board.

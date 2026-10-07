@@ -395,11 +395,14 @@ function TaskCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
-      className={`border-ink-200/60 hover:border-brand-300 cursor-pointer rounded-lg border bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition ${faded ? "opacity-40" : ""}`}
+      className={`group border-ink-200/60 hover:border-brand-300 cursor-pointer rounded-lg border bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition ${faded ? "opacity-40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-ink-900 text-[13px] font-medium">{task.title}</p>
-        <PriorityBadge priority={task.priority} />
+        <span className="flex shrink-0 items-center gap-2">
+          <PriorityBadge priority={task.priority} />
+          <DeleteTask task={task} className="opacity-0 group-hover:opacity-100 focus:opacity-100" />
+        </span>
       </div>
       <div className="mt-1">
         <About task={task} />
@@ -419,6 +422,34 @@ function TaskCard({
         </span>
       </div>
     </div>
+  );
+}
+
+/** Delete a task from the board, after asking — its comments go with it (doc §2.8). */
+function DeleteTask({ task, className = "" }: { task: { id: string; title: string }; className?: string }) {
+  const utils = api.useUtils();
+  const remove = api.task.remove.useMutation({
+    onSuccess: () => {
+      void utils.task.invalidate();
+      void utils.sales.invalidate();
+    },
+    onError: (error) => window.alert(friendlyError(error)),
+  });
+  return (
+    <button
+      type="button"
+      disabled={remove.isPending}
+      onClick={(e) => {
+        // On a card: delete, do not open it.
+        e.stopPropagation();
+        if (window.confirm(`Delete the task "${task.title}"? Its comments go with it. This cannot be undone.`)) remove.mutate({ id: task.id });
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+      aria-label={`Delete ${task.title}`}
+      className={`text-ink-500 text-xs font-light transition hover:text-[#c03654] ${className}`}
+    >
+      {remove.isPending ? "Deleting…" : "Delete"}
+    </button>
   );
 }
 
@@ -447,12 +478,13 @@ export function TaskTable({
             <th className={th}>To complete</th>
             {!compact && <th className={th}>Requested by</th>}
             <th className={th}>Deadline</th>
+            {!compact && <th className={th}>{""}</th>}
           </tr>
         </thead>
         <tbody>
           {onAdd && (
             <tr>
-              <td colSpan={compact ? 4 : 6} className="border-ink-200/40 border-b px-2 py-1.5">
+              <td colSpan={compact ? 4 : 7} className="border-ink-200/40 border-b px-2 py-1.5">
                 <AddTaskButton onClick={onAdd} />
               </td>
             </tr>
@@ -485,6 +517,11 @@ export function TaskTable({
               <td className={td}>
                 <Deadline task={task} />
               </td>
+              {!compact && (
+                <td className={`${td} text-right`}>
+                  <DeleteTask task={task} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -864,10 +901,10 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           </dl>
           <button
             type="button"
-            onClick={() => window.confirm(`Remove the task "${t.title}"? Its comments go with it.`) && remove.mutate({ id: t.id })}
+            onClick={() => window.confirm(`Delete the task "${t.title}"? Its comments go with it. This cannot be undone.`) && remove.mutate({ id: t.id })}
             className="mt-5 text-xs text-[#c03654] hover:underline"
           >
-            Remove task
+            Delete task
           </button>
         </div>
 
