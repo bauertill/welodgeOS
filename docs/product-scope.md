@@ -1703,7 +1703,10 @@ the contract.
   that a new sales request has come in (§2.9); with no accommodation manager set, the task
   waits unassigned and the project lead is told to give it to someone. One task per request:
   sending the details again makes no second one, and a request whose event is only chosen
-  later gets its task then. A request not for one of our events gets none.
+  later gets its task then. A request not for one of our events gets none. **The request's
+  page links to it** (2026-10-07): a *Tasks* card at the top of its right-hand column shows
+  the sourcing task — its status, who has it, *Open the sourcing task* — and under it the
+  hotel contact tasks that came out of it, each a link with its status.
 - **Where to source**, on the sourcing task: a map with the places the client wants to be
   close to (or, if they chose none, the event's own, said so), and **the properties we
   already have** around them — within 15 km, or on the event already — as pins and a list,

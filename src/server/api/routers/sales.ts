@@ -952,6 +952,18 @@ export const salesRouter = createTRPCRouter({
         include: {
           ...include,
           client: { select: { id: true, name: true, shortName: true, contacts: { orderBy: { name: "asc" }, select: { id: true, name: true, title: true } } } },
+          // Its tasks — the sourcing task, and the hotel contact tasks it led to (doc §4.11).
+          tasks: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              type: { select: { name: true } },
+              property: { select: { name: true } },
+              assignees: { select: { id: true, name: true, email: true } },
+            },
+          },
         },
       }),
     ),

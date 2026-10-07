@@ -12,6 +12,7 @@ import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_c
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { NewClientPopup } from "~/app/_components/new-client-popup";
+import { TaskStatusBadge } from "~/app/_components/tasks";
 import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
 import { addDays, daysUntil, dayKey, today } from "~/lib/dates";
@@ -1152,6 +1153,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
           />
         </div>
         <div className="space-y-5">
+          <RequestTasks request={request} />
           <FollowUpCard request={request} />
           <ContractCard request={request} />
           <DetailsCard request={request} />
@@ -1161,6 +1163,52 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The request's tasks (doc §4.11): its sourcing task first — to whom, how far
+ * along, a click away — then the hotel contact tasks that came out of it.
+ */
+function RequestTasks({ request }: { request: FullRequest }) {
+  const sourcing = request.tasks.filter((task) => task.type?.name === "Sourcing");
+  const others = request.tasks.filter((task) => task.type?.name !== "Sourcing");
+  const who = (task: FullRequest["tasks"][number]) =>
+    task.assignees.length ? task.assignees.map((person) => person.name ?? person.email).join(", ") : "Nobody yet";
+  return (
+    <Card>
+      <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Tasks</h2>
+      {sourcing.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">
+          {request.event
+            ? "No sourcing task yet — it is made once the request's details are in."
+            : "No sourcing task — the request is not for one of our events."}
+        </p>
+      ) : (
+        sourcing.map((task) => (
+          <Link key={task.id} href={`/tasks/${task.id}`} className="border-brand-200 bg-brand-50/50 hover:border-brand-400 block rounded-lg border px-3 py-2.5 transition-colors">
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">Sourcing task</span>
+              <TaskStatusBadge status={task.status} />
+            </span>
+            <span className="text-ink-700 mt-1 block text-[13px] font-light">With {who(task)}</span>
+            <span className="text-brand-700 mt-1 block text-[13px] font-medium">Open the sourcing task →</span>
+          </Link>
+        ))
+      )}
+      {others.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {others.map((task) => (
+            <li key={task.id} className="flex items-baseline justify-between gap-2 text-[13px]">
+              <Link href={`/tasks/${task.id}`} className="text-ink-900 hover:text-brand-700 min-w-0 truncate font-light hover:underline">
+                {task.property && task.type?.name === "Hotel contact" ? `Contact ${task.property.name}` : task.title}
+              </Link>
+              <TaskStatusBadge status={task.status} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
