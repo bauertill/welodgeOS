@@ -920,20 +920,34 @@ contract is sent for signature, which need not be the general email or any conta
 every colleague**. That was put to the business and accepted for now; if it changes, it is
 part of deciding on roles (§9, question 5).
 
-**The hotel fills them in itself, by link** (2026-10-06). The *Contracting details* section
-of a property's page has **Ask the hotel to fill them in**: **Email it to the hotel** makes a
-private link — if there is none yet — and opens an email from your own mailbox, addressed to
-the email for contracts, else the general email, else the first contact with an email, with
-the link and a short request in it; *Copy link*, *Open* and *Switch off* sit beside it, and
-*Just make the link* (or *Make a new link*, which replaces the old one) makes it without the
-email. The hotel opens the link without signing in and sees only a form for its name: the
-company (trade name — required — VAT number, registration number), its bank details (IBAN,
-BIC) and who signs (name, designation, email for contracts), filled with whatever we already
-have. What it sends replaces those eight fields on the property and is recorded in the
-property's Log, field by field, as *sent by the hotel, through the link*; whoever made the
-link is told (§2.9). It can be corrected and sent again while the link is on. The section
-says when the hotel sent them, and opens on its own while a link is out and unanswered.
-Switching the link off makes it open nothing; what was sent stays.
+**The hotel fills in its own details, by link** (2026-10-06; widened 2026-10-08 from the
+contracting details alone to everything but rates). A section of a property's page, **The
+hotel's own form** — and the hotel contact task's *Contact details* card — has **Email it to
+the hotel**: it makes a private link, if there is none yet, and opens an email from your own
+mailbox, addressed to the email for contracts, else the general email, else the first
+contact with an email, with the link and a short request in it; *Copy link*, *Open* and
+*Switch off* sit beside it, and *Just make the link* (or *Make a new link*, which replaces the
+old one) makes it without the email. The hotel opens the link (`/property-details/…`) without
+signing in and sees a form for its property alone, filled with whatever we already have:
+
+- **The property** — address, city, country, neighbourhood, phone, general email, website,
+  check-in and check-out times, year built;
+- **Room categories** (or unit types) — name, rooms, sleeps, beds (or bedrooms and
+  bathrooms), size, notes; it can change those we have and add new ones, **never remove
+  one** (it is asked to tell us instead), and cannot take a category below the rooms already
+  in our inventory;
+- **Amenities**, ticked from our list; **services** — breakfast, cleaning, laundry, gym,
+  public transport; **who we talk to** — name, role, email, phone;
+- **Contracting details** — company (trade name, VAT, registration), bank (IBAN, BIC) and who
+  signs (name, designation, email for contracts).
+
+**No rates, and no terms for an event** — those are agreed separately, by quotation. What it
+sends replaces what it covers on the property and is recorded in the property's Log as *sent
+by the hotel, through its form*, field by field and room category by room category; whoever
+made the link is told (§2.9), and the hotel contact task's checklist ticks what came in. It
+can be corrected and sent again while the link is on; the section says when it was sent.
+Switching the link off makes it open nothing; what was sent stays. A link sent before
+2026-10-08 (`/contracting/hotel/…`) opens the new form.
 
 **Providers — the chain or group.** A **provider** is the hotel chain or group a property
 belongs to — Marriott, Accor, a local apartment operator. It is its own record, entered once:
@@ -1789,8 +1803,11 @@ the contract.
   can be chosen) and a note for them — and **Create contact task** makes the same task, to
   that person, with the note as its first comment and in the notification they get. While
   one is open, the panel shows who has it and links to it instead.
-  *Rooms, amenities and quotations* opens the property's page; *Terms for {event}* opens its
-  terms panel right there. When all eight are in, the task says so — it is still marked
+  **Hotel details** opens, in a popup over the task, all of the property's own sections —
+  room categories, where it is, more about it, contacts, amenities and contracting details —
+  each edited where it stands and saved on the property, so nobody leaves the task;
+  *Quotations* opens the property's page at its quotations; *Terms for {event}* opens its
+  terms panel right there. Its *Contact details* card also holds the hotel's own form (§3.9). When all eight are in, the task says so — it is still marked
   done by hand. Adding an existing property to the event from the sourcing task makes no
   hotel contact task (not asked for).
 - **Once the details are in, the enquiry is a sales request** — the same request, its
@@ -2666,7 +2683,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
-| §3.9 Hotel fills in its contracting details by link | **Built** | From the property's page: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. Company, bank details and signatory; lands on the property and in its Log; whoever made the link is told; can be sent again |
+| §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services, contacts and contracting details — not rates or event terms; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |

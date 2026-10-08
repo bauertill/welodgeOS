@@ -8,6 +8,7 @@ import {
   AmenitiesCard,
   ContactsCard,
   ContractingCard,
+  HotelDetailsLink,
   DetailsPanel,
   MoreAboutCard,
   PanelSection,
@@ -136,6 +137,13 @@ export default async function PropertyPage({
                 <p className="text-ink-700 text-sm font-light whitespace-pre-line">{property.notes}</p>
               </PanelSection>
             )}
+            <PanelSection
+              title="The hotel's own form"
+              summary={property.contractingSubmittedAt ? "details sent" : property.contractingToken ? "link out" : "not sent"}
+              defaultOpen={Boolean(property.contractingToken && !property.contractingSubmittedAt)}
+            >
+              <HotelDetailsLink property={property} bare />
+            </PanelSection>
             <WhereItIsCard property={property} totalLabel={units ? `${units} rooms` : null} />
             <ContactsCard property={property} />
             <AmenitiesCard property={property} amenities={amenities} />

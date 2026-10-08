@@ -408,9 +408,7 @@ export function ContractingCard({ property }: { property: PropertyForCards }) {
   return (
     <EditableCard
       title="Contracting details"
-      summary={filled ?? (property.provider ? `from ${property.provider.name}` : "none recorded — send the hotel the form")}
-      // Open while the hotel has the form and has not answered yet.
-      defaultOpen={Boolean(property.contractingToken && !property.contractingSubmittedAt)}
+      summary={filled ?? (property.provider ? `from ${property.provider.name}` : "none recorded")}
       editor={(done) => (
         <>
           <p className="text-ink-500 mb-3 text-xs font-light">
@@ -430,17 +428,17 @@ export function ContractingCard({ property }: { property: PropertyForCards }) {
       )}
     >
       <ContractingDetails property={property} />
-      <HotelContractingLink property={property} />
     </EditableCard>
   );
 }
 
 /**
- * Sending the hotel its contracting-details form (doc §3.9): a private link,
- * emailed from your own mailbox, that the hotel fills in without signing in —
- * its answers land on the property. A new link replaces the old one.
+ * Sending the hotel its own details form (doc §3.9): a private link, emailed
+ * from your own mailbox, that the hotel fills in without signing in —
+ * everything about the property but rates; its answers land on the property.
+ * A new link replaces the old one.
  */
-function HotelContractingLink({ property }: { property: PropertyForCards }) {
+export function HotelDetailsLink({ property, bare = false }: { property: PropertyForCards; /** Without its own heading. */ bare?: boolean }) {
   const saved = useSaved();
   const me = api.user.me.useQuery();
   const [origin, setOrigin] = useState("");
@@ -448,18 +446,18 @@ function HotelContractingLink({ property }: { property: PropertyForCards }) {
   useEffect(() => setOrigin(window.location.origin), []);
   const make = api.property.makeContractingLink.useMutation({ onSuccess: saved });
   const off = api.property.switchOffContractingLink.useMutation({ onSuccess: saved });
-  const url = (token: string | null | undefined) => (token ? `${origin}/contracting/hotel/${token}` : null);
+  const url = (token: string | null | undefined) => (token ? `${origin}/property-details/${token}` : null);
   const link = url(property.contractingToken);
   const record = property as unknown as Record<string, string | null>;
   const to = [record.contractEmail, record.generalEmail, ...property.contacts.map((contact) => contact.email)].find((email) => email?.trim()) ?? "";
   const name = property.name ?? "your property";
 
   const email = (target: string) => {
-    const subject = `Contracting details for ${name} — We Lodge`;
+    const subject = `${name}: your property's details — We Lodge`;
     const body = [
       "Hello,",
       "",
-      `To draw up our agreement, could you please fill in ${name}'s contracting details — the company, its bank details and who signs — on this page:`,
+      `To prepare our work together, could you please check and complete ${name}'s details on this page — your room categories and sizes, amenities, services, who we should talk to, and the contracting details:`,
       "",
       target,
       "",
@@ -473,14 +471,14 @@ function HotelContractingLink({ property }: { property: PropertyForCards }) {
   };
 
   return (
-    <div className="border-ink-200/60 mt-3 border-t pt-3">
-      <p className="text-ink-900 text-[13px] font-medium">Ask the hotel to fill them in</p>
+    <div>
+      {!bare && <p className="text-ink-900 text-[13px] font-medium">Ask the hotel to fill in its details</p>}
       <p className="text-ink-500 mb-2 text-xs font-light">
         {property.contractingSubmittedAt
           ? `The hotel sent its details on ${formatDate(property.contractingSubmittedAt)}. `
           : link
             ? "The hotel has a link to its form and has not sent it yet. "
-            : "A private link to a form for the hotel — no account needed; what it sends lands here. "}
+            : "A private link to a form where the hotel checks and completes its details — rooms, sizes, amenities, services, contacts and contracting; not rates. No account needed; what it sends lands here. "}
         {!to && "No email is known for the hotel — add one under Contacts, or copy the link."}
       </p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">

@@ -116,6 +116,23 @@ const detail = {
 const blank = (value: string | undefined) => (value?.trim() ? value.trim() : null);
 
 /** Every free-text field of a property, blanked the same way. */
+/** What the hotel fills in on its own form (doc §3.9) — everything but rates, and its name and type. */
+const hotelFormFieldLabels = [
+  { key: "address", label: "Address" },
+  { key: "city", label: "City" },
+  { key: "country", label: "Country" },
+  { key: "phone", label: "Phone" },
+  { key: "website", label: "Website" },
+  { key: "area", label: "Area" },
+  { key: "generalEmail", label: "General email" },
+  { key: "checkInTime", label: "Check-in time" },
+  { key: "checkOutTime", label: "Check-out time" },
+  ...propertyServiceFields.map(({ key, label }) => ({ key, label })),
+  ...contractingFields.map(({ key, label }) => ({ key, label })),
+] as const;
+type HotelFormTextKey = (typeof hotelFormFieldLabels)[number]["key"];
+const hotelFormTextKeys = hotelFormFieldLabels.map((field) => field.key) as HotelFormTextKey[];
+
 const textKeys = [
   "address",
   "city",
@@ -564,55 +581,181 @@ export const propertyRouter = createTRPCRouter({
     return { ok: true };
   }),
 
-  /** The hotel's form, by its link only — what is already recorded, to check or complete. */
-  contractingForm: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
+  /**
+   * The hotel's own form, by its link only (doc §3.9): everything we keep
+   * about the property except rates — to check, correct or complete.
+   */
+  detailsForm: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
     const property = await ctx.db.property.findUnique({
       where: { contractingToken: input.token },
-      select: { name: true, contractingSubmittedAt: true, ...Object.fromEntries(contractingFields.map((field) => [field.key, true])) },
+      include: {
+        categories: { orderBy: { sortOrder: "asc" } },
+        amenities: { select: { id: true } },
+        contacts: { orderBy: { name: "asc" } },
+      },
     });
     if (!property) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-    const record = property as Record<string, unknown>;
+    const amenities = await ctx.db.amenity.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
+    const record = property as unknown as Record<string, unknown>;
+    const text = (key: string) => (record[key] as string | null) ?? "";
     return {
       propertyName: property.name,
+      type: property.type,
       submittedAt: property.contractingSubmittedAt,
-      values: Object.fromEntries(contractingFields.map((field) => [field.key, (record[field.key] as string | null) ?? ""])) as Record<(typeof contractingFields)[number]["key"], string>,
+      values: Object.fromEntries(hotelFormTextKeys.map((key) => [key, text(key)])) as Record<HotelFormTextKey, string>,
+      yearBuilt: property.yearBuilt ? String(property.yearBuilt) : "",
+      categories: property.categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        unitCount: String(category.unitCount || ""),
+        capacity: String(category.capacity),
+        bedConfiguration: category.bedConfiguration ?? "",
+        bedrooms: category.bedrooms === null ? "" : String(category.bedrooms),
+        bathrooms: category.bathrooms === null ? "" : String(category.bathrooms),
+        size: category.size ?? "",
+        notes: category.notes ?? "",
+      })),
+      amenityIds: property.amenities.map((amenity) => amenity.id),
+      amenities,
+      contacts: property.contacts.map((contact) => ({ name: contact.name, role: contact.role ?? "", email: contact.email ?? "", phone: contact.phone ?? "" })),
     };
   }),
 
-  /** The hotel sends its contracting details: they land on the property, and whoever sent the link is told. */
-  submitContracting: publicProcedure
+  /**
+   * The hotel sends its details: they land on the property — room categories
+   * changed or added (never removed), amenities and contacts as sent — every
+   * change in its Log, and whoever sent the link is told.
+   */
+  submitDetails: publicProcedure
     .input(
       z.object({
         token: z.string().min(20).max(100),
-        values: z.object(Object.fromEntries(contractingFields.map((field) => [field.key, z.string().max(2000)])) as Record<(typeof contractingFields)[number]["key"], z.ZodString>),
+        values: z.object(Object.fromEntries(hotelFormTextKeys.map((key) => [key, z.string().max(2000)])) as Record<HotelFormTextKey, z.ZodString>),
+        yearBuilt: z.string().max(10),
+        categories: z
+          .array(
+            z.object({
+              id: z.string().optional(),
+              name: z.string().trim().max(200),
+              unitCount: z.string().max(10),
+              capacity: z.string().max(10),
+              bedConfiguration: z.string().max(200),
+              bedrooms: z.string().max(10),
+              bathrooms: z.string().max(10),
+              size: z.string().max(200),
+              notes: z.string().max(2000),
+            }),
+          )
+          .max(60),
+        amenityIds: z.array(z.string()).max(200),
+        contacts: z.array(z.object({ name: z.string().max(200), role: z.string().max(200), email: z.string().max(300), phone: z.string().max(100) })).max(30),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.db.$transaction(async (tx) => {
-        const before = await tx.property.findUnique({ where: { contractingToken: input.token } });
-        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-        if (!input.values.tradeName.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Please give the company's trade name." });
-        const email = input.values.contractEmail.trim();
-        if (email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "The email address for contracts does not look right." });
+      const number = (value: string, label: string, decimal = false) => {
+        const trimmed = value.trim().replace(",", ".");
+        if (!trimmed) return null;
+        const parsed = Number(trimmed);
+        if (!Number.isFinite(parsed) || parsed < 0 || (!decimal && !Number.isInteger(parsed))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `${label} should be a number.` });
         }
+        return parsed;
+      };
+      const isEmail = (value: string) => !value.trim() || /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(value.trim());
+      if (!isEmail(input.values.generalEmail)) throw new TRPCError({ code: "BAD_REQUEST", message: "The general email does not look right." });
+      if (!isEmail(input.values.contractEmail)) throw new TRPCError({ code: "BAD_REQUEST", message: "The email address for contracts does not look right." });
+      const contacts = input.contacts.filter((contact) => contact.name.trim());
+      if (contacts.some((contact) => !isEmail(contact.email))) throw new TRPCError({ code: "BAD_REQUEST", message: "One of the contacts' email addresses does not look right." });
+      const yearBuilt = number(input.yearBuilt, "The year it was built");
+      if (yearBuilt !== null && (yearBuilt < 1000 || yearBuilt > 2100)) throw new TRPCError({ code: "BAD_REQUEST", message: "The year it was built does not look right." });
+
+      await ctx.db.$transaction(async (tx) => {
+        const before = await tx.property.findUnique({
+          where: { contractingToken: input.token },
+          include: { categories: true, amenities: { select: { id: true, label: true } }, contacts: true },
+        });
+        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+
+        // The property itself.
         const after = await tx.property.update({
           where: { id: before.id },
-          data: { ...Object.fromEntries(contractingFields.map((field) => [field.key, blank(input.values[field.key])])), contractingSubmittedAt: new Date() },
+          data: {
+            ...Object.fromEntries(hotelFormTextKeys.map((key) => [key, blank(input.values[key])])),
+            yearBuilt,
+            contractingSubmittedAt: new Date(),
+          },
         });
-        const readable = (property: Record<string, unknown>) => Object.fromEntries(contractingFields.map((field) => [field.key, (property[field.key] as string | null) ?? null]));
+        const fieldChanges = diffFields(
+          before as unknown as Record<string, unknown>,
+          { ...after, yearBuilt } as unknown as Record<string, unknown>,
+          [...hotelFormFieldLabels, { key: "yearBuilt", label: "Year built" }],
+        );
+
+        // Room categories: those sent with an id are changed, the others added; none is removed.
+        const notes: string[] = [];
+        const hotel = before.type === "HOTEL";
+        let order = Math.max(-1, ...before.categories.map((category) => category.sortOrder));
+        for (const sent of input.categories) {
+          if (!sent.name) continue;
+          const data = {
+            name: sent.name,
+            unitCount: number(sent.unitCount, `The rooms of "${sent.name}"`) ?? 0,
+            capacity: Math.max(1, number(sent.capacity, `How many "${sent.name}" sleeps`) ?? 2),
+            bedConfiguration: hotel ? blank(sent.bedConfiguration) : null,
+            bedrooms: hotel ? null : number(sent.bedrooms, `The bedrooms of "${sent.name}"`),
+            bathrooms: hotel ? null : number(sent.bathrooms, `The bathrooms of "${sent.name}"`, true),
+            size: blank(sent.size),
+            notes: blank(sent.notes),
+          };
+          const existing = sent.id ? before.categories.find((category) => category.id === sent.id) : undefined;
+          if (existing) {
+            const highest = await tx.roomSlot.findFirst({ where: { categoryId: existing.id }, orderBy: { slotNumber: "desc" }, select: { slotNumber: true } });
+            if (highest && data.unitCount < highest.slotNumber) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: `"${existing.name}" cannot go below ${highest.slotNumber} rooms — please contact We Lodge to change it.` });
+            }
+            const changed = (Object.keys(data) as (keyof typeof data)[]).filter((key) => (existing[key] ?? null) !== (data[key] ?? null));
+            if (changed.length) {
+              await tx.roomCategory.update({ where: { id: existing.id }, data });
+              notes.push(`Room category changed: ${data.name}`);
+            }
+          } else {
+            order += 1;
+            await tx.roomCategory.create({ data: { ...data, propertyId: before.id, sortOrder: order } });
+            notes.push(`Room category added: ${data.name} (${data.unitCount} rooms)`);
+          }
+        }
+
+        // Amenities, as ticked.
+        const known = new Set((await tx.amenity.findMany({ where: { id: { in: input.amenityIds } }, select: { id: true } })).map((amenity) => amenity.id));
+        const ticked = input.amenityIds.filter((id) => known.has(id));
+        const had = new Set(before.amenities.map((amenity) => amenity.id));
+        if (ticked.length !== had.size || ticked.some((id) => !had.has(id))) {
+          await tx.property.update({ where: { id: before.id }, data: { amenities: { set: ticked.map((id) => ({ id })) } } });
+          notes.push(`Amenities: ${ticked.length} ticked`);
+        }
+
+        // Contacts, as sent.
+        const contactKey = (contact: { name: string; role: string | null; email: string | null; phone: string | null }) =>
+          [contact.name, contact.role ?? "", contact.email ?? "", contact.phone ?? ""].map((part) => part.trim()).join("|");
+        const sentContacts = contacts.map((contact) => ({ name: contact.name.trim(), role: blank(contact.role), email: blank(contact.email), phone: blank(contact.phone) }));
+        if (sentContacts.map(contactKey).sort().join("\n") !== before.contacts.map(contactKey).sort().join("\n")) {
+          await tx.propertyContact.deleteMany({ where: { propertyId: before.id } });
+          if (sentContacts.length) await tx.propertyContact.createMany({ data: sentContacts.map((contact) => ({ ...contact, propertyId: before.id })) });
+          notes.push(`Contacts: ${sentContacts.map((contact) => contact.name).join(", ") || "none"}`);
+        }
+
         await logAudit(tx, {
           actorId: null,
           entity: "Property",
           entityId: before.id,
-          summary: "Contracting details sent by the hotel, through the link",
-          changes: diffFields(readable(before), readable(after), [...contractingFields]),
+          summary: "Details sent by the hotel, through its form",
+          changes: [fieldChanges, ...notes].filter(Boolean).join("\n") || "Nothing changed",
         });
         await notify(tx, {
           to: [before.contractingLinkMadeById],
           actorId: null,
           kind: "PROPERTY_CONTRACTING_SENT",
-          title: `${before.name} sent its contracting details`,
+          title: `${before.name} sent its details`,
           link: `/properties/${before.id}`,
         });
       });
