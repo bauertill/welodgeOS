@@ -920,8 +920,9 @@ contract is sent for signature, which need not be the general email or any conta
 every colleague**. That was put to the business and accepted for now; if it changes, it is
 part of deciding on roles (§9, question 5).
 
-**The hotel fills in its own details, by link** (2026-10-06; widened 2026-10-08 from the
-contracting details alone to everything but rates). A section of a property's page, **The
+**The hotel fills in its own details, by link** (2026-10-06 for its contracting details;
+since 2026-10-08 its property details instead — everything but rates and contracting
+details). A section of a property's page, **The
 hotel's own form** — and the hotel contact task's *Contact details* card — has **Email it to
 the hotel**: it makes a private link, if there is none yet, and opens an email from your own
 mailbox, addressed to the email for contracts, else the general email, else the first
@@ -937,11 +938,11 @@ signing in and sees a form for its property alone, filled with whatever we alrea
   one** (it is asked to tell us instead), and cannot take a category below the rooms already
   in our inventory;
 - **Amenities**, ticked from our list; **services** — breakfast, cleaning, laundry, gym,
-  public transport; **who we talk to** — name, role, email, phone;
-- **Contracting details** — company (trade name, VAT, registration), bank (IBAN, BIC) and who
-  signs (name, designation, email for contracts).
+  public transport; **who we talk to** — name, role, email, phone.
 
-**No rates, and no terms for an event** — those are agreed separately, by quotation. What it
+**No rates, no terms for an event and no contracting details** — rates and terms are agreed
+separately, by quotation, and the contracting details are taken down by the team on the
+property's page (the owner's call, 2026-10-08). What it
 sends replaces what it covers on the property and is recorded in the property's Log as *sent
 by the hotel, through its form*, field by field and room category by room category; whoever
 made the link is told (§2.9), and the hotel contact task's checklist ticks what came in. It
@@ -2683,7 +2684,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
-| §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services, contacts and contracting details — not rates or event terms; lands on the property and in its Log; whoever made the link is told; can be sent again |
+| §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |

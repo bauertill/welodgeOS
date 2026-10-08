@@ -116,7 +116,7 @@ const detail = {
 const blank = (value: string | undefined) => (value?.trim() ? value.trim() : null);
 
 /** Every free-text field of a property, blanked the same way. */
-/** What the hotel fills in on its own form (doc §3.9) — everything but rates, and its name and type. */
+/** What the hotel fills in on its own form (doc §3.9) — not rates, not contracting details, not its name or type. */
 const hotelFormFieldLabels = [
   { key: "address", label: "Address" },
   { key: "city", label: "City" },
@@ -128,7 +128,6 @@ const hotelFormFieldLabels = [
   { key: "checkInTime", label: "Check-in time" },
   { key: "checkOutTime", label: "Check-out time" },
   ...propertyServiceFields.map(({ key, label }) => ({ key, label })),
-  ...contractingFields.map(({ key, label }) => ({ key, label })),
 ] as const;
 type HotelFormTextKey = (typeof hotelFormFieldLabels)[number]["key"];
 const hotelFormTextKeys = hotelFormFieldLabels.map((field) => field.key) as HotelFormTextKey[];
@@ -663,7 +662,6 @@ export const propertyRouter = createTRPCRouter({
       };
       const isEmail = (value: string) => !value.trim() || /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(value.trim());
       if (!isEmail(input.values.generalEmail)) throw new TRPCError({ code: "BAD_REQUEST", message: "The general email does not look right." });
-      if (!isEmail(input.values.contractEmail)) throw new TRPCError({ code: "BAD_REQUEST", message: "The email address for contracts does not look right." });
       const contacts = input.contacts.filter((contact) => contact.name.trim());
       if (contacts.some((contact) => !isEmail(contact.email))) throw new TRPCError({ code: "BAD_REQUEST", message: "One of the contacts' email addresses does not look right." });
       const yearBuilt = number(input.yearBuilt, "The year it was built");

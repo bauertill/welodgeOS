@@ -457,7 +457,7 @@ export function HotelDetailsLink({ property, bare = false }: { property: Propert
     const body = [
       "Hello,",
       "",
-      `To prepare our work together, could you please check and complete ${name}'s details on this page — your room categories and sizes, amenities, services, who we should talk to, and the contracting details:`,
+      `To prepare our work together, could you please check and complete ${name}'s details on this page — your room categories and sizes, amenities, services and who we should talk to:`,
       "",
       target,
       "",
@@ -478,7 +478,7 @@ export function HotelDetailsLink({ property, bare = false }: { property: Propert
           ? `The hotel sent its details on ${formatDate(property.contractingSubmittedAt)}. `
           : link
             ? "The hotel has a link to its form and has not sent it yet. "
-            : "A private link to a form where the hotel checks and completes its details — rooms, sizes, amenities, services, contacts and contracting; not rates. No account needed; what it sends lands here. "}
+            : "A private link to a form where the hotel checks and completes its details — rooms, sizes, amenities, services and contacts; not rates or contracting details. No account needed; what it sends lands here. "}
         {!to && "No email is known for the hotel — add one under Contacts, or copy the link."}
       </p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">

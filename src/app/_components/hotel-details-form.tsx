@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input } from "~/app/_components/form";
 import { Card } from "~/app/_components/ui";
-import { contractingFields, propertyServiceFields } from "~/lib/contracting";
+import { propertyServiceFields } from "~/lib/contracting";
 import { formatMomentInWords } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -14,7 +14,6 @@ type Key = keyof Values;
 type Category = Omit<Form["categories"][number], "id"> & { id?: string };
 type Contact = Form["contacts"][number];
 
-const contractingLabel = Object.fromEntries(contractingFields.map((field) => [field.key, field.label])) as Record<string, string>;
 const aboutFields: { key: Key; label: string; placeholder?: string; wide?: boolean }[] = [
   { key: "address", label: "Address", placeholder: "Street and number", wide: true },
   { key: "city", label: "City" },
@@ -26,25 +25,14 @@ const aboutFields: { key: Key; label: string; placeholder?: string; wide?: boole
   { key: "checkInTime", label: "Check-in time", placeholder: "15:00" },
   { key: "checkOutTime", label: "Check-out time", placeholder: "11:00" },
 ];
-const contractingGroups: { title: string; hint?: string; fields: { key: Key; placeholder?: string; wide?: boolean }[] }[] = [
-  {
-    title: "Company",
-    fields: [{ key: "tradeName", placeholder: "The company's registered name", wide: true }, { key: "vatNumber" }, { key: "registrationNumber" }],
-  },
-  { title: "Bank details", hint: "Where we pay you.", fields: [{ key: "iban", wide: true }, { key: "bic" }] },
-  {
-    title: "Who signs",
-    fields: [{ key: "signatoryName" }, { key: "signatoryTitle", placeholder: "General Manager" }, { key: "contractEmail", placeholder: "contracts@hotel.com", wide: true }],
-  },
-];
 const emptyCategory = (): Category => ({ name: "", unitCount: "", capacity: "2", bedConfiguration: "", bedrooms: "", bathrooms: "", size: "", notes: "" });
 const emptyContact = (): Contact => ({ name: "", role: "", email: "", phone: "" });
 
 /**
  * The page a hotel opens from its private link (doc §3.9): everything we keep
- * about the property except rates — the property, its room categories,
- * amenities, services, the people to talk to and the contracting details —
- * filled with what we already have, sent straight to the property.
+ * about the property but rates and contracting details — the property, its
+ * room categories, amenities, services and the people to talk to — filled
+ * with what we already have, sent straight to the property.
  */
 export function HotelDetailsForm({ token }: { token: string }) {
   const form = api.property.detailsForm.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
@@ -91,7 +79,7 @@ export function HotelDetailsForm({ token }: { token: string }) {
   const text = (key: Key, label: string, placeholder?: string, wide?: boolean) => (
     <Field key={key} label={label} className={wide ? "sm:col-span-2" : ""}>
       <Input
-        type={key === "generalEmail" || key === "contractEmail" ? "email" : "text"}
+        type={key === "generalEmail" ? "email" : "text"}
         value={values[key]}
         onChange={(e) => set(key, e.target.value)}
         placeholder={placeholder}
@@ -244,20 +232,6 @@ export function HotelDetailsForm({ token }: { token: string }) {
           <button type="button" onClick={() => setContacts([...contacts, emptyContact()])} className="text-brand-700 text-[13px] font-light hover:underline">
             + Add a person
           </button>
-        </div>
-      </Card>
-
-      <Card>
-        <h2 className="text-ink-900 text-[15px] font-medium">Contracting details</h2>
-        <p className="text-ink-500 mb-3 text-xs font-light">The company our agreement is signed with.</p>
-        <div className="space-y-5">
-          {contractingGroups.map((group) => (
-            <div key={group.title}>
-              <h3 className="text-ink-700 text-[13px] font-medium">{group.title}</h3>
-              {group.hint && <p className="text-ink-500 text-xs font-light">{group.hint}</p>}
-              <div className="mt-2 grid gap-4 sm:grid-cols-2">{group.fields.map((field) => text(field.key, contractingLabel[field.key]!, field.placeholder, field.wide))}</div>
-            </div>
-          ))}
         </div>
       </Card>
 
