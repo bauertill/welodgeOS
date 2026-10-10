@@ -13,7 +13,6 @@ import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea
 import { MentionTextarea } from "~/app/_components/mention-textarea";
 import { Popup } from "~/app/_components/popup";
 import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
-import { HotelDetailsLink } from "~/app/_components/property-cards";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { SourcingPanel } from "~/app/_components/sourcing-panel";
 import { Initials } from "~/app/_components/property-groups";
@@ -866,7 +865,9 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
             <SourcingPanel salesRequestId={t.salesRequest!.id} />
           </div>
         )}
+        {/* The hotel contact task, step by step (doc §4.11): call, email the request, gather. */}
         {hotelContact && <PropertyContactDetails propertyId={t.property!.id} eventId={t.event!.id} />}
+        {hotelContact && <EmailTheHotel propertyId={t.property!.id} salesRequestId={t.salesRequest?.id ?? null} eventName={t.event!.name} />}
         {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Comments</h2>
@@ -882,7 +883,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
               Edit
             </button>
           </div>
-          {sourcing ? (
+          {sourcing || (hotelContact && t.salesRequest) ? (
             <ClientRequest salesRequestId={t.salesRequest!.id} />
           ) : (
             t.details &&
@@ -1023,7 +1024,9 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
   return (
     <div className="border-ink-200/60 rounded-xl border bg-white p-5">
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-ink-900 text-[15px] font-medium">Contact details</h2>
+        <StepTitle step={1} hint="Their details, kept on the property">
+          Call the hotel
+        </StepTitle>
         {!editing && (
           <span className="flex items-center gap-4">
             {(!r.phone || !r.email || !r.website) && (
@@ -1141,20 +1144,149 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
               </a>
             </p>
           )}
-          <div className="border-ink-200/60 mt-4 border-t pt-3">
-            <HotelFormOnTask propertyId={propertyId} />
-          </div>
+
         </>
       )}
     </div>
   );
 }
 
-/** The hotel's own details form, on its contact task: send it, or see that it came back. */
-function HotelFormOnTask({ propertyId }: { propertyId: string }) {
+/** A step's heading on the hotel contact task: its number, what to do, and a word on it. */
+function StepTitle({ step, hint, children }: { step: number; hint?: string; children: React.ReactNode }) {
+  return (
+    <h2 className="text-ink-900 flex items-baseline gap-2 text-[15px] font-medium">
+      <span className="bg-brand-400 inline-flex h-5 w-5 shrink-0 translate-y-[-1px] items-center justify-center self-center rounded-full text-[11px] font-semibold text-white">
+        {step}
+      </span>
+      {children}
+      {hint && <span className="text-ink-500 text-xs font-light">{hint}</span>}
+    </h2>
+  );
+}
+
+/**
+ * Step 2 of a hotel contact task (doc §4.11): after the call, the hotel
+ * usually asks for the request by email. This writes it — the units, dates
+ * and places asked for, never the client's name or budget — with the link to
+ * the hotel's own details form, and opens it in your own mailbox.
+ */
+function EmailTheHotel({ propertyId, salesRequestId, eventName }: { propertyId: string; salesRequestId: string | null; eventName: string }) {
+  const utils = api.useUtils();
   const property = api.property.byId.useQuery({ id: propertyId });
-  if (!property.data) return null;
-  return <HotelDetailsLink property={property.data} />;
+  const request = api.sales.byId.useQuery({ id: salesRequestId ?? "" }, { enabled: Boolean(salesRequestId) });
+  const me = api.user.me.useQuery();
+  const [origin, setOrigin] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => setOrigin(window.location.origin), []);
+  const make = api.property.makeContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
+  const off = api.property.switchOffContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
+  const p = property.data;
+  if (!p) return null;
+
+  const linkFor = (token: string | null | undefined) => (token ? `${origin}/property-details/${token}` : null);
+  const link = linkFor(p.contractingToken);
+  const to = [p.generalEmail, ...p.contacts.map((contact) => contact.email), p.contractEmail].find((email) => email?.trim()) ?? "";
+  const greeting = p.contacts[0]?.name ? `Dear ${p.contacts[0].name.split(" ")[0]},` : "Hello,";
+  const r = request.data;
+  const lines = (r?.lines ?? []).map(
+    (line) =>
+      `• ${line.rooms} × ${line.roomType ?? "units"}${
+        line.checkIn && line.checkOut
+          ? `, ${formatRange(line.checkIn, line.checkOut)} (${nightsBetween(line.checkIn, line.checkOut)} nights)`
+          : line.checkIn
+            ? `, from ${formatDate(line.checkIn)}`
+            : ""
+      }`,
+  );
+  const places = r ? ([...r.closeTo.map((place) => place.name), ...r.closeToPoints.map((point) => point.label), r.closeToOther].filter(Boolean) as string[]) : [];
+  const subject = `Accommodation request — ${eventName} — ${p.name}`;
+  const body = (target: string | null) =>
+    [
+      greeting,
+      "",
+      `Thank you for your time. As discussed, here is our accommodation request for ${eventName}:`,
+      "",
+      ...(lines.length ? lines : ["• (the rooms and dates we spoke about)"]),
+      ...(places.length ? ["", `Ideally close to: ${places.join(", ")}`] : []),
+      "",
+      "Could you let us know your availability and rates for these dates?",
+      ...(target
+        ? ["", `To help us prepare, please also check and complete ${p.name}'s details here — rooms, sizes, amenities and contacts; no account needed:`, target]
+        : []),
+      "",
+      "Thank you, and kind regards,",
+      me.data?.name ?? "",
+      "We Lodge",
+    ].join("\n");
+
+  // The link is made the first time it is needed, so the email always carries one.
+  const withLink = (then: (target: string) => void) => {
+    if (link) then(link);
+    else make.mutate({ id: propertyId }, { onSuccess: (made) => then(linkFor(made.contractingToken)!) });
+  };
+
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <StepTitle step={2} hint="When they ask for it in writing">
+        Email them the request
+      </StepTitle>
+      <pre className="bg-ink-50/60 text-ink-700 mt-3 max-h-56 overflow-y-auto rounded-lg px-3 py-2.5 font-sans text-[13px] font-light whitespace-pre-wrap">
+        {body(link ?? "(the link to their details form is added when you send it)")}
+      </pre>
+      {!to && <p className="text-ink-500 mt-2 text-xs font-light">No email is known for the hotel — add one in step 1, or copy the email.</p>}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
+        <button
+          type="button"
+          disabled={make.isPending}
+          onClick={() =>
+            withLink((target) => {
+              window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body(target))}`;
+            })
+          }
+          className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 font-medium text-white disabled:opacity-60"
+        >
+          {make.isPending ? "Preparing…" : "Email the request to the hotel"}
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            withLink((target) => {
+              void navigator.clipboard.writeText(`${subject}\n\n${body(target)}`).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            })
+          }
+          className="text-brand-700 font-light hover:underline"
+        >
+          {copied ? "Copied" : "Copy the email"}
+        </button>
+      </div>
+      <p className="text-ink-500 mt-3 text-xs font-light">
+        {p.contractingSubmittedAt
+          ? `The hotel sent its details through the form on ${formatDate(p.contractingSubmittedAt)}. `
+          : link
+            ? "The hotel's details form is out, not sent back yet. "
+            : "The email carries a link to a form where the hotel checks and completes its details — not rates. "}
+        {link && (
+          <>
+            <a href={link} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+              See what the hotel sees ↗
+            </a>
+            {" · "}
+            <button
+              type="button"
+              onClick={() => window.confirm("Switch the link off? It will open nothing any more; what the hotel sent stays.") && off.mutate({ id: propertyId })}
+              className="text-[#c03654] hover:underline"
+            >
+              Switch the link off
+            </button>
+          </>
+        )}
+      </p>
+      {make.error && <FormError message={friendlyError(make.error)} />}
+    </div>
+  );
 }
 
 /**
@@ -1195,7 +1327,7 @@ function HotelContactChecklist({ propertyId, propertyName, eventId, eventName }:
   return (
     <div className="border-ink-200/60 rounded-xl border bg-white p-5">
       <div className="mb-1 flex items-baseline justify-between gap-3">
-        <h2 className="text-ink-900 text-[15px] font-medium">What to find out</h2>
+        <StepTitle step={3}>What to find out</StepTitle>
         {g && (
           <span className="text-ink-500 text-xs font-light">
             {done} of {g.items.length} in

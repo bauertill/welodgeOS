@@ -1770,7 +1770,26 @@ the contract.
   event's accommodation managers (or, with none set, to whoever added it), asked by whoever
   added it, linked to the property, the event, the client and the sales request; the
   managers are told (§2.9). One open task per property and event. Its point is to reach
-  out to the property and gather what we need. Its page starts with the property's
+  out to the property and gather what we need. **Its page follows the work** (2026-10-10):
+  on the right, beside its details, **what the client asked** — read from the sales request,
+  as on the sourcing task — so whoever calls the hotel knows what for; on the left, three
+  numbered steps:
+
+  1. **Call the hotel** — its contact details, below.
+  2. **Email them the request** — after the call the hotel usually asks for it in writing.
+     The email is shown as it will go: a greeting (the first contact's first name, if
+     known), the request for the event — each line's units, type, dates and nights, and
+     what to be close to — asking for availability and rates, and the link to the hotel's
+     own details form (§3.9), made the first time it is needed. **The client's name and
+     budget are never in it.** *Email the request to the hotel* opens it in your own
+     mailbox, addressed to the hotel's general email, else its first contact's, else its
+     email for contracts; *Copy the email* copies subject and text instead. Beneath, whether
+     the hotel's form is out or came back, *See what the hotel sees* and *Switch the link off*.
+  3. **What to find out** — the checklist below, with *Hotel details*, *Quotations* and the
+     terms.
+
+  A contact task made from the event's map has no request, so its email asks for
+  availability for the event without listing rooms and dates. Its page starts with the property's
   **contact details** — phone, email, website, address and the people there — always shown,
   with links to look it up on Google and Google Maps while something is missing. **A
   detail not known yet is a box to type it straight into** (2026-10-04) — saved on Enter or
