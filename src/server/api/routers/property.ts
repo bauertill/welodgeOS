@@ -154,6 +154,179 @@ function cleaned<T extends { providerId?: string | null }>(property: T): T & { p
   };
 }
 
+// --- The hotel details form (doc §3.9, §4.11) --------------------------------
+// One form, two ways in: the hotel by its link (no rates, no contracting
+// details), and the team in a popup on the hotel contact task (contracting
+// details too). Both save the same way.
+
+const formInclude = {
+  categories: { orderBy: { sortOrder: "asc" } },
+  amenities: { select: { id: true } },
+  contacts: { orderBy: { name: "asc" } },
+} satisfies Prisma.PropertyInclude;
+type FormProperty = Prisma.PropertyGetPayload<{ include: typeof formInclude }>;
+
+const applyInclude = { categories: true, amenities: { select: { id: true, label: true } }, contacts: true } satisfies Prisma.PropertyInclude;
+type ApplyProperty = Prisma.PropertyGetPayload<{ include: typeof applyInclude }>;
+
+type ContractingKey = (typeof contractingFields)[number]["key"];
+
+async function detailsFormData(db: Prisma.TransactionClient, property: FormProperty, contracting: boolean) {
+  const amenities = await db.amenity.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
+  const record = property as unknown as Record<string, unknown>;
+  const text = (key: string) => (record[key] as string | null) ?? "";
+  return {
+    propertyName: property.name,
+    type: property.type,
+    submittedAt: property.contractingSubmittedAt,
+    values: Object.fromEntries(hotelFormTextKeys.map((key) => [key, text(key)])) as Record<HotelFormTextKey, string>,
+    contracting: contracting ? (Object.fromEntries(contractingFields.map(({ key }) => [key, text(key)])) as Record<ContractingKey, string>) : null,
+    yearBuilt: property.yearBuilt ? String(property.yearBuilt) : "",
+    categories: property.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      unitCount: String(category.unitCount || ""),
+      capacity: String(category.capacity),
+      bedConfiguration: category.bedConfiguration ?? "",
+      bedrooms: category.bedrooms === null ? "" : String(category.bedrooms),
+      bathrooms: category.bathrooms === null ? "" : String(category.bathrooms),
+      size: category.size ?? "",
+      notes: category.notes ?? "",
+    })),
+    amenityIds: property.amenities.map((amenity) => amenity.id),
+    amenities,
+    contacts: property.contacts.map((contact) => ({ name: contact.name, role: contact.role ?? "", email: contact.email ?? "", phone: contact.phone ?? "" })),
+  };
+}
+
+const detailsInput = z.object({
+  values: z.object(Object.fromEntries(hotelFormTextKeys.map((key) => [key, z.string().max(2000)])) as Record<HotelFormTextKey, z.ZodString>),
+  /** The team's only. */
+  contracting: z
+    .object(Object.fromEntries(contractingFields.map(({ key }) => [key, z.string().max(2000)])) as Record<ContractingKey, z.ZodString>)
+    .nullable()
+    .optional(),
+  yearBuilt: z.string().max(10),
+  categories: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        name: z.string().trim().max(200),
+        unitCount: z.string().max(10),
+        capacity: z.string().max(10),
+        bedConfiguration: z.string().max(200),
+        bedrooms: z.string().max(10),
+        bathrooms: z.string().max(10),
+        size: z.string().max(200),
+        notes: z.string().max(2000),
+      }),
+    )
+    .max(60),
+  amenityIds: z.array(z.string()).max(200),
+  contacts: z.array(z.object({ name: z.string().max(200), role: z.string().max(200), email: z.string().max(300), phone: z.string().max(100) })).max(30),
+});
+
+/** Writes the form onto the property: every change in its Log. Room categories are changed or added, never removed. */
+async function applyDetails(
+  tx: Prisma.TransactionClient,
+  before: ApplyProperty,
+  input: z.infer<typeof detailsInput>,
+  options: { actorId: string | null; summary: string; contracting: boolean },
+) {
+  const number = (value: string, label: string, decimal = false) => {
+    const trimmed = value.trim().replace(",", ".");
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 0 || (!decimal && !Number.isInteger(parsed))) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `${label} should be a number.` });
+    }
+    return parsed;
+  };
+  const isEmail = (value: string) => !value.trim() || /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(value.trim());
+  if (!isEmail(input.values.generalEmail)) throw new TRPCError({ code: "BAD_REQUEST", message: "The general email does not look right." });
+  const contracting = options.contracting ? input.contracting : null;
+  if (contracting && !isEmail(contracting.contractEmail)) throw new TRPCError({ code: "BAD_REQUEST", message: "The email address for contracts does not look right." });
+  const contacts = input.contacts.filter((contact) => contact.name.trim());
+  if (contacts.some((contact) => !isEmail(contact.email))) throw new TRPCError({ code: "BAD_REQUEST", message: "One of the contacts' email addresses does not look right." });
+  const yearBuilt = number(input.yearBuilt, "The year it was built");
+  if (yearBuilt !== null && (yearBuilt < 1000 || yearBuilt > 2100)) throw new TRPCError({ code: "BAD_REQUEST", message: "The year it was built does not look right." });
+
+  // The property itself.
+  const after = await tx.property.update({
+    where: { id: before.id },
+    data: {
+      ...Object.fromEntries(hotelFormTextKeys.map((key) => [key, blank(input.values[key])])),
+      ...(contracting ? Object.fromEntries(contractingFields.map(({ key }) => [key, blank(contracting[key])])) : {}),
+      yearBuilt,
+      ...(options.actorId === null ? { contractingSubmittedAt: new Date() } : {}),
+    },
+  });
+  const fieldChanges = diffFields(
+    before as unknown as Record<string, unknown>,
+    { ...after, yearBuilt } as unknown as Record<string, unknown>,
+    [...hotelFormFieldLabels, ...(contracting ? contractingFields : []), { key: "yearBuilt", label: "Year built" }],
+  );
+
+  // Room categories: those sent with an id are changed, the others added; none is removed.
+  const notes: string[] = [];
+  const hotel = before.type === "HOTEL";
+  let order = Math.max(-1, ...before.categories.map((category) => category.sortOrder));
+  for (const sent of input.categories) {
+    if (!sent.name) continue;
+    const data = {
+      name: sent.name,
+      unitCount: number(sent.unitCount, `The rooms of "${sent.name}"`) ?? 0,
+      capacity: Math.max(1, number(sent.capacity, `How many "${sent.name}" sleeps`) ?? 2),
+      bedConfiguration: hotel ? blank(sent.bedConfiguration) : null,
+      bedrooms: hotel ? null : number(sent.bedrooms, `The bedrooms of "${sent.name}"`),
+      bathrooms: hotel ? null : number(sent.bathrooms, `The bathrooms of "${sent.name}"`, true),
+      size: blank(sent.size),
+      notes: blank(sent.notes),
+    };
+    const existing = sent.id ? before.categories.find((category) => category.id === sent.id) : undefined;
+    if (existing) {
+      const highest = await tx.roomSlot.findFirst({ where: { categoryId: existing.id }, orderBy: { slotNumber: "desc" }, select: { slotNumber: true } });
+      if (highest && data.unitCount < highest.slotNumber) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `"${existing.name}" cannot go below ${highest.slotNumber} rooms — rooms up to #${highest.slotNumber} are in inventory.` });
+      }
+      const changed = (Object.keys(data) as (keyof typeof data)[]).filter((key) => (existing[key] ?? null) !== (data[key] ?? null));
+      if (changed.length) {
+        await tx.roomCategory.update({ where: { id: existing.id }, data });
+        notes.push(`Room category changed: ${data.name}`);
+      }
+    } else {
+      order += 1;
+      await tx.roomCategory.create({ data: { ...data, propertyId: before.id, sortOrder: order } });
+      notes.push(`Room category added: ${data.name} (${data.unitCount} rooms)`);
+    }
+  }
+
+  // Amenities, as ticked.
+  const known = new Set((await tx.amenity.findMany({ where: { id: { in: input.amenityIds } }, select: { id: true } })).map((amenity) => amenity.id));
+  const ticked = input.amenityIds.filter((id) => known.has(id));
+  const had = new Set(before.amenities.map((amenity) => amenity.id));
+  if (ticked.length !== had.size || ticked.some((id) => !had.has(id))) {
+    await tx.property.update({ where: { id: before.id }, data: { amenities: { set: ticked.map((id) => ({ id })) } } });
+    notes.push(`Amenities: ${ticked.length} ticked`);
+  }
+
+  // Contacts, as sent.
+  const contactKey = (contact: { name: string; role: string | null; email: string | null; phone: string | null }) =>
+    [contact.name, contact.role ?? "", contact.email ?? "", contact.phone ?? ""].map((part) => part.trim()).join("|");
+  const sentContacts = contacts.map((contact) => ({ name: contact.name.trim(), role: blank(contact.role), email: blank(contact.email), phone: blank(contact.phone) }));
+  if (sentContacts.map(contactKey).sort().join("\n") !== before.contacts.map(contactKey).sort().join("\n")) {
+    await tx.propertyContact.deleteMany({ where: { propertyId: before.id } });
+    if (sentContacts.length) await tx.propertyContact.createMany({ data: sentContacts.map((contact) => ({ ...contact, propertyId: before.id })) });
+    notes.push(`Contacts: ${sentContacts.map((contact) => contact.name).join(", ") || "none"}`);
+  }
+
+  const changes = [fieldChanges, ...notes].filter(Boolean).join("\n");
+  // The team saving an unchanged form leaves no trace; the hotel sending one is still worth a line.
+  if (changes || options.actorId === null) {
+    await logAudit(tx, { actorId: options.actorId, entity: "Property", entityId: before.id, summary: options.summary, changes: changes || "Nothing changed" });
+  }
+}
+
 export const propertyRouter = createTRPCRouter({
   /** Just names, for duplicate detection — a property list is too heavy to fetch on every keystroke. */
   listNames: protectedProcedure.query(({ ctx }) =>
@@ -582,42 +755,19 @@ export const propertyRouter = createTRPCRouter({
 
   /**
    * The hotel's own form, by its link only (doc §3.9): everything we keep
-   * about the property except rates — to check, correct or complete.
+   * about the property but rates and contracting details — to check, correct
+   * or complete.
    */
   detailsForm: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
-    const property = await ctx.db.property.findUnique({
-      where: { contractingToken: input.token },
-      include: {
-        categories: { orderBy: { sortOrder: "asc" } },
-        amenities: { select: { id: true } },
-        contacts: { orderBy: { name: "asc" } },
-      },
-    });
+    const property = await ctx.db.property.findUnique({ where: { contractingToken: input.token }, include: formInclude });
     if (!property) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-    const amenities = await ctx.db.amenity.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
-    const record = property as unknown as Record<string, unknown>;
-    const text = (key: string) => (record[key] as string | null) ?? "";
-    return {
-      propertyName: property.name,
-      type: property.type,
-      submittedAt: property.contractingSubmittedAt,
-      values: Object.fromEntries(hotelFormTextKeys.map((key) => [key, text(key)])) as Record<HotelFormTextKey, string>,
-      yearBuilt: property.yearBuilt ? String(property.yearBuilt) : "",
-      categories: property.categories.map((category) => ({
-        id: category.id,
-        name: category.name,
-        unitCount: String(category.unitCount || ""),
-        capacity: String(category.capacity),
-        bedConfiguration: category.bedConfiguration ?? "",
-        bedrooms: category.bedrooms === null ? "" : String(category.bedrooms),
-        bathrooms: category.bathrooms === null ? "" : String(category.bathrooms),
-        size: category.size ?? "",
-        notes: category.notes ?? "",
-      })),
-      amenityIds: property.amenities.map((amenity) => amenity.id),
-      amenities,
-      contacts: property.contacts.map((contact) => ({ name: contact.name, role: contact.role ?? "", email: contact.email ?? "", phone: contact.phone ?? "" })),
-    };
+    return detailsFormData(ctx.db, property, false);
+  }),
+
+  /** The same form for the team, in a popup on the hotel contact task — contracting details included. */
+  teamDetailsForm: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const property = await ctx.db.property.findUniqueOrThrow({ where: { id: input.id }, include: formInclude });
+    return detailsFormData(ctx.db, property, true);
   }),
 
   /**
@@ -625,141 +775,31 @@ export const propertyRouter = createTRPCRouter({
    * changed or added (never removed), amenities and contacts as sent — every
    * change in its Log, and whoever sent the link is told.
    */
-  submitDetails: publicProcedure
-    .input(
-      z.object({
-        token: z.string().min(20).max(100),
-        values: z.object(Object.fromEntries(hotelFormTextKeys.map((key) => [key, z.string().max(2000)])) as Record<HotelFormTextKey, z.ZodString>),
-        yearBuilt: z.string().max(10),
-        categories: z
-          .array(
-            z.object({
-              id: z.string().optional(),
-              name: z.string().trim().max(200),
-              unitCount: z.string().max(10),
-              capacity: z.string().max(10),
-              bedConfiguration: z.string().max(200),
-              bedrooms: z.string().max(10),
-              bathrooms: z.string().max(10),
-              size: z.string().max(200),
-              notes: z.string().max(2000),
-            }),
-          )
-          .max(60),
-        amenityIds: z.array(z.string()).max(200),
-        contacts: z.array(z.object({ name: z.string().max(200), role: z.string().max(200), email: z.string().max(300), phone: z.string().max(100) })).max(30),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const number = (value: string, label: string, decimal = false) => {
-        const trimmed = value.trim().replace(",", ".");
-        if (!trimmed) return null;
-        const parsed = Number(trimmed);
-        if (!Number.isFinite(parsed) || parsed < 0 || (!decimal && !Number.isInteger(parsed))) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `${label} should be a number.` });
-        }
-        return parsed;
-      };
-      const isEmail = (value: string) => !value.trim() || /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(value.trim());
-      if (!isEmail(input.values.generalEmail)) throw new TRPCError({ code: "BAD_REQUEST", message: "The general email does not look right." });
-      const contacts = input.contacts.filter((contact) => contact.name.trim());
-      if (contacts.some((contact) => !isEmail(contact.email))) throw new TRPCError({ code: "BAD_REQUEST", message: "One of the contacts' email addresses does not look right." });
-      const yearBuilt = number(input.yearBuilt, "The year it was built");
-      if (yearBuilt !== null && (yearBuilt < 1000 || yearBuilt > 2100)) throw new TRPCError({ code: "BAD_REQUEST", message: "The year it was built does not look right." });
-
-      await ctx.db.$transaction(async (tx) => {
-        const before = await tx.property.findUnique({
-          where: { contractingToken: input.token },
-          include: { categories: true, amenities: { select: { id: true, label: true } }, contacts: true },
-        });
-        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-
-        // The property itself.
-        const after = await tx.property.update({
-          where: { id: before.id },
-          data: {
-            ...Object.fromEntries(hotelFormTextKeys.map((key) => [key, blank(input.values[key])])),
-            yearBuilt,
-            contractingSubmittedAt: new Date(),
-          },
-        });
-        const fieldChanges = diffFields(
-          before as unknown as Record<string, unknown>,
-          { ...after, yearBuilt } as unknown as Record<string, unknown>,
-          [...hotelFormFieldLabels, { key: "yearBuilt", label: "Year built" }],
-        );
-
-        // Room categories: those sent with an id are changed, the others added; none is removed.
-        const notes: string[] = [];
-        const hotel = before.type === "HOTEL";
-        let order = Math.max(-1, ...before.categories.map((category) => category.sortOrder));
-        for (const sent of input.categories) {
-          if (!sent.name) continue;
-          const data = {
-            name: sent.name,
-            unitCount: number(sent.unitCount, `The rooms of "${sent.name}"`) ?? 0,
-            capacity: Math.max(1, number(sent.capacity, `How many "${sent.name}" sleeps`) ?? 2),
-            bedConfiguration: hotel ? blank(sent.bedConfiguration) : null,
-            bedrooms: hotel ? null : number(sent.bedrooms, `The bedrooms of "${sent.name}"`),
-            bathrooms: hotel ? null : number(sent.bathrooms, `The bathrooms of "${sent.name}"`, true),
-            size: blank(sent.size),
-            notes: blank(sent.notes),
-          };
-          const existing = sent.id ? before.categories.find((category) => category.id === sent.id) : undefined;
-          if (existing) {
-            const highest = await tx.roomSlot.findFirst({ where: { categoryId: existing.id }, orderBy: { slotNumber: "desc" }, select: { slotNumber: true } });
-            if (highest && data.unitCount < highest.slotNumber) {
-              throw new TRPCError({ code: "BAD_REQUEST", message: `"${existing.name}" cannot go below ${highest.slotNumber} rooms — please contact We Lodge to change it.` });
-            }
-            const changed = (Object.keys(data) as (keyof typeof data)[]).filter((key) => (existing[key] ?? null) !== (data[key] ?? null));
-            if (changed.length) {
-              await tx.roomCategory.update({ where: { id: existing.id }, data });
-              notes.push(`Room category changed: ${data.name}`);
-            }
-          } else {
-            order += 1;
-            await tx.roomCategory.create({ data: { ...data, propertyId: before.id, sortOrder: order } });
-            notes.push(`Room category added: ${data.name} (${data.unitCount} rooms)`);
-          }
-        }
-
-        // Amenities, as ticked.
-        const known = new Set((await tx.amenity.findMany({ where: { id: { in: input.amenityIds } }, select: { id: true } })).map((amenity) => amenity.id));
-        const ticked = input.amenityIds.filter((id) => known.has(id));
-        const had = new Set(before.amenities.map((amenity) => amenity.id));
-        if (ticked.length !== had.size || ticked.some((id) => !had.has(id))) {
-          await tx.property.update({ where: { id: before.id }, data: { amenities: { set: ticked.map((id) => ({ id })) } } });
-          notes.push(`Amenities: ${ticked.length} ticked`);
-        }
-
-        // Contacts, as sent.
-        const contactKey = (contact: { name: string; role: string | null; email: string | null; phone: string | null }) =>
-          [contact.name, contact.role ?? "", contact.email ?? "", contact.phone ?? ""].map((part) => part.trim()).join("|");
-        const sentContacts = contacts.map((contact) => ({ name: contact.name.trim(), role: blank(contact.role), email: blank(contact.email), phone: blank(contact.phone) }));
-        if (sentContacts.map(contactKey).sort().join("\n") !== before.contacts.map(contactKey).sort().join("\n")) {
-          await tx.propertyContact.deleteMany({ where: { propertyId: before.id } });
-          if (sentContacts.length) await tx.propertyContact.createMany({ data: sentContacts.map((contact) => ({ ...contact, propertyId: before.id })) });
-          notes.push(`Contacts: ${sentContacts.map((contact) => contact.name).join(", ") || "none"}`);
-        }
-
-        await logAudit(tx, {
-          actorId: null,
-          entity: "Property",
-          entityId: before.id,
-          summary: "Details sent by the hotel, through its form",
-          changes: [fieldChanges, ...notes].filter(Boolean).join("\n") || "Nothing changed",
-        });
-        await notify(tx, {
-          to: [before.contractingLinkMadeById],
-          actorId: null,
-          kind: "PROPERTY_CONTRACTING_SENT",
-          title: `${before.name} sent its details`,
-          link: `/properties/${before.id}`,
-        });
+  submitDetails: publicProcedure.input(detailsInput.extend({ token: z.string().min(20).max(100) })).mutation(async ({ ctx, input }) => {
+    await ctx.db.$transaction(async (tx) => {
+      const before = await tx.property.findUnique({ where: { contractingToken: input.token }, include: applyInclude });
+      if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+      await applyDetails(tx, before, input, { actorId: null, summary: "Details sent by the hotel, through its form", contracting: false });
+      await notify(tx, {
+        to: [before.contractingLinkMadeById],
+        actorId: null,
+        kind: "PROPERTY_CONTRACTING_SENT",
+        title: `${before.name} sent its details`,
+        link: `/properties/${before.id}`,
       });
-      await deliverImmediate(ctx.db);
-      return { ok: true };
-    }),
+    });
+    await deliverImmediate(ctx.db);
+    return { ok: true };
+  }),
+
+  /** The team saves the same form, from the hotel contact task. */
+  saveDetails: protectedProcedure.input(detailsInput.extend({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.$transaction(async (tx) => {
+      const before = await tx.property.findUniqueOrThrow({ where: { id: input.id }, include: applyInclude });
+      await applyDetails(tx, before, input, { actorId: ctx.session.user.id, summary: "Details updated with the hotel details form", contracting: true });
+    });
+    return { ok: true };
+  }),
 
   /** Fill in its phone, email and website from Google Maps and its own website, where empty (doc §4.11). */
   findContacts: protectedProcedure

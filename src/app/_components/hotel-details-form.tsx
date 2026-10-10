@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input } from "~/app/_components/form";
 import { Card } from "~/app/_components/ui";
-import { propertyServiceFields } from "~/lib/contracting";
+import { contractingFields, propertyServiceFields } from "~/lib/contracting";
 import { formatMomentInWords } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -13,6 +13,16 @@ type Values = Form["values"];
 type Key = keyof Values;
 type Category = Omit<Form["categories"][number], "id"> & { id?: string };
 type Contact = Form["contacts"][number];
+type Contracting = NonNullable<RouterOutputs["property"]["teamDetailsForm"]["contracting"]>;
+/** The hotel, by its private link; or the team, in a popup on the hotel contact task. */
+type Mode = { token: string; propertyId?: undefined; onSaved?: undefined } | { token?: undefined; propertyId: string; onSaved: () => void };
+
+const contractingGroups: { title: string; fields: { key: keyof Contracting; placeholder?: string; wide?: boolean }[] }[] = [
+  { title: "Company", fields: [{ key: "tradeName", placeholder: "The company's registered name", wide: true }, { key: "vatNumber" }, { key: "registrationNumber" }] },
+  { title: "Bank details", fields: [{ key: "iban", wide: true }, { key: "bic" }] },
+  { title: "Who signs", fields: [{ key: "signatoryName" }, { key: "signatoryTitle", placeholder: "General Manager" }, { key: "contractEmail", placeholder: "contracts@hotel.com", wide: true }] },
+];
+const contractingLabel = Object.fromEntries(contractingFields.map((field) => [field.key, field.label])) as Record<keyof Contracting, string>;
 
 const aboutFields: { key: Key; label: string; placeholder?: string; wide?: boolean }[] = [
   { key: "address", label: "Address", placeholder: "Street and number", wide: true },
@@ -29,13 +39,19 @@ const emptyCategory = (): Category => ({ name: "", unitCount: "", capacity: "2",
 const emptyContact = (): Contact => ({ name: "", role: "", email: "", phone: "" });
 
 /**
- * The page a hotel opens from its private link (doc §3.9): everything we keep
- * about the property but rates and contracting details — the property, its
- * room categories, amenities, services and the people to talk to — filled
- * with what we already have, sent straight to the property.
+ * A property's details in one form (doc §3.9, §4.11) — the property, its room
+ * categories, amenities, services and the people to talk to — filled with
+ * what we already have. The hotel opens it from its private link (no rates,
+ * no contracting details) and sends it; the team opens it in a popup on the
+ * hotel contact task, contracting details included, and saves it.
  */
-export function HotelDetailsForm({ token }: { token: string }) {
-  const form = api.property.detailsForm.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
+export function HotelDetailsForm(mode: Mode) {
+  const team = mode.propertyId !== undefined;
+  const byLink = api.property.detailsForm.useQuery({ token: mode.token ?? "" }, { enabled: !team, retry: false, refetchOnWindowFocus: false });
+  const forTeam = api.property.teamDetailsForm.useQuery({ id: mode.propertyId ?? "" }, { enabled: team, refetchOnWindowFocus: false });
+  const form = team ? forTeam : byLink;
+  const utils = api.useUtils();
+  const [contracting, setContracting] = useState<Contracting | null>(null);
   const [values, setValues] = useState<Values | null>(null);
   const [yearBuilt, setYearBuilt] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
@@ -46,6 +62,7 @@ export function HotelDetailsForm({ token }: { token: string }) {
   useEffect(() => {
     if (!form.data || values) return;
     setValues(form.data.values);
+    setContracting(form.data.contracting);
     setYearBuilt(form.data.yearBuilt);
     setCategories(form.data.categories.length ? form.data.categories : [emptyCategory()]);
     setAmenityIds(form.data.amenityIds);
@@ -58,8 +75,18 @@ export function HotelDetailsForm({ token }: { token: string }) {
       window.scrollTo({ top: 0 });
     },
   });
+  const save = api.property.saveDetails.useMutation({
+    onSuccess: () => {
+      void utils.property.invalidate();
+      void utils.task.invalidate();
+      mode.onSaved?.();
+    },
+  });
+  const pending = submit.isPending || save.isPending;
+  const error = submit.error ?? save.error;
 
   if (form.isLoading) return <p className="text-ink-500 text-sm font-light">Loading…</p>;
+  if (team && !form.data) return <p className="text-ink-500 text-sm font-light">{form.error ? friendlyError(form.error) : "Loading…"}</p>;
   if (form.error || !form.data) {
     return (
       <Card>
@@ -92,16 +119,20 @@ export function HotelDetailsForm({ token }: { token: string }) {
       className="space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
-        submit.mutate({ token, values, yearBuilt, categories, amenityIds, contacts });
+        const details = { values, yearBuilt, categories, amenityIds, contacts };
+        if (mode.propertyId !== undefined) save.mutate({ ...details, id: mode.propertyId, contracting });
+        else submit.mutate({ ...details, token: mode.token });
       }}
     >
-      <div>
-        <h1 className="text-ink-900 text-2xl font-semibold">{form.data.propertyName}</h1>
-        <p className="text-ink-500 mt-1 text-sm font-light">
-          Your property&apos;s details, as We Lodge has them — please check, correct and complete them. Rates are agreed separately. What you send
-          comes straight to your contact at We Lodge.
-        </p>
-      </div>
+      {!team && (
+        <div>
+          <h1 className="text-ink-900 text-2xl font-semibold">{form.data.propertyName}</h1>
+          <p className="text-ink-500 mt-1 text-sm font-light">
+            Your property&apos;s details, as We Lodge has them — please check, correct and complete them. Rates are agreed separately. What you send
+            comes straight to your contact at We Lodge.
+          </p>
+        </div>
+      )}
 
       {sent && (
         <p className="rounded-lg bg-[#e3f8ee] px-4 py-3 text-sm text-[#0a7a47]">
@@ -110,7 +141,9 @@ export function HotelDetailsForm({ token }: { token: string }) {
       )}
       {!sent && form.data.submittedAt && (
         <p className="bg-brand-50 text-brand-800 rounded-lg px-4 py-3 text-sm font-light">
-          You sent these {formatMomentInWords(form.data.submittedAt)}. Change anything that is wrong and send again.
+          {team
+            ? `The hotel sent its details ${formatMomentInWords(form.data.submittedAt)}.`
+            : `You sent these ${formatMomentInWords(form.data.submittedAt)}. Change anything that is wrong and send again.`}
         </p>
       )}
 
@@ -235,10 +268,36 @@ export function HotelDetailsForm({ token }: { token: string }) {
         </div>
       </Card>
 
-      <div className="space-y-2">
-        <FormError message={submit.error ? friendlyError(submit.error) : null} />
-        <Button type="submit" disabled={submit.isPending}>
-          {submit.isPending ? "Sending…" : form.data.submittedAt || sent ? "Send again" : "Send to We Lodge"}
+      {contracting && (
+        <Card>
+          <h2 className="text-ink-900 text-[15px] font-medium">Contracting details</h2>
+          <p className="text-ink-500 mb-3 text-xs font-light">The company our agreement is signed with — not on the hotel&apos;s own form.</p>
+          <div className="space-y-5">
+            {contractingGroups.map((group) => (
+              <div key={group.title}>
+                <h3 className="text-ink-700 text-[13px] font-medium">{group.title}</h3>
+                <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                  {group.fields.map((field) => (
+                    <Field key={field.key} label={contractingLabel[field.key]} className={field.wide ? "sm:col-span-2" : ""}>
+                      <Input
+                        type={field.key === "contractEmail" ? "email" : "text"}
+                        value={contracting[field.key]}
+                        onChange={(e) => setContracting({ ...contracting, [field.key]: e.target.value })}
+                        placeholder={field.placeholder}
+                      />
+                    </Field>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <div className={team ? "bg-ink-50 sticky bottom-0 -mx-6 -mb-6 space-y-2 border-t border-ink-200/60 px-6 py-3" : "space-y-2"} style={team ? { backgroundColor: "#f3f3f3" } : undefined}>
+        <FormError message={error ? friendlyError(error) : null} />
+        <Button type="submit" disabled={pending}>
+          {team ? (save.isPending ? "Saving…" : "Save the details") : submit.isPending ? "Sending…" : form.data.submittedAt || sent ? "Send again" : "Send to We Lodge"}
         </Button>
       </div>
     </form>

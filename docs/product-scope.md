@@ -948,7 +948,9 @@ by the hotel, through its form*, field by field and room category by room catego
 made the link is told (§2.9), and the hotel contact task's checklist ticks what came in. It
 can be corrected and sent again while the link is on; the section says when it was sent.
 Switching the link off makes it open nothing; what was sent stays. A link sent before
-2026-10-08 (`/contracting/hotel/…`) opens the new form.
+2026-10-08 (`/contracting/hotel/…`) opens the new form. *See what the hotel sees* opens the
+hotel's page for a look; the team fills the same form in from the hotel contact task
+(§4.11).
 
 **Providers — the chain or group.** A **provider** is the hotel chain or group a property
 belongs to — Marriott, Accor, a local apartment operator. It is its own record, entered once:
@@ -1804,9 +1806,10 @@ the contract.
   can be chosen) and a note for them — and **Create contact task** makes the same task, to
   that person, with the note as its first comment and in the notification they get. While
   one is open, the panel shows who has it and links to it instead.
-  **Hotel details** opens, in a popup over the task, all of the property's own sections —
-  room categories, where it is, more about it, contacts, amenities and contracting details —
-  each edited where it stands and saved on the property, so nobody leaves the task;
+  **Hotel details** opens, in a popup over the task, **the same form the hotel gets by its
+  link** (§3.9) — the property, room categories, amenities, services and contacts — with the
+  contracting details added for the team, filled with what we have; *Save the details*
+  saves it all on the property at once, every change in its Log, so nobody leaves the task;
   *Quotations* opens the property's page at its quotations; *Terms for {event}* opens its
   terms panel right there. Its *Contact details* card also holds the hotel's own form (§3.9). When all eight are in, the task says so — it is still marked
   done by hand. Adding an existing property to the event from the sourcing task makes no

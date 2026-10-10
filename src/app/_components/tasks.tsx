@@ -12,15 +12,8 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
 import { Popup } from "~/app/_components/popup";
-import {
-  AmenitiesCard,
-  ContactsCard,
-  ContractingCard,
-  HotelDetailsLink,
-  MoreAboutCard,
-  RoomCategoriesCard,
-  WhereItIsCard,
-} from "~/app/_components/property-cards";
+import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
+import { HotelDetailsLink } from "~/app/_components/property-cards";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { SourcingPanel } from "~/app/_components/sourcing-panel";
 import { Initials } from "~/app/_components/property-groups";
@@ -1166,18 +1159,14 @@ function HotelFormOnTask({ propertyId }: { propertyId: string }) {
 
 /**
  * All of a hotel's details in a popup over its contact task (doc §4.11), so
- * nobody leaves the task to fill them in: the property's own sections, each
- * edited where it stands and saved on the property.
+ * nobody leaves the task to fill them in: the same form the hotel gets by its
+ * link — contracting details too — saved on the property in one go.
  */
-function HotelDetailsPopup({ propertyId, onClose }: { propertyId: string; onClose: () => void }) {
-  const property = api.property.byId.useQuery({ id: propertyId });
-  const amenities = api.amenity.list.useQuery();
-  const p = property.data;
-  const units = p ? p.categories.reduce((sum, category) => sum + category.unitCount, 0) : 0;
+function HotelDetailsPopup({ propertyId, propertyName, onClose }: { propertyId: string; propertyName: string; onClose: () => void }) {
   return (
     <Popup
-      title={p ? p.name : "Hotel details"}
-      subtitle="Everything we keep about the property but rates — each section saved on its own."
+      title={propertyName}
+      subtitle="Its details — everything but rates. Saved on the property."
       aside={
         <Link href={`/properties/${propertyId}`} className="text-brand-700 text-[13px] font-light hover:underline">
           Open the property
@@ -1185,24 +1174,7 @@ function HotelDetailsPopup({ propertyId, onClose }: { propertyId: string; onClos
       }
       onClose={onClose}
     >
-      {!p || !amenities.data ? (
-        <p className="text-ink-500 text-sm font-light">Loading…</p>
-      ) : (
-        <div className="space-y-5">
-          <RoomCategoriesCard property={p} />
-          <div className="grid items-start gap-5 lg:grid-cols-2">
-            <div className="space-y-5">
-              <WhereItIsCard property={p} totalLabel={units ? `${units} rooms` : null} />
-              <MoreAboutCard property={p} />
-            </div>
-            <div className="space-y-5">
-              <ContactsCard property={p} />
-              <AmenitiesCard property={p} amenities={amenities.data} />
-              <ContractingCard property={p} />
-            </div>
-          </div>
-        </div>
-      )}
+      <HotelDetailsForm propertyId={propertyId} onSaved={onClose} />
     </Popup>
   );
 }
@@ -1276,6 +1248,7 @@ function HotelContactChecklist({ propertyId, propertyName, eventId, eventName }:
       {details && (
         <HotelDetailsPopup
           propertyId={propertyId}
+          propertyName={propertyName}
           onClose={() => {
             setDetails(false);
             void utils.task.gathering.invalidate();

@@ -508,7 +508,7 @@ export function HotelDetailsLink({ property, bare = false }: { property: Propert
               {copied ? "Copied" : "Copy link"}
             </button>
             <a href={link} target="_blank" rel="noreferrer" className="text-brand-700 font-light hover:underline">
-              Open ↗
+              See what the hotel sees ↗
             </a>
             <button
               type="button"
