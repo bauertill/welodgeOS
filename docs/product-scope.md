@@ -1780,7 +1780,11 @@ the contract.
   as on the sourcing task — so whoever calls the hotel knows what for; on the left, three
   numbered steps:
 
-  1. **Call the hotel** — its contact details, below.
+  1. **Call the hotel** — its contact details, below; and first, prominent, **who to email
+     the request to** (2026-10-11): "Ask them on the call: who should we email the request
+     to?" — a name and an email, saved on the task and added to the hotel's contacts when
+     new; once saved it reads *Email the request to Maria Lopez · maria@hotel.com*, with
+     *Change*.
   2. **Email them the request** — after the call the hotel usually asks for it in writing.
      Folded to one line by default (2026-10-11): the step's heading with **Email the
      request**, and *Show the email ▾* to open it. Opened, the email is shown as it will go: a greeting (the first contact's first name, if
@@ -1788,8 +1792,9 @@ the contract.
      what to be close to — asking for availability and rates, and the link to the hotel's
      own details form (§3.9), made the first time it is needed. **The client's name and
      budget are never in it.** *Email the request* opens it in your own
-     mailbox, addressed to the hotel's general email, else its first contact's, else its
-     email for contracts; *Copy the email* copies subject and text instead. Beneath, whether
+     mailbox, addressed to the person the hotel named on the call (and greeting them by
+     first name), else the hotel's general email, else its first contact's, else its email
+     for contracts; *Copy the email* copies subject and text instead. Beneath, whether
      the hotel's form is out or came back, *See what the hotel sees* and *Switch the link off*.
   3. **What to find out** — the checklist below, with *Hotel details*, *Quotations* and the
      terms.

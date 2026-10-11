@@ -1501,19 +1501,23 @@ model TaskType {
 /// A piece of work for one or more of the team (doc §2.8): who asked, who
 /// completes it, by when, and what it is about.
 model Task {
-  id          String          @id @default(cuid())
-  title       String
-  details     String?
-  status      TaskStatus      @default(TODO)
-  priority    Priority?
+  id             String          @id @default(cuid())
+  title          String
+  details        String?
+  status         TaskStatus      @default(TODO)
+  priority       Priority?
   /// Optional: a calendar day.
-  deadline    DateTime?       @db.Date
+  deadline       DateTime?       @db.Date
   /// When it was last moved to Done; cleared when it leaves Done.
-  doneAt      DateTime?
+  doneAt         DateTime?
   /// A hotel contact task closed because the hotel cannot help (doc §4.11);
   /// cleared when the task is reopened.
-  outcome     ContactOutcome?
-  outcomeNote String?
+  outcome        ContactOutcome?
+  outcomeNote    String?
+  /// On a hotel contact task: who at the hotel the request is emailed to, as
+  /// they said on the call (doc §4.11) — also kept among the hotel's contacts.
+  emailToName    String?
+  emailToAddress String?
 
   type   TaskType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
   typeId String?

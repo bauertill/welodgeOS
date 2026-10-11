@@ -322,6 +322,43 @@ export const taskRouter = createTRPCRouter({
       return { ok: true };
     }),
 
+  /**
+   * Who at the hotel the request is emailed to, as they said on the call (doc
+   * §4.11): kept on the task for its email, and among the hotel's contacts
+   * when they are not there yet.
+   */
+  setEmailTo: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().trim().max(200),
+        email: z.string().trim().max(300).email("That email address does not look right"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(async (tx) => {
+        const task = await tx.task.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, propertyId: true } });
+        await tx.task.update({ where: { id: task.id }, data: { emailToName: input.name || null, emailToAddress: input.email } });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Task",
+          entityId: task.id,
+          summary: "Who to email the request to",
+          changes: [input.name, input.email].filter(Boolean).join(" · "),
+        });
+        if (task.propertyId) {
+          const known = await tx.propertyContact.findFirst({ where: { propertyId: task.propertyId, email: { equals: input.email, mode: "insensitive" } } });
+          if (known) {
+            if (input.name && !known.name.trim()) await tx.propertyContact.update({ where: { id: known.id }, data: { name: input.name } });
+          } else {
+            await tx.propertyContact.create({ data: { propertyId: task.propertyId, name: input.name || input.email, email: input.email } });
+            await logAudit(tx, { actorId: ctx.session.user.id, entity: "Property", entityId: task.propertyId, summary: `Contact added: ${input.name || input.email}` });
+          }
+        }
+      });
+      return { ok: true };
+    }),
+
   /** The open hotel contact task for a property on an event, if any (doc §4.11) — for the event's map. */
   hotelContactFor: protectedProcedure.input(z.object({ propertyId: z.string(), eventId: z.string() })).query(({ ctx, input }) =>
     ctx.db.task.findFirst({

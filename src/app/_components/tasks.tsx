@@ -890,8 +890,21 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           </div>
         )}
         {/* The hotel contact task, step by step (doc §4.11): call, email the request, gather. */}
-        {hotelContact && <PropertyContactDetails propertyId={t.property!.id} eventId={t.event!.id} />}
-        {hotelContact && <EmailTheHotel propertyId={t.property!.id} salesRequestId={t.salesRequest?.id ?? null} eventName={t.event!.name} />}
+        {hotelContact && (
+          <PropertyContactDetails
+            propertyId={t.property!.id}
+            eventId={t.event!.id}
+            emailTo={<EmailToBox taskId={t.id} name={t.emailToName} email={t.emailToAddress} />}
+          />
+        )}
+        {hotelContact && (
+          <EmailTheHotel
+            propertyId={t.property!.id}
+            salesRequestId={t.salesRequest?.id ?? null}
+            eventName={t.event!.name}
+            emailTo={t.emailToAddress ? { name: t.emailToName, email: t.emailToAddress } : null}
+          />
+        )}
         {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Comments</h2>
@@ -995,7 +1008,7 @@ function QuickField({ propertyId, field, label, placeholder, onSaved }: { proper
  * phone, email, website and address, and the people there — changed right
  * here, and kept on the property. With nothing known yet, a search for it.
  */
-function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; eventId: string }) {
+function PropertyContactDetails({ propertyId, eventId, emailTo }: { propertyId: string; eventId: string; /** Who to email, asked on the call — first. */ emailTo?: React.ReactNode }) {
   const utils = api.useUtils();
   const gathering = api.task.gathering.useQuery({ propertyId, eventId });
   const r = gathering.data?.reach;
@@ -1070,6 +1083,7 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
           </span>
         )}
       </div>
+      {emailTo && <div className="mb-4">{emailTo}</div>}
       {editing ? (
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
@@ -1177,6 +1191,71 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
 }
 
 /**
+ * Asked on the call (doc §4.11): who at the hotel the request should be
+ * emailed to — prominent, so it is not forgotten. Saved on the task for the
+ * email, and among the hotel's contacts.
+ */
+function EmailToBox({ taskId, name, email }: { taskId: string; name: string | null; email: string | null }) {
+  const utils = api.useUtils();
+  const [editing, setEditing] = useState(!email);
+  const [draft, setDraft] = useState({ name: name ?? "", email: email ?? "" });
+  const save = api.task.setEmailTo.useMutation({
+    onSuccess: () => {
+      setEditing(false);
+      void utils.task.invalidate();
+      void utils.property.invalidate();
+    },
+  });
+  if (!editing && email) {
+    return (
+      <div className="border-brand-200 bg-brand-50/60 flex flex-wrap items-baseline justify-between gap-2 rounded-lg border px-3 py-2.5 text-[13px]">
+        <span>
+          <span className="text-brand-800 mr-2 text-[11px] font-medium tracking-wider uppercase">Email the request to</span>
+          <span className="text-ink-900 font-medium">{name ?? email}</span>
+          {name && <span className="text-ink-700 font-light"> · {email}</span>}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft({ name: name ?? "", email });
+            setEditing(true);
+          }}
+          className="text-brand-700 text-xs font-light hover:underline"
+        >
+          Change
+        </button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="border-brand-300 bg-brand-50/60 rounded-lg border px-3 py-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate({ id: taskId, name: draft.name, email: draft.email });
+      }}
+    >
+      <p className="text-brand-800 text-[13px] font-medium">Ask them on the call: who should we email the request to?</p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
+        <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Their name — Maria Lopez" aria-label="Who to email" />
+        <Input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="Their email — maria@hotel.com" aria-label="Their email" />
+        <span className="flex gap-2">
+          <Button type="submit" disabled={!draft.email.trim() || save.isPending}>
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+          {email && (
+            <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          )}
+        </span>
+      </div>
+      {save.error && <p className="mt-1.5 text-xs text-[#c03654]">{friendlyError(save.error)}</p>}
+    </form>
+  );
+}
+
+/**
  * Closing a hotel contact task because the hotel cannot help (doc §4.11):
  * why — no availability, no groups, not interested — and a word if wanted.
  */
@@ -1256,7 +1335,18 @@ function StepTitle({ step, hint, children }: { step: number; hint?: string; chil
  * and places asked for, never the client's name or budget — with the link to
  * the hotel's own details form, and opens it in your own mailbox.
  */
-function EmailTheHotel({ propertyId, salesRequestId, eventName }: { propertyId: string; salesRequestId: string | null; eventName: string }) {
+function EmailTheHotel({
+  propertyId,
+  salesRequestId,
+  eventName,
+  emailTo,
+}: {
+  propertyId: string;
+  salesRequestId: string | null;
+  eventName: string;
+  /** Who the hotel said to send it to, on the call — they come first. */
+  emailTo: { name: string | null; email: string } | null;
+}) {
   const utils = api.useUtils();
   const property = api.property.byId.useQuery({ id: propertyId });
   const request = api.sales.byId.useQuery({ id: salesRequestId ?? "" }, { enabled: Boolean(salesRequestId) });
@@ -1279,8 +1369,9 @@ function EmailTheHotel({ propertyId, salesRequestId, eventName }: { propertyId: 
 
   const linkFor = (token: string | null | undefined) => (token ? `${origin}/property-details/${token}` : null);
   const link = linkFor(p.contractingToken);
-  const to = [p.generalEmail, ...p.contacts.map((contact) => contact.email), p.contractEmail].find((email) => email?.trim()) ?? "";
-  const greeting = p.contacts[0]?.name ? `Dear ${p.contacts[0].name.split(" ")[0]},` : "Hello,";
+  const to = emailTo?.email ?? [p.generalEmail, ...p.contacts.map((contact) => contact.email), p.contractEmail].find((email) => email?.trim()) ?? "";
+  const toName = emailTo ? emailTo.name : p.contacts[0]?.name;
+  const greeting = toName ? `Dear ${toName.split(" ")[0]},` : "Hello,";
   const r = request.data;
   const lines = (r?.lines ?? []).map(
     (line) =>
