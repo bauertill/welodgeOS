@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 
+import { PhotoGallery, RoomPhotos, type CardPhoto } from "~/app/_components/rate-card-media";
 import { nightsBetween } from "~/lib/dates";
 import { formatMoney, formatRange } from "~/lib/format";
 import { propertyTypeLabels } from "~/lib/scouting";
@@ -26,7 +27,12 @@ export type ClientRateCard = {
     where: string | null;
     nearest: { name: string; km: number } | null;
     description: string | null;
-    lines: { id: string; name: string; sleeps: number | null; sellingCents: number; available: number | null; minNights: number | null }[];
+    /** Its media (doc §3.10): the video to play, the Dropbox folder, the photos chosen for this card. */
+    video: string | null;
+    videoUrl: string | null;
+    photosUrl: string | null;
+    photos: (CardPhoto & { categoryId: string | null })[];
+    lines: { id: string; categoryId: string | null; name: string; sleeps: number | null; sellingCents: number; available: number | null; minNights: number | null }[];
   }[];
 };
 
@@ -99,7 +105,33 @@ export function RateCardView({
               )}
             </div>
             <p className="text-ink-500 text-xs font-light">{[propertyTypeLabels[property.type], property.where].filter(Boolean).join(" · ")}</p>
+            <PhotoGallery photos={property.photos} name={property.name} />
             {property.description && <p className="text-ink-700 mt-3 text-sm leading-relaxed font-light">{property.description}</p>}
+            {property.video && (
+              <div className="relative mt-4 aspect-video overflow-hidden rounded-xl bg-black print:hidden">
+                <iframe
+                  src={property.video}
+                  title={`Video of ${property.name}`}
+                  allow="encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  className="absolute inset-0 h-full w-full"
+                />
+              </div>
+            )}
+            {(property.videoUrl ?? property.photosUrl) && (
+              <p className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
+                {property.videoUrl && (
+                  <a href={property.videoUrl} target="_blank" rel="noreferrer" className={`text-brand-700 hover:underline ${property.video ? "hidden print:inline" : ""}`}>
+                    Watch the video ↗<span className="hidden print:inline"> {property.videoUrl}</span>
+                  </a>
+                )}
+                {property.photosUrl && (
+                  <a href={property.photosUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                    See all photos ↗<span className="hidden print:inline"> {property.photosUrl}</span>
+                  </a>
+                )}
+              </p>
+            )}
             <table className="mt-4 w-full text-left text-sm">
               <thead>
                 <tr className="text-ink-500 border-ink-200/70 border-b text-[11px] tracking-wider uppercase">
@@ -117,7 +149,10 @@ export function RateCardView({
                   return (
                     <Fragment key={line.id}>
                       <tr className={`border-ink-200/40 ${extra ? "" : "border-b last:border-0"}`}>
-                        <td className="text-ink-900 py-2.5">{line.name}</td>
+                        <td className="text-ink-900 py-2.5">
+                          {line.name}
+                          <RoomPhotos photos={line.categoryId ? property.photos.filter((photo) => photo.categoryId === line.categoryId) : []} name={`${property.name} — ${line.name}`} />
+                        </td>
                         <td className="text-ink-500 py-2.5 font-light">{line.sleeps ?? "—"}</td>
                         <td className="text-ink-500 py-2.5 font-light">{line.available ?? "—"}</td>
                         <td className="text-ink-500 py-2.5 font-light">{line.minNights ? `${line.minNights} ${line.minNights === 1 ? "night" : "nights"}` : "—"}</td>

@@ -165,6 +165,8 @@ model Property {
   yearBuilt       Int?
   generalEmail    String?
   videoUrl        String?
+  /// The Dropbox folder with all the team's photos of it (doc §3.10, Media).
+  photosUrl       String?
   /// The property's standard times, as written, e.g. "15:00".
   checkInTime     String?
   checkOutTime    String?
@@ -205,6 +207,7 @@ model Property {
   scoutedById String?
   tasks       Task[]
   rateCards   RateCardProperty[]
+  photos      PropertyPhoto[]
 
   /// The hotel's own contracting-details form (doc §3.9): the unguessable
   /// part of its link; empty means no link, or switched off.
@@ -258,6 +261,8 @@ model RoomCategory {
 
   /// Phase 2 room slots numbered 1..N within this category (doc §2.1).
   slots RoomSlot[]
+
+  photos PropertyPhoto[]
 
   /// This category's own supplier-contract status, per event (doc §3.5, §3.6).
   categoryContracts CategoryContract[]
@@ -736,6 +741,7 @@ model User {
   scoutedProperties        Property[]
   propertyContractingLinks Property[]      @relation("PropertyContractingLinkMadeBy")
   rateCards                RateCard[]
+  photosAdded              PropertyPhoto[]
   quotationsAdded          Quotation[]     @relation("QuotationAddedBy")
   scoutingEntries          ScoutingEntry[] @relation("AddedBy")
 
@@ -1705,7 +1711,8 @@ model RateCardProperty {
   /// A short description for the client — written by the team, with help if wanted.
   description String?
 
-  lines RateCardLine[]
+  lines  RateCardLine[]
+  photos RateCardPhoto[]
 
   @@index([rateCardId])
 }
@@ -1775,4 +1782,40 @@ model RateCardResponseItem {
   note         String?
 
   @@index([responseId])
+}
+
+/// A photo of a property picked for clients (doc §3.10, Media) — the file stays
+/// in Dropbox; this is its shared link. Tagged with a room category when it
+/// shows one.
+model PropertyPhoto {
+  id         String          @id @default(cuid())
+  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  /// The Dropbox shared link to the photo, as given.
+  url        String
+  /// The file's name, for us.
+  name       String?
+  caption    String?
+  category   RoomCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId String?
+  /// The first is the cover.
+  position   Int             @default(0)
+  createdAt  DateTime        @default(now())
+  addedBy    User?           @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  addedById  String?
+  onCards    RateCardPhoto[]
+
+  @@index([propertyId, position])
+}
+
+/// Which of a property's photos this rate card shows the client, in order (doc §4.11).
+model RateCardPhoto {
+  rateCardProperty   RateCardProperty @relation(fields: [rateCardPropertyId], references: [id], onDelete: Cascade)
+  rateCardPropertyId String
+  photo              PropertyPhoto    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  photoId            String
+  position           Int              @default(0)
+
+  @@id([rateCardPropertyId, photoId])
+  @@index([photoId])
 }

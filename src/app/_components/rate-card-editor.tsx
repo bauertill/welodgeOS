@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { Button, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { RateCardView, type ClientRateCard } from "~/app/_components/rate-card-view";
+import { Photo } from "~/app/_components/photo";
 import { nightsBetween } from "~/lib/dates";
+import { clientMedia } from "~/lib/media";
 import { formatMoment, formatMoney, formatNights, formatRange } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -14,7 +16,7 @@ type Draft = {
   name: string;
   intro: string;
   markup: string;
-  properties: { id: string; description: string; lines: { id: string; selling: string; available: string; minNights: string }[] }[];
+  properties: { id: string; description: string; photoIds: string[]; lines: { id: string; selling: string; available: string; minNights: string }[] }[];
   removed: string[];
 };
 
@@ -34,6 +36,7 @@ const draftOf = (card: Card): Draft => ({
   properties: card.properties.map((property) => ({
     id: property.id,
     description: property.description ?? "",
+    photoIds: property.photoIds,
     lines: property.lines.map((line) => ({
       id: line.id,
       selling: toText(line.sellingCents),
@@ -126,6 +129,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       properties: draft.properties.map((property) => ({
         id: property.id,
         description: property.description,
+        photoIds: property.photoIds,
         lines: property.lines.map((line) => ({ id: line.id, sellingCents: toCents(line.selling), available: toCount(line.available), minNights: toCount(line.minNights) })),
       })),
       removedPropertyIds: draft.removed,
@@ -177,11 +181,13 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 where: source.where,
                 nearest: source.nearest,
                 description: property.description.trim() || null,
+                ...clientMedia({ ...source, photoIds: property.photoIds }),
                 lines: property.lines
                   .map((line) => ({ line, source: source.lines.find((one) => one.id === line.id)! }))
                   .filter(({ line }) => toCents(line.selling) !== null)
                   .map(({ line, source: lineSource }) => ({
                     id: line.id,
+                    categoryId: lineSource.categoryId,
                     name: lineSource.name,
                     sleeps: lineSource.sleeps,
                     sellingCents: toCents(line.selling)!,
@@ -293,6 +299,13 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                       <p className="mt-1 text-xs text-[#c03654]">{friendlyError(describe.error)}</p>
                     )}
                   </div>
+                  <CardPhotos
+                    propertyId={source.propertyId}
+                    photos={source.allPhotos}
+                    chosen={property.photoIds}
+                    hasVideo={Boolean(source.videoUrl)}
+                    onChange={(photoIds) => setProperty(property.id, (one) => ({ ...one, photoIds }))}
+                  />
                   <table className="mt-3 w-full text-left text-[13px]">
                     <thead>
                       <tr className="text-ink-500 border-ink-200/60 border-b text-[10px] tracking-wider uppercase">
@@ -473,6 +486,69 @@ function ClientAnswers({ answers, currency }: { answers: RouterOutputs["rateCard
             {answer.note && <p className="text-ink-700 mt-1 font-light whitespace-pre-line">{answer.note}</p>}
           </li>
         ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Which of the property's photos this card shows (doc §4.11): every photo
+ * picked for clients on its Media tab, those on the card numbered in the
+ * order the client sees them — click to put one on or take it off.
+ */
+function CardPhotos({
+  propertyId,
+  photos,
+  chosen,
+  hasVideo,
+  onChange,
+}: {
+  propertyId: string;
+  photos: { id: string; src: string; caption: string | null; categoryName: string | null }[];
+  chosen: string[];
+  hasVideo: boolean;
+  onChange: (photoIds: string[]) => void;
+}) {
+  const mediaHref = `/properties/${propertyId}#media`;
+  if (photos.length === 0) {
+    return (
+      <p className="mt-3 rounded-lg bg-[#fff4e0] px-3 py-2 text-xs text-[#8a5a00]">
+        {hasVideo ? "No photos for this property yet — the client sees the video only." : "No photos or video for this property yet."}{" "}
+        <a href={mediaHref} target="_blank" rel="noreferrer" className="font-medium underline">
+          Add them on its Media tab ↗
+        </a>
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="text-ink-700 text-[13px] font-medium">
+          Photos on this card <span className="text-ink-500 font-light">— {chosen.length} of {photos.length}; the first is the cover</span>
+        </span>
+        <a href={mediaHref} target="_blank" rel="noreferrer" className="text-brand-700 text-xs hover:underline">
+          Media tab ↗
+        </a>
+      </div>
+      <ul className="flex flex-wrap gap-2">
+        {photos.map((photo) => {
+          const at = chosen.indexOf(photo.id);
+          const on = at >= 0;
+          return (
+            <li key={photo.id}>
+              <button
+                type="button"
+                aria-pressed={on}
+                title={[photo.categoryName, photo.caption].filter(Boolean).join(" — ") || undefined}
+                onClick={() => onChange(on ? chosen.filter((id) => id !== photo.id) : [...chosen, photo.id])}
+                className={`relative block h-16 w-20 overflow-hidden rounded-lg border-2 transition ${on ? "border-brand-500" : "border-transparent opacity-45 hover:opacity-80"}`}
+              >
+                <Photo src={photo.src} alt={photo.caption ?? "Photo"} sizes="80px" />
+                {on && <span className="bg-brand-500 absolute top-1 left-1 rounded-full px-1.5 text-[10px] font-medium text-white">{at + 1}</span>}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

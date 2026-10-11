@@ -1136,9 +1136,23 @@ stack of cards:
 
 - Under the name, the events the property is on, each with its status, as links.
 - On the left, one card of tabs (in this order since 2026-10-06): **Updates** (§2.6),
-  **Room categories** (or *Unit types*, with their event rates), **Quotations**,
-  **Contracts** (§7.1) and **Log**. The address remembers the tab, so a link can open one.
-  The Updates box is one line until something is typed into it.
+  **Room categories** (or *Unit types*, with their event rates), **Media** (2026-10-11,
+  below), **Quotations**, **Contracts** (§7.1) and **Log**. The address remembers the tab,
+  so a link can open one. The Updates box is one line until something is typed into it.
+- **Media** (2026-10-11) — what clients see of the property on a rate card (§4.11).
+  Nothing is uploaded to us: photos stay in the team's Dropbox, videos on YouTube.
+  - **Video**: the YouTube link (the same *Video* field as before), played on the tab.
+  - **Photos folder**: the Dropbox link to the property's folder, with its room-category
+    subfolders — *Open in Dropbox*.
+  - **Photos for clients**: the best few, picked from that folder — up to 60. **Choose
+    from Dropbox** opens Dropbox's own picker, to tick photos across the folder and its
+    subfolders (needs the Dropbox app key — Till, `docs/todos.md`); until then **Paste
+    photo links** takes Dropbox *Copy link* links, one per line. A folder's link is
+    refused there, and a photo already in is not added twice. Each photo has a caption
+    and a room category (or *Whole property*), so it shows beside that room on a rate
+    card; the first is the **Cover**, *Make cover* and ← → change the order; *Remove*
+    takes it off here and off any rate card showing it, never out of Dropbox. Photos are
+    shown web-sized, however large the file.
 - On the right, one **Details** panel instead of a card per subject: Notes, Where it is,
   Contacts, Amenities, More about the property and Contracting details, each a section
   that folds shut. The last two start shut, saying how many of their fields are filled.
@@ -1969,6 +1983,15 @@ room category at the rate we sell it for.
   per room per night, in the currency, subject to availability. **Never our buying rates or
   margins**: the client's copy is made without them. Properties with no rate offered are
   left out of it.
+- **Photos and video on the card** (2026-10-11). A new card starts with each property's
+  first six photos (its Media tab, §3.10). In our popup each property shows all its
+  photos for clients as thumbnails: those on this card numbered in the order the client
+  sees them, click one to put it on or take it off. A property with no photos or video
+  is flagged there, with a link to its Media tab — a warning, not a block. The client
+  sees the cover large with up to four more beside it ("+3 more"), each opening full size
+  to page through with its room and caption; the YouTube video playing in the card;
+  *See all photos* opening the Dropbox folder; and beside a room, "2 photos" of that
+  room. The printout keeps the photos and gives the video's and folder's links instead.
 - **The client's link** (`/rate-card/…`): made on the card, opened without signing in;
   *Copy link*, *Open*, *Switch off*. It shows what is saved.
 - **The client answers from the link** (2026-10-11). Beside each room, **I'm interested**;

@@ -16,6 +16,7 @@ import {
   WhereItIsCard,
 } from "~/app/_components/property-cards";
 import { PropertyContracts } from "~/app/_components/finance";
+import { PropertyMedia } from "~/app/_components/property-media";
 import { PropertyTabs } from "~/app/_components/property-tabs";
 import { PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
@@ -110,6 +111,12 @@ export default async function PropertyPage({
                 label: property.type === "HOTEL" ? "Room categories" : "Unit types",
                 count: property.categories.length,
                 content: <RoomCategoriesCard property={property} bare />,
+              },
+              {
+                key: "media",
+                label: "Media",
+                count: property._count.photos,
+                content: <PropertyMedia propertyId={property.id} />,
               },
               {
                 key: "quotations",

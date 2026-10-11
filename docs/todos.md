@@ -405,3 +405,14 @@ document.
       and in the local `.env`. Until then *✨ Write it for me* says the key is missing;
       everything else on the rate card works. Uses Claude Sonnet 5, a few hundred
       tokens per description.
+
+- [ ] **Dropbox app key, to pick property photos straight from Dropbox**
+      (`product-scope.md` §3.10, Media, 2026-10-11). At dropbox.com/developers create an
+      app ("Scoped access", "Full Dropbox"), and under *Chooser / Saver / Embedder
+      domains* add `os.welodge.net`, `staging.welodge.net` and `localhost`. Put its
+      **App key** (not the secret — the Chooser needs the key only, and it is public by
+      nature) in `NEXT_PUBLIC_DROPBOX_APP_KEY` on Vercel (Production and Preview) and in
+      the local `.env`. Until then the Media tab takes pasted photo links instead.
+- [ ] **Later: storage for photos of our own** (Vercel Blob or Cloudflare R2), should
+      Dropbox links prove unreliable for clients. Decided 2026-10-11 to start with
+      Dropbox links; photos are shown web-sized through the site's image service.

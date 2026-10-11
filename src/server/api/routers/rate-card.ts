@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { env } from "~/env";
 import { nightsBetween, parseDay } from "~/lib/dates";
+import { clientMedia, photoSrc } from "~/lib/media";
 import { nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { moveStage } from "~/server/api/routers/sales";
@@ -22,6 +23,8 @@ import { eventRates } from "~/server/event-rates";
 type Db = Prisma.TransactionClient | PrismaClient;
 
 const DEFAULT_MARKUP = 1500; // 15.00%
+/** How many of a property's photos a new card shows to start. */
+const CARD_PHOTOS = 6;
 const withMarkup = (cents: number, basisPoints: number) => Math.round((cents * (10_000 + basisPoints)) / 10_000);
 
 const answerInclude = { orderBy: { createdAt: "desc" }, include: { items: true } } satisfies Prisma.RateCard$responsesArgs;
@@ -40,8 +43,24 @@ const cardInclude = {
   properties: {
     orderBy: { position: "asc" },
     include: {
-      property: { select: { id: true, name: true, type: true, stars: true, city: true, area: true, latitude: true, longitude: true, website: true } },
+      property: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          stars: true,
+          city: true,
+          area: true,
+          latitude: true,
+          longitude: true,
+          website: true,
+          videoUrl: true,
+          photosUrl: true,
+          photos: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], include: { category: { select: { name: true } } } },
+        },
+      },
       lines: { orderBy: { position: "asc" } },
+      photos: { orderBy: { position: "asc" }, select: { photoId: true } },
     },
   },
 } satisfies Prisma.RateCardInclude;
@@ -100,8 +119,22 @@ function shape(card: LoadedCard) {
         website: entry.property.website,
         nearest: nearest ? { name: nearest.place.name, km: nearest.km } : null,
         description: entry.description,
+        videoUrl: entry.property.videoUrl,
+        photosUrl: entry.property.photosUrl,
+        /** Every photo picked for clients on the property (doc §3.9, Media) … */
+        allPhotos: entry.property.photos.map((photo) => ({
+          id: photo.id,
+          url: photo.url,
+          src: photoSrc(photo.url),
+          caption: photo.caption,
+          categoryId: photo.categoryId,
+          categoryName: photo.category?.name ?? null,
+        })),
+        /** … and those this card shows, in order. */
+        photoIds: entry.photos.map((photo) => photo.photoId),
         lines: entry.lines.map((line) => ({
           id: line.id,
+          categoryId: line.categoryId,
           name: line.name,
           sleeps: line.sleeps,
           buyingCents: line.buyingCents,
@@ -131,7 +164,11 @@ export const rateCardRouter = createTRPCRouter({
         });
         const properties = await tx.property.findMany({
           where: { id: { in: input.propertyIds } },
-          select: { id: true, categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, capacity: true, unitCount: true } } },
+          select: {
+            id: true,
+            categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, capacity: true, unitCount: true } },
+            photos: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], take: CARD_PHOTOS, select: { id: true } },
+          },
         });
         const rates = request.eventId ? (await eventRates(tx, { propertyIds: input.propertyIds, eventId: request.eventId })).get(request.eventId) : undefined;
         const currency = request.budgetCurrency ?? [...(rates?.values() ?? [])][0]?.currency ?? "USD";
@@ -149,6 +186,8 @@ export const rateCardRouter = createTRPCRouter({
                 .map((property, position) => ({
                   propertyId: property.id,
                   position,
+                  // The property's first photos to start; the team changes the choice on the card.
+                  photos: { create: property.photos.map((photo, index) => ({ photoId: photo.id, position: index })) },
                   lines: {
                     create: property.categories.map((category, index) => {
                       const rate = rates?.get(category.id);
@@ -261,6 +300,8 @@ export const rateCardRouter = createTRPCRouter({
             z.object({
               id: z.string(),
               description: z.string().max(3000),
+              /** The property's photos this card shows, in order. */
+              photoIds: z.array(z.string()).max(60).optional(),
               lines: z
                 .array(
                   z.object({
@@ -300,6 +341,14 @@ export const rateCardRouter = createTRPCRouter({
         for (const [position, property] of input.properties.entries()) {
           if (!ownProperties.has(property.id) || input.removedPropertyIds.includes(property.id)) continue;
           await tx.rateCardProperty.update({ where: { id: property.id }, data: { description: property.description.trim() || null, position } });
+          if (property.photoIds) {
+            const entry = await tx.rateCardProperty.findUniqueOrThrow({ where: { id: property.id }, select: { property: { select: { photos: { select: { id: true } } } } } });
+            const own = new Set(entry.property.photos.map((photo) => photo.id));
+            await tx.rateCardPhoto.deleteMany({ where: { rateCardPropertyId: property.id } });
+            await tx.rateCardPhoto.createMany({
+              data: property.photoIds.filter((id) => own.has(id)).map((photoId, index) => ({ rateCardPropertyId: property.id, photoId, position: index })),
+            });
+          }
           for (const line of property.lines) {
             if (!ownLines.has(line.id)) continue;
             await tx.rateCardLine.update({ where: { id: line.id }, data: { sellingCents: line.sellingCents, available: line.available, minNights: line.minNights } });
@@ -560,7 +609,18 @@ export function clientCopy(card: ReturnType<typeof shape>) {
         where: property.where,
         nearest: property.nearest,
         description: property.description,
-        lines: property.lines.filter((line) => line.sellingCents !== null).map((line) => ({ id: line.id, name: line.name, sleeps: line.sleeps, sellingCents: line.sellingCents!, available: line.available, minNights: line.minNights })),
+        ...clientMedia(property),
+        lines: property.lines
+          .filter((line) => line.sellingCents !== null)
+          .map((line) => ({
+            id: line.id,
+            categoryId: line.categoryId,
+            name: line.name,
+            sleeps: line.sleeps,
+            sellingCents: line.sellingCents!,
+            available: line.available,
+            minNights: line.minNights,
+          })),
       }))
       .filter((property) => property.lines.length > 0),
   };

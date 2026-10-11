@@ -60,6 +60,10 @@ export const env = createEnv({
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().optional(),
     // Needed for the map's pins. Falls back to Google's demo ID when unset.
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: z.string().optional(),
+    // Dropbox's Chooser, to pick a property's photos from the team's Dropbox
+    // (doc §3.10, Media). Public by nature, restricted to our web addresses in
+    // the Dropbox app's settings. Without it, photo links are pasted instead.
+    NEXT_PUBLIC_DROPBOX_APP_KEY: z.string().optional(),
   },
 
   /**
@@ -82,6 +86,7 @@ export const env = createEnv({
     GIPHY_API_KEY: process.env.GIPHY_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
+    NEXT_PUBLIC_DROPBOX_APP_KEY: process.env.NEXT_PUBLIC_DROPBOX_APP_KEY,
     DEV_USER_EMAIL: process.env.DEV_USER_EMAIL,
     DEV_USER_NAME: process.env.DEV_USER_NAME,
     NODE_ENV: process.env.NODE_ENV,
