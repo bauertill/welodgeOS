@@ -1186,6 +1186,7 @@ function RequestRateCards({ salesRequestId }: { salesRequestId: string }) {
             <span className="text-ink-500 shrink-0 text-xs font-light">
               {card._count.properties} {card._count.properties === 1 ? "property" : "properties"}
               {card.shareToken ? " · shared" : ""}
+              {card._count.responses > 0 && <span className="text-brand-700 font-medium"> · {card._count.responses === 1 ? "1 answer" : `${card._count.responses} answers`}</span>}
             </span>
           </li>
         ))}

@@ -1580,6 +1580,7 @@ enum NotificationKind {
   SALES_NEEDS_SENT
   SALES_CONTRACTING_SENT
   PROPERTY_CONTRACTING_SENT
+  RATE_CARD_ANSWERED
   TASK_ASSIGNED
   TASK_COMMENT
   TASK_MENTION
@@ -1689,6 +1690,7 @@ model RateCard {
   updatedAt         DateTime     @updatedAt
 
   properties RateCardProperty[]
+  responses  RateCardResponse[]
 
   @@index([salesRequestId])
 }
@@ -1710,10 +1712,10 @@ model RateCardProperty {
 
 /// One room category's rate on a rate card.
 model RateCardLine {
-  id                 String           @id @default(cuid())
-  rateCardProperty   RateCardProperty @relation(fields: [rateCardPropertyId], references: [id], onDelete: Cascade)
+  id                 String                 @id @default(cuid())
+  rateCardProperty   RateCardProperty       @relation(fields: [rateCardPropertyId], references: [id], onDelete: Cascade)
   rateCardPropertyId String
-  category           RoomCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category           RoomCategory?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   categoryId         String?
   /// The category's name when the card was made — kept should the category change.
   name               String
@@ -1722,7 +1724,49 @@ model RateCardLine {
   buyingCents        Int?
   /// What the client pays per night; empty means not offered on this card.
   sellingCents       Int?
-  position           Int              @default(0)
+  position           Int                    @default(0)
+  answeredIn         RateCardResponseItem[]
 
   @@index([rateCardPropertyId])
+}
+
+/// The client's answer to a rate card, from its link (doc §4.11): the rooms
+/// they are interested in, a note, and — if so — that their dates have changed.
+/// Each sending is kept; the newest is the current one.
+model RateCardResponse {
+  id           String    @id @default(cuid())
+  rateCard     RateCard  @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  rateCardId   String
+  createdAt    DateTime  @default(now())
+  /// Who answered, as they gave it.
+  name         String?
+  email        String?
+  note         String?
+  /// Their dates have changed: the new ones, and a word on it.
+  datesChanged Boolean   @default(false)
+  newCheckIn   DateTime? @db.Date
+  newCheckOut  DateTime? @db.Date
+  datesNote    String?
+
+  items RateCardResponseItem[]
+
+  @@index([rateCardId, createdAt])
+}
+
+model RateCardResponseItem {
+  id           String           @id @default(cuid())
+  response     RateCardResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  responseId   String
+  line         RateCardLine?    @relation(fields: [lineId], references: [id], onDelete: SetNull)
+  lineId       String?
+  /// As they were when answered, should the card change after.
+  propertyName String
+  roomName     String
+  sellingCents Int?
+  rooms        Int
+  checkIn      DateTime?        @db.Date
+  checkOut     DateTime?        @db.Date
+  note         String?
+
+  @@index([responseId])
 }

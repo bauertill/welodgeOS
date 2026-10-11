@@ -4,9 +4,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { env } from "~/env";
+import { parseDay } from "~/lib/dates";
 import { nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
+import { deliverImmediate, notify } from "~/server/notify";
 import { eventRates } from "~/server/event-rates";
 
 /**
@@ -21,10 +23,14 @@ type Db = Prisma.TransactionClient | PrismaClient;
 const DEFAULT_MARKUP = 1500; // 15.00%
 const withMarkup = (cents: number, basisPoints: number) => Math.round((cents * (10_000 + basisPoints)) / 10_000);
 
+const answerInclude = { orderBy: { createdAt: "desc" }, include: { items: true } } satisfies Prisma.RateCard$responsesArgs;
+
 const cardInclude = {
+  responses: answerInclude,
   salesRequest: {
     select: {
       id: true,
+      ownerId: true,
       client: { select: { name: true } },
       event: { select: { id: true, name: true, startDate: true, endDate: true, placesOfInterest: { select: { name: true, category: true, latitude: true, longitude: true } } } },
       lines: { orderBy: { position: "asc" } },
@@ -53,6 +59,29 @@ function shape(card: LoadedCard) {
     shareToken: card.shareToken,
     updatedAt: card.updatedAt,
     clientName: card.salesRequest.client.name,
+    /** The client's answers from its link, newest first (doc §4.11). */
+    answers: card.responses.map((response) => ({
+      id: response.id,
+      at: response.createdAt,
+      name: response.name,
+      email: response.email,
+      note: response.note,
+      datesChanged: response.datesChanged,
+      newCheckIn: response.newCheckIn,
+      newCheckOut: response.newCheckOut,
+      datesNote: response.datesNote,
+      items: response.items.map((item) => ({
+        id: item.id,
+        lineId: item.lineId,
+        propertyName: item.propertyName,
+        roomName: item.roomName,
+        sellingCents: item.sellingCents,
+        rooms: item.rooms,
+        checkIn: item.checkIn,
+        checkOut: item.checkOut,
+        note: item.note,
+      })),
+    })),
     salesRequestId: card.salesRequest.id,
     event: card.salesRequest.event ? { name: card.salesRequest.event.name, startDate: card.salesRequest.event.startDate, endDate: card.salesRequest.event.endDate } : null,
     asked: card.salesRequest.lines.map((line) => ({ rooms: line.rooms, roomType: line.roomType, checkIn: line.checkIn, checkOut: line.checkOut })),
@@ -138,7 +167,7 @@ export const rateCardRouter = createTRPCRouter({
     ctx.db.rateCard.findMany({
       where: { salesRequestId: input.salesRequestId },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, createdAt: true, updatedAt: true, shareToken: true, _count: { select: { properties: true } } },
+      select: { id: true, name: true, createdAt: true, updatedAt: true, shareToken: true, _count: { select: { properties: true, responses: true } } },
     }),
   ),
 
@@ -218,6 +247,112 @@ export const rateCardRouter = createTRPCRouter({
     if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
     return clientCopy(card);
   }),
+
+  /**
+   * The client answers from the link (doc §4.11): the rooms they are
+   * interested in — how many, which nights, a note — and, if so, that their
+   * dates have changed. Kept as sent; the request's account manager and
+   * whoever made the card are told.
+   */
+  answer: publicProcedure
+    .input(
+      z.object({
+        token: z.string().min(20).max(100),
+        name: z.string().trim().max(200),
+        email: z.string().trim().max(300),
+        note: z.string().max(3000),
+        dateChange: z.object({ checkIn: z.string().max(10), checkOut: z.string().max(10), note: z.string().max(2000) }).nullable(),
+        items: z
+          .array(
+            z.object({
+              lineId: z.string(),
+              rooms: z.number().int().min(1, "Say how many rooms.").max(5000),
+              checkIn: z.string().max(10),
+              checkOut: z.string().max(10),
+              note: z.string().max(2000),
+            }),
+          )
+          .max(100),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const day = (text: string) => (/^\d{4}-\d{2}-\d{2}$/.test(text) ? parseDay(text) : null);
+      if (input.email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(input.email)) throw new TRPCError({ code: "BAD_REQUEST", message: "That email address does not look right." });
+      if (input.items.length === 0 && !input.dateChange && !input.note.trim()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the rooms you are interested in, tell us your new dates, or leave a note." });
+      }
+      for (const item of input.items) {
+        const from = day(item.checkIn);
+        const to = day(item.checkOut);
+        if (from && to && to <= from) throw new TRPCError({ code: "BAD_REQUEST", message: "Each departure has to be after its arrival." });
+      }
+      const result = await ctx.db.$transaction(async (tx) => {
+        const card = await tx.rateCard.findUnique({
+          where: { shareToken: input.token },
+          select: {
+            id: true,
+            name: true,
+            createdById: true,
+            salesRequest: { select: { id: true, ownerId: true, client: { select: { name: true } } } },
+            properties: { select: { property: { select: { name: true } }, lines: { select: { id: true, name: true, sellingCents: true } } } },
+          },
+        });
+        if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
+        const lines = new Map(card.properties.flatMap((property) => property.lines.map((line) => [line.id, { ...line, propertyName: property.property.name }] as const)));
+        const items = input.items.filter((item) => lines.has(item.lineId));
+        const response = await tx.rateCardResponse.create({
+          data: {
+            rateCardId: card.id,
+            name: input.name || null,
+            email: input.email || null,
+            note: input.note.trim() || null,
+            datesChanged: Boolean(input.dateChange),
+            newCheckIn: input.dateChange ? day(input.dateChange.checkIn) : null,
+            newCheckOut: input.dateChange ? day(input.dateChange.checkOut) : null,
+            datesNote: input.dateChange?.note.trim() || null,
+            items: {
+              create: items.map((item) => {
+                const line = lines.get(item.lineId)!;
+                return {
+                  lineId: line.id,
+                  propertyName: line.propertyName,
+                  roomName: line.name,
+                  sellingCents: line.sellingCents,
+                  rooms: item.rooms,
+                  checkIn: day(item.checkIn),
+                  checkOut: day(item.checkOut),
+                  note: item.note.trim() || null,
+                };
+              }),
+            },
+          },
+        });
+        const said = [
+          items.length ? `${items.reduce((sum, item) => sum + item.rooms, 0)} rooms of ${items.length} ${items.length === 1 ? "kind" : "kinds"}` : null,
+          input.dateChange ? "their dates have changed" : null,
+        ]
+          .filter(Boolean)
+          .join(", and ");
+        await logAudit(tx, {
+          actorId: null,
+          entity: "SalesRequest",
+          entityId: card.salesRequest.id,
+          summary: `Rate card answered by the client: ${card.name}`,
+          changes: said || input.note.trim() || null,
+        });
+        await notify(tx, {
+          to: [card.salesRequest.ownerId, card.createdById],
+          actorId: null,
+          kind: "RATE_CARD_ANSWERED",
+          title: `${card.salesRequest.client.name} answered the rate card${said ? `: ${said}` : ""}`,
+          body: input.note.trim() || null,
+          link: `/sales/${card.salesRequest.id}`,
+        });
+        return { id: response.id };
+      });
+      await deliverImmediate(ctx.db);
+      return result;
+    }),
 
   /**
    * A short description of a property for the card, written — or a draft
@@ -302,6 +437,8 @@ export function clientCopy(card: ReturnType<typeof shape>) {
     currency: card.currency,
     intro: card.intro,
     clientName: card.clientName,
+    /** Their last answer, to change and send again. */
+    lastAnswer: card.answers[0] ?? null,
     event: card.event,
     asked: card.asked,
     properties: card.properties

@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 import { nightsBetween } from "~/lib/dates";
 import { formatMoney, formatRange } from "~/lib/format";
 import { propertyTypeLabels } from "~/lib/scouting";
@@ -30,7 +32,20 @@ export type ClientRateCard = {
 
 const distance = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
 
-export function RateCardView({ card }: { card: ClientRateCard }) {
+type Line = ClientRateCard["properties"][number]["lines"][number];
+type Property = ClientRateCard["properties"][number];
+
+export function RateCardView({
+  card,
+  lineAction,
+  lineExtra,
+}: {
+  card: ClientRateCard;
+  /** On the client's link: a button per room — "I'm interested" (doc §4.11). Not printed. */
+  lineAction?: (line: Line, property: Property) => React.ReactNode;
+  /** Beneath a room, once chosen: how many, which nights, a note. */
+  lineExtra?: (line: Line, property: Property) => React.ReactNode;
+}) {
   return (
     <article className="rate-card mx-auto max-w-3xl rounded-2xl bg-white px-8 py-9 shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:max-w-none print:rounded-none print:px-0 print:py-0 print:shadow-none">
       <header className="border-ink-200/70 flex items-start justify-between gap-6 border-b pb-6">
@@ -91,16 +106,30 @@ export function RateCardView({ card }: { card: ClientRateCard }) {
                   <th className="pb-2 font-medium">Room type</th>
                   <th className="pb-2 font-medium">Sleeps</th>
                   <th className="pb-2 text-right font-medium">Per night</th>
+                  {lineAction && <th className="pb-2 print:hidden" />}
                 </tr>
               </thead>
               <tbody>
-                {property.lines.map((line) => (
-                  <tr key={line.id} className="border-ink-200/40 border-b last:border-0">
-                    <td className="text-ink-900 py-2.5">{line.name}</td>
-                    <td className="text-ink-500 py-2.5 font-light">{line.sleeps ?? "—"}</td>
-                    <td className="text-ink-900 py-2.5 text-right font-medium whitespace-nowrap">{formatMoney(line.sellingCents, card.currency)}</td>
-                  </tr>
-                ))}
+                {property.lines.map((line) => {
+                  const extra = lineExtra?.(line, property);
+                  return (
+                    <Fragment key={line.id}>
+                      <tr className={`border-ink-200/40 ${extra ? "" : "border-b last:border-0"}`}>
+                        <td className="text-ink-900 py-2.5">{line.name}</td>
+                        <td className="text-ink-500 py-2.5 font-light">{line.sleeps ?? "—"}</td>
+                        <td className="text-ink-900 py-2.5 text-right font-medium whitespace-nowrap">{formatMoney(line.sellingCents, card.currency)}</td>
+                        {lineAction && <td className="py-2.5 pl-3 text-right print:hidden">{lineAction(line, property)}</td>}
+                      </tr>
+                      {extra && (
+                        <tr className="border-ink-200/40 border-b last:border-0 print:hidden">
+                          <td colSpan={lineAction ? 4 : 3} className="pb-3">
+                            {extra}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </section>

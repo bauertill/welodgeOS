@@ -450,6 +450,7 @@ about what they did themselves.
 | A task moves to another status | Whoever asked for it and whoever completes it |
 | A task is due tomorrow | Whoever completes it — or, with nobody on it, whoever asked. Once |
 | A task becomes overdue | The same people. Once |
+| A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card |
 
 **The bell** in the header shows how many are unread and the latest thirty, newest first;
 opening one marks it read and goes to the task; *Mark all read* clears the count. It checks
@@ -1964,6 +1965,19 @@ room category at the rate we sell it for.
   left out of it.
 - **The client's link** (`/rate-card/…`): made on the card, opened without signing in;
   *Copy link*, *Open*, *Switch off*. It shows what is saved.
+- **The client answers from the link** (2026-10-11). Beside each room, **I'm interested**;
+  pressed, it opens how many rooms, arrival and departure (the request's dates to start, else
+  the event's) and a note, with what that comes to at the rate shown. Under the card, **Your
+  answer** sums up the rooms chosen, and has **Our dates have changed** — the new arrival
+  and departure and what changed — their name and email, and a note to us. **Send to We
+  Lodge** needs at least a room, a change of dates or a note. They can come back and send
+  again: the link shows their last answer filled in. Each answer is kept as sent — the rooms,
+  the rate at that moment and the notes — and a later one does not rewrite it.
+- **What we see of it**: the account manager and whoever made the card are told (§2.9); the
+  answer is written on the request's history; the card in our popup lists **The client's
+  answers**, newest first, a change of dates in orange; the request's *Rate cards* shows how
+  many answers each card has. An answer reserves nothing — the rooms are still ours to
+  confirm.
 
 Not built yet: suggesting properties to the client before a rate card; a rate card's history
 of versions.
@@ -2820,7 +2834,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (Claude writing helper once ANTHROPIC_API_KEY is set), preview, print/PDF and a client link, never our buying rates; delete one that went nowhere (refused with rooms or a contract) |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (Claude writing helper once ANTHROPIC_API_KEY is set), preview, print/PDF and a client link, never our buying rates, which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |

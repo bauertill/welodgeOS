@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { Button, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { RateCardView, type ClientRateCard } from "~/app/_components/rate-card-view";
-import { formatMoney } from "~/lib/format";
+import { nightsBetween } from "~/lib/dates";
+import { formatMoment, formatMoney, formatNights, formatRange } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Card = RouterOutputs["rateCard"]["byId"];
@@ -304,6 +305,8 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
               );
             })}
 
+          {c.answers.length > 0 && <ClientAnswers answers={c.answers} currency={c.currency} />}
+
           <div className="border-ink-200/60 rounded-xl border bg-white p-4 text-[13px]">
             <p className="text-ink-900 font-medium">The client&apos;s link</p>
             <p className="text-ink-500 mb-2 text-xs font-light">A page with this rate card for the client — no account needed, never our buying rates. Save first: the link shows what is saved.</p>
@@ -354,5 +357,51 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
         </div>
       )}
     </Popup>
+  );
+}
+
+/**
+ * What the client sent back from the link (doc §4.11), newest first: the
+ * rooms they are interested in, for which nights, their notes and any change
+ * of dates. Each answer stands as sent — a later one does not rewrite it.
+ */
+function ClientAnswers({ answers, currency }: { answers: RouterOutputs["rateCard"]["byId"]["answers"]; currency: string }) {
+  return (
+    <div className="border-brand-200 bg-brand-50/50 rounded-xl border p-4 text-[13px]">
+      <p className="text-ink-900 font-medium">The client&apos;s answers</p>
+      <ul className="mt-2 space-y-3">
+        {answers.map((answer) => (
+          <li key={answer.id} className="rounded-lg bg-white px-3 py-2.5">
+            <p className="text-ink-500 text-xs font-light">
+              {formatMoment(answer.at)}
+              {answer.name || answer.email ? ` · ${[answer.name, answer.email].filter(Boolean).join(" · ")}` : ""}
+            </p>
+            {answer.items.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {answer.items.map((item, index) => (
+                  <li key={index} className="text-ink-700 font-light">
+                    <span className="text-ink-900 font-medium">
+                      {item.rooms} × {item.roomName}
+                    </span>{" "}
+                    at {item.propertyName}
+                    {item.checkIn && item.checkOut ? ` · ${formatRange(item.checkIn, item.checkOut)} (${formatNights(nightsBetween(item.checkIn, item.checkOut))})` : ""}
+                    {item.sellingCents !== null ? ` · ${formatMoney(item.sellingCents, currency)} a night` : ""}
+                    {item.note && <span className="text-ink-500 block pl-3 italic">“{item.note}”</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {answer.datesChanged && (
+              <p className="mt-1 text-[#a35a00]">
+                Dates have changed
+                {answer.newCheckIn && answer.newCheckOut ? `: now ${formatRange(answer.newCheckIn, answer.newCheckOut)}` : ""}
+                {answer.datesNote ? ` — ${answer.datesNote}` : ""}
+              </p>
+            )}
+            {answer.note && <p className="text-ink-700 mt-1 font-light whitespace-pre-line">{answer.note}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

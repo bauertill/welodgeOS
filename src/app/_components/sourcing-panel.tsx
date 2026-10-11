@@ -209,7 +209,8 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
           <span className="flex flex-wrap items-center gap-3 text-xs">
             {(cards.data ?? []).map((card) => (
               <button key={card.id} type="button" onClick={() => setOpenCard(card.id)} className="text-brand-700 hover:underline">
-                {card.name.split(" — ")[0]} ({card._count.properties}) →
+                {card.name.split(" — ")[0]} ({card._count.properties})
+                {card._count.responses > 0 && <span className="font-medium"> · {card._count.responses === 1 ? "1 answer" : `${card._count.responses} answers`}</span>} →
               </button>
             ))}
             <button

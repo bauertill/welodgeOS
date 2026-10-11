@@ -1,11 +1,10 @@
-import { PrintButton } from "~/app/_components/print-button";
-import { RateCardView } from "~/app/_components/rate-card-view";
+import { SharedRateCard } from "~/app/_components/shared-rate-card";
 import { api } from "~/trpc/server";
 
 /**
  * A rate card opened by the client from its link — no sign-in (doc §4.11).
  * The link's code is the only key; the page shows the card, never our
- * buying rates.
+ * buying rates, and lets the client answer it.
  */
 export const metadata = { title: "Rate card — We Lodge", robots: { index: false, follow: false } };
 
@@ -20,12 +19,5 @@ export default async function SharedRateCardPage({ params }: { params: Promise<{
       </div>
     );
   }
-  return (
-    <div className="space-y-4">
-      <div className="mx-auto flex max-w-3xl justify-end print:hidden">
-        <PrintButton />
-      </div>
-      <RateCardView card={card} />
-    </div>
-  );
+  return <SharedRateCard token={token} card={card} />;
 }
