@@ -31,10 +31,6 @@ export function PropertyQuotations({
     <div>
       {entries.length === 0 ? (
         <p className="text-ink-500 text-sm font-light">Put the property on an event&apos;s list to record what it quotes for that event.</p>
-      ) : categories.length === 0 ? (
-        <p className="text-ink-500 text-sm font-light">
-          Add the property&apos;s room categories first — each line of a quotation is rooms of one of them.
-        </p>
       ) : (
         <div className="space-y-6">
           {entries.map((entry) => (
@@ -360,6 +356,10 @@ function QuotationEditor({
   });
   // Which client's request it was quoted for (doc §4.11) — for a new one, the request its open contact task is about.
   const requests = api.quotation.requestsFor.useQuery({ scoutingEntryId });
+  // The hotel's room categories, as they are now — one can be added right here, from a line (doc §3.10).
+  const context = api.quotation.formContext.useQuery({ scoutingEntryId });
+  const cats = context.data?.property.categories ?? categories;
+  const [addingFor, setAddingFor] = useState<number | null>(categories.length === 0 ? 0 : null);
   const [salesRequestId, setSalesRequestId] = useState<string | null>(quotation ? quotation.salesRequestId : (forRequestId ?? null));
   const [requestTouched, setRequestTouched] = useState(Boolean(quotation) || Boolean(forRequestId));
   const forRequest = requestTouched ? salesRequestId : (requests.data?.likely ?? null);
@@ -368,7 +368,7 @@ function QuotationEditor({
   const [cleaningIncluded, setCleaningIncluded] = useState(quotation?.cleaning != null);
   const [cleaning, setCleaning] = useState<Cleaning | "">(quotation?.cleaning ?? "");
   const blankLine = (from?: LineDraft): LineDraft => ({
-    categoryId: from?.categoryId ?? categories[0]?.id ?? "",
+    categoryId: from?.categoryId ?? cats[0]?.id ?? "",
     checkIn: from?.checkOut ?? stay.checkIn,
     checkOut: stay.checkOut,
     rooms: from?.rooms ?? "",
@@ -493,12 +493,18 @@ function QuotationEditor({
             <div key={index} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_8.75rem_8.75rem_4.5rem_5.5rem_4.5rem_auto] sm:items-end">
               <label className="col-span-2 min-w-0 sm:col-span-1">
                 <span className="text-ink-500 mb-1 block text-[11px]">Room category</span>
-                <Select value={line.categoryId} onChange={(e) => setLine(index, "categoryId", e.target.value)} aria-label={`Line ${index + 1} category`}>
-                  {categories.map((category) => (
+                <Select
+                  value={line.categoryId}
+                  onChange={(e) => (e.target.value === NEW_CATEGORY ? setAddingFor(index) : setLine(index, "categoryId", e.target.value))}
+                  aria-label={`Line ${index + 1} category`}
+                >
+                  {!line.categoryId && <option value="">Add a room category →</option>}
+                  {cats.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
                     </option>
                   ))}
+                  <option value={NEW_CATEGORY}>+ New room category…</option>
                 </Select>
               </label>
               <label className="min-w-0">
@@ -531,6 +537,20 @@ function QuotationEditor({
             </div>
           ))}
         </div>
+        {addingFor !== null && context.data && (
+          <NewCategory
+            propertyId={context.data.property.id}
+            propertyName={context.data.property.name}
+            first={cats.length === 0}
+            onCancel={cats.length ? () => setAddingFor(null) : undefined}
+            onAdded={(id) => {
+              const index = addingFor;
+              setAddingFor(null);
+              void context.refetch();
+              setLines((current) => current.map((line, i) => (i === index || !line.categoryId ? { ...line, categoryId: id } : line)));
+            }}
+          />
+        )}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
           <button type="button" onClick={() => setLines((current) => [...current, blankLine(current.at(-1))])} className="text-brand-700 font-medium hover:underline">
             + Add a line — another room category, or a pre or post period
@@ -604,10 +624,6 @@ export function QuotationPopup({ scoutingEntryId, forRequestId, onClose }: { sco
     <Popup title={c ? `Their quote — ${c.property.name}` : "Their quote"} subtitle={c ? `For ${c.event.name}. Saved on the property's Quotations tab.` : undefined} size="large" onClose={onClose}>
       {!c ? (
         <p className="text-ink-500 text-sm font-light">Loading…</p>
-      ) : c.property.categories.length === 0 ? (
-        <p className="text-ink-700 text-sm font-light">
-          {c.property.name} has no room categories yet — each line of a quotation is rooms of one of them. Add them first under <em>Hotel details</em> on the task.
-        </p>
       ) : (
         <QuotationEditor
           scoutingEntryId={scoutingEntryId}
@@ -618,5 +634,63 @@ export function QuotationPopup({ scoutingEntryId, forRequestId, onClose }: { sco
         />
       )}
     </Popup>
+  );
+}
+
+const NEW_CATEGORY = "__new__";
+
+/**
+ * A room category added from the quotation form (doc §3.10): a hotel's quote
+ * often comes before its room categories are on the property. Name, how many
+ * rooms, how many they sleep — the rest on the property's page later.
+ */
+function NewCategory({
+  propertyId,
+  propertyName,
+  first,
+  onAdded,
+  onCancel,
+}: {
+  propertyId: string;
+  propertyName: string;
+  first: boolean;
+  onAdded: (id: string) => void;
+  onCancel?: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [rooms, setRooms] = useState("");
+  const [sleeps, setSleeps] = useState("2");
+  const save = api.property.saveCategory.useMutation({ onSuccess: (category) => onAdded(category.id) });
+  const add = () => {
+    if (!name.trim()) return;
+    save.mutate({ propertyId, category: { name: name.trim(), unitCount: Math.max(0, Math.round(Number(rooms) || 0)), capacity: Math.max(1, Math.round(Number(sleeps) || 2)) } });
+  };
+  return (
+    <div className="bg-brand-50/60 border-brand-200 mt-2 rounded-lg border p-3">
+      <p className="text-ink-900 text-[13px] font-medium">{first ? `${propertyName} has no room categories yet — add the one quoted` : "New room category"}</p>
+      <p className="text-ink-500 mb-2 text-xs font-light">Saved on the property, where its beds, size and the rest can be filled in later.</p>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_6rem_auto] sm:items-end">
+        <Field label="Name">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Standard King" autoFocus onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())} />
+        </Field>
+        <Field label="Rooms it has">
+          <Input value={rooms} onChange={(e) => setRooms(e.target.value)} inputMode="numeric" placeholder="40" />
+        </Field>
+        <Field label="Sleeps">
+          <Input value={sleeps} onChange={(e) => setSleeps(e.target.value)} inputMode="numeric" />
+        </Field>
+        <span className="flex items-center gap-3 pb-1">
+          <Button type="button" disabled={save.isPending || !name.trim()} onClick={add}>
+            {save.isPending ? "Adding…" : "Add"}
+          </Button>
+          {onCancel && (
+            <button type="button" onClick={onCancel} className="text-ink-500 text-xs hover:underline">
+              Cancel
+            </button>
+          )}
+        </span>
+      </div>
+      {save.error && <p className="mt-1 text-xs text-[#c03654]">{friendlyError(save.error)}</p>}
+    </div>
   );
 }
