@@ -7,8 +7,8 @@ import type { CategoryContractStatus, ContactOutcome, QuotationStatus, ScoutingS
  */
 export type PropertyStage = "TO_CONTACT" | "PENDING_QUOTE" | "QUOTED" | "CONTRACTED" | "PROSPECT" | "COULDNT_HELP" | "RULED_OUT";
 
-/** The board's order: the work in hand first, then the long list, then the closed ones. */
-export const stageOrder: PropertyStage[] = ["TO_CONTACT", "PENDING_QUOTE", "QUOTED", "CONTRACTED", "PROSPECT", "COULDNT_HELP", "RULED_OUT"];
+/** The board's order: contracted at the top, then the work in hand furthest along first, the long list, and the closed ones. */
+export const stageOrder: PropertyStage[] = ["CONTRACTED", "QUOTED", "PENDING_QUOTE", "TO_CONTACT", "PROSPECT", "COULDNT_HELP", "RULED_OUT"];
 
 export const stageInfo: Record<PropertyStage, { label: string; hint: string; colour: string }> = {
   TO_CONTACT: { label: "To be contacted", hint: "A contact task is open and not started yet.", colour: "#7c4dd8" },

@@ -867,15 +867,15 @@ by hand — so a property **moves between the groups on its own** as the work is
 
 | Stage | When |
 | --- | --- |
-| **To be contacted** | A hotel contact task (§4.11) is open on it and not started — it lands here as soon as the task is made, from sourcing or from the map |
-| **Pending quote** | Contacted and waiting for a quotation: its contact task is in progress — emailing the request moves a task not yet started to *In progress*, and a *Prospect* to *Reached out* — or it is marked *Reached out* |
-| **Quote received** | It has a quotation for this event that is not declined (§3.10) |
 | **Contracted** | Any of its room categories is *Contracted* for this event, or there is a supplier contract with it for this event (§7.1) — the highest stage |
+| **Quote received** | It has a quotation for this event that is not declined (§3.10) |
+| **Pending quote** | Contacted and waiting for a quotation: its contact task is in progress — emailing the request moves a task not yet started to *In progress*, and a *Prospect* to *Reached out* — or it is marked *Reached out* |
+| **To be contacted** | A hotel contact task (§4.11) is open on it and not started — it lands here as soon as the task is made, from sourcing or from the map |
 | **Prospects** | On the list, nothing started |
 | **Couldn't help** | Its last contact task closed because it could not help (§4.11) — folded by default |
 | **Ruled out** | Marked *Rejected* — folded by default |
 
-In that order, each with how many properties it holds and what it means. The team's own
+In that order — **Contracted at the top** (the owner's call, 2026-10-11), then the work in hand furthest along first — each with how many properties it holds and what it means. The team's own
 groups (below) are a click away: **Group by: Stage · Your groups**, remembered in the
 browser. The status column (*Prospect*, *Reached out*, *Shortlisted*, *Rejected*) stays as
 it was, set by hand.
