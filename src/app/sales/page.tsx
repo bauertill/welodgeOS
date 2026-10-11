@@ -15,7 +15,7 @@ export default async function SalesRequestsPage() {
     <>
       <PageHeader
         title="Sales requests"
-        subtitle="Every client's interest, from the first enquiry until it is signed, released, lost or never answered — and who to follow up with."
+        subtitle="Every client's interest, from the first enquiry until it is contracted, lost or declined — and who to follow up with."
         action={
           <Link
             href="/sales/new"

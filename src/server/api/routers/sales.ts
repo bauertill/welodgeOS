@@ -1,4 +1,4 @@
-import { BudgetBasis, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
+import { BudgetBasis, LostReason, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import {
   interestFields,
   isClosed,
   openStages,
+  lostReasonLabels,
   salesStageLabels,
 } from "~/lib/sales";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
@@ -191,8 +192,9 @@ async function saveDetails(
     summary: before.detailedAt ? actor.summary : `${actor.summary} — now a sales request`,
     changes: diffFields(readable(before), readable(after), historyFields),
   });
-  // Now a sales request: its sourcing task goes on the board (doc §4.11).
+  // Now a sales request: its sourcing task goes on the board, and it moves to Specify (doc §4.11).
   await ensureSourcingTask(tx, id, actor.id);
+  if (after.stage === "INITIAL_INTEREST") await moveStage(tx, actor.id, id, "SPECIFY");
   return { before, after };
 }
 
@@ -358,16 +360,26 @@ function rectangles(nights: { slotId: string; date: Date }[]) {
  * marked Signed only once the client's contract is registered against it
  * (doc §4.11): signed means there is a contract to collect payments under.
  */
-export async function moveStage(tx: Prisma.TransactionClient, actorId: string, id: string, stage: SalesRequestStage) {
+export async function moveStage(tx: Prisma.TransactionClient, actorId: string | null, id: string, stage: SalesRequestStage, lostReason?: LostReason) {
   const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
-  if (before.stage === stage) return before;
-  if (stage === "SIGNED") {
+  if (before.stage === stage && (stage !== "LOST" || !lostReason || lostReason === before.lostReason)) return before;
+  // A proposal is a rate card: from Initial interest or Specify, Proposal sent needs one sent (doc §4.11).
+  if (stage === "PROPOSAL_SENT" && (before.stage === "INITIAL_INTEREST" || before.stage === "SPECIFY")) {
+    const sent = await tx.rateCard.count({ where: { salesRequestId: id, shareToken: { not: null } } });
+    if (!sent) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Send the client a rate card first — making a rate card's link moves the request to Proposal sent on its own.",
+      });
+    }
+  }
+  if (stage === "CONTRACTED") {
     if (!before.eventId) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — a signed request needs the client's contract, and a contract is for an event." });
     }
     const contracts = await tx.contract.count({ where: { salesRequestId: id, party: "CLIENT" } });
     if (contracts === 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Register the client's contract before marking the request signed." });
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Register the client's contract before marking the request contracted." });
     }
   }
   const closing = isClosed(stage);
@@ -377,6 +389,7 @@ export async function moveStage(tx: Prisma.TransactionClient, actorId: string, i
       stage,
       closedOn: closing ? (before.closedOn && isClosed(before.stage) ? before.closedOn : today()) : null,
       ...(stage === "PROPOSAL_SENT" && !before.proposalSentOn && { proposalSentOn: today() }),
+      lostReason: stage === "LOST" ? (lostReason ?? before.lostReason ?? "DECLINED") : null,
     },
     include,
   });
@@ -384,7 +397,7 @@ export async function moveStage(tx: Prisma.TransactionClient, actorId: string, i
     actorId,
     entity: "SalesRequest",
     entityId: id,
-    summary: `Stage: ${salesStageLabels[before.stage]} → ${salesStageLabels[stage]}`,
+    summary: `Stage: ${salesStageLabels[before.stage]} → ${salesStageLabels[stage]}${stage === "LOST" ? ` (${lostReasonLabels[lostReason ?? before.lostReason ?? "DECLINED"]})` : ""}`,
   });
   return after;
 }
@@ -1056,6 +1069,8 @@ export const salesRouter = createTRPCRouter({
       z.object({
         id: z.string(),
         stage: z.nativeEnum(SalesRequestStage),
+        /** Why, when closing it as Lost/Declined. */
+        lostReason: z.nativeEnum(LostReason).optional(),
         /** Signing under one of the client's contracts for the event not yet tied to a request: it is tied to this one. */
         contractId: z.string().optional(),
       }),
@@ -1063,7 +1078,7 @@ export const salesRouter = createTRPCRouter({
     .mutation(({ ctx, input }) =>
       ctx.db.$transaction(async (tx) => {
         if (input.contractId) await tieContract(tx, ctx.session.user.id, input.id, input.contractId);
-        return moveStage(tx, ctx.session.user.id, input.id, input.stage);
+        return moveStage(tx, ctx.session.user.id, input.id, input.stage, input.lostReason);
       }),
     ),
 

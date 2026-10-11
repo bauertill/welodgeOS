@@ -17,6 +17,7 @@ import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RateCardsBox, SourcingPanel } from "~/app/_components/sourcing-panel";
 import { AssigneePicker } from "~/app/_components/assignee-picker";
+import { QuotationPopup } from "~/app/_components/quotations";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
 import { daysUntil, dayKey, nightsBetween } from "~/lib/dates";
@@ -943,6 +944,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
             emailTo={t.emailToAddress ? { name: t.emailToName, email: t.emailToAddress } : null}
           />
         )}
+        {hotelContact && <TheirQuote propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} salesRequestId={t.salesRequest?.id ?? null} />}
         {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
         {/* The get media task (doc §4.11): straight to where the media goes. */}
         {getMedia && (
@@ -1630,6 +1632,72 @@ function HotelDetailsPopup({ propertyId, propertyName, onClose }: { propertyId: 
 }
 
 /**
+ * Step 3 of a hotel contact task (doc §4.11): the hotel answers the email
+ * with a quote, registered here in a popup — the task stays open — and saved
+ * on the property's Quotations tab, tied to the task's sales request.
+ */
+function TheirQuote({ propertyId, propertyName, eventId, salesRequestId }: { propertyId: string; propertyName: string; eventId: string; salesRequestId: string | null }) {
+  const gathering = api.task.gathering.useQuery({ propertyId, eventId });
+  const entryId = gathering.data?.entryId ?? null;
+  const quotes = api.quotation.forEntry.useQuery({ scoutingEntryId: entryId ?? "" }, { enabled: Boolean(entryId) });
+  const [open, setOpen] = useState(false);
+  const list = quotes.data ?? [];
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <StepTitle step={3} hint={list.length ? `${list.length} in` : "When they reply"}>
+          Register their quote
+        </StepTitle>
+        {entryId && (
+          <button type="button" onClick={() => setOpen(true)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
+            {list.length ? "+ Another quote" : "+ Register their quote"}
+          </button>
+        )}
+      </div>
+      {list.length === 0 ? (
+        <p className="text-ink-500 mt-2 text-xs font-light">
+          {entryId
+            ? `Once ${propertyName} replies with rooms and rates, put the quote in here — it goes on the property's Quotations tab${salesRequestId ? ", for this request" : ""}.`
+            : `${propertyName} is not on the event's list, so a quote cannot be registered for it yet.`}
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-1.5">
+          {list.map((quote) => (
+            <li key={quote.id} className="bg-brand-50/60 flex flex-wrap items-baseline justify-between gap-x-3 rounded-lg px-3 py-2 text-[13px]">
+              <span className="min-w-0">
+                <span className="text-ink-900 font-medium">{quote.name}</span>
+                {quote.salesRequest && <span className="text-brand-700 ml-2 text-xs">For {quote.salesRequest.client.name}</span>}
+                <span className="text-ink-500 block text-xs font-light">
+                  {[quote.from && quote.to ? formatRange(quote.from, quote.to) : null, `${quote.roomNights} room-nights`, quote.rooms ? `${quote.rooms} rooms` : null]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </span>
+              <span className="text-ink-900 font-semibold whitespace-nowrap">{formatMoney(quote.totalCents, quote.currency)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {list.length > 0 && (
+        <Link href={`/properties/${propertyId}?back=${encodeURIComponent(`/events/${eventId}`)}#quotations`} className="text-brand-700 mt-2 inline-block text-xs hover:underline">
+          Open them on the Quotations tab →
+        </Link>
+      )}
+      {open && entryId && (
+        <QuotationPopup
+          scoutingEntryId={entryId}
+          forRequestId={salesRequestId}
+          onClose={() => {
+            setOpen(false);
+            void quotes.refetch();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
  * A hotel contact task (doc §4.11): how to reach the property, and what is to
  * be found out — each ticked once it is on the property, its terms for the
  * event or a quotation, where the team fills it in.
@@ -1645,7 +1713,7 @@ function HotelContactChecklist({ propertyId, propertyName, eventId, eventName }:
   return (
     <div className="border-ink-200/60 rounded-xl border bg-white p-5">
       <div className="mb-1 flex items-baseline justify-between gap-3">
-        <StepTitle step={3}>What to find out</StepTitle>
+        <StepTitle step={4}>What to find out</StepTitle>
         {g && (
           <span className="text-ink-500 text-xs font-light">
             {done} of {g.items.length} in

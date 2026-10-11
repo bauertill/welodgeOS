@@ -73,8 +73,8 @@ export function SalesPanel({ onClose }: { onClose: () => void }) {
               "/sales",
               "Requests",
               open.isLoading
-                ? "Every client's interest, from first enquiry to signed"
-                : `${requests.length} open · every client's interest, from first enquiry to signed`,
+                ? "Every client's interest, from first enquiry to contracted"
+                : `${requests.length} open · every client's interest, from first enquiry to contracted`,
             )}
             {row("/clients", "Clients", "The companies we sell to and the people there — search by company or by person")}
           </ul>

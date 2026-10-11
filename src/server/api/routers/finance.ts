@@ -191,7 +191,7 @@ export const financeRouter = createTRPCRouter({
         },
       });
       await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary: "Contract added" });
-      if (input.markRequestSigned) await moveStage(tx, ctx.session.user.id, input.salesRequestId!, "SIGNED");
+      if (input.markRequestSigned) await moveStage(tx, ctx.session.user.id, input.salesRequestId!, "CONTRACTED");
       return contract;
       });
     }),

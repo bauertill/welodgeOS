@@ -1716,40 +1716,46 @@ to this request**; that is written to the ledger too. The list of requests shows
 nights sold and blocked, counted from the nights themselves: nothing about the rooms is
 stored on the request, so it cannot disagree with the stock sheet.
 
-**Where a request stands** — its *stage*:
+**Where a request stands** — its *stage* (the owner's set, 2026-10-11, replacing Rate card
+sent, Blocked, Signed, Released and No reply):
 
-| Stage | Meaning |
+| Stage | Means |
 | --- | --- |
-| *Initial interest* | The client has asked. We are looking for units and preparing a proposal. Monday: *Discovery* |
-| *Rate card sent* | The client has a rate card's link; we are waiting to hear which rooms they want. Reached on its own when the link is made (2026-10-11) |
-| *Proposal sent* | We have sent a proposal and are waiting for the answer |
-| *Blocked* | The client is holding rooms while they decide |
-| *Signed* | Closed: the client has signed — and their contract is registered against the request (below) |
-| *Released* | Closed: the client let their block go |
-| *No reply* | Closed: the client never came back to us |
-| *Lost* | Closed: the client went elsewhere or dropped the plan |
+| *Initial interest* | The client has asked; we are finding out exactly what they need. Monday: *Discovery* |
+| *Specify* | The details are in; we are sourcing properties and preparing a rate card. Reached on its own when the details are given |
+| *Proposal sent* | The client has a rate card and we are waiting for their answer. Reached on its own when a rate card's link is made — and, from *Initial interest* or *Specify*, only once one has been |
+| *Negotiation* | The client is interested and terms are being agreed — rooms may be held for them |
+| *Contracted* | Closed: the client has signed — and their contract is registered against the request (below) |
+| *Lost/Declined* | Closed, with the reason: **Declined** (went elsewhere or dropped the plan), **No reply** (never came back to us) or **Released** (let their block go) |
+
+When the stages changed, every request was carried over: *Initial interest* with its
+details in → *Specify*; *Rate card sent* → *Proposal sent*; *Blocked* → *Negotiation*;
+*Signed* → *Contracted*; *Lost*, *No reply* and *Released* → *Lost/Declined*, the old stage
+kept as its reason (*Lost* as *Declined*).
 
 **On a request's page the stage is a progress bar** (2026-10-03): *Initial interest →
-Rate card sent → Proposal sent → Blocked → Signed*, the steps passed ticked and the current
-one marked, each a click away. The next move is a button — *Mark rate card sent* or *Mark
-proposal sent*, then *Mark proposal sent* or *Mark blocked*, then *Mark signed* or *Mark
-blocked* — and the other ways a request ends (*Released*, *No reply*, *Lost*) are under
-*Close as…*, each with what it means. A request closed that way shows as such — "Lost —
+Specify → Proposal sent → Negotiation → Contracted*, the steps passed ticked and the current
+one marked, each a click away. The next move is a button — *Mark specify*, then *Mark
+proposal sent*, then *Mark negotiation* or *Mark contracted*, then *Mark contracted*. *Close
+as…* asks why it was lost or declined. A request closed that way shows as such — "No reply —
 closed on 3 Oct" — with *Reopen*, which takes it back to *Proposal sent* if one was sent,
-or else *Initial interest*. A signed one shows every step done.
+else *Specify* if its details are in, else *Initial interest*. A contracted one shows every
+step done.
 
-The stage is changed by hand, with one click, in any direction: a released request can be
-reopened. Moving to *Proposal sent* dates the proposal today, unless a date is already
-there. Moving to a closing stage records the day it closed; reopening clears that. One
-move is made for us: making a rate card's link takes a request at *Initial interest* to
-*Rate card sent* (2026-10-11, the rate card below; requests that already had a link moved
-there when the stage was added). Nothing else moves a request on its own —
-a block that has passed its date is not released by the system (§2.4).
+The stage is changed by hand, with one click, in any direction — except that *Proposal
+sent* is reached from *Initial interest* or *Specify* only once a rate card has been sent:
+the button says so otherwise. Moving to *Proposal sent* dates the proposal today, unless a
+date is already there. Moving to a closing stage records the day it closed; reopening clears
+that. Two moves are made for us: **giving the request's details** takes it from *Initial
+interest* to *Specify*, and **making a rate card's link** takes it from *Initial interest*
+or *Specify* to *Proposal sent* (the rate card below). Nothing else moves a request on its
+own — a block that has passed its date is not released by the system (§2.4). After blocking
+rooms the request offers *Negotiation*, after selling them *Contracted*.
 
-**Signed needs the client's contract.** A request can be marked *Signed* only once a client
+**Contracted needs the client's contract.** A request can be marked *Contracted* only once a client
 contract (§7.1) is registered against it — the client's, for the request's event — so
 there is always a contract whose payments and cancellation deadlines are followed. Clicking
-*Signed*, or *Mark the request Signed* after a sale, marks it at once when there is one.
+*Contracted*, or *Mark the request Contracted* after a sale, marks it at once when there is one.
 When there is not, it asks for one instead:
 
 - **Sign under a contract already registered** — any of the client's contracts for the
@@ -1894,7 +1900,14 @@ the contract.
      message (⌘V), which the task says; *Copy the email* copies it the same way. Where
      formatting is not taken, the plain text carries the form's address after the word. Beneath, whether
      the hotel's form is out or came back, *See what the hotel sees* and *Switch the link off*.
-  3. **What to find out** — the checklist below, with *Hotel details*, *Quotations* and the
+  3. **Register their quote** (2026-10-11) — when the hotel replies with rooms and rates,
+     *+ Register their quote* opens the quotation form (§3.10) in a popup over the task, so
+     the task stays where it is, tied to the task's sales request to start. Saved, it is on
+     the property's Quotations tab for the event like any other, listed here (name, for
+     which client, period, room-nights, total), ticks *Rate* below and moves the property on
+     the request's sourcing task. A property with no room categories yet is asked for them
+     first, under *Hotel details*.
+  4. **What to find out** — the checklist below, with *Hotel details*, *Quotations* and the
      terms.
 
   A contact task made from the event's map has no request, so its email asks for
@@ -2040,9 +2053,9 @@ room category at the rate we sell it for.
   Lodge** needs at least a room, a change of dates or a note. They can come back and send
   again: the link shows their last answer filled in. Each answer is kept as sent — the rooms,
   the rate at that moment and the notes — and a later one does not rewrite it.
-- **Making the link is sending the rate card** (2026-10-11): a request still at *Initial
-  interest* moves to **Rate card sent** — its own group on the sales board — the moment a
-  rate card's link is made, on its history. A request further along is left where it is.
+- **Making the link is sending the proposal** (2026-10-11): a request at *Initial interest*
+  or *Specify* moves to **Proposal sent** the moment a rate card's link is made, on its
+  history. A request further along is left where it is.
 - **What we see of it**: the account manager and whoever made the card are told (§2.9); the
   answer is written on the request's history; the card in our popup lists **The client's
   answers**, newest first, a change of dates in orange; the request's *Rate cards* shows how
@@ -2094,8 +2107,8 @@ of versions.
 Every change is recorded in the request's history, and registering one is also recorded on
 the client's.
 
-**The Sales requests page** lists open requests grouped by stage — *Initial interest*, then
-*Proposal sent*, then *Blocked* — each row showing the client and contact, the event, what
+**The Sales requests page** lists open requests grouped by stage — *Initial interest*, *Specify*,
+*Proposal sent*, then *Negotiation* — each row showing the client and contact, the event, what
 they need, the period, the follow-up date and next step, the account manager and how many
 days the request has been open. Within a stage, the most pressing follow-up comes first.
 A follow-up due today or overdue shows in red, and a note above the list counts them, with

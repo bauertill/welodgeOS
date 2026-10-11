@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
+import { Popup } from "~/app/_components/popup";
 import { RateIncludesPicker } from "~/app/_components/room-categories";
 import { dayKey } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
@@ -330,12 +331,15 @@ function QuotationEditor({
   categories,
   stay,
   quotation,
+  forRequestId,
   onDone,
 }: {
   scoutingEntryId: string;
   categories: Category[];
   stay: { checkIn: string; checkOut: string };
   quotation?: Quotation;
+  /** A new quotation's sales request, when it is made from that request's task. */
+  forRequestId?: string | null;
   onDone: () => void;
 }) {
   const utils = api.useUtils();
@@ -356,8 +360,8 @@ function QuotationEditor({
   });
   // Which client's request it was quoted for (doc §4.11) — for a new one, the request its open contact task is about.
   const requests = api.quotation.requestsFor.useQuery({ scoutingEntryId });
-  const [salesRequestId, setSalesRequestId] = useState<string | null>(quotation ? quotation.salesRequestId : null);
-  const [requestTouched, setRequestTouched] = useState(Boolean(quotation));
+  const [salesRequestId, setSalesRequestId] = useState<string | null>(quotation ? quotation.salesRequestId : (forRequestId ?? null));
+  const [requestTouched, setRequestTouched] = useState(Boolean(quotation) || Boolean(forRequestId));
   const forRequest = requestTouched ? salesRequestId : (requests.data?.likely ?? null);
   // What the rates include, the same choice as on a room category (§3.9).
   const [includes, setIncludes] = useState<RateInclusion[]>(quotation?.rateIncludes ?? []);
@@ -390,6 +394,7 @@ function QuotationEditor({
       void utils.quotation.invalidate();
       void utils.scouting.listForEvent.invalidate();
       void utils.sales.sourcing.invalidate();
+      void utils.task.gathering.invalidate();
       onDone();
     },
   });
@@ -584,5 +589,34 @@ function QuotationEditor({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Register a hotel's quotation from elsewhere — its contact task (doc §4.11) —
+ * in a popup, so the task stays where it is. It is saved on the property's
+ * Quotations tab for the event, like one added there.
+ */
+export function QuotationPopup({ scoutingEntryId, forRequestId, onClose }: { scoutingEntryId: string; forRequestId: string | null; onClose: () => void }) {
+  const context = api.quotation.formContext.useQuery({ scoutingEntryId });
+  const c = context.data;
+  return (
+    <Popup title={c ? `Their quote — ${c.property.name}` : "Their quote"} subtitle={c ? `For ${c.event.name}. Saved on the property's Quotations tab.` : undefined} size="medium" onClose={onClose}>
+      {!c ? (
+        <p className="text-ink-500 text-sm font-light">Loading…</p>
+      ) : c.property.categories.length === 0 ? (
+        <p className="text-ink-700 text-sm font-light">
+          {c.property.name} has no room categories yet — each line of a quotation is rooms of one of them. Add them first under <em>Hotel details</em> on the task.
+        </p>
+      ) : (
+        <QuotationEditor
+          scoutingEntryId={scoutingEntryId}
+          categories={c.property.categories}
+          stay={{ checkIn: dayKey(c.event.startDate), checkOut: dayKey(c.event.endDate) }}
+          forRequestId={forRequestId}
+          onDone={onClose}
+        />
+      )}
+    </Popup>
   );
 }

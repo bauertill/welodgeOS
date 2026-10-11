@@ -1103,13 +1103,18 @@ model ClientContact {
 /// order a request moves through them; the rest close it.
 enum SalesRequestStage {
   INITIAL_INTEREST
-  RATE_CARD_SENT
+  SPECIFY
   PROPOSAL_SENT
-  BLOCKED
-  SIGNED
-  RELEASED
-  NO_REPLY
+  NEGOTIATION
+  CONTRACTED
   LOST
+}
+
+/// Why a request was lost or declined (doc §4.11).
+enum LostReason {
+  DECLINED
+  NO_REPLY
+  RELEASED
 }
 
 /// A client's interest in accommodation, followed from the first enquiry to
@@ -1117,8 +1122,10 @@ enum SalesRequestStage {
 /// calls it a deal. It is the commercial conversation, not the rooms: a
 /// room-night's own "requested" is a different, per-night thing (§4.2).
 model SalesRequest {
-  id    String            @id @default(cuid())
-  stage SalesRequestStage @default(INITIAL_INTEREST)
+  id         String            @id @default(cuid())
+  stage      SalesRequestStage @default(INITIAL_INTEREST)
+  /// Why, when it is Lost/Declined.
+  lostReason LostReason?
 
   client    Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   clientId  String

@@ -130,6 +130,18 @@ export const quotationRouter = createTRPCRouter({
     return { requests: requests.map((request) => ({ id: request.id, name: request.client.name, description: request.description })), likely: task?.salesRequestId ?? null };
   }),
 
+  /** What the quotation form needs outside the property's page: its room categories and the event's dates (doc §4.11). */
+  formContext: protectedProcedure.input(z.object({ scoutingEntryId: z.string() })).query(async ({ ctx, input }) => {
+    const entry = await ctx.db.scoutingEntry.findUniqueOrThrow({
+      where: { id: input.scoutingEntryId },
+      select: {
+        event: { select: { name: true, startDate: true, endDate: true } },
+        property: { select: { id: true, name: true, categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true } } } },
+      },
+    });
+    return entry;
+  }),
+
   /** Add a quotation, or change one — its lines are replaced by the ones given. */
   save: protectedProcedure
     .input(z.object({ scoutingEntryId: z.string(), id: z.string().optional(), quotation: quotationInput }))

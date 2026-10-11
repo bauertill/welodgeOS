@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData } from "@tanstack/react-query";
-import type { SalesRequestStage } from "generated/prisma";
+import type { LostReason, SalesRequestStage } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -25,6 +25,8 @@ import {
   earlierInterestFields,
   interestFields,
   isClosed,
+  lostReasonHints,
+  lostReasonLabels,
   openStages,
   salesStageHints,
   salesStageLabels,
@@ -701,7 +703,7 @@ function useSign(request: FullRequest, onSigned: () => void) {
   });
   const start = () => {
     setStage.reset();
-    if ((linked.data ?? []).some((contract) => contract.party === "CLIENT")) setStage.mutate({ id: request.id, stage: "SIGNED" });
+    if ((linked.data ?? []).some((contract) => contract.party === "CLIENT")) setStage.mutate({ id: request.id, stage: "CONTRACTED" });
     else setAsking(true);
   };
   const panel = asking ? (
@@ -709,7 +711,7 @@ function useSign(request: FullRequest, onSigned: () => void) {
       request={request}
       pending={setStage.isPending}
       error={setStage.error ? friendlyError(setStage.error) : null}
-      onUse={(contractId) => setStage.mutate({ id: request.id, stage: "SIGNED", contractId })}
+      onUse={(contractId) => setStage.mutate({ id: request.id, stage: "CONTRACTED", contractId })}
       onCancel={() => setAsking(false)}
     />
   ) : setStage.error ? (
@@ -735,13 +737,13 @@ function SignNeedsContract({
   const free = (contracts.data ?? []).filter((contract) => contract.clientId === request.client.id && !contract.salesRequestId);
   return (
     <div className="border-brand-200 bg-brand-50/60 mt-3 rounded-lg border p-3 text-[13px] font-light">
-      <p className="text-ink-900 font-medium">To mark it signed, register the client&apos;s contract</p>
+      <p className="text-ink-900 font-medium">To mark it contracted, register the client&apos;s contract</p>
       {!request.event ? (
         <p className="text-ink-700 mt-1">Choose the event under Details first — a contract is for an event.</p>
       ) : (
         <>
           <p className="text-ink-700 mt-1">
-            A signed request needs {request.client.name}&apos;s contract for {request.event.name}, so its payments and cancellation
+            A contracted request needs {request.client.name}&apos;s contract for {request.event.name}, so its payments and cancellation
             terms are followed.
           </p>
           {free.length > 0 && (
@@ -780,14 +782,14 @@ function SignNeedsContract({
 }
 
 /** The way a request goes when it goes well (doc §4.11) — Blocked is a step some skip. */
-const pipeline: SalesRequestStage[] = ["INITIAL_INTEREST", "RATE_CARD_SENT", "PROPOSAL_SENT", "BLOCKED", "SIGNED"];
-/** The ways it ends without being signed. */
-const closings: SalesRequestStage[] = ["RELEASED", "NO_REPLY", "LOST"];
+const pipeline: SalesRequestStage[] = ["INITIAL_INTEREST", "SPECIFY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACTED"];
+/** Why it ended without being contracted — chosen under Close as…. */
+const lostReasons: LostReason[] = ["DECLINED", "NO_REPLY", "RELEASED"];
 const moveOnLabels: Partial<Record<SalesRequestStage, string>> = {
-  RATE_CARD_SENT: "Mark rate card sent",
+  SPECIFY: "Mark specify",
   PROPOSAL_SENT: "Mark proposal sent",
-  BLOCKED: "Mark blocked",
-  SIGNED: "Mark signed",
+  NEGOTIATION: "Mark negotiation",
+  CONTRACTED: "Mark contracted",
 };
 
 /**
@@ -801,16 +803,16 @@ function StagePicker({ request }: { request: FullRequest }) {
   const setStage = api.sales.setStage.useMutation({ onSuccess: saved });
   const sign = useSign(request, saved);
   const [closing, setClosing] = useState(false);
-  const move = (stage: SalesRequestStage) => {
+  const move = (stage: SalesRequestStage, lostReason?: LostReason) => {
     setClosing(false);
-    if (stage === request.stage) return;
-    if (stage === "SIGNED") sign.start();
-    else setStage.mutate({ id: request.id, stage });
+    if (stage === request.stage && stage !== "LOST") return;
+    if (stage === "CONTRACTED") sign.start();
+    else setStage.mutate({ id: request.id, stage, lostReason });
   };
-  const closedOtherwise = closings.includes(request.stage);
+  const closedOtherwise = request.stage === "LOST";
   const at = pipeline.indexOf(request.stage);
-  const nextSteps =
-    at === 0 ? ["RATE_CARD_SENT", "PROPOSAL_SENT"] : at === 1 ? ["PROPOSAL_SENT", "BLOCKED"] : at === 2 ? ["SIGNED", "BLOCKED"] : at === 3 ? ["SIGNED"] : [];
+  // Specify → Proposal sent happens when a rate card's link is made; by hand only once one has been sent (doc §4.11).
+  const nextSteps = at === 0 ? ["SPECIFY"] : at === 1 ? ["PROPOSAL_SENT"] : at === 2 ? ["NEGOTIATION", "CONTRACTED"] : at === 3 ? ["CONTRACTED"] : [];
 
   return (
     <Card>
@@ -819,14 +821,15 @@ function StagePicker({ request }: { request: FullRequest }) {
           <div className="flex items-center gap-3">
             <StageBadge stage={request.stage} />
             <span className="text-ink-700 text-sm font-light">
-              Closed{request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""} — {salesStageHints[request.stage].replace(/ Closed\.$/, "")}
+              {request.lostReason ? `${lostReasonLabels[request.lostReason]} — ` : ""}closed{request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""}.{" "}
+              {request.lostReason ? lostReasonHints[request.lostReason] : ""}
             </span>
           </div>
           <Button
             type="button"
             variant="secondary"
             disabled={setStage.isPending}
-            onClick={() => move(request.proposalSentOn ? "PROPOSAL_SENT" : "INITIAL_INTEREST")}
+            onClick={() => move(request.proposalSentOn ? "PROPOSAL_SENT" : request.detailedAt ? "SPECIFY" : "INITIAL_INTEREST")}
           >
             Reopen
           </Button>
@@ -836,7 +839,7 @@ function StagePicker({ request }: { request: FullRequest }) {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <ol className="flex min-w-0 flex-1 items-start">
               {pipeline.map((stage, index) => {
-                const done = index < at || request.stage === "SIGNED";
+                const done = index < at || request.stage === "CONTRACTED";
                 const current = index === at;
                 const last = index === pipeline.length - 1;
                 return (
@@ -851,7 +854,7 @@ function StagePicker({ request }: { request: FullRequest }) {
                     >
                       <span
                         className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-[13px] font-semibold transition-colors ${
-                          request.stage === "SIGNED"
+                          request.stage === "CONTRACTED"
                             ? "border-[#0a7a47] bg-[#0a7a47] text-white"
                             : current
                               ? "border-brand-400 bg-brand-400 text-white"
@@ -869,7 +872,7 @@ function StagePicker({ request }: { request: FullRequest }) {
                     {!last && (
                       <span
                         aria-hidden
-                        className={`mt-4 h-0.5 min-w-4 flex-1 rounded ${index < at || request.stage === "SIGNED" ? (request.stage === "SIGNED" ? "bg-[#0a7a47]" : "bg-brand-400") : "bg-ink-200"}`}
+                        className={`mt-4 h-0.5 min-w-4 flex-1 rounded ${index < at || request.stage === "CONTRACTED" ? (request.stage === "CONTRACTED" ? "bg-[#0a7a47]" : "bg-brand-400") : "bg-ink-200"}`}
                       />
                     )}
                   </li>
@@ -883,22 +886,23 @@ function StagePicker({ request }: { request: FullRequest }) {
                   {moveOnLabels[stage as SalesRequestStage]} {index === 0 ? "→" : ""}
                 </Button>
               ))}
-              {request.stage !== "SIGNED" && (
+              {request.stage !== "CONTRACTED" && (
                 <div className="relative">
                   <Button type="button" variant="ghost" onClick={() => setClosing(!closing)} aria-expanded={closing}>
                     Close as… ▾
                   </Button>
                   {closing && (
                     <div className="border-ink-200 absolute right-0 z-20 mt-1 w-72 overflow-hidden rounded-xl border bg-white shadow-lg">
-                      {closings.map((stage) => (
+                      <span className="text-ink-500 block px-4 pt-2.5 pb-1 text-[11px] font-medium tracking-wider uppercase">Lost/Declined — why?</span>
+                      {lostReasons.map((reason) => (
                         <button
-                          key={stage}
+                          key={reason}
                           type="button"
-                          onClick={() => move(stage)}
+                          onClick={() => move("LOST", reason)}
                           className="hover:bg-ink-50 block w-full px-4 py-2.5 text-left"
                         >
-                          <span className="text-ink-900 block text-[13px] font-medium">{salesStageLabels[stage]}</span>
-                          <span className="text-ink-500 block text-xs font-light">{salesStageHints[stage].replace(/ Closed\.$/, "")}</span>
+                          <span className="text-ink-900 block text-[13px] font-medium">{lostReasonLabels[reason]}</span>
+                          <span className="text-ink-500 block text-xs font-light">{lostReasonHints[reason]}</span>
                         </button>
                       ))}
                     </div>
@@ -908,8 +912,8 @@ function StagePicker({ request }: { request: FullRequest }) {
             </div>
           </div>
           <p className="text-ink-500 mt-3 text-xs font-light">
-            {request.stage === "SIGNED"
-              ? `Signed${request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""}. Click a step to move it back.`
+            {request.stage === "CONTRACTED"
+              ? `Contracted${request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""}. Click a step to move it back.`
               : salesStageHints[request.stage]}
           </p>
         </>
@@ -1465,7 +1469,7 @@ const rowActions: Record<RoomRow["state"], { action: RoomAction; label: string }
 };
 
 /** The stage a request has reached once its rooms are blocked or sold — offered, never made. */
-const stageAfter = { BLOCK: "BLOCKED", SELL: "SIGNED" } as const;
+const stageAfter = { BLOCK: "NEGOTIATION", SELL: "CONTRACTED" } as const;
 
 /** Re-reads the rooms, and resolves once the table shows the change — so "done" is never said before it is. */
 function useRoomsSaved() {
@@ -1582,7 +1586,7 @@ function Done({ done, request, onClose }: { done: { text: string; offer: SalesRe
         <button
           type="button"
           disabled={setStage.isPending}
-          onClick={() => (done.offer === "SIGNED" ? sign.start() : setStage.mutate({ id: request.id, stage: done.offer! }))}
+          onClick={() => (done.offer === "CONTRACTED" ? sign.start() : setStage.mutate({ id: request.id, stage: done.offer! }))}
           className="font-medium hover:underline"
         >
           Mark the request {salesStageLabels[done.offer]}
@@ -2081,7 +2085,7 @@ function ContractCard({ request }: { request: FullRequest }) {
           </Link>
         )}
       </div>
-      {rows.length === 0 && request.stage === "SIGNED" ? (
+      {rows.length === 0 && request.stage === "CONTRACTED" ? (
         // Signed before a contract was required: said, so it gets registered.
         <p className="text-sm font-light text-[#c03654]">
           Marked signed, but no contract is registered.{" "}

@@ -622,7 +622,7 @@ export function NewContractForm({
         <div className="space-y-2 sm:col-span-2">
           <FormError message={problem ?? (create.error ? friendlyError(create.error) : null)} />
           <Button type="submit" disabled={create.isPending || !eventId || !withId || !name.trim()}>
-            {create.isPending ? "Adding…" : preset?.markRequestSigned ? "Add contract and mark signed" : "Add contract"}
+            {create.isPending ? "Adding…" : preset?.markRequestSigned ? "Add contract and mark contracted" : "Add contract"}
           </Button>
           <p className="text-ink-500 text-xs font-light">Its payment and cancellation terms are added on the next page.</p>
         </div>
