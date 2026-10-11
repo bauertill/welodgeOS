@@ -6,15 +6,17 @@ import { Button, Field, FormError, friendlyError, Input, Textarea } from "~/app/
 import { PrintButton } from "~/app/_components/print-button";
 import { RateCardView } from "~/app/_components/rate-card-view";
 import { dayKey, nightsBetween, parseDay } from "~/lib/dates";
-import { formatMoney } from "~/lib/format";
+import { formatMoney, formatRange } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Card = RouterOutputs["rateCard"]["shared"];
-type Pick = { rooms: string; checkIn: string; checkOut: string; note: string };
+type Line = Card["properties"][number]["lines"][number];
+type Period = { rooms: string; checkIn: string; checkOut: string; note: string };
 
 /**
  * A rate card on the client's link (doc §4.11), answerable: "I'm interested"
- * on a room opens how many, which nights and a note; "Our dates have changed"
+ * on a room opens how many, which nights and a note — as many periods as
+ * they need; "Our dates have changed"
  * takes the new dates; Send to We Lodge sends it all — and can be sent again.
  */
 export function SharedRateCard({ token, card }: { token: string; card: Card }) {
@@ -23,21 +25,19 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   const defaultOut = first?.checkOut ? dayKey(first.checkOut) : card.event ? dayKey(card.event.endDate) : "";
   const last = card.lastAnswer;
 
-  const [picks, setPicks] = useState<Record<string, Pick>>(() =>
-    Object.fromEntries(
-      (last?.items ?? [])
-        .filter((item) => item.lineId)
-        .map((item) => [
-          item.lineId!,
-          {
-            rooms: String(item.rooms),
-            checkIn: item.checkIn ? dayKey(item.checkIn) : defaultIn,
-            checkOut: item.checkOut ? dayKey(item.checkOut) : defaultOut,
-            note: item.note ?? "",
-          },
-        ]),
-    ),
-  );
+  const [picks, setPicks] = useState<Record<string, Period[]>>(() => {
+    const start: Record<string, Period[]> = {};
+    for (const item of last?.items ?? []) {
+      if (!item.lineId) continue;
+      (start[item.lineId] ??= []).push({
+        rooms: String(item.rooms),
+        checkIn: item.checkIn ? dayKey(item.checkIn) : defaultIn,
+        checkOut: item.checkOut ? dayKey(item.checkOut) : defaultOut,
+        note: item.note ?? "",
+      });
+    }
+    return start;
+  });
   const [name, setName] = useState(last?.name ?? "");
   const [email, setEmail] = useState(last?.email ?? "");
   const [note, setNote] = useState("");
@@ -54,8 +54,33 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
 
   const lines = new Map(card.properties.flatMap((property) => property.lines.map((line) => [line.id, { line, property }] as const)));
   const chosen = Object.entries(picks);
-  const setPick = (lineId: string, change: Partial<Pick>) => setPicks((current) => ({ ...current, [lineId]: { ...current[lineId]!, ...change } }));
-  const nights = (pick: Pick) => (pick.checkIn && pick.checkOut && pick.checkOut > pick.checkIn ? nightsBetween(parseDay(pick.checkIn), parseDay(pick.checkOut)) : null);
+  const newPeriod = (line: Line): Period => {
+    const asked = first?.rooms ?? 1;
+    return { rooms: String(line.available ? Math.min(asked, line.available) : asked), checkIn: defaultIn, checkOut: defaultOut, note: "" };
+  };
+  const setPeriod = (lineId: string, index: number, change: Partial<Period>) =>
+    setPicks((current) => ({ ...current, [lineId]: current[lineId]!.map((period, i) => (i === index ? { ...period, ...change } : period)) }));
+  const addPeriod = (lineId: string) => setPicks((current) => ({ ...current, [lineId]: [...current[lineId]!, newPeriod(lines.get(lineId)!.line)] }));
+  const removePeriod = (lineId: string, index: number) =>
+    setPicks((current) => {
+      const left = current[lineId]!.filter((_, i) => i !== index);
+      const next = { ...current };
+      if (left.length) next[lineId] = left;
+      else delete next[lineId];
+      return next;
+    });
+  const nights = (pick: Period) => (pick.checkIn && pick.checkOut && pick.checkOut > pick.checkIn ? nightsBetween(parseDay(pick.checkIn), parseDay(pick.checkOut)) : null);
+  /** What stands in the way of a period: more rooms than there are, or a stay under the minimum. */
+  const problem = (line: Line, pick: Period) => {
+    const n = nights(pick);
+    if (line.available !== null && Number(pick.rooms) > line.available) return `${line.available} available at most`;
+    if (line.minNights !== null && n !== null && n < line.minNights) return `The minimum stay is ${line.minNights} nights`;
+    return null;
+  };
+  const blocked = Object.entries(picks).some(([lineId, periods]) => {
+    const found = lines.get(lineId);
+    return found ? periods.some((pick) => problem(found.line, pick)) : false;
+  });
 
   return (
     <div className="space-y-4 pb-10">
@@ -87,7 +112,7 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                 setPicks((current) => {
                   const next = { ...current };
                   if (on) delete next[line.id];
-                  else next[line.id] = { rooms: first ? String(first.rooms) : "1", checkIn: defaultIn, checkOut: defaultOut, note: "" };
+                  else next[line.id] = [newPeriod(line)];
                   return next;
                 })
               }
@@ -100,29 +125,51 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
           );
         }}
         lineExtra={(line) => {
-          const pick = picks[line.id];
-          if (!pick) return null;
-          const n = nights(pick);
+          const periods = picks[line.id];
+          if (!periods) return null;
           return (
-            <div className="bg-brand-50/60 grid gap-3 rounded-lg px-3 py-3 sm:grid-cols-[6rem_9.5rem_9.5rem_1fr]">
-              <Field label="Rooms">
-                <Input inputMode="numeric" value={pick.rooms} onChange={(e) => setPick(line.id, { rooms: e.target.value })} />
-              </Field>
-              <Field label="Arrival">
-                <Input type="date" value={pick.checkIn} onChange={(e) => setPick(line.id, { checkIn: e.target.value })} />
-              </Field>
-              <Field label="Departure">
-                <Input type="date" value={pick.checkOut} onChange={(e) => setPick(line.id, { checkOut: e.target.value })} />
-              </Field>
-              <Field label="Note — optional">
-                <Input value={pick.note} onChange={(e) => setPick(line.id, { note: e.target.value })} placeholder="For the coaches, close to each other" />
-              </Field>
-              {n !== null && Number(pick.rooms) > 0 && (
-                <p className="text-ink-500 text-xs font-light sm:col-span-4">
-                  {pick.rooms} {Number(pick.rooms) === 1 ? "room" : "rooms"} × {n} nights × {formatMoney(line.sellingCents, card.currency)} ={" "}
-                  <span className="text-ink-900 font-medium">{formatMoney(line.sellingCents * Number(pick.rooms) * n, card.currency)}</span>
-                </p>
-              )}
+            <div className="bg-brand-50/60 space-y-3 rounded-lg px-3 py-3">
+              {periods.map((pick, index) => {
+                const n = nights(pick);
+                return (
+                  <div key={index} className={index > 0 ? "border-brand-200/70 border-t pt-3" : ""}>
+                    <div className="grid gap-3 sm:grid-cols-[5.5rem_9.5rem_9.5rem_1fr]">
+                      <Field label="Rooms">
+                        <Input inputMode="numeric" value={pick.rooms} onChange={(e) => setPeriod(line.id, index, { rooms: e.target.value })} />
+                      </Field>
+                      <Field label="Arrival">
+                        <Input type="date" value={pick.checkIn} onChange={(e) => setPeriod(line.id, index, { checkIn: e.target.value })} />
+                      </Field>
+                      <Field label="Departure">
+                        <Input type="date" value={pick.checkOut} onChange={(e) => setPeriod(line.id, index, { checkOut: e.target.value })} />
+                      </Field>
+                      <Field label="Note — optional">
+                        <Input value={pick.note} onChange={(e) => setPeriod(line.id, index, { note: e.target.value })} placeholder="For the coaches, close to each other" />
+                      </Field>
+                    </div>
+                    <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs">
+                      <p className="text-ink-500 font-light">
+                        {problem(line, pick) ? (
+                          <span className="font-normal text-[#c03654]">{problem(line, pick)}</span>
+                        ) : n !== null && Number(pick.rooms) > 0 && (
+                          <>
+                            {pick.rooms} {Number(pick.rooms) === 1 ? "room" : "rooms"} × {n} nights × {formatMoney(line.sellingCents, card.currency)} ={" "}
+                            <span className="text-ink-900 font-medium">{formatMoney(line.sellingCents * Number(pick.rooms) * n, card.currency)}</span>
+                          </>
+                        )}
+                      </p>
+                      {periods.length > 1 && (
+                        <button type="button" onClick={() => removePeriod(line.id, index)} className="shrink-0 font-light text-[#c03654] hover:underline">
+                          Remove this period
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <button type="button" onClick={() => addPeriod(line.id)} className="text-brand-700 text-xs font-medium hover:underline">
+                + Add another period
+              </button>
             </div>
           );
         }}
@@ -134,19 +181,20 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
           <p className="text-ink-500 mt-1 text-sm font-light">No rooms chosen yet — press &ldquo;I&apos;m interested&rdquo; on the rooms you would like.</p>
         ) : (
           <ul className="mt-2 space-y-1 text-sm">
-            {chosen.map(([lineId, pick]) => {
+            {chosen.flatMap(([lineId, periods]) => {
               const found = lines.get(lineId);
-              if (!found) return null;
-              const n = nights(pick);
-              return (
-                <li key={lineId} className="text-ink-700 font-light">
+              if (!found) return [];
+              return periods.map((pick, index) => (
+                <li key={`${lineId}-${index}`} className="text-ink-700 font-light">
                   <span className="text-ink-900 font-medium">
                     {pick.rooms} × {found.line.name}
                   </span>{" "}
                   at {found.property.name}
-                  {n !== null ? ` · ${n} nights` : ""}
+                  {pick.checkIn && pick.checkOut && pick.checkOut > pick.checkIn
+                    ? ` · ${formatRange(parseDay(pick.checkIn), parseDay(pick.checkOut))} · ${nights(pick)} nights`
+                    : ""}
                 </li>
-              );
+              ));
             })}
           </ul>
         )}
@@ -183,9 +231,10 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
 
         <div className="mt-4 space-y-2">
           <FormError message={answer.error ? friendlyError(answer.error) : null} />
+          {blocked && <p className="text-xs text-[#c03654]">Please check the rooms marked in red above — the number of rooms or the length of stay.</p>}
           <Button
             type="button"
-            disabled={answer.isPending || (chosen.length === 0 && !datesChanged && !note.trim())}
+            disabled={answer.isPending || blocked || (chosen.length === 0 && !datesChanged && !note.trim())}
             onClick={() =>
               answer.mutate({
                 token,
@@ -193,13 +242,15 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                 email,
                 note,
                 dateChange: datesChanged ? newDates : null,
-                items: chosen.map(([lineId, pick]) => ({
-                  lineId,
-                  rooms: Math.max(1, Math.round(Number(pick.rooms) || 1)),
-                  checkIn: pick.checkIn,
-                  checkOut: pick.checkOut,
-                  note: pick.note,
-                })),
+                items: chosen.flatMap(([lineId, periods]) =>
+                  periods.map((pick) => ({
+                    lineId,
+                    rooms: Math.max(1, Math.round(Number(pick.rooms) || 1)),
+                    checkIn: pick.checkIn,
+                    checkOut: pick.checkOut,
+                    note: pick.note,
+                  })),
+                ),
               })
             }
           >

@@ -1954,12 +1954,15 @@ room category at the rate we sell it for.
   the client pays per night**, typed in; the margin beside it, red when below cost. A
   **markup** (15% to start) is applied to every room with a cost by *Apply to all*, then any
   rate changed by hand. A property can be taken off the card. A room left without a selling
-  rate is not offered.
+  rate is not offered. **Every room offered must say how many units are available and the
+  minimum stay in nights** (2026-10-11): missing ones are outlined in red and the card
+  cannot be saved, nor its link made, until they are given.
 - **What the client sees** — the preview, the printout (*Print or save as PDF*) and the
   client's link are one design: our logo, *Rate card*, the event, "Prepared for {client}" and
   the event's dates, the request ("20 × Single room · 10–31 Jul 2028 · 21 nights"), the word
   to the client, then each property — name and stars, kind and area, how far from the nearest
-  venue, its description and its rooms with the rate per night — and a line that rates are
+  venue, its description and its rooms — sleeps, units available, minimum stay — with the
+  rate per night — and a line that rates are
   per room per night, in the currency, subject to availability. **Never our buying rates or
   margins**: the client's copy is made without them. Properties with no rate offered are
   left out of it.
@@ -1967,7 +1970,10 @@ room category at the rate we sell it for.
   *Copy link*, *Open*, *Switch off*. It shows what is saved.
 - **The client answers from the link** (2026-10-11). Beside each room, **I'm interested**;
   pressed, it opens how many rooms, arrival and departure (the request's dates to start, else
-  the event's) and a note, with what that comes to at the rate shown. Under the card, **Your
+  the event's) and a note, with what that comes to at the rate shown. **+ Add another
+  period** adds more dates for the same room — each period its own number of rooms, dates
+  and note, and any can be removed. More rooms than are available, or a stay shorter than
+  the minimum, is marked in red and cannot be sent. Under the card, **Your
   answer** sums up the rooms chosen, and has **Our dates have changed** — the new arrival
   and departure and what changed — their name and email, and a note to us. **Send to We
   Lodge** needs at least a room, a change of dates or a note. They can come back and send

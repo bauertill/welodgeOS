@@ -26,7 +26,7 @@ export type ClientRateCard = {
     where: string | null;
     nearest: { name: string; km: number } | null;
     description: string | null;
-    lines: { id: string; name: string; sleeps: number | null; sellingCents: number }[];
+    lines: { id: string; name: string; sleeps: number | null; sellingCents: number; available: number | null; minNights: number | null }[];
   }[];
 };
 
@@ -105,6 +105,8 @@ export function RateCardView({
                 <tr className="text-ink-500 border-ink-200/70 border-b text-[11px] tracking-wider uppercase">
                   <th className="pb-2 font-medium">Room type</th>
                   <th className="pb-2 font-medium">Sleeps</th>
+                  <th className="pb-2 font-medium">Available</th>
+                  <th className="pb-2 font-medium">Min. stay</th>
                   <th className="pb-2 text-right font-medium">Per night</th>
                   {lineAction && <th className="pb-2 print:hidden" />}
                 </tr>
@@ -117,12 +119,14 @@ export function RateCardView({
                       <tr className={`border-ink-200/40 ${extra ? "" : "border-b last:border-0"}`}>
                         <td className="text-ink-900 py-2.5">{line.name}</td>
                         <td className="text-ink-500 py-2.5 font-light">{line.sleeps ?? "—"}</td>
+                        <td className="text-ink-500 py-2.5 font-light">{line.available ?? "—"}</td>
+                        <td className="text-ink-500 py-2.5 font-light">{line.minNights ? `${line.minNights} ${line.minNights === 1 ? "night" : "nights"}` : "—"}</td>
                         <td className="text-ink-900 py-2.5 text-right font-medium whitespace-nowrap">{formatMoney(line.sellingCents, card.currency)}</td>
                         {lineAction && <td className="py-2.5 pl-3 text-right print:hidden">{lineAction(line, property)}</td>}
                       </tr>
                       {extra && (
                         <tr className="border-ink-200/40 border-b last:border-0 print:hidden">
-                          <td colSpan={lineAction ? 4 : 3} className="pb-3">
+                          <td colSpan={lineAction ? 6 : 5} className="pb-3">
                             {extra}
                           </td>
                         </tr>

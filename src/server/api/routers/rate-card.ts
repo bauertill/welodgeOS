@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { env } from "~/env";
-import { parseDay } from "~/lib/dates";
+import { nightsBetween, parseDay } from "~/lib/dates";
 import { nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
@@ -98,7 +98,15 @@ function shape(card: LoadedCard) {
         website: entry.property.website,
         nearest: nearest ? { name: nearest.place.name, km: nearest.km } : null,
         description: entry.description,
-        lines: entry.lines.map((line) => ({ id: line.id, name: line.name, sleeps: line.sleeps, buyingCents: line.buyingCents, sellingCents: line.sellingCents })),
+        lines: entry.lines.map((line) => ({
+          id: line.id,
+          name: line.name,
+          sleeps: line.sleeps,
+          buyingCents: line.buyingCents,
+          sellingCents: line.sellingCents,
+          available: line.available,
+          minNights: line.minNights,
+        })),
       };
     }),
   };
@@ -190,7 +198,16 @@ export const rateCardRouter = createTRPCRouter({
             z.object({
               id: z.string(),
               description: z.string().max(3000),
-              lines: z.array(z.object({ id: z.string(), sellingCents: z.number().int().min(0).nullable() })).max(60),
+              lines: z
+                .array(
+                  z.object({
+                    id: z.string(),
+                    sellingCents: z.number().int().min(0).nullable(),
+                    available: z.number().int().min(1, "Units available has to be at least 1.").max(10_000).nullable(),
+                    minNights: z.number().int().min(1, "The minimum stay has to be at least 1 night.").max(365).nullable(),
+                  }),
+                )
+                .max(60),
             }),
           )
           .max(30),
@@ -199,6 +216,13 @@ export const rateCardRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // A room is only offered with how many units there are and the shortest stay (doc §4.11).
+      for (const property of input.properties) {
+        if (input.removedPropertyIds.includes(property.id)) continue;
+        if (property.lines.some((line) => line.sellingCents !== null && (line.available === null || line.minNights === null))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "For every room offered, say how many units are available and the minimum stay." });
+        }
+      }
       await ctx.db.$transaction(async (tx) => {
         const card = await tx.rateCard.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, salesRequestId: true, properties: { select: { id: true, lines: { select: { id: true } } } } } });
         const ownProperties = new Set(card.properties.map((property) => property.id));
@@ -215,7 +239,7 @@ export const rateCardRouter = createTRPCRouter({
           await tx.rateCardProperty.update({ where: { id: property.id }, data: { description: property.description.trim() || null, position } });
           for (const line of property.lines) {
             if (!ownLines.has(line.id)) continue;
-            await tx.rateCardLine.update({ where: { id: line.id }, data: { sellingCents: line.sellingCents } });
+            await tx.rateCardLine.update({ where: { id: line.id }, data: { sellingCents: line.sellingCents, available: line.available, minNights: line.minNights } });
           }
         }
         await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card saved: ${input.name}` });
@@ -231,6 +255,10 @@ export const rateCardRouter = createTRPCRouter({
 
   /** A link for the client — no sign-in, no buying rates. A new one replaces the old. */
   share: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const missing = await ctx.db.rateCardLine.count({
+      where: { rateCardProperty: { rateCardId: input.id }, sellingCents: { not: null }, OR: [{ available: null }, { minNights: null }] },
+    });
+    if (missing) throw new TRPCError({ code: "BAD_REQUEST", message: "Say how many units are available and the minimum stay for every room offered, and save, before making the link." });
     const card = await ctx.db.rateCard.update({ where: { id: input.id }, data: { shareToken: randomBytes(24).toString("base64url") }, select: { shareToken: true, salesRequestId: true, name: true } });
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card link made: ${card.name}` });
     return { shareToken: card.shareToken! };
@@ -294,12 +322,23 @@ export const rateCardRouter = createTRPCRouter({
             name: true,
             createdById: true,
             salesRequest: { select: { id: true, ownerId: true, client: { select: { name: true } } } },
-            properties: { select: { property: { select: { name: true } }, lines: { select: { id: true, name: true, sellingCents: true } } } },
+            properties: { select: { property: { select: { name: true } }, lines: { select: { id: true, name: true, sellingCents: true, available: true, minNights: true } } } },
           },
         });
         if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
         const lines = new Map(card.properties.flatMap((property) => property.lines.map((line) => [line.id, { ...line, propertyName: property.property.name }] as const)));
         const items = input.items.filter((item) => lines.has(item.lineId));
+        for (const item of items) {
+          const line = lines.get(item.lineId)!;
+          if (line.available !== null && item.rooms > line.available) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `${line.propertyName}, ${line.name}: ${line.available} available at most.` });
+          }
+          const from = day(item.checkIn);
+          const to = day(item.checkOut);
+          if (line.minNights !== null && from && to && nightsBetween(from, to) < line.minNights) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `${line.propertyName}, ${line.name}: the minimum stay is ${line.minNights} nights.` });
+          }
+        }
         const response = await tx.rateCardResponse.create({
           data: {
             rateCardId: card.id,
@@ -328,7 +367,7 @@ export const rateCardRouter = createTRPCRouter({
           },
         });
         const said = [
-          items.length ? `${items.reduce((sum, item) => sum + item.rooms, 0)} rooms of ${items.length} ${items.length === 1 ? "kind" : "kinds"}` : null,
+          items.length ? roomsInWords(items) : null,
           input.dateChange ? "their dates have changed" : null,
         ]
           .filter(Boolean)
@@ -450,8 +489,16 @@ export function clientCopy(card: ReturnType<typeof shape>) {
         where: property.where,
         nearest: property.nearest,
         description: property.description,
-        lines: property.lines.filter((line) => line.sellingCents !== null).map((line) => ({ id: line.id, name: line.name, sleeps: line.sleeps, sellingCents: line.sellingCents! })),
+        lines: property.lines.filter((line) => line.sellingCents !== null).map((line) => ({ id: line.id, name: line.name, sleeps: line.sleeps, sellingCents: line.sellingCents!, available: line.available, minNights: line.minNights })),
       }))
       .filter((property) => property.lines.length > 0),
   };
+}
+
+/** "20 rooms of 1 kind", "35 rooms of 2 kinds, over 3 periods" — for the notification. */
+function roomsInWords(items: { lineId: string; rooms: number }[]) {
+  const kinds = new Set(items.map((item) => item.lineId)).size;
+  const rooms = items.reduce((sum, item) => sum + item.rooms, 0);
+  const words = `${rooms} ${rooms === 1 ? "room" : "rooms"} of ${kinds} ${kinds === 1 ? "kind" : "kinds"}`;
+  return items.length > kinds ? `${words}, over ${items.length} periods` : words;
 }

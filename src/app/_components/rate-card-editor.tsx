@@ -14,7 +14,7 @@ type Draft = {
   name: string;
   intro: string;
   markup: string;
-  properties: { id: string; description: string; lines: { id: string; selling: string }[] }[];
+  properties: { id: string; description: string; lines: { id: string; selling: string; available: string; minNights: string }[] }[];
   removed: string[];
 };
 
@@ -23,6 +23,10 @@ const toCents = (text: string) => {
   return text.trim() && Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : null;
 };
 const toText = (cents: number | null) => (cents === null ? "" : String(cents / 100));
+const toCount = (text: string) => {
+  const value = Number(text.trim());
+  return text.trim() && Number.isInteger(value) && value > 0 ? value : null;
+};
 const draftOf = (card: Card): Draft => ({
   name: card.name,
   intro: card.intro ?? "",
@@ -30,7 +34,12 @@ const draftOf = (card: Card): Draft => ({
   properties: card.properties.map((property) => ({
     id: property.id,
     description: property.description ?? "",
-    lines: property.lines.map((line) => ({ id: line.id, selling: toText(line.sellingCents) })),
+    lines: property.lines.map((line) => ({
+      id: line.id,
+      selling: toText(line.sellingCents),
+      available: line.available === null ? "" : String(line.available),
+      minNights: line.minNights === null ? "" : String(line.minNights),
+    })),
   })),
   removed: [],
 });
@@ -76,6 +85,13 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
 
   const c = card.data;
   const dirty = draft !== null && JSON.stringify(draft) !== saved;
+  /** Rooms offered without how many units or the shortest stay — not saved until given (doc §4.11). */
+  const incomplete = draft
+    ? draft.properties
+        .filter((property) => !draft.removed.includes(property.id))
+        .flatMap((property) => property.lines)
+        .filter((line) => toCents(line.selling) !== null && (toCount(line.available) === null || toCount(line.minNights) === null)).length
+    : 0;
   const close = () => {
     if (dirty && !window.confirm("Close without saving the rate card?")) return;
     onClose();
@@ -92,7 +108,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       properties: draft.properties.map((property) => ({
         id: property.id,
         description: property.description,
-        lines: property.lines.map((line) => ({ id: line.id, sellingCents: toCents(line.selling) })),
+        lines: property.lines.map((line) => ({ id: line.id, sellingCents: toCents(line.selling), available: toCount(line.available), minNights: toCount(line.minNights) })),
       })),
       removedPropertyIds: draft.removed,
     });
@@ -146,7 +162,14 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 lines: property.lines
                   .map((line) => ({ line, source: source.lines.find((one) => one.id === line.id)! }))
                   .filter(({ line }) => toCents(line.selling) !== null)
-                  .map(({ line, source: lineSource }) => ({ id: line.id, name: lineSource.name, sleeps: lineSource.sleeps, sellingCents: toCents(line.selling)! })),
+                  .map(({ line, source: lineSource }) => ({
+                    id: line.id,
+                    name: lineSource.name,
+                    sleeps: lineSource.sleeps,
+                    sellingCents: toCents(line.selling)!,
+                    available: toCount(line.available),
+                    minNights: toCount(line.minNights),
+                  })),
               };
             })
             .filter((property) => property.lines.length > 0),
@@ -259,6 +282,8 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                         <th className="pb-1.5 font-medium">Sleeps</th>
                         <th className="pb-1.5 font-medium">Our cost / night</th>
                         <th className="pb-1.5 font-medium">Client pays / night ({c.currency})</th>
+                        <th className="pb-1.5 font-medium">Units available</th>
+                        <th className="pb-1.5 font-medium">Min. stay (nights)</th>
                         <th className="pb-1.5 text-right font-medium">Margin</th>
                       </tr>
                     </thead>
@@ -290,6 +315,27 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                                 />
                               </span>
                             </td>
+                            {(["available", "minNights"] as const).map((field) => {
+                              const missing = selling !== null && toCount(line[field]) === null;
+                              return (
+                                <td key={field} className="py-1.5 pr-2">
+                                  <span className={`block w-20 rounded-lg ${missing ? "ring-2 ring-[#c03654]/50" : ""}`}>
+                                    <Input
+                                      inputMode="numeric"
+                                      value={line[field]}
+                                      placeholder={selling !== null ? "Needed" : ""}
+                                      aria-label={`${field === "available" ? "Units available" : "Minimum stay"} for ${lineSource.name}`}
+                                      onChange={(e) =>
+                                        setProperty(property.id, (one) => ({
+                                          ...one,
+                                          lines: one.lines.map((other) => (other.id === line.id ? { ...other, [field]: e.target.value } : other)),
+                                        }))
+                                      }
+                                    />
+                                  </span>
+                                </td>
+                              );
+                            })}
                             <td className={`py-1.5 text-right whitespace-nowrap ${margin !== null && margin < 0 ? "text-[#c03654]" : "text-ink-500"}`}>
                               {margin !== null && lineSource.buyingCents
                                 ? `${formatMoney(margin, c.currency)} · ${Math.round((margin / lineSource.buyingCents) * 100)}%`
@@ -336,6 +382,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 {share.isPending ? "Making the link…" : "Make a link for the client"}
               </Button>
             )}
+            {share.error && <p className="mt-2 text-xs text-[#c03654]">{friendlyError(share.error)}</p>}
           </div>
         </div>
       )}
@@ -350,8 +397,14 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
           >
             Delete rate card
           </button>
-          <span className="text-ink-500 ml-auto text-xs font-light">{dirty ? "Not saved yet" : "Saved"}</span>
-          <Button type="button" disabled={save.isPending || !dirty} onClick={doSave}>
+          {incomplete > 0 ? (
+            <span className="ml-auto text-xs text-[#c03654]">
+              Units available and minimum stay needed for {incomplete} {incomplete === 1 ? "room" : "rooms"}
+            </span>
+          ) : (
+            <span className="text-ink-500 ml-auto text-xs font-light">{dirty ? "Not saved yet" : "Saved"}</span>
+          )}
+          <Button type="button" disabled={save.isPending || !dirty || incomplete > 0} onClick={doSave}>
             {save.isPending ? "Saving…" : "Save"}
           </Button>
         </div>

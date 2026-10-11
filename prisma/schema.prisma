@@ -1724,6 +1724,10 @@ model RateCardLine {
   buyingCents        Int?
   /// What the client pays per night; empty means not offered on this card.
   sellingCents       Int?
+  /// How many of these units we can offer on this card — asked of us before a rate is offered.
+  available          Int?
+  /// The shortest stay, in nights, we accept for these units on this card.
+  minNights          Int?
   position           Int                    @default(0)
   answeredIn         RateCardResponseItem[]
 
