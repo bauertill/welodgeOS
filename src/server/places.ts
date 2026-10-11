@@ -59,13 +59,13 @@ export async function placeDetails(placeId: string, sessionToken: string) {
   const place = (await response.json()) as {
     displayName?: { text: string };
     formattedAddress?: string;
-    addressComponents?: { longText: string; types: string[] }[];
+    addressComponents?: { longText: string; types?: string[] }[];
     location?: { latitude: number; longitude: number };
     websiteUri?: string;
     internationalPhoneNumber?: string;
     types?: string[];
   };
-  const part = (type: string) => place.addressComponents?.find((component) => component.types.includes(type))?.longText ?? null;
+  const part = (type: string) => place.addressComponents?.find((component) => (component.types ?? []).includes(type))?.longText ?? null;
   return {
     name: place.displayName?.text ?? null,
     address: place.formattedAddress ?? null,

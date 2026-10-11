@@ -73,7 +73,7 @@ type GooglePlace = {
   id: string;
   displayName?: { text: string };
   formattedAddress?: string;
-  addressComponents?: { longText: string; types: string[] }[];
+  addressComponents?: { longText: string; types?: string[] }[];
   location?: { latitude: number; longitude: number };
   types?: string[];
   primaryType?: string;
@@ -145,7 +145,7 @@ async function fromGoogle(point: Point, radiusKm: number, kinds: { hotels: boole
       if (types.some((type) => ["campground", "rv_park", "hostel", "camping_cabin"].includes(type))) continue;
       // A holiday let listed through a booking site is somebody's flat, not a place we contract.
       if (place.websiteUri && listingSite.test(hostOf(place.websiteUri))) continue;
-      const part = (type: string) => place.addressComponents?.find((component) => component.types.includes(type))?.longText ?? null;
+      const part = (type: string) => place.addressComponents?.find((component) => (component.types ?? []).includes(type))?.longText ?? null;
       const apartment = textQuery !== "hotels" || types.includes("extended_stay_hotel");
       found.set(place.id, {
         key: `google:${place.id}`,

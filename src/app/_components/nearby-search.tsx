@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { AddressSearch } from "~/app/_components/address-search";
 import { Select } from "~/app/_components/form";
 import { ScoutingMap, type MapAvailability, type MapPin, type MapPlace } from "~/app/_components/scouting-map";
 import { WebsiteLink } from "~/app/_components/website-link";
@@ -36,13 +37,16 @@ export function NearbySearch({
 }) {
   const utils = api.useUtils();
   const venues = places.filter((place) => place.category === "VENUE");
-  const [placeId, setPlaceId] = useState((venues[0] ?? places[0])?.id ?? "");
+  // A place of interest, or "custom" for any address found on the map.
+  const [placeId, setPlaceId] = useState((venues[0] ?? places[0])?.id ?? "custom");
+  const [addressText, setAddressText] = useState("");
+  const [address, setAddress] = useState<{ label: string; latitude: number; longitude: number } | null>(null);
   const [radiusKm, setRadiusKm] = useState(5);
-  const [searching, setSearching] = useState<{ placeId: string; radiusKm: number } | null>(null);
+  const [searching, setSearching] = useState<{ placeId?: string; address?: { label: string; latitude: number; longitude: number }; radiusKm: number } | null>(null);
   const [all, setAll] = useState(false);
   const [added, setAdded] = useState<Record<string, { propertyId: string; taskId: string | null }>>({});
   const search = api.scouting.discoverNear.useQuery(
-    { eventId, placeId: searching?.placeId ?? "", radiusKm: searching?.radiusKm ?? 5 },
+    { eventId, placeId: searching?.placeId, address: searching?.address, radiusKm: searching?.radiusKm ?? 5 },
     { enabled: Boolean(searching), staleTime: 3600_000, refetchOnWindowFocus: false },
   );
   const findContacts = api.property.findContacts.useMutation({ onSettled: () => void utils.task.invalidate() });
@@ -125,7 +129,7 @@ export function NearbySearch({
 
   return (
     <div className="space-y-3">
-      {places.length > 0 && (
+      {(
         <div className="border-ink-200/60 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-white px-4 py-3 text-[13px]">
           <span className="text-ink-900 font-medium">Find hotels not on our list near</span>
           <span className="w-56">
@@ -135,8 +139,26 @@ export function NearbySearch({
                   {place.name}
                 </option>
               ))}
+              <option value="custom">A custom address…</option>
             </Select>
           </span>
+          {placeId === "custom" && (
+            <span className="w-80">
+              <AddressSearch
+                value={addressText}
+                onChange={(value) => {
+                  setAddressText(value);
+                  setAddress(null);
+                }}
+                onFound={(found) => {
+                  if (found.latitude === null || found.longitude === null) return;
+                  const label = found.name ?? found.address ?? addressText;
+                  setAddressText(found.address ?? label);
+                  setAddress({ label, latitude: found.latitude, longitude: found.longitude });
+                }}
+              />
+            </span>
+          )}
           <span className="text-ink-500 font-light">within</span>
           {radiusOptions.map((km) => (
             <button
@@ -151,10 +173,11 @@ export function NearbySearch({
           ))}
           <button
             type="button"
-            disabled={!placeId}
+            disabled={placeId === "custom" ? !address : !placeId}
+            title={placeId === "custom" && !address ? "Choose an address from the suggestions first" : undefined}
             onClick={() => {
               setAll(false);
-              setSearching({ placeId, radiusKm });
+              setSearching(placeId === "custom" ? { address: address!, radiusKm } : { placeId, radiusKm });
             }}
             className="bg-brand-400 hover:bg-brand-500 ml-auto rounded-full px-4 py-1.5 font-medium text-white disabled:opacity-60"
           >

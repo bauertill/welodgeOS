@@ -896,7 +896,8 @@ hand.
 
 **Finding hotels from the map** (2026-10-11). The Map view has a bar above the map: **Find
 hotels not on our list near** one of the event's places of interest (its first venue by
-default), **within 5, 10 or 20 km**, and *Search*. Google Maps (Places API) is searched for
+default) — or **a custom address**, found with the same Google Maps address box as a
+property's — **within 5, 10 or 20 km**, and *Search*. Google Maps (Places API) is searched for
 hotels, serviced apartments and aparthotels around it; those already in our system (the same
 name or address, or the very same spot) are left out, and so are holiday lets listed through
 booking sites (Airbnb, Booking.com, Vrbo, Expedia, bluepillow and the like) — somebody's

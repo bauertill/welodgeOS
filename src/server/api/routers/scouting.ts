@@ -324,12 +324,22 @@ export const scoutingRouter = createTRPCRouter({
    * Properties tab's map, in general rather than for a client.
    */
   discoverNear: protectedProcedure
-    .input(z.object({ eventId: z.string(), placeId: z.string(), radiusKm: z.number().min(1).max(30).default(5) }))
+    .input(
+      z.object({
+        eventId: z.string(),
+        /** One of the event's places of interest — or, instead, any address found on the map. */
+        placeId: z.string().optional(),
+        address: z.object({ label: z.string().max(300), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }).optional(),
+        radiusKm: z.number().min(1).max(30).default(5),
+      }),
+    )
     .query(async ({ ctx, input }) => {
-      const place = await ctx.db.placeOfInterest.findFirstOrThrow({
-        where: { id: input.placeId, eventId: input.eventId },
-        select: { name: true, latitude: true, longitude: true },
-      });
+      const place = input.address
+        ? { name: input.address.label, latitude: input.address.latitude, longitude: input.address.longitude }
+        : await ctx.db.placeOfInterest.findFirstOrThrow({
+            where: { id: input.placeId ?? "", eventId: input.eventId },
+            select: { name: true, latitude: true, longitude: true },
+          });
       const result = await findNearby(place, input.radiusKm, { hotels: true, apartments: true });
       if (!result) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "The map search did not answer — try again in a minute." });
       const ours = await ctx.db.property.findMany({ select: { id: true, name: true, address: true, latitude: true, longitude: true } });
