@@ -1139,6 +1139,12 @@ first. They are not shown under the property's row on the Properties tab, where 
 them would make the board too long; the row says how many there are and links straight
 to the tab.
 
+**A quote before the room categories** (2026-10-11). A hotel often quotes before its rooms
+are on the property, so a quotation can be started anyway: each line's *Room category* has
+*+ New room category…* (and, with none yet, the form opens on it) — a name, how many rooms
+it has and how many it sleeps — which adds the category to the property at once, its beds,
+size and the rest to fill in later on the property's page, and puts it on the line.
+
 **For which sales request** (2026-10-11). A quotation can be for one client's request —
 the hotel quoted for that group — found at the top of the form by typing the client's
 name (the event's open requests are searched, however many), or left general; a new one starts with the request the property's open hotel contact task is
@@ -1905,8 +1911,8 @@ the contract.
      the task stays where it is, tied to the task's sales request to start. Saved, it is on
      the property's Quotations tab for the event like any other, listed here (name, for
      which client, period, room-nights, total), ticks *Rate* below and moves the property on
-     the request's sourcing task. A property with no room categories yet is asked for them
-     first, under *Hotel details*.
+     the request's sourcing task. A hotel with no room categories yet can still be quoted:
+     they are added from the quote's lines (§3.10).
   4. **What to find out** — the checklist below, with *Hotel details*, *Quotations* and the
      terms.
 
