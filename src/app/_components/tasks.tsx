@@ -326,11 +326,15 @@ function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) 
   const [moved, setMoved] = useState<Record<string, TaskStatus>>({});
   useEffect(() => setMoved({}), [tasks]);
   const statusOf = (task: Task) => moved[task.id] ?? task.status;
+  // A long column shows its first cards only; Done, its latest few (doc §2.8).
+  const [expanded, setExpanded] = useState<TaskStatus[]>([]);
 
   return (
     <div className="grid gap-3 lg:grid-cols-4">
       {taskStatusOrder.map((column) => {
         const inColumn = tasks.filter((task) => statusOf(task) === column);
+        // Done: the most recently finished first.
+        if (column === "DONE") inColumn.sort((a, b) => (b.doneAt?.getTime() ?? 0) - (a.doneAt?.getTime() ?? 0));
         return (
           <div
             key={column}
@@ -355,8 +359,8 @@ function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) 
               <TaskStatusBadge status={column} />
               <span className="text-ink-500 text-xs font-light">{inColumn.length}</span>
             </div>
-            <div className="space-y-2">
-              {inColumn.map((task) => (
+            <div className="space-y-1.5">
+              {inColumn.slice(0, expanded.includes(column) ? undefined : columnCap(column)).map((task) => (
                 <TaskCard
                   key={task.id}
                   task={task}
@@ -370,6 +374,15 @@ function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) 
                   onOpen={() => onOpen(task.id)}
                 />
               ))}
+              {inColumn.length > columnCap(column) && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((current) => (current.includes(column) ? current.filter((one) => one !== column) : [...current, column]))}
+                  className="text-brand-700 w-full rounded-lg px-2 py-1 text-left text-xs font-medium hover:underline"
+                >
+                  {expanded.includes(column) ? "Show fewer" : `Show ${inColumn.length - columnCap(column)} more`}
+                </button>
+              )}
               <AddTaskButton onClick={() => onAdd(column)} />
             </div>
           </div>
@@ -383,6 +396,9 @@ function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) 
     </div>
   );
 }
+
+/** How many cards a column shows before "Show more". */
+const columnCap = (column: TaskStatus) => (column === "DONE" ? 5 : 15);
 
 function TaskCard({
   task,
@@ -406,35 +422,43 @@ function TaskCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
-      className={`group border-ink-200/60 hover:border-brand-300 cursor-pointer rounded-lg border bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition ${faded ? "opacity-40" : ""}`}
+      title={[task.title, aboutText(task)].filter(Boolean).join("\n")}
+      className={`group border-ink-200/60 hover:border-brand-300 cursor-pointer rounded-lg border bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition ${faded ? "opacity-40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-ink-900 text-[13px] font-medium">{task.title}</p>
-        <span className="flex shrink-0 items-center gap-2">
+        <p className="text-ink-900 line-clamp-2 text-[13px] leading-snug font-medium">{shortTitle(task)}</p>
+        <span className="flex shrink-0 items-center gap-1.5">
           <PriorityBadge priority={task.priority} />
-          <DeleteTask task={task} className="opacity-0 group-hover:opacity-100 focus:opacity-100" />
-        </span>
-      </div>
-      <div className="mt-1">
-        <About task={task} />
-      </div>
-      <div className="mt-2.5 flex items-end justify-between gap-2 text-xs">
-        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          {task.outcome && <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${contactOutcomeStyle}`}>{contactOutcomeLabels[task.outcome]}</span>}
-          {task.type && <span className="bg-ink-50 text-ink-700 rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap">{task.type.name}</span>}
-          {task.deadline && <Deadline task={task} />}
-          {task._count.comments > 0 && (
-            <span className="text-ink-500 whitespace-nowrap">
-              {task._count.comments} {task._count.comments === 1 ? "comment" : "comments"}
-            </span>
-          )}
-        </span>
-        <span className="shrink-0">
           <Assignees people={task.assignees} />
+        </span>
+      </div>
+      <div className="text-ink-500 mt-1 flex items-center gap-x-1.5 overflow-hidden text-[11px] font-light whitespace-nowrap">
+        {task.outcome && <span className={`rounded px-1 font-medium ${contactOutcomeStyle}`}>{contactOutcomeLabels[task.outcome]}</span>}
+        {task.type && <span className="bg-ink-50 text-ink-700 rounded px-1">{task.type.name}</span>}
+        {task.deadline && <Deadline task={task} />}
+        {task._count.comments > 0 && <span title={`${task._count.comments} comments`}>💬 {task._count.comments}</span>}
+        <span className="ml-auto">
+          <DeleteTask task={task} className="opacity-0 group-hover:opacity-100 focus:opacity-100" />
         </span>
       </div>
     </div>
   );
+}
+
+/**
+ * The card's title, shortened: the event is left off the end, as the filters
+ * and the hover say which (doc §2.8) — "Contact The Georgian for Beyond Limits".
+ */
+function shortTitle(task: Task) {
+  const suffix = task.event ? ` — ${task.event.name}` : null;
+  return suffix && task.title.endsWith(suffix) ? task.title.slice(0, -suffix.length) : task.title;
+}
+
+/** What the task is about, in words — for the card's hover. */
+function aboutText(task: Task) {
+  return [task.event?.name, task.property?.name, task.salesRequest ? `${task.salesRequest.client.name} · request` : (task.client?.shortName ?? task.client?.name)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** Delete a task from the board, after asking — its comments go with it (doc §2.8). */

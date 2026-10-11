@@ -398,9 +398,13 @@ team asks of each other. **Tasks** in the menu opens **one board that everyone s
 **Two views of the same board**, switched at the top and remembered in the browser:
 
 - **Kanban** — four columns, Backlog, To do, In progress and Done. Dragging a card to
-  another column moves the task there. A card shows the task, its priority, what it is
-  about, its type, its deadline, how many comments it has and who completes it. *Done*
-  shows what was finished in the last 30 days.
+  another column moves the task there. **Cards are kept small** (2026-10-11), as the board
+  will hold many: the title on at most two lines, the event left off its end ("Contact The
+  Georgian for Beyond Limits"); who completes it and its priority beside it; one line under
+  it with any outcome, the type, the deadline and the number of comments. What it is about
+  — event, property, client — shows on hovering, and in full once opened. A column shows
+  its first 15 cards and *Show n more*; *Done* shows its 5 most recently finished, the rest
+  under *Show n more*, and holds what was finished in the last 30 days.
 - **List** — every task in a table: status, priority, type, who completes it, who asked,
   deadline, soonest deadline first. It can also be filtered by status, and shows every
   finished task.
