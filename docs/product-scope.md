@@ -1769,7 +1769,9 @@ the contract.
   search away the section says so, with *Try again* — a failed search is never kept as
   "nothing found".
 - **The hotel contact task** (2026-10-03). Adding a place with *Add to properties board*
-  also puts a **Hotel contact** task on the board: *Contact {property} — {event}*, to the
+  also puts a **Hotel contact** task on the board: *Contact {property} for {client} —
+  {event}* (the client in the name since 2026-10-11, tasks made before renamed; one made
+  from the event's map, with no request, is *Contact {property} — {event}*), to the
   event's accommodation managers (or, with none set, to whoever added it), asked by whoever
   added it, linked to the property, the event, the client and the sales request; the
   managers are told (§2.9). One open task per property and event. Its point is to reach

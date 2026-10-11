@@ -73,7 +73,8 @@ export async function ensureHotelContactTask(
 
   const task = await tx.task.create({
     data: {
-      title: `Contact ${property.name} — ${event.name}`,
+      // Named for the client too, when it is for a request: "Contact Hotel Amarano for Beyond Limits — LA28".
+      title: `Contact ${property.name}${request ? ` for ${request.client.name}` : ""} — ${event.name}`,
       details,
       status: "TODO",
       typeId: type.id,
@@ -99,7 +100,7 @@ export async function ensureHotelContactTask(
     to: managers,
     actorId: input.actorId,
     kind: "TASK_ASSIGNED",
-    title: `New hotel contact task: ${property.name} for ${event.name}`,
+    title: `New hotel contact task: ${property.name}${request ? ` for ${request.client.name}` : ""} — ${event.name}`,
     body: note || "Reach out to the property and gather its rooms, terms and rate.",
     link: `/tasks/${task.id}`,
     taskId: task.id,
