@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input } from "~/app/_components/form";
 import { InfoTip } from "~/app/_components/info-tip";
+import { WebsiteLink } from "~/app/_components/website-link";
 import { LocationPreview } from "~/app/_components/location-preview";
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { ProviderPicker } from "~/app/_components/property-form";
@@ -304,7 +305,7 @@ function filledOf(property: object, keys: string[]) {
   return filled ? `${filled} of ${keys.length} filled` : null;
 }
 
-function Row({ label, value }: { label: string; value?: string | null }) {
+function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
     <div className="flex gap-3" data-empty={value == null || value === "" ? "" : undefined}>
       <dt className="text-ink-500 w-28 shrink-0">{label}</dt>
@@ -363,7 +364,7 @@ export function WhereItIsCard({ property, totalLabel }: { property: PropertyForC
         />
         <Row label="Total" value={totalLabel} />
         <Row label="Phone" value={property.phone} />
-        <Row label="Website" value={property.website} />
+        <Row label="Website" value={property.website ? <WebsiteLink url={property.website} /> : null} />
       </dl>
     </EditableCard>
   );

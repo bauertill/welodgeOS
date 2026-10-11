@@ -12,6 +12,7 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
 import { Popup } from "~/app/_components/popup";
+import { WebsiteLink } from "~/app/_components/website-link";
 import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { SourcingPanel } from "~/app/_components/sourcing-panel";
@@ -1024,7 +1025,6 @@ function PropertyContactDetails({ propertyId, eventId, emailTo }: { propertyId: 
   const error = patch.error ?? setContacts.error;
 
   if (!r) return null;
-  const href = (url: string) => (/^https?:\/\//.test(url) ? url : `https://${url}`);
   const lookup = encodeURIComponent([r.name, r.city].filter(Boolean).join(" "));
   const nothing = !r.phone && !r.email && !r.website && r.contacts.length === 0;
 
@@ -1136,7 +1136,7 @@ function PropertyContactDetails({ propertyId, eventId, emailTo }: { propertyId: 
           <dl className="space-y-1.5 text-sm font-light">
             {row("Phone", r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">{r.phone}</a>, "phone", "Type the phone number")}
             {row("Email", r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">{r.email}</a>, "generalEmail", "Type the email address")}
-            {row("Website", r.website && <a href={href(r.website)} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">{r.website.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗</a>, "website", "Paste the website")}
+            {row("Website", r.website && <WebsiteLink url={r.website} />, "website", "Paste the website")}
             {row("Address", r.address, "address", "Type the address")}
           </dl>
           {r.contacts.length === 0 && (
