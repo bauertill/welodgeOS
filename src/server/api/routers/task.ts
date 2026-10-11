@@ -1,11 +1,12 @@
-import { Priority, TaskStatus, type Prisma } from "generated/prisma";
+import { ContactOutcome, Priority, TaskStatus, type Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { priorityLabels } from "~/lib/clients";
 import { parseDay } from "~/lib/dates";
-import { formatDate } from "~/lib/format";
-import { taskStatusLabels } from "~/lib/tasks";
+import { nightsBetween, today } from "~/lib/dates";
+import { formatDate, formatRange } from "~/lib/format";
+import { contactOutcomeLabels, taskStatusLabels } from "~/lib/tasks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
 import { ensureHotelContactTask, HOTEL_CONTACT, hotelContactItems } from "~/server/hotel-contact";
@@ -257,6 +258,70 @@ export const taskRouter = createTRPCRouter({
     };
   }),
 
+  /**
+   * The hotel cannot help with the request (doc §4.11): the contact task is
+   * closed with why — no availability, no groups, not interested — and the
+   * property's Updates say so, for this request only; it stays on the event
+   * and in every other search.
+   */
+  cantHelp: protectedProcedure
+    .input(z.object({ id: z.string(), outcome: z.nativeEnum(ContactOutcome), note: z.string().max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(async (tx) => {
+        const task = await tx.task.findUniqueOrThrow({
+          where: { id: input.id },
+          include: {
+            type: { select: { name: true } },
+            property: { select: { id: true, name: true } },
+            event: { select: { name: true } },
+            salesRequest: { select: { client: { select: { name: true } }, lines: { orderBy: { position: "asc" } } } },
+          },
+        });
+        if (task.type?.name !== HOTEL_CONTACT || !task.property) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Only a hotel contact task can be closed this way." });
+        }
+        const note = input.note.trim() || null;
+        await tx.task.update({
+          where: { id: task.id },
+          data: { status: "DONE", doneAt: task.status === "DONE" ? task.doneAt : new Date(), outcome: input.outcome, outcomeNote: note },
+        });
+        const label = contactOutcomeLabels[input.outcome];
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Task",
+          entityId: task.id,
+          summary: `Closed — the hotel cannot help: ${label}`,
+          changes: note,
+        });
+        // On the property, for the record: who it could not help, with what.
+        const asked = (task.salesRequest?.lines ?? []).map(
+          (line) =>
+            `${line.rooms} × ${line.roomType ?? "units"}${line.checkIn && line.checkOut ? `, ${formatRange(line.checkIn, line.checkOut)} (${nightsBetween(line.checkIn, line.checkOut)} nights)` : ""}`,
+        );
+        const what = [task.salesRequest ? `For ${task.salesRequest.client.name}` : null, task.event?.name].filter(Boolean).join(" · ");
+        await tx.update.create({
+          data: {
+            kind: "CONTACT_OUTCOME",
+            propertyId: task.property.id,
+            authorId: ctx.session.user.id,
+            happenedOn: today(),
+            body: [`${label}${what ? ` — ${what}` : ""}`, ...asked, ...(note ? [note] : [])].join("\n"),
+          },
+        });
+        await notify(tx, {
+          to: [task.requestedById],
+          actorId: ctx.session.user.id,
+          kind: "TASK_STATUS",
+          title: `${task.property.name} cannot help: ${label}`,
+          body: note,
+          link: `/tasks/${task.id}`,
+          taskId: task.id,
+        });
+      });
+      await deliverImmediate(ctx.db);
+      return { ok: true };
+    }),
+
   /** The open hotel contact task for a property on an event, if any (doc §4.11) — for the event's map. */
   hotelContactFor: protectedProcedure.input(z.object({ propertyId: z.string(), eventId: z.string() })).query(({ ctx, input }) =>
     ctx.db.task.findFirst({
@@ -352,6 +417,8 @@ export const taskRouter = createTRPCRouter({
           ...(fields.status !== undefined && {
             status: fields.status,
             doneAt: fields.status === "DONE" ? (before.status === "DONE" ? before.doneAt : new Date()) : null,
+            // Reopened: the hotel's "cannot help" no longer stands (doc §4.11).
+            ...(fields.status !== "DONE" && { outcome: null, outcomeNote: null }),
           }),
           ...(fields.assigneeIds !== undefined && { assignees: { set: fields.assigneeIds.map((assignee) => ({ id: assignee })) } }),
         },

@@ -1216,6 +1216,15 @@ enum UpdateKind {
   MEETING
   CALL
   SITE_INSPECTION
+  /// Written by the system when a hotel contact task closes with a hotel that cannot help.
+  CONTACT_OUTCOME
+}
+
+/// Why a hotel could not help with a request (doc §4.11).
+enum ContactOutcome {
+  NO_AVAILABILITY
+  NO_GROUPS
+  NOT_INTERESTED
 }
 
 model Update {
@@ -1492,15 +1501,19 @@ model TaskType {
 /// A piece of work for one or more of the team (doc §2.8): who asked, who
 /// completes it, by when, and what it is about.
 model Task {
-  id       String     @id @default(cuid())
-  title    String
-  details  String?
-  status   TaskStatus @default(TODO)
-  priority Priority?
+  id          String          @id @default(cuid())
+  title       String
+  details     String?
+  status      TaskStatus      @default(TODO)
+  priority    Priority?
   /// Optional: a calendar day.
-  deadline DateTime?  @db.Date
+  deadline    DateTime?       @db.Date
   /// When it was last moved to Done; cleared when it leaves Done.
-  doneAt   DateTime?
+  doneAt      DateTime?
+  /// A hotel contact task closed because the hotel cannot help (doc §4.11);
+  /// cleared when the task is reopened.
+  outcome     ContactOutcome?
+  outcomeNote String?
 
   type   TaskType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
   typeId String?

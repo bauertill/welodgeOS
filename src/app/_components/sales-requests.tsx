@@ -13,6 +13,7 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { NewClientPopup } from "~/app/_components/new-client-popup";
 import { TaskStatusBadge } from "~/app/_components/tasks";
+import { contactOutcomeLabels, contactOutcomeStyle } from "~/lib/tasks";
 import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
 import { addDays, daysUntil, dayKey, today } from "~/lib/dates";
@@ -1203,7 +1204,11 @@ function RequestTasks({ request }: { request: FullRequest }) {
               <Link href={`/tasks/${task.id}`} className="text-ink-900 hover:text-brand-700 min-w-0 truncate font-light hover:underline">
                 {task.property && task.type?.name === "Hotel contact" ? `Contact ${task.property.name}` : task.title}
               </Link>
-              <TaskStatusBadge status={task.status} />
+              {task.outcome ? (
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${contactOutcomeStyle}`}>{contactOutcomeLabels[task.outcome]}</span>
+              ) : (
+                <TaskStatusBadge status={task.status} />
+              )}
             </li>
           ))}
         </ul>

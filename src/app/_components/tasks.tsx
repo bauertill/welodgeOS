@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData } from "@tanstack/react-query";
-import type { Priority, TaskStatus } from "generated/prisma";
+import type { ContactOutcome, Priority, TaskStatus } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -20,7 +20,16 @@ import { EmptyState } from "~/app/_components/ui";
 import { daysUntil, dayKey, nightsBetween } from "~/lib/dates";
 import { priorityLabels, priorityOrder } from "~/lib/clients";
 import { formatDate, formatDay, formatMomentInWords, formatMoney, formatRange } from "~/lib/format";
-import { taskStatusHints, taskStatusLabels, taskStatusOrder, taskStatusStyles } from "~/lib/tasks";
+import {
+  contactOutcomeHints,
+  contactOutcomeLabels,
+  contactOutcomeOrder,
+  contactOutcomeStyle,
+  taskStatusHints,
+  taskStatusLabels,
+  taskStatusOrder,
+  taskStatusStyles,
+} from "~/lib/tasks";
 import { renderUpdateBody } from "~/lib/updates";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -410,6 +419,7 @@ function TaskCard({
       </div>
       <div className="mt-2.5 flex items-end justify-between gap-2 text-xs">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          {task.outcome && <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${contactOutcomeStyle}`}>{contactOutcomeLabels[task.outcome]}</span>}
           {task.type && <span className="bg-ink-50 text-ink-700 rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap">{task.type.name}</span>}
           {task.deadline && <Deadline task={task} />}
           {task._count.comments > 0 && (
@@ -508,6 +518,11 @@ export function TaskTable({
               </td>
               <td className={td}>
                 <TaskStatusBadge status={task.status} />
+                {task.outcome && (
+                  <span className={`mt-1 block w-fit rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${contactOutcomeStyle}`}>
+                    {contactOutcomeLabels[task.outcome]}
+                  </span>
+                )}
               </td>
               <td className={td}>{task.priority ? <PriorityBadge priority={task.priority} /> : <span className="text-ink-400">—</span>}</td>
               {!compact && <td className={td}>{task.type?.name ?? <span className="text-ink-400">—</span>}</td>}
@@ -853,6 +868,15 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
 
   return (
     <div className="grid items-start gap-5 lg:grid-cols-3">
+      {t.outcome && (
+        <div className="rounded-xl border border-[#f3c4cf] bg-[#fdf2f4] px-5 py-3 lg:col-span-3">
+          <p className="text-[14px] font-medium text-[#a3243d]">The hotel cannot help — {contactOutcomeLabels[t.outcome]}</p>
+          {t.outcomeNote && <p className="text-ink-700 mt-0.5 text-[13px] font-light">{t.outcomeNote}</p>}
+          <p className="text-ink-500 mt-0.5 text-xs font-light">
+            Closed{t.doneAt ? ` on ${formatDate(t.doneAt)}` : ""}. It stays on {t.event?.name ?? "the event"} for other requests — written on its Updates. Reopen the task if they come back.
+          </p>
+        </div>
+      )}
       <div className="space-y-5 lg:col-span-2">
         {sourcing && (
           <div className="border-ink-200/60 rounded-xl border bg-white p-5">
@@ -915,6 +939,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           <h2 className="text-ink-900 mb-4 text-[15px] font-medium">Status</h2>
           <TaskStatusSteps status={t.status} pending={setStatus.isPending} onMove={(status) => setStatus.mutate({ id: t.id, status })} />
           {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
+          {hotelContact && t.status !== "DONE" && <CantHelp taskId={t.id} propertyName={t.property!.name} />}
         </div>
       </div>
     </div>
@@ -1151,6 +1176,67 @@ function PropertyContactDetails({ propertyId, eventId }: { propertyId: string; e
   );
 }
 
+/**
+ * Closing a hotel contact task because the hotel cannot help (doc §4.11):
+ * why — no availability, no groups, not interested — and a word if wanted.
+ */
+function CantHelp({ taskId, propertyName }: { taskId: string; propertyName: string }) {
+  const utils = api.useUtils();
+  const [open, setOpen] = useState(false);
+  const [outcome, setOutcome] = useState<ContactOutcome | null>(null);
+  const [note, setNote] = useState("");
+  const close = api.task.cantHelp.useMutation({
+    onSuccess: () => {
+      setOpen(false);
+      void utils.task.invalidate();
+      void utils.update.invalidate();
+      void utils.audit.invalidate();
+      void utils.sales.invalidate();
+    },
+  });
+  return (
+    <div className="border-ink-200/60 mt-4 border-t pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full rounded-full border border-[#f3c4cf] px-4 py-2 text-[13px] font-medium text-[#a3243d] transition-colors hover:bg-[#fdf2f4]"
+      >
+        They can&apos;t help us
+      </button>
+      {open && (
+        <Popup title={`${propertyName} can't help`} subtitle="The task closes with why. The hotel stays on the event for other requests." size="medium" onClose={() => setOpen(false)}>
+          <div className="space-y-2">
+            {contactOutcomeOrder.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setOutcome(option)}
+                aria-pressed={outcome === option}
+                className={`block w-full rounded-xl border px-4 py-3 text-left transition-colors ${
+                  outcome === option ? "border-[#a3243d] bg-[#fdf2f4]" : "border-ink-200 hover:border-ink-400 bg-white"
+                }`}
+              >
+                <span className="text-ink-900 block text-[14px] font-medium">{contactOutcomeLabels[option]}</span>
+                <span className="text-ink-500 block text-xs font-light">{contactOutcomeHints[option]}</span>
+              </button>
+            ))}
+            <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="A note, if useful — 'Full with a federation that week; try again for the Paralympics'" aria-label="Note" />
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            {close.error && <p className="text-xs text-[#c03654]">{friendlyError(close.error)}</p>}
+            <Button type="button" variant="ghost" className="ml-auto" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={!outcome || close.isPending} onClick={() => outcome && close.mutate({ id: taskId, outcome, note })}>
+              {close.isPending ? "Closing…" : "Close the task"}
+            </Button>
+          </div>
+        </Popup>
+      )}
+    </div>
+  );
+}
+
 /** A step's heading on the hotel contact task: its number, what to do, and a word on it. */
 function StepTitle({ step, hint, children }: { step: number; hint?: string; children: React.ReactNode }) {
   return (
@@ -1181,7 +1267,14 @@ function EmailTheHotel({ propertyId, salesRequestId, eventName }: { propertyId: 
   const make = api.property.makeContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
   const off = api.property.switchOffContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
   const p = property.data;
-  if (!p) return null;
+  if (!p) {
+    return (
+      <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+        <StepTitle step={2}>Email them the request</StepTitle>
+        <p className="text-ink-500 mt-3 text-sm font-light">…</p>
+      </div>
+    );
+  }
 
   const linkFor = (token: string | null | undefined) => (token ? `${origin}/property-details/${token}` : null);
   const link = linkFor(p.contractingToken);

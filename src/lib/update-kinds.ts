@@ -14,6 +14,8 @@ export type UpdateKindInfo = {
   badge: string;
   /** Only for a property — a site inspection is of a place. */
   propertyOnly?: boolean;
+  /** Written by the system, never chosen above the box. */
+  system?: boolean;
   sections: { heading: string; placeholder: string }[];
 };
 
@@ -39,6 +41,14 @@ export const updateKinds: Record<UpdateKind, UpdateKindInfo> = {
       { heading: "Summary", placeholder: "What was said" },
       { heading: "Next steps", placeholder: "Follow up next week with dates" },
     ],
+  },
+  CONTACT_OUTCOME: {
+    label: "Couldn't help",
+    short: "Contacted",
+    badge: "bg-[#fde8ec] text-[#a3243d]",
+    propertyOnly: true,
+    system: true,
+    sections: [],
   },
   SITE_INSPECTION: {
     label: "Site inspection feedback",

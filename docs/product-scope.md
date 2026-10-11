@@ -207,6 +207,7 @@ Closing it with something written asks first. Posted, it lands in the feed with 
 | Meeting feedback | Who was there · What was discussed · What was agreed · Next steps |
 | Call summary | Who we spoke to · Summary · Next steps |
 | Site inspection feedback | Who visited · First impression · Rooms · Common areas and amenities · Location and surroundings · Fit for our clients · Photos and video · Next steps |
+| *Couldn't help* | Written by the system, never chosen — when a hotel contact task closes because the hotel cannot help (§4.11) |
 
 *These headings are a first draft; the team's monday.com templates replace them when the
 owner sends them.* Headings left empty are left out. A posted template is kept as the
@@ -1791,7 +1792,20 @@ the contract.
      terms.
 
   A contact task made from the event's map has no request, so its email asks for
-  availability for the event without listing rooms and dates. Its page starts with the property's
+  availability for the event without listing rooms and dates.
+
+  **When the hotel cannot help** (2026-10-11): *They can't help us*, under the task's status,
+  asks why — **No availability** (full, or not enough rooms for these dates), **No groups**
+  (no group bookings) or **Not interested** (does not want to work with us) — and for a
+  note, then closes the task (Done) with that reason. The reason is the task's label: a
+  red tag on its Kanban card and in the List, on the request's *Tasks* card, and a banner
+  on the task. **It does not rule the hotel out**: it stays on the event and in every
+  search; for this request only, the sourcing task shows it under its own tab, **Couldn't
+  help**. **The property keeps the record**: an update is written to its Updates (§2.6) —
+  *Couldn't help*, by whoever closed it, dated that day — saying why, for which client and
+  event, with the units and dates asked for and the note, so the property's feed shows every
+  request it could not take. Whoever asked for the task is told. Reopening the task clears
+  the reason (the update stays, as history). Its page starts with the property's
   **contact details** — phone, email, website, address and the people there — always shown,
   with links to look it up on Google and Google Maps while something is missing. **A
   detail not known yet is a box to type it straight into** (2026-10-04) — saved on Enter or

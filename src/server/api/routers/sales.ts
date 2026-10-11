@@ -959,6 +959,7 @@ export const salesRouter = createTRPCRouter({
               id: true,
               title: true,
               status: true,
+              outcome: true,
               type: { select: { name: true } },
               property: { select: { name: true } },
               assignees: { select: { id: true, name: true, email: true } },
@@ -1304,6 +1305,15 @@ export const salesRouter = createTRPCRouter({
           ).map((task) => [task.propertyId!, task.id])
         : [],
     );
+    // Those that could not help with this very request — closed with why (doc §4.11).
+    const declined = new Map(
+      (
+        await ctx.db.task.findMany({
+          where: { salesRequestId: request.id, outcome: { not: null }, propertyId: { not: null } },
+          select: { propertyId: true, outcome: true },
+        })
+      ).map((task) => [task.propertyId!, task.outcome!]),
+    );
     const properties = await ctx.db.property.findMany({
       where: { latitude: { not: null }, longitude: { not: null } },
       select: {
@@ -1344,6 +1354,7 @@ export const salesRouter = createTRPCRouter({
           longitude: property.longitude!,
           onEvent: onList.has(property.id),
           contactTaskId: contactTasks.get(property.id) ?? null,
+          declined: declined.get(property.id) ?? null,
           ...judged,
         };
       })
@@ -1354,7 +1365,10 @@ export const salesRouter = createTRPCRouter({
         return order[a.verdict] - order[b.verdict] || (a.km ?? 99) - (b.km ?? 99);
       })
       // Every one still to be contacted, then the best of the rest.
-      .filter((property, index, all) => property.contactTaskId !== null || all.slice(0, index).filter((other) => other.contactTaskId === null).length < 25);
+      .filter(
+        (property, index, all) =>
+          property.contactTaskId !== null || property.declined !== null || all.slice(0, index).filter((other) => other.contactTaskId === null && other.declined === null).length < 25,
+      );
     return {
       eventId: request.eventId,
       eventName: request.event?.name ?? null,

@@ -17,11 +17,14 @@ const verdictStyles = {
   poor: { dot: "bg-[#9a9a9a]", badge: "bg-ink-50 text-ink-500", label: "Does not fit" },
   /** Added to the board, its hotel contact task still open: not judged until we hear back. */
   contact: { dot: "bg-brand-500", badge: "bg-brand-50 text-brand-800", label: "To be contacted" },
+  /** Contacted for this request, and could not help — kept apart, for this request only. */
+  declined: { dot: "bg-[#c03654]", badge: "bg-[#fde8ec] text-[#a3243d]", label: "Couldn't help" },
 } as const;
 type Verdict = keyof typeof verdictStyles;
 // Only those that fit, entirely or in part, are offered, and those still to be contacted; the rest are left out.
-const verdictOrder: Verdict[] = ["good", "partly", "contact"];
-const standing = (property: { verdict: Verdict; contactTaskId: string | null }): Verdict => (property.contactTaskId ? "contact" : property.verdict);
+const verdictOrder: Verdict[] = ["good", "partly", "contact", "declined"];
+const standing = (property: { verdict: Verdict; contactTaskId: string | null; declined: string | null }): Verdict =>
+  property.contactTaskId ? "contact" : property.declined ? "declined" : property.verdict;
 
 /** Frames the map around every pin once they are known. */
 function FitAll({ points }: { points: { latitude: number; longitude: number }[] }) {
