@@ -899,6 +899,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
         )}
         {hotelContact && (
           <EmailTheHotel
+            taskId={t.id}
             propertyId={t.property!.id}
             salesRequestId={t.salesRequest?.id ?? null}
             eventName={t.event!.name}
@@ -1336,11 +1337,13 @@ function StepTitle({ step, hint, children }: { step: number; hint?: string; chil
  * the hotel's own details form, and opens it in your own mailbox.
  */
 function EmailTheHotel({
+  taskId,
   propertyId,
   salesRequestId,
   eventName,
   emailTo,
 }: {
+  taskId: string;
   propertyId: string;
   salesRequestId: string | null;
   eventName: string;
@@ -1357,6 +1360,15 @@ function EmailTheHotel({
   useEffect(() => setOrigin(window.location.origin), []);
   const make = api.property.makeContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
   const off = api.property.switchOffContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
+  // Sending it starts the task: it moves to In progress, the hotel to Pending quote.
+  const emailed = api.task.requestEmailed.useMutation({
+    onSuccess: (result) => {
+      if (!result.moved) return;
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
+      void utils.scouting.invalidate();
+    },
+  });
   const p = property.data;
   if (!p) {
     return (
@@ -1426,6 +1438,7 @@ function EmailTheHotel({
             disabled={make.isPending}
             onClick={() =>
               withLink((target) => {
+                emailed.mutate({ id: taskId });
                 window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body(target))}`;
               })
             }
@@ -1447,6 +1460,7 @@ function EmailTheHotel({
               onClick={() =>
                 withLink((target) => {
                   void navigator.clipboard.writeText(`${subject}\n\n${body(target)}`).then(() => {
+                    emailed.mutate({ id: taskId });
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   });

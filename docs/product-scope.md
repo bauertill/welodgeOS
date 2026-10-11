@@ -860,6 +860,26 @@ counts. The Properties tab becomes that board, but built on what the system alre
 so a hotel's details are entered once and reused on every event, and the stock sheet
 (§5.4), the map (§3.8) and availability (§5.3) read the same facts.
 
+#### Stages — the board grouped by where each property stands (2026-10-11)
+
+By default the Properties tab groups its list by **stage**, which is worked out, never set
+by hand — so a property **moves between the groups on its own** as the work is done:
+
+| Stage | When |
+| --- | --- |
+| **To be contacted** | A hotel contact task (§4.11) is open on it and not started — it lands here as soon as the task is made, from sourcing or from the map |
+| **Pending quote** | Contacted and waiting for a quotation: its contact task is in progress — emailing the request moves a task not yet started to *In progress*, and a *Prospect* to *Reached out* — or it is marked *Reached out* |
+| **Quote received** | It has a quotation for this event that is not declined (§3.10) |
+| **Contracted** | Any of its room categories is *Contracted* for this event, or there is a supplier contract with it for this event (§7.1) — the highest stage |
+| **Prospects** | On the list, nothing started |
+| **Couldn't help** | Its last contact task closed because it could not help (§4.11) — folded by default |
+| **Ruled out** | Marked *Rejected* — folded by default |
+
+In that order, each with how many properties it holds and what it means. The team's own
+groups (below) are a click away: **Group by: Stage · Your groups**, remembered in the
+browser. The status column (*Prospect*, *Reached out*, *Shortlisted*, *Rejected*) stays as
+it was, set by hand.
+
 #### Groups
 
 - **Groups belong to an event.** Each event has its own, created, named, recoloured,

@@ -2,6 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { Cleaning, GroupColour, RateInclusion } from "generated/prisma";
 import { z } from "zod";
 
+import { stageOf } from "~/lib/stages";
+
 import { categoryContractStatusLabels, scoutingStatusLabels } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
@@ -254,8 +256,8 @@ export const scoutingRouter = createTRPCRouter({
         hasQuotations: z.boolean().default(false),
       }),
     )
-    .query(({ ctx, input }) =>
-      ctx.db.scoutingEntry.findMany({
+    .query(async ({ ctx, input }) => {
+      const entries = await ctx.db.scoutingEntry.findMany({
         where: {
           eventId: input.eventId,
           status: input.status,
@@ -290,8 +292,28 @@ export const scoutingRouter = createTRPCRouter({
           categoryContracts: true,
           quotations: { select: { id: true, status: true } },
         },
-      }),
-    ),
+      });
+      // Where each stands, worked out from its contact tasks, quotations and contracts (doc §3.9).
+      const propertyIds = entries.map((entry) => entry.propertyId);
+      const [tasks, contracts] = await Promise.all([
+        ctx.db.task.findMany({
+          where: { eventId: input.eventId, propertyId: { in: propertyIds }, type: { name: "Hotel contact" } },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, propertyId: true, status: true, outcome: true },
+        }),
+        ctx.db.contract.findMany({ where: { eventId: input.eventId, party: "SUPPLIER", propertyId: { in: propertyIds } }, select: { propertyId: true } }),
+      ]);
+      const contracted = new Set(contracts.map((contract) => contract.propertyId));
+      return entries.map((entry) => {
+        const contactTasks = tasks.filter((task) => task.propertyId === entry.propertyId);
+        return {
+          ...entry,
+          stage: stageOf({ ...entry, contactTasks, hasSupplierContract: contracted.has(entry.propertyId) }),
+          contactTaskId: contactTasks.find((task) => task.status !== "DONE")?.id ?? contactTasks[0]?.id ?? null,
+        };
+      });
+    }),
+
 
   /** Properties not yet on this event's list, for the "add" picker. */
   candidates: protectedProcedure

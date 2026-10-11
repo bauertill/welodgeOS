@@ -359,6 +359,35 @@ export const taskRouter = createTRPCRouter({
       return { ok: true };
     }),
 
+  /**
+   * The request was emailed to the hotel (doc §4.11): a contact task not yet
+   * started moves to In progress — and the property, on the event's board,
+   * to Pending quote (§3.9).
+   */
+  requestEmailed: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const task = await ctx.db.task.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, status: true, propertyId: true, eventId: true } });
+    if (task.status !== "BACKLOG" && task.status !== "TODO") return { moved: false };
+    await ctx.db.$transaction(async (tx) => {
+      await tx.task.update({ where: { id: task.id }, data: { status: "IN_PROGRESS", doneAt: null } });
+      // On the event's list, a Prospect is now Reached out (doc §3.5).
+      if (task.propertyId && task.eventId) {
+        const entry = await tx.scoutingEntry.findUnique({ where: { eventId_propertyId: { eventId: task.eventId, propertyId: task.propertyId } }, select: { id: true, status: true } });
+        if (entry?.status === "PROSPECT") {
+          await tx.scoutingEntry.update({ where: { id: entry.id }, data: { status: "CONTACTED" } });
+          await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: entry.id, summary: "Status: Prospect → Reached out (request emailed)" });
+        }
+      }
+      await logAudit(tx, {
+        actorId: ctx.session.user.id,
+        entity: "Task",
+        entityId: task.id,
+        summary: "Request emailed to the hotel",
+        changes: `Status: ${taskStatusLabels[task.status]} → ${taskStatusLabels.IN_PROGRESS}`,
+      });
+    });
+    return { moved: true };
+  }),
+
   /** The open hotel contact task for a property on an event, if any (doc §4.11) — for the event's map. */
   hotelContactFor: protectedProcedure.input(z.object({ propertyId: z.string(), eventId: z.string() })).query(({ ctx, input }) =>
     ctx.db.task.findFirst({

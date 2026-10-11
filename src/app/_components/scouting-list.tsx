@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { CategoryContractStatus, PropertyType } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
@@ -32,6 +32,7 @@ import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RoomCategoryTable } from "~/app/_components/room-categories";
 import { GroupHeader, Initials, NewGroup } from "~/app/_components/property-groups";
+import { stageInfo, stageOrder } from "~/lib/stages";
 import { api } from "~/trpc/react";
 
 // Google Maps only exists in the browser, so the map never renders on the server.
@@ -59,6 +60,19 @@ export function ScoutingList({
 }) {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("list");
+  // By stage — worked out from the work, moving on its own (doc §3.9) — or by the team's own groups.
+  const [groupBy, setGroupBy] = useState<"stage" | "groups">("stage");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("welodge.board.groupBy") === "groups") setGroupBy("groups");
+    } catch {}
+  }, []);
+  const chooseGroupBy = (next: "stage" | "groups") => {
+    setGroupBy(next);
+    try {
+      localStorage.setItem("welodge.board.groupBy", next);
+    } catch {}
+  };
   const [status, setStatus] = useState<SelectableScoutingStatus | "">("");
   const [type, setType] = useState<PropertyType | "">("");
   const [providerId, setProviderId] = useState("");
@@ -105,7 +119,14 @@ export function ScoutingList({
   const setGroupMutation = api.scouting.setGroup.useMutation({
     onSuccess: () => void entries.refetch(),
   });
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["stage-COULDNT_HELP", "stage-RULED_OUT"]));
+  const toggleGroup = (key: string) =>
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const [openEntry, setOpenEntry] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState<Set<string>>(new Set());
   const sections = [
@@ -173,6 +194,29 @@ export function ScoutingList({
   );
 
   const withoutCoordinates = rows.length - pins.length;
+
+  // One section's table, the same whichever way the board is grouped.
+  const renderTable = (sectionRows: typeof rows, colour: string) => (
+    <div className="border-l-4 pl-0" style={{ borderColor: colour }}>
+      <Table>
+        <thead>
+          <tr>
+            <Th>Property</Th>
+            <Th>Account manager</Th>
+            <Th>Location</Th>
+            <Th>Rooms</Th>
+            {venues.length > 0 && <Th>To venue</Th>}
+            <Th>Amenities</Th>
+            <Th>Video</Th>
+            <Th>Status</Th>
+            <Th>Group</Th>
+            <Th>{""}</Th>
+          </tr>
+        </thead>
+        <tbody>{sectionRows.map((entry) => renderEntry(entry))}</tbody>
+      </Table>
+    </div>
+  );
 
   const renderEntry = (entry: (typeof rows)[number]) => {
               const property = entry.property;
@@ -471,6 +515,22 @@ export function ScoutingList({
             </button>
           ))}
         </div>
+        {view === "list" && (
+          <div className="border-ink-200 flex items-center rounded-full border bg-white p-1 text-[13px]">
+            <span className="text-ink-500 px-2 font-light">Group by</span>
+            {(["stage", "groups"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={groupBy === option}
+                onClick={() => chooseGroupBy(option)}
+                className={`rounded-full px-3 py-1 font-light transition-colors ${groupBy === option ? "bg-ink-900 text-white" : "text-ink-500 hover:text-ink-900"}`}
+              >
+                {option === "stage" ? "Stage" : "Your groups"}
+              </button>
+            ))}
+          </div>
+        )}
 
         <Select
           value={status}
@@ -596,6 +656,42 @@ export function ScoutingList({
             </p>
           )}
         </>
+      ) : groupBy === "stage" ? (
+        <div className="space-y-6">
+          {stageOrder
+            .map((stage) => ({ stage, entries: rows.filter((entry) => entry.stage === stage) }))
+            .filter((section) => section.entries.length > 0)
+            .map(({ stage, entries: sectionRows }) => {
+              const key = `stage-${stage}`;
+              const collapsed = collapsedGroups.has(key);
+              const info = stageInfo[stage];
+              return (
+                <section key={key}>
+                  <div className="mb-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                    <button type="button" onClick={() => toggleGroup(key)} aria-expanded={!collapsed} className="flex min-w-0 items-center gap-2 text-left">
+                      <svg
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        aria-hidden="true"
+                        className={`h-4 w-4 shrink-0 self-center transition-transform ${collapsed ? "" : "rotate-90"}`}
+                        style={{ color: info.colour }}
+                      >
+                        <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="truncate text-[17px] font-semibold" style={{ color: info.colour }}>
+                        {info.label}
+                      </span>
+                    </button>
+                    <span className="text-ink-500 text-[13px] font-light">
+                      {sectionRows.length} {sectionRows.length === 1 ? "property" : "properties"}
+                    </span>
+                    <span className="text-ink-500 text-xs font-light">{info.hint}</span>
+                  </div>
+                  {!collapsed && renderTable(sectionRows, info.colour)}
+                </section>
+              );
+            })}
+        </div>
       ) : (
         <div className="space-y-6">
           {sections.map(({ group, entries: sectionRows }) => {
@@ -607,41 +703,11 @@ export function ScoutingList({
                   group={group}
                   entries={sectionRows}
                   collapsed={collapsed}
-                  onToggle={() =>
-                    setCollapsedGroups((current) => {
-                      const next = new Set(current);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    })
-                  }
+                  onToggle={() => toggleGroup(key)}
                   isFirst={group ? groups.data?.[0]?.id === group.id : false}
                   isLast={group ? groups.data?.at(-1)?.id === group.id : false}
                 />
-                {!collapsed && sectionRows.length > 0 && (
-                  <div
-                    className="border-l-4 pl-0"
-                    style={{ borderColor: group ? groupColours[group.colour].hex : "#d0d0d0" }}
-                  >
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Property</Th>
-                  <Th>Account manager</Th>
-                  <Th>Location</Th>
-                  <Th>Rooms</Th>
-                  {venues.length > 0 && <Th>To venue</Th>}
-                  <Th>Amenities</Th>
-                  <Th>Video</Th>
-                  <Th>Status</Th>
-                  <Th>Group</Th>
-                  <Th>{""}</Th>
-                </tr>
-              </thead>
-                      <tbody>{sectionRows.map(renderEntry)}</tbody>
-                    </Table>
-                  </div>
-                )}
+                {!collapsed && sectionRows.length > 0 && renderTable(sectionRows, group ? groupColours[group.colour].hex : "#d0d0d0")}
                 {!collapsed && sectionRows.length === 0 && (
                   <p className="text-ink-500 ml-5 text-xs font-light">
                     Nothing in this group yet — choose it in a property&apos;s Group column.
