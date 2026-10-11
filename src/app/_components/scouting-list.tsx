@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { CategoryContractStatus, PropertyType } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
@@ -25,13 +25,12 @@ import {
   scoutingStatusLabels,
   scoutingStatusOrder,
   totalUnits,
-  groupColours,
   type SelectableScoutingStatus,
 } from "~/lib/scouting";
 import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RoomCategoryTable } from "~/app/_components/room-categories";
-import { GroupHeader, Initials, NewGroup } from "~/app/_components/property-groups";
+import { Initials } from "~/app/_components/property-groups";
 import { stageInfo, stageOrder } from "~/lib/stages";
 import { api } from "~/trpc/react";
 
@@ -51,33 +50,17 @@ const ScoutingMap = dynamic(
 export function ScoutingList({
   eventId,
   places,
-  amenities,
 }: {
   eventId: string;
   /** The event's places of interest (doc §3.7) — venues, airports, stations. */
   places: MapPlace[];
-  amenities: { id: string; label: string }[];
 }) {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("list");
-  // By stage — worked out from the work, moving on its own (doc §3.9) — or by the team's own groups.
-  const [groupBy, setGroupBy] = useState<"stage" | "groups">("stage");
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("welodge.board.groupBy") === "groups") setGroupBy("groups");
-    } catch {}
-  }, []);
-  const chooseGroupBy = (next: "stage" | "groups") => {
-    setGroupBy(next);
-    try {
-      localStorage.setItem("welodge.board.groupBy", next);
-    } catch {}
-  };
   const [status, setStatus] = useState<SelectableScoutingStatus | "">("");
   const [type, setType] = useState<PropertyType | "">("");
   const [providerId, setProviderId] = useState("");
   const providers = api.provider.list.useQuery();
-  const [amenityIds, setAmenityIds] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [hasQuotations, setHasQuotations] = useState(false);
 
@@ -85,7 +68,7 @@ export function ScoutingList({
     eventId,
     status: status || undefined,
     type: type || undefined,
-    amenityIds,
+    amenityIds: [],
     providerId: providerId || undefined,
     hasQuotations,
   });
@@ -113,12 +96,6 @@ export function ScoutingList({
 
   const rows = entries.data ?? [];
 
-  // Groups on the Properties tab (doc §3.9): the event's own, top first, with
-  // "No group" at the bottom for anything not sorted yet.
-  const groups = api.scouting.groups.useQuery({ eventId });
-  const setGroupMutation = api.scouting.setGroup.useMutation({
-    onSuccess: () => void entries.refetch(),
-  });
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["stage-COULDNT_HELP", "stage-RULED_OUT"]));
   const toggleGroup = (key: string) =>
     setCollapsedGroups((current) => {
@@ -129,18 +106,7 @@ export function ScoutingList({
     });
   const [openEntry, setOpenEntry] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState<Set<string>>(new Set());
-  const sections = [
-    ...(groups.data ?? []).map((group) => ({
-      group,
-      entries: rows.filter((entry) => entry.groupId === group.id),
-    })),
-    {
-      group: null,
-      entries: rows.filter(
-        (entry) => !entry.groupId || !(groups.data ?? []).some((group) => group.id === entry.groupId),
-      ),
-    },
-  ].filter((section) => section.group || section.entries.length > 0);
+
 
   // The sales team's at-a-glance position, per room category: whole rooms
   // genuinely free — bought and not blocked or sold — across the whole
@@ -209,7 +175,6 @@ export function ScoutingList({
             <Th>Amenities</Th>
             <Th>Video</Th>
             <Th>Status</Th>
-            <Th>Group</Th>
             <Th>{""}</Th>
           </tr>
         </thead>
@@ -414,21 +379,6 @@ export function ScoutingList({
                     </Select>
                   </Td>
                   <Td>
-                    <Select
-                      value={entry.groupId ?? ""}
-                      aria-label="Group"
-                      onChange={(e) => setGroupMutation.mutate({ id: entry.id, groupId: e.target.value || null })}
-                      className="w-40 min-w-40 py-1.5 text-[13px]"
-                    >
-                      <option value="">No group</option>
-                      {(groups.data ?? []).map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Td>
-                  <Td>
                     <Button
                       type="button"
                       variant="ghost"
@@ -515,22 +465,6 @@ export function ScoutingList({
             </button>
           ))}
         </div>
-        {view === "list" && (
-          <div className="border-ink-200 flex items-center rounded-full border bg-white p-1 text-[13px]">
-            <span className="text-ink-500 px-2 font-light">Group by</span>
-            {(["stage", "groups"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={groupBy === option}
-                onClick={() => chooseGroupBy(option)}
-                className={`rounded-full px-3 py-1 font-light transition-colors ${groupBy === option ? "bg-ink-900 text-white" : "text-ink-500 hover:text-ink-900"}`}
-              >
-                {option === "stage" ? "Stage" : "Your groups"}
-              </button>
-            ))}
-          </div>
-        )}
 
         <Select
           value={status}
@@ -588,46 +522,6 @@ export function ScoutingList({
         </span>
       </div>
 
-      {amenities.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-ink-500 text-[11px] font-medium tracking-wider uppercase">
-            Must have
-          </span>
-          {amenities.map((amenity) => {
-            const active = amenityIds.includes(amenity.id);
-            return (
-              <button
-                key={amenity.id}
-                type="button"
-                onClick={() =>
-                  setAmenityIds((current) =>
-                    active
-                      ? current.filter((id) => id !== amenity.id)
-                      : [...current, amenity.id],
-                  )
-                }
-                className={`rounded-full px-3 py-1 text-[11px] font-light transition-colors ${
-                  active
-                    ? "bg-brand-700 text-white"
-                    : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
-                }`}
-              >
-                {amenity.label}
-              </button>
-            );
-          })}
-          {amenityIds.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setAmenityIds([])}
-              className="text-brand-700 text-[11px] font-light underline"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      )}
-
       {rows.length === 0 && !entries.isLoading ? (
         hasQuotations ? (
           <EmptyState
@@ -656,7 +550,7 @@ export function ScoutingList({
             </p>
           )}
         </>
-      ) : groupBy === "stage" ? (
+      ) : (
         <div className="space-y-6">
           {stageOrder
             .map((stage) => ({ stage, entries: rows.filter((entry) => entry.stage === stage) }))
@@ -691,32 +585,6 @@ export function ScoutingList({
                 </section>
               );
             })}
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {sections.map(({ group, entries: sectionRows }) => {
-            const key = group?.id ?? "none";
-            const collapsed = collapsedGroups.has(key);
-            return (
-              <section key={key}>
-                <GroupHeader
-                  group={group}
-                  entries={sectionRows}
-                  collapsed={collapsed}
-                  onToggle={() => toggleGroup(key)}
-                  isFirst={group ? groups.data?.[0]?.id === group.id : false}
-                  isLast={group ? groups.data?.at(-1)?.id === group.id : false}
-                />
-                {!collapsed && sectionRows.length > 0 && renderTable(sectionRows, group ? groupColours[group.colour].hex : "#d0d0d0")}
-                {!collapsed && sectionRows.length === 0 && (
-                  <p className="text-ink-500 ml-5 text-xs font-light">
-                    Nothing in this group yet — choose it in a property&apos;s Group column.
-                  </p>
-                )}
-              </section>
-            );
-          })}
-          <NewGroup eventId={eventId} />
         </div>
       )}
 

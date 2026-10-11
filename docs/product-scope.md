@@ -91,6 +91,13 @@ its **project lead**, and its **accommodation managers** — one or more. The ac
 managers are given each new sales request's sourcing task, and the project lead is told
 of it (§4.11). Changes to the team are in the event's log.
 
+
+**An event's tabs** (2026-10-11): **Event details** first, then Properties, Inventory,
+Deadlines and Position. *Event details* shows the event — name, dates and nights, city,
+country, status — with *Edit*; its **team** — the project lead and the accommodation
+managers — with *Change the team*; its **places of interest**, with *Change places of
+interest*; and its Log, the latest change shown. Each change opens **in a popup** over the
+tab. Opening an event still lands on its Properties tab.
 ### 2.4 Deadlines alert, they never auto-change state
 
 An expired option or block is **flagged**, never silently downgraded or released. The
@@ -698,13 +705,11 @@ places the way there is for properties (§3.5), so each event keeps its own list
 
 **Where they are managed.** Places of interest are part of setting the event up, so they are
 added, edited and removed in the **event's settings** (its Edit page), beside its name, dates
-and city — not on the Properties tab, which only measures to them. The Properties tab keeps
-one line naming them ("Distances are measured to: Crypto.com Arena, IBC"), with *Change
-places of interest* — which opens them **in a popup** over the tab (2026-10-11), the same as
-in the settings, so nobody loses their place — or a prompt to add some if there are none. The
-team line beneath it (*Change the team*, §2.3) opens in a popup the same way. **As a rule,
-changing or adding something opens in a popup over the page rather than another page** (the
-owner's, 2026-10-11). They still
+and city — not on the Properties tab, which only measures to them. Since 2026-10-11 they are
+shown on the event's first tab, **Event details** (below), with *Change places of interest*
+opening them **in a popup** — the Properties tab no longer carries a line about them. **As a
+rule, changing or adding something opens in a popup over the page rather than another page**
+(the owner's, 2026-10-11). They still
 appear as pins on the Properties tab's map.
 
 | Field | Notes |
@@ -885,12 +890,16 @@ by hand — so a property **moves between the groups on its own** as the work is
 | **Couldn't help** | Its last contact task closed because it could not help (§4.11) — folded by default |
 | **Ruled out** | Marked *Rejected* — folded by default |
 
-In that order — **Contracted at the top** (the owner's call, 2026-10-11), then the work in hand furthest along first — each with how many properties it holds and what it means. The team's own
-groups (below) are a click away: **Group by: Stage · Your groups**, remembered in the
-browser. The status column (*Prospect*, *Reached out*, *Shortlisted*, *Rejected*) stays as
-it was, set by hand.
+In that order — **Contracted at the top** (the owner's call, 2026-10-11), then the work in hand furthest along first — each with how many properties it holds and what it means. The
+status column (*Prospect*, *Reached out*, *Shortlisted*, *Rejected*) stays as it was, set by
+hand.
 
-#### Groups
+**The tab, tidied** (2026-10-11): the board is grouped by stage only — the team's own groups
+(below) are no longer shown or chosen, and their Group column is gone; the groups already
+made are kept, unused. The *Must have* amenity filter is gone too. Above the list there are
+only List · Map, status, type and *With quotations*.
+
+#### Groups (no longer shown since 2026-10-11 — kept for the record)
 
 - **Groups belong to an event.** Each event has its own, created, named, recoloured,
   reordered and deleted by the team as they like — "We Lodge Accommodation – Contracted",
@@ -2744,7 +2753,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, size, notes; the event rate per event read from the agreed rate or the quotations (§3.9) — the indicative price range is no longer entered (2026-10-06) |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
-| §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status, type and amenity; per-category contract status (`CategoryContract`), independent of the property's own status |
+| §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status and type (the amenity filter removed 2026-10-11), grouped by stage; per-category contract status (`CategoryContract`), independent of the property's own status |
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |

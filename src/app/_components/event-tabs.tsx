@@ -15,6 +15,7 @@ import { setLastEventPath } from "~/lib/last-event";
  * property's page meanwhile, a client's on their sales request.
  */
 const tabs = [
+  { slug: "details", label: "Event details", hint: "The event, its team and its places of interest" },
   { slug: "", label: "Properties", hint: "What could we contract" },
   { slug: "inventory", label: "Inventory", hint: "What we hold and what we promised" },
   { slug: "deadlines", label: "Deadlines", hint: "What runs out soon" },

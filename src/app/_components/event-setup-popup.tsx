@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { EventForm, type EventFormValues } from "~/app/_components/event-form";
 import { EventTeam } from "~/app/_components/event-team";
 import { PlacesOfInterest } from "~/app/_components/places-of-interest";
 import { Popup } from "~/app/_components/popup";
@@ -15,7 +16,8 @@ import { Popup } from "~/app/_components/popup";
 export function EventSetupPopup(
   props:
     | { part: "places"; eventId: string; eventName: string; label: string }
-    | { part: "team"; eventId: string; eventName: string; label: string; projectLeadId: string | null; accommodationManagerIds: string[] },
+    | { part: "team"; eventId: string; eventName: string; label: string; projectLeadId: string | null; accommodationManagerIds: string[] }
+    | { part: "event"; eventId: string; eventName: string; label: string; initial: EventFormValues },
 ) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -26,7 +28,7 @@ export function EventSetupPopup(
       </button>
       {open && (
         <Popup
-          title={props.part === "places" ? "Places of interest" : "The team"}
+          title={props.part === "places" ? "Places of interest" : props.part === "team" ? "The team" : "Edit the event"}
           subtitle={props.eventName}
           size={props.part === "places" ? "large" : "medium"}
           onClose={() => {
@@ -34,7 +36,11 @@ export function EventSetupPopup(
             router.refresh();
           }}
         >
-          {props.part === "places" ? (
+          {props.part === "event" ? (
+            <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+              <EventForm initial={props.initial} onDone={() => setOpen(false)} />
+            </div>
+          ) : props.part === "places" ? (
             <PlacesOfInterest eventId={props.eventId} />
           ) : (
             <EventTeam eventId={props.eventId} projectLeadId={props.projectLeadId} accommodationManagerIds={props.accommodationManagerIds} />

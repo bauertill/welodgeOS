@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AddToList } from "~/app/_components/add-to-list";
-import { EventSetupPopup } from "~/app/_components/event-setup-popup";
 import { EventTabs } from "~/app/_components/event-tabs";
 import {
   ScoutingList,
@@ -22,10 +20,7 @@ export default async function EventPropertiesPage({
   if (!session?.user) redirect("/signin");
 
   const { id } = await params;
-  const [event, amenities] = await Promise.all([
-    api.event.byId({ id }),
-    api.amenity.list(),
-  ]);
+  const event = await api.event.byId({ id });
 
   if (!event) notFound();
 
@@ -50,12 +45,6 @@ export default async function EventPropertiesPage({
         }`}
         action={
           <div className="flex items-start gap-2">
-            <Link
-              href={`/events/${event.id}/edit`}
-              className="border-ink-200 text-ink-700 hover:bg-ink-50 inline-flex rounded-full border bg-white px-5 py-2.5 text-[13px] font-light transition-colors"
-            >
-              Edit
-            </Link>
             <AddToList eventId={event.id} eventName={event.name} />
           </div>
         }
@@ -63,43 +52,7 @@ export default async function EventPropertiesPage({
 
       <EventTabs eventId={event.id} />
 
-      <p className="text-ink-500 mb-4 text-[13px] font-light">
-        {places.length === 0 ? (
-          <>No places of interest yet, so distances and travel times cannot be measured. </>
-        ) : (
-          <>
-            Distances are measured to:{" "}
-            <span className="text-ink-700">{places.map((place) => place.name).join(", ")}</span>
-            {" · "}
-          </>
-        )}
-        <EventSetupPopup
-          part="places"
-          eventId={event.id}
-          eventName={event.name}
-          label={places.length === 0 ? "Add places of interest" : "Change places of interest"}
-        />
-      </p>
-
-      {/* Who leads the event, and who sources it (doc §2.3) — given each new sales request's sourcing task. */}
-      <p className="text-ink-500 -mt-2 mb-4 text-[13px] font-light">
-        Project lead: <span className="text-ink-700">{event.projectLead ? (event.projectLead.name ?? event.projectLead.email) : "nobody yet"}</span>
-        {" · "}Accommodation managers:{" "}
-        <span className="text-ink-700">
-          {event.accommodationManagers.length ? event.accommodationManagers.map((person) => person.name ?? person.email).join(", ") : "nobody yet"}
-        </span>
-        {" · "}
-        <EventSetupPopup
-          part="team"
-          eventId={event.id}
-          eventName={event.name}
-          label={event.projectLead || event.accommodationManagers.length ? "Change the team" : "Set the team"}
-          projectLeadId={event.projectLead?.id ?? null}
-          accommodationManagerIds={event.accommodationManagers.map((person) => person.id)}
-        />
-      </p>
-
-      <ScoutingList eventId={event.id} places={places} amenities={amenities} />
+      <ScoutingList eventId={event.id} places={places} />
 
       <Card className="mt-8">
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
