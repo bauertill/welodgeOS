@@ -7,6 +7,7 @@ import { env } from "~/env";
 import { nightsBetween, parseDay } from "~/lib/dates";
 import { nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import { moveStage } from "~/server/api/routers/sales";
 import { logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 import { eventRates } from "~/server/event-rates";
@@ -63,6 +64,7 @@ function shape(card: LoadedCard) {
     answers: card.responses.map((response) => ({
       id: response.id,
       at: response.createdAt,
+      isNew: response.seenAt === null,
       name: response.name,
       email: response.email,
       note: response.note,
@@ -175,9 +177,70 @@ export const rateCardRouter = createTRPCRouter({
     ctx.db.rateCard.findMany({
       where: { salesRequestId: input.salesRequestId },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, createdAt: true, updatedAt: true, shareToken: true, _count: { select: { properties: true, responses: true } } },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+        shareToken: true,
+        _count: { select: { properties: true, responses: true } },
+        responses: { where: { seenAt: null }, select: { id: true } },
+      },
     }),
   ),
+
+  /** How many requests have an answer from the client nobody in the team has opened yet — the red count on Sales (doc §4.11). */
+  newAnswers: protectedProcedure.query(async ({ ctx }) => {
+    const unseen = await ctx.db.rateCardResponse.findMany({ where: { seenAt: null }, select: { rateCard: { select: { salesRequestId: true } } } });
+    return { requests: new Set(unseen.map((response) => response.rateCard.salesRequestId)).size };
+  }),
+
+  /**
+   * Every answer the client sent on this request's rate cards, newest first —
+   * what the request's page puts at its top (doc §4.11).
+   */
+  answersForRequest: protectedProcedure.input(z.object({ salesRequestId: z.string() })).query(async ({ ctx, input }) => {
+    const responses = await ctx.db.rateCardResponse.findMany({
+      where: { rateCard: { salesRequestId: input.salesRequestId } },
+      orderBy: { createdAt: "desc" },
+      include: { items: true, rateCard: { select: { id: true, name: true, currency: true } } },
+    });
+    return responses.map((response) => ({
+      id: response.id,
+      at: response.createdAt,
+      isNew: response.seenAt === null,
+      card: response.rateCard,
+      name: response.name,
+      email: response.email,
+      note: response.note,
+      datesChanged: response.datesChanged,
+      newCheckIn: response.newCheckIn,
+      newCheckOut: response.newCheckOut,
+      datesNote: response.datesNote,
+      items: response.items.map((item) => ({
+        id: item.id,
+        propertyName: item.propertyName,
+        roomName: item.roomName,
+        sellingCents: item.sellingCents,
+        rooms: item.rooms,
+        checkIn: item.checkIn,
+        checkOut: item.checkOut,
+        note: item.note,
+      })),
+    }));
+  }),
+
+  /** The request's answers have been read — seeing them on its page does it. */
+  markRequestSeen: protectedProcedure.input(z.object({ salesRequestId: z.string() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.rateCardResponse.updateMany({ where: { rateCard: { salesRequestId: input.salesRequestId }, seenAt: null }, data: { seenAt: new Date() } });
+    return { ok: true };
+  }),
+
+  /** The card's answers have been read — opening the card does it. */
+  markSeen: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.rateCardResponse.updateMany({ where: { rateCardId: input.id, seenAt: null }, data: { seenAt: new Date() } });
+    return { ok: true };
+  }),
 
   byId: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     const card = await loadCard(ctx.db, { id: input.id });
@@ -259,9 +322,17 @@ export const rateCardRouter = createTRPCRouter({
       where: { rateCardProperty: { rateCardId: input.id }, sellingCents: { not: null }, OR: [{ available: null }, { minNights: null }] },
     });
     if (missing) throw new TRPCError({ code: "BAD_REQUEST", message: "Say how many units are available and the minimum stay for every room offered, and save, before making the link." });
-    const card = await ctx.db.rateCard.update({ where: { id: input.id }, data: { shareToken: randomBytes(24).toString("base64url") }, select: { shareToken: true, salesRequestId: true, name: true } });
-    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card link made: ${card.name}` });
-    return { shareToken: card.shareToken! };
+    // Making the link is sending the proposal: a request still at Initial interest moves to Proposal sent (doc §4.11).
+    return ctx.db.$transaction(async (tx) => {
+      const card = await tx.rateCard.update({
+        where: { id: input.id },
+        data: { shareToken: randomBytes(24).toString("base64url") },
+        select: { shareToken: true, salesRequestId: true, name: true, salesRequest: { select: { stage: true } } },
+      });
+      await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card link made: ${card.name}` });
+      if (card.salesRequest.stage === "INITIAL_INTEREST") await moveStage(tx, ctx.session.user.id, card.salesRequestId, "PROPOSAL_SENT");
+      return { shareToken: card.shareToken!, movedToProposal: card.salesRequest.stage === "INITIAL_INTEREST" };
+    });
   }),
 
   unshare: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
@@ -477,7 +548,7 @@ export function clientCopy(card: ReturnType<typeof shape>) {
     intro: card.intro,
     clientName: card.clientName,
     /** Their last answer, to change and send again. */
-    lastAnswer: card.answers[0] ?? null,
+    lastAnswer: card.answers[0] ? (({ isNew: _isNew, ...answer }) => answer)(card.answers[0]) : null,
     event: card.event,
     asked: card.asked,
     properties: card.properties

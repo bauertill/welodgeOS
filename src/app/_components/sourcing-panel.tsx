@@ -8,6 +8,7 @@ import { env } from "~/env";
 import { propertyTypeLabels } from "~/lib/scouting";
 import { NEAR_KM, WITHIN_KM } from "~/lib/sourcing-fit";
 import { Select } from "~/app/_components/form";
+import { NewAnswers } from "~/app/_components/sales-requests";
 import { RateCardEditor } from "~/app/_components/rate-card-editor";
 import { formatMoney } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -589,6 +590,7 @@ export function RateCardsBox({ salesRequestId }: { salesRequestId: string }) {
               <option key={card.id} value={card.id}>
                 {card.name.split(" — ")[0]} · {card.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                 {card._count.responses > 0 ? ` · ${card._count.responses === 1 ? "1 answer" : `${card._count.responses} answers`}` : ""}
+                {card.responses.length > 0 ? ` (${card.responses.length} new)` : ""}
               </option>
             ))}
           </Select>
@@ -599,6 +601,7 @@ export function RateCardsBox({ salesRequestId }: { salesRequestId: string }) {
                 {current._count.responses > 0 && (
                   <span className="text-brand-700 font-medium"> · {current._count.responses === 1 ? "1 answer" : `${current._count.responses} answers`}</span>
                 )}
+                {current.responses.length > 0 && <NewAnswers count={current.responses.length} />}
               </p>
               {!c ? (
                 <p className="text-ink-500 mt-2 text-xs font-light">Loading…</p>

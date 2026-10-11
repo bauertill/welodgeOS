@@ -67,13 +67,31 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
     }
   }, [card.data, draft]);
 
+  // Opening the card is reading the client's answers: they stop counting as new (doc §4.11).
+  const markSeen = api.rateCard.markSeen.useMutation({
+    onSuccess: () => {
+      void utils.rateCard.forRequest.invalidate();
+      void utils.rateCard.newAnswers.invalidate();
+      void utils.sales.list.invalidate();
+    },
+  });
+  const hasNew = Boolean(card.data?.answers.some((answer) => answer.isNew));
+  useEffect(() => {
+    if (hasNew && markSeen.isIdle) markSeen.mutate({ id });
+  }, [hasNew, id, markSeen]);
+
   const save = api.rateCard.save.useMutation({
     onSuccess: () => {
       setSaved(JSON.stringify(draft));
       void utils.rateCard.invalidate();
     },
   });
-  const share = api.rateCard.share.useMutation({ onSuccess: () => void utils.rateCard.byId.invalidate({ id }) });
+  const share = api.rateCard.share.useMutation({
+    onSuccess: () => {
+      void utils.rateCard.byId.invalidate({ id });
+      void utils.sales.invalidate();
+    },
+  });
   const unshare = api.rateCard.unshare.useMutation({ onSuccess: () => void utils.rateCard.byId.invalidate({ id }) });
   const describe = api.rateCard.describe.useMutation();
   const remove = api.rateCard.remove.useMutation({
@@ -426,6 +444,7 @@ function ClientAnswers({ answers, currency }: { answers: RouterOutputs["rateCard
         {answers.map((answer) => (
           <li key={answer.id} className="rounded-lg bg-white px-3 py-2.5">
             <p className="text-ink-500 text-xs font-light">
+              {answer.isNew && <span className="mr-1.5 rounded-full bg-[#e0234e] px-1.5 py-px text-[10px] font-medium text-white">New</span>}
               {formatMoment(answer.at)}
               {answer.name || answer.email ? ` · ${[answer.name, answer.email].filter(Boolean).join(" · ")}` : ""}
             </p>

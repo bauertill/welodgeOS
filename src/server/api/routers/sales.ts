@@ -482,8 +482,16 @@ export const salesRouter = createTRPCRouter({
         : [];
       const count = (id: string, state: "BLOCKED" | "SOLD") =>
         counts.find((row) => row.salesRequestId === id && row.salesState === state)?._count._all ?? 0;
+      // Answers from the client on a rate card nobody in the team has opened yet (doc §4.11).
+      const unseen = requests.length
+        ? await ctx.db.rateCardResponse.findMany({
+            where: { seenAt: null, rateCard: { salesRequestId: { in: requests.map((request) => request.id) } } },
+            select: { rateCard: { select: { salesRequestId: true } } },
+          })
+        : [];
       return requests.map((request) => ({
         ...request,
+        newAnswers: unseen.filter((response) => response.rateCard.salesRequestId === request.id).length,
         nightsBlocked: count(request.id, "BLOCKED"),
         nightsSold: count(request.id, "SOLD"),
       }));

@@ -17,8 +17,8 @@ import { TaskStatusBadge } from "~/app/_components/tasks";
 import { contactOutcomeLabels, contactOutcomeStyle } from "~/lib/tasks";
 import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
-import { addDays, daysUntil, dayKey, today } from "~/lib/dates";
-import { formatDate, formatMoney, formatRange } from "~/lib/format";
+import { addDays, daysUntil, dayKey, nightsBetween, today } from "~/lib/dates";
+import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
 import {
   closedStages,
   contractingFields,
@@ -193,6 +193,18 @@ export function DeleteRequest({ request, subtle = false, onDeleted }: { request:
   );
 }
 
+/** The red count of client answers nobody has opened yet (doc §4.11). */
+export function NewAnswers({ count }: { count: number }) {
+  return (
+    <span
+      title={`The client answered a rate card — ${count === 1 ? "1 answer" : `${count} answers`} not opened yet`}
+      className="ml-1 inline-flex items-center gap-1 rounded-full bg-[#e0234e] px-2 py-0.5 align-middle text-[11px] font-medium whitespace-nowrap text-white"
+    >
+      {count} new {count === 1 ? "answer" : "answers"}
+    </span>
+  );
+}
+
 function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: Request[] }) {
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
@@ -227,6 +239,7 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                     {request.client.name}
                   </Link>{" "}
                   {!request.detailedAt && <RequestKind request={request} />}
+                  {request.newAnswers > 0 && <NewAnswers count={request.newAnswers} />}
                   {request.contact && <span className="text-ink-500 block text-xs">{request.contact.name}</span>}
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{request.event?.name ?? "—"}</td>
@@ -1126,6 +1139,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
   return (
     <div className="space-y-5">
       <StagePicker request={request} />
+      <ClientAnswer request={request} />
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           <TextSection
@@ -1169,6 +1183,172 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
   );
 }
 
+/**
+ * What the client answered on our rate cards (doc §4.11) — the most important
+ * thing on a request once it comes, so it sits at the top: what they are
+ * interested in, room by room and period by period, with what it comes to;
+ * a change of dates; their note. Earlier answers fold away underneath.
+ * Seeing it here counts as reading it.
+ */
+function ClientAnswer({ request }: { request: FullRequest }) {
+  const utils = api.useUtils();
+  const answers = api.rateCard.answersForRequest.useQuery({ salesRequestId: request.id });
+  const [open, setOpen] = useState<string | null>(null);
+  const [earlier, setEarlier] = useState(false);
+  const markSeen = api.rateCard.markRequestSeen.useMutation({
+    onSuccess: () => {
+      void utils.rateCard.newAnswers.invalidate();
+      void utils.rateCard.forRequest.invalidate();
+      void utils.sales.list.invalidate();
+    },
+  });
+  // New when the page opened — still marked New for this visit once read.
+  const [fresh, setFresh] = useState<string[]>([]);
+  const newIds = (answers.data ?? []).filter((answer) => answer.isNew).map((answer) => answer.id);
+  useEffect(() => {
+    if (newIds.length && markSeen.isIdle) {
+      setFresh(newIds);
+      markSeen.mutate({ salesRequestId: request.id });
+    }
+  }, [newIds, markSeen, request.id]);
+
+  const list = answers.data ?? [];
+  if (list.length === 0) return null;
+  const [latest, ...older] = list;
+
+  return (
+    <section className="border-brand-300 overflow-hidden rounded-2xl border-2 bg-white shadow-[0_2px_10px_rgba(115,72,214,0.10)]">
+      <div className="bg-brand-50 flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+        <div>
+          <h2 className="text-ink-900 flex items-center gap-2 text-lg font-semibold">
+            {request.client.name} answered the rate card
+            {(latest!.isNew || fresh.includes(latest!.id)) && <span className="rounded-full bg-[#e0234e] px-2 py-0.5 text-[11px] font-medium text-white">New</span>}
+          </h2>
+          <p className="text-ink-500 text-[13px] font-light">
+            {formatMomentInWords(latest!.at)}
+            {latest!.name || latest!.email ? ` · ${[latest!.name, latest!.email].filter(Boolean).join(" · ")}` : ""} · on {latest!.card.name.split(" — ")[0]}
+          </p>
+        </div>
+        <button type="button" onClick={() => setOpen(latest!.card.id)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
+          Open the rate card
+        </button>
+      </div>
+      <div className="px-6 py-5">
+        <AnswerBody answer={latest!} />
+        {older.length > 0 && (
+          <div className="border-ink-200/60 mt-5 border-t pt-3">
+            <button type="button" onClick={() => setEarlier(!earlier)} className="text-brand-700 text-[13px] font-medium hover:underline">
+              {earlier ? "Hide earlier answers" : `Earlier answers (${older.length})`}
+            </button>
+            {earlier && (
+              <ul className="mt-3 space-y-4">
+                {older.map((answer) => (
+                  <li key={answer.id} className="bg-ink-50/60 rounded-xl px-4 py-3">
+                    <p className="text-ink-500 mb-2 text-xs font-light">
+                      {formatMomentInWords(answer.at)}
+                      {answer.name ? ` · ${answer.name}` : ""} · on {answer.card.name.split(" — ")[0]}
+                    </p>
+                    <AnswerBody answer={answer} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+      {open && (
+        <RateCardEditor
+          id={open}
+          onClose={() => {
+            setOpen(null);
+            void answers.refetch();
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+function AnswerBody({ answer }: { answer: RouterOutputs["rateCard"]["answersForRequest"][number] }) {
+  const currency = answer.card.currency;
+  const total = answer.items.reduce(
+    (sum, item) => sum + (item.sellingCents !== null && item.checkIn && item.checkOut ? item.sellingCents * item.rooms * nightsBetween(item.checkIn, item.checkOut) : 0),
+    0,
+  );
+  return (
+    <div className="space-y-3">
+      {answer.datesChanged && (
+        <p className="rounded-xl border border-[#f5c98a] bg-[#fff4e0] px-4 py-3 text-[14px] text-[#8a5a00]">
+          <span className="font-semibold">Their dates have changed</span>
+          {answer.newCheckIn && answer.newCheckOut ? (
+            <>
+              {" "}
+              — now <span className="font-semibold">{formatRange(answer.newCheckIn, answer.newCheckOut)}</span> ({nightsBetween(answer.newCheckIn, answer.newCheckOut)} nights)
+            </>
+          ) : null}
+          {answer.datesNote ? <span className="block text-[13px] font-light">“{answer.datesNote}”</span> : null}
+        </p>
+      )}
+      {answer.items.length > 0 && (
+        <div className="overflow-x-auto">
+          <p className="text-ink-500 mb-1 text-[11px] font-medium tracking-wider uppercase">Interested in</p>
+          <table className="w-full text-left text-[14px]">
+            <thead>
+              <tr className="text-ink-500 border-ink-200/60 border-b text-[10px] tracking-wider uppercase">
+                <th className="py-1.5 font-medium">Property</th>
+                <th className="py-1.5 font-medium">Room</th>
+                <th className="py-1.5 text-right font-medium">Rooms</th>
+                <th className="py-1.5 pl-4 font-medium">Dates</th>
+                <th className="py-1.5 text-right font-medium">Per night</th>
+                <th className="py-1.5 text-right font-medium">Comes to</th>
+              </tr>
+            </thead>
+            <tbody>
+              {answer.items.map((item) => {
+                const nights = item.checkIn && item.checkOut ? nightsBetween(item.checkIn, item.checkOut) : null;
+                return (
+                  <tr key={item.id} className="border-ink-200/40 border-b align-top last:border-0">
+                    <td className="text-ink-900 py-2 font-medium">{item.propertyName}</td>
+                    <td className="text-ink-700 py-2">
+                      {item.roomName}
+                      {item.note && <span className="text-ink-500 block text-xs font-light italic">“{item.note}”</span>}
+                    </td>
+                    <td className="text-ink-900 py-2 text-right font-semibold">{item.rooms}</td>
+                    <td className="text-ink-700 py-2 pl-4 whitespace-nowrap">
+                      {item.checkIn && item.checkOut ? formatRange(item.checkIn, item.checkOut) : "—"}
+                      {nights !== null && <span className="text-ink-500 block text-xs font-light">{nights} nights</span>}
+                    </td>
+                    <td className="text-ink-700 py-2 text-right whitespace-nowrap">{item.sellingCents !== null ? formatMoney(item.sellingCents, currency) : "—"}</td>
+                    <td className="text-ink-900 py-2 text-right font-medium whitespace-nowrap">
+                      {item.sellingCents !== null && nights !== null ? formatMoney(item.sellingCents * item.rooms * nights, currency) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {answer.items.length > 1 && total > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan={5} className="text-ink-500 pt-2 text-right text-xs font-medium tracking-wider uppercase">
+                    Total
+                  </td>
+                  <td className="text-ink-900 pt-2 text-right font-semibold whitespace-nowrap">{formatMoney(total, currency)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      )}
+      {answer.note && (
+        <p className="text-ink-900 bg-ink-50/60 rounded-xl px-4 py-3 text-[14px] font-light whitespace-pre-line">
+          <span className="text-ink-500 mb-0.5 block text-[11px] font-medium tracking-wider uppercase">Their note</span>
+          {answer.note}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** The request's rate cards (doc §4.11) — made on its sourcing task, opened and changed here too. */
 function RequestRateCards({ salesRequestId }: { salesRequestId: string }) {
   const cards = api.rateCard.forRequest.useQuery({ salesRequestId });
@@ -1187,6 +1367,7 @@ function RequestRateCards({ salesRequestId }: { salesRequestId: string }) {
               {card._count.properties} {card._count.properties === 1 ? "property" : "properties"}
               {card.shareToken ? " · shared" : ""}
               {card._count.responses > 0 && <span className="text-brand-700 font-medium"> · {card._count.responses === 1 ? "1 answer" : `${card._count.responses} answers`}</span>}
+              {card.responses.length > 0 && <NewAnswers count={card.responses.length} />}
             </span>
           </li>
         ))}

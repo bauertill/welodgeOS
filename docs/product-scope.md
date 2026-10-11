@@ -1709,9 +1709,10 @@ or else *Initial interest*. A signed one shows every step done.
 
 The stage is changed by hand, with one click, in any direction: a released request can be
 reopened. Moving to *Proposal sent* dates the proposal today, unless a date is already
-there. Moving to a closing stage records the day it closed; reopening clears that. Nothing
-moves a request on its own — a block that has passed its date is not released by the
-system (§2.4).
+there. Moving to a closing stage records the day it closed; reopening clears that. One
+move is made for us: making a rate card's link takes a request at *Initial interest* to
+*Proposal sent* (2026-10-11, the rate card below). Nothing else moves a request on its own —
+a block that has passed its date is not released by the system (§2.4).
 
 **Signed needs the client's contract.** A request can be marked *Signed* only once a client
 contract (§7.1) is registered against it — the client's, for the request's event — so
@@ -1981,11 +1982,24 @@ room category at the rate we sell it for.
   Lodge** needs at least a room, a change of dates or a note. They can come back and send
   again: the link shows their last answer filled in. Each answer is kept as sent — the rooms,
   the rate at that moment and the notes — and a later one does not rewrite it.
+- **Making the link is sending the proposal** (2026-10-11): a request still at *Initial
+  interest* moves to *Proposal sent* the moment a rate card's link is made (dated that day,
+  on its history). A request further along is left where it is.
 - **What we see of it**: the account manager and whoever made the card are told (§2.9); the
   answer is written on the request's history; the card in our popup lists **The client's
   answers**, newest first, a change of dates in orange; the request's *Rate cards* shows how
   many answers each card has. An answer reserves nothing — the rooms are still ours to
   confirm.
+- **The answer leads the request's page** (2026-10-11): right under the stage, across the
+  page, a box "{client} answered the rate card" — when, who, which card, *Open the rate
+  card* — then what they are interested in, room by room and period by period (property,
+  room, rooms, dates and nights, rate, what it comes to, a total), their notes, and a change
+  of dates in orange. The latest answer shows; earlier ones fold under *Earlier answers*.
+- **A new answer is flagged in red until it is read**: on the sales board, beside the
+  client's name ("1 new answer"); on *Sales* in the menu, the number of requests with one
+  (checked every half minute); on the request's *Rate cards* and the sourcing task's box; and
+  *New* on the answer itself. Opening the request's page or the card — by anyone in the
+  team — counts as reading it, and the red goes for everyone.
 
 Not built yet: suggesting properties to the client before a rate card; a rate card's history
 of versions.

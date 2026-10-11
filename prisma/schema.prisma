@@ -1742,6 +1742,8 @@ model RateCardResponse {
   rateCard     RateCard  @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
   rateCardId   String
   createdAt    DateTime  @default(now())
+  /// When someone in the team first opened the card after it came in; empty while it is new to us.
+  seenAt       DateTime?
   /// Who answered, as they gave it.
   name         String?
   email        String?
