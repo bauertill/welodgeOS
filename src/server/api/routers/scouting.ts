@@ -4,9 +4,12 @@ import { z } from "zod";
 
 import { stageOf } from "~/lib/stages";
 
-import { categoryContractStatusLabels, scoutingStatusLabels } from "~/lib/scouting";
+import { categoryContractStatusLabels, distanceKm, scoutingStatusLabels } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
+import { findNearby, knownAlready } from "~/server/discover";
+import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
+import { deliverImmediate } from "~/server/notify";
 
 // `CONTRACTED` is deliberately excluded — a property has no single contract
 // status of its own any more; that lives per room category (doc §3.5, §3.6).
@@ -314,6 +317,47 @@ export const scoutingRouter = createTRPCRouter({
       });
     }),
 
+
+  /**
+   * Places to stay around one of the event's places of interest that are not
+   * in our system (doc §3.9), from Google Maps — searched from the
+   * Properties tab's map, in general rather than for a client.
+   */
+  discoverNear: protectedProcedure
+    .input(z.object({ eventId: z.string(), placeId: z.string(), radiusKm: z.number().min(1).max(30).default(5) }))
+    .query(async ({ ctx, input }) => {
+      const place = await ctx.db.placeOfInterest.findFirstOrThrow({
+        where: { id: input.placeId, eventId: input.eventId },
+        select: { name: true, latitude: true, longitude: true },
+      });
+      const result = await findNearby(place, input.radiusKm, { hotels: true, apartments: true });
+      if (!result) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "The map search did not answer — try again in a minute." });
+      const ours = await ctx.db.property.findMany({ select: { id: true, name: true, address: true, latitude: true, longitude: true } });
+      const found = result.found
+        .filter((candidate) => !knownAlready(candidate, ours))
+        .map((candidate) => ({ ...candidate, km: distanceKm(candidate, place) }))
+        .filter((candidate) => candidate.km <= input.radiusKm)
+        .sort((a, b) => a.km - b.km);
+      return { source: result.source, placeName: place.name, found };
+    }),
+
+  /** A place found on the event's map, added to our properties and the event, with a contact task (doc §3.9, §4.11). */
+  addFound: protectedProcedure
+    .input(z.object({ eventId: z.string(), placeName: z.string().max(300), place: foundPlaceInput }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.db.$transaction(async (tx) => {
+        const event = await tx.event.findUniqueOrThrow({ where: { id: input.eventId }, select: { name: true } });
+        return createFoundProperty(tx, {
+          place: input.place,
+          eventId: input.eventId,
+          salesRequestId: null,
+          foundWhile: `near ${input.placeName} for ${event.name}`,
+          actorId: ctx.session.user.id,
+        });
+      });
+      await deliverImmediate(ctx.db);
+      return result;
+    }),
 
   /** Properties not yet on this event's list, for the "add" picker. */
   candidates: protectedProcedure

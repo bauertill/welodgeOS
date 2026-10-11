@@ -19,12 +19,11 @@ import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/
 import { diffFields, logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
-import { ensureHotelContactTask, HOTEL_CONTACT } from "~/server/hotel-contact";
+import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
+import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { ensureSourcingTask } from "~/server/sourcing";
-import { distanceKm } from "~/lib/scouting";
-import { looksLike } from "~/lib/similar-properties";
 import { fit } from "~/lib/sourcing-fit";
-import { findNearby, type Source } from "~/server/discover";
+import { findNearby, knownAlready, type Source } from "~/server/discover";
 import { eventRates } from "~/server/event-rates";
 import { snapshotNight } from "~/server/inventory";
 
@@ -1403,13 +1402,7 @@ export const salesRouter = createTRPCRouter({
       .flatMap((result) => result.found)
       .filter((place) => !seen.has(place.key) && seen.add(place.key))
       // Not one we have: not the same name or address, and not on the very same spot.
-      .filter(
-        (place) =>
-          !ours.some((property) => {
-            if (looksLike({ name: place.name, address: place.address }, { ...property, latitude: null, longitude: null })) return true;
-            return property.latitude !== null && property.longitude !== null && distanceKm(place, { latitude: property.latitude, longitude: property.longitude }) < 0.04;
-          }),
-      )
+      .filter((place) => !knownAlready(place, ours))
       .map((place) => ({ ...place, ...fit({ type: place.type, latitude: place.latitude, longitude: place.longitude, categories: [], stated: place.rooms }, targets, wanted) }))
       .filter((place) => place.km !== null && place.km <= input.radiusKm)
       .sort((a, b) => (a.km ?? 99) - (b.km ?? 99) || (b.rating ?? 0) - (a.rating ?? 0))
@@ -1419,66 +1412,21 @@ export const salesRouter = createTRPCRouter({
 
   /** A place found on the map, added to our properties — and to the request's event, when it has one. */
   addFound: protectedProcedure
-    .input(
-      z.object({
-        salesRequestId: z.string(),
-        place: z.object({
-          name: z.string().trim().min(1).max(300),
-          type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]),
-          latitude: z.number().min(-90).max(90),
-          longitude: z.number().min(-180).max(180),
-          address: z.string().max(500).nullable(),
-          city: z.string().max(200).nullable(),
-          country: z.string().max(200).nullable(),
-          website: z.string().max(2000).nullable(),
-          phone: z.string().max(200).nullable(),
-          stars: z.number().int().min(1).max(5).nullable(),
-          rooms: z.number().int().min(1).nullable(),
-          source: z.enum(["google", "osm"]),
-        }),
-      }),
-    )
+    .input(z.object({ salesRequestId: z.string(), place: foundPlaceInput }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.db.$transaction(async (tx) => {
-        const { place } = input;
         const request = await tx.salesRequest.findUniqueOrThrow({
           where: { id: input.salesRequestId },
           select: { eventId: true, event: { select: { name: true } }, client: { select: { name: true } } },
         });
-        const already = await tx.property.findFirst({ where: { name: { equals: place.name, mode: "insensitive" } }, select: { id: true } });
-        if (already) throw new TRPCError({ code: "BAD_REQUEST", message: `${place.name} is already in our properties.` });
-        const property = await tx.property.create({
-          data: {
-            name: place.name,
-            type: place.type,
-            latitude: place.latitude,
-            longitude: place.longitude,
-            address: place.address,
-            city: place.city,
-            country: place.country,
-            website: place.website,
-            phone: place.phone,
-            stars: place.type === "HOTEL" ? place.stars : null,
-            totalRooms: place.rooms,
-            scoutedById: ctx.session.user.id,
-            notes: `Found on ${place.source === "google" ? "Google Maps" : "OpenStreetMap"} while sourcing for ${request.client.name}.`,
-          },
-        });
-        await logAudit(tx, {
+        const made = await createFoundProperty(tx, {
+          place: input.place,
+          eventId: request.eventId,
+          salesRequestId: input.salesRequestId,
+          foundWhile: `while sourcing for ${request.client.name}`,
           actorId: ctx.session.user.id,
-          entity: "Property",
-          entityId: property.id,
-          summary: `Added — found on ${place.source === "google" ? "Google Maps" : "OpenStreetMap"} while sourcing for ${request.client.name}`,
         });
-        let taskId: string | null = null;
-        if (request.eventId) {
-          const entry = await tx.scoutingEntry.create({ data: { eventId: request.eventId, propertyId: property.id, addedById: ctx.session.user.id } });
-          await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: entry.id, summary: "Added to the scouting list" });
-          // Someone now reaches out to it, to gather what we need (doc §4.11).
-          const task = await ensureHotelContactTask(tx, { propertyId: property.id, eventId: request.eventId, salesRequestId: input.salesRequestId, actorId: ctx.session.user.id });
-          taskId = task?.id ?? null;
-        }
-        return { id: property.id, eventName: request.event?.name ?? null, taskId };
+        return { ...made, eventName: request.event?.name ?? null };
       });
       await deliverImmediate(ctx.db);
       return result;

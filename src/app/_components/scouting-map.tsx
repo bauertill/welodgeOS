@@ -317,11 +317,17 @@ export function ScoutingMap({
   places = [],
   availability = [],
   eventId,
+  found = [],
+  renderFound,
 }: {
   pins: MapPin[];
   places?: MapPlace[];
   availability?: MapAvailability[];
   eventId?: string;
+  /** Places to stay not in our system, from a search on the map — hollow purple dots (doc §3.9). */
+  found?: { key: string; name: string; latitude: number; longitude: number }[];
+  /** What a found place's panel says and offers. */
+  renderFound?: (key: string) => React.ReactNode;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -355,8 +361,9 @@ export function ScoutingMap({
     () => [
       ...pins.map((pin) => ({ lat: pin.latitude, lng: pin.longitude })),
       ...places.map((place) => ({ lat: place.latitude, lng: place.longitude })),
+      ...found.map((place) => ({ lat: place.latitude, lng: place.longitude })),
     ],
-    [pins, places],
+    [pins, places, found],
   );
 
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -429,9 +436,34 @@ export function ScoutingMap({
                 />
               </AdvancedMarker>
             ))}
+            {found.map((place) => (
+              <AdvancedMarker
+                key={place.key}
+                position={{ lat: place.latitude, lng: place.longitude }}
+                title={`${place.name} — not in our system`}
+                zIndex={openId === place.key ? 1000 : 50}
+                clickable
+                onClick={() => openPin(place.key)}
+              >
+                <span
+                  className={`border-brand-500 block rounded-full border-2 bg-white shadow ${openId === place.key ? "h-4 w-4" : "h-3 w-3"}`}
+                />
+              </AdvancedMarker>
+            ))}
           </GoogleMap>
         </APIProvider>
       </div>
+
+      {openId && renderFound && found.some((place) => place.key === openId) && (
+        <aside className="border-ink-200/60 w-full shrink-0 border-t bg-white p-4 md:w-80 md:border-t-0 md:border-l">
+          <div className="mb-1 flex justify-end">
+            <button type="button" onClick={() => setOpenId(null)} aria-label="Close" className="text-ink-500 hover:text-ink-900 -mt-1 px-1 text-lg leading-none">
+              ×
+            </button>
+          </div>
+          {renderFound(openId)}
+        </aside>
+      )}
 
       {(openProperty ?? openPlace) && (
         <SidePanel

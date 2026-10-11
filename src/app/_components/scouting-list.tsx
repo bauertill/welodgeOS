@@ -35,8 +35,8 @@ import { stageInfo, stageOrder } from "~/lib/stages";
 import { api } from "~/trpc/react";
 
 // Google Maps only exists in the browser, so the map never renders on the server.
-const ScoutingMap = dynamic(
-  () => import("~/app/_components/scouting-map").then((m) => m.ScoutingMap),
+const NearbySearch = dynamic(
+  () => import("~/app/_components/nearby-search").then((m) => m.NearbySearch),
   {
     ssr: false,
     loading: () => (
@@ -536,11 +536,15 @@ export function ScoutingList({
         )
       ) : view === "map" ? (
         <>
-          <ScoutingMap
+          <NearbySearch
+            eventId={eventId}
             pins={pins}
             places={places}
             availability={availability.data ?? []}
-            eventId={eventId}
+            onAdded={() => {
+              void entries.refetch();
+              router.refresh();
+            }}
           />
           {withoutCoordinates > 0 && (
             <p className="text-ink-500 text-xs font-light">

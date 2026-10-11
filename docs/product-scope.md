@@ -894,6 +894,20 @@ In that order — **Contracted at the top** (the owner's call, 2026-10-11), then
 status column (*Prospect*, *Reached out*, *Shortlisted*, *Rejected*) stays as it was, set by
 hand.
 
+**Finding hotels from the map** (2026-10-11). The Map view has a bar above the map: **Find
+hotels not on our list near** one of the event's places of interest (its first venue by
+default), **within 5, 10 or 20 km**, and *Search*. Google Maps (Places API) is searched for
+hotels, serviced apartments and aparthotels around it; those already in our system (the same
+name or address, or the very same spot) are left out, and so are holiday lets listed through
+booking sites (Airbnb, Booking.com, Vrbo, Expedia, bluepillow and the like) — somebody's
+flat, not a place we contract. What is left shows as hollow purple dots on the map — a click
+opens its card — and as a list beneath, nearest first: name, kind, Google's rating, its
+distance, its website and a link to it on Google Maps. **Add to properties board** creates
+the property from what Google knows, puts it on this event and makes a **hotel contact task**
+for it (§4.11) — a general one, with no client's request behind it — so it lands under *To
+be contacted*; its phone and email are then looked up on their own. Should Google not answer,
+OpenStreetMap is used instead, and the list says so.
+
 **The tab, tidied** (2026-10-11): the board is grouped by stage only — the team's own groups
 (below) are no longer shown or chosen, and their Group column is gone; the groups already
 made are kept, unused. The *Must have* amenity filter is gone too. Above the list there are

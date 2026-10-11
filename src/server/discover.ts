@@ -2,6 +2,7 @@ import type { PropertyType } from "generated/prisma";
 
 import { env } from "~/env";
 import { distanceKm } from "~/lib/scouting";
+import { looksLike } from "~/lib/similar-properties";
 
 /**
  * Finding places to stay that we do not have yet (doc §4.11), around one of
@@ -45,7 +46,9 @@ const cache = new Map<string, { at: number; value: { source: Source; found: Foun
 export async function findNearby(point: Point, radiusKm: number, kinds: { hotels: boolean; apartments: boolean }) {
   const key = `${point.latitude.toFixed(4)},${point.longitude.toFixed(4)},${radiusKm},${kinds.hotels},${kinds.apartments}`;
   const kept = cache.get(key);
-  if (kept && Date.now() - kept.at < HOURS * 3600_000) return kept.value;
+  // Google's answers are kept for hours; a fallback to OpenStreetMap only briefly, so Google is asked again soon.
+  const keepFor = kept?.value.source === "google" ? HOURS * 3600_000 : 15 * 60_000;
+  if (kept && Date.now() - kept.at < keepFor) return kept.value;
   const google = await fromGoogle(point, radiusKm, kinds);
   let value: { source: Source; found: Found[] } | null = google ? { source: "google", found: google } : null;
   if (!value) {
@@ -82,12 +85,24 @@ type GooglePlace = {
   googleMapsUri?: string;
 };
 
+/** Booking and holiday-let sites: a place whose website is one of these is a listing, not a hotel's own. */
+const listingSite = /(^|\.)(airbnb|booking|vrbo|expedia|bluepillow|hotels|tripadvisor|agoda|trivago|homeaway|furnishedfinder|zillow|apartments|corporatehousing|blueground|kayak)\.[a-z.]+$/i;
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+};
+
 /** null when Google refuses or fails — the caller then asks OpenStreetMap. */
 async function fromGoogle(point: Point, radiusKm: number, kinds: { hotels: boolean; apartments: boolean }) {
   const key = env.GOOGLE_MAPS_SERVER_KEY;
   if (!key) return null;
   const queries = [...(kinds.hotels ? ["hotels"] : []), ...(kinds.apartments ? ["serviced apartments", "aparthotel"] : [])];
   const found = new Map<string, Found>();
+  let answered = 0;
   for (const textQuery of queries) {
     const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
       method: "POST",
@@ -114,16 +129,22 @@ async function fromGoogle(point: Point, radiusKm: number, kinds: { hotels: boole
         textQuery,
         includedType: "lodging",
         pageSize: 20,
-        locationBias: { circle: { center: point, radius: Math.min(50_000, radiusKm * 1000) } },
+        // Only the coordinates — Google refuses a place sent with anything else (its name, a label).
+        locationBias: { circle: { center: { latitude: point.latitude, longitude: point.longitude }, radius: Math.min(50_000, radiusKm * 1000) } },
       }),
+      signal: AbortSignal.timeout(10_000),
     }).catch(() => null);
-    if (!response?.ok) return null;
-    const data = (await response.json()) as { places?: GooglePlace[] };
+    // One search failing does not lose the others' answers.
+    if (!response?.ok) continue;
+    answered += 1;
+    const data = (await response.json().catch(() => ({}))) as { places?: GooglePlace[] };
     for (const place of data.places ?? []) {
       if (!place.location || !place.displayName?.text) continue;
       const types = place.types ?? [];
       // Campsites, hostels and the like are not for our clients.
       if (types.some((type) => ["campground", "rv_park", "hostel", "camping_cabin"].includes(type))) continue;
+      // A holiday let listed through a booking site is somebody's flat, not a place we contract.
+      if (place.websiteUri && listingSite.test(hostOf(place.websiteUri))) continue;
       const part = (type: string) => place.addressComponents?.find((component) => component.types.includes(type))?.longText ?? null;
       const apartment = textQuery !== "hotels" || types.includes("extended_stay_hotel");
       found.set(place.id, {
@@ -146,7 +167,7 @@ async function fromGoogle(point: Point, radiusKm: number, kinds: { hotels: boole
       });
     }
   }
-  return [...found.values()];
+  return answered ? [...found.values()] : null;
 }
 
 // --- OpenStreetMap -----------------------------------------------------------
@@ -215,4 +236,15 @@ export function cleanWebsite(url: string) {
   } catch {
     return url;
   }
+}
+
+/** Whether a found place is one we already have: the same name or address, or the very same spot (doc §4.11). */
+export function knownAlready(
+  place: { name: string; address: string | null; latitude: number; longitude: number },
+  ours: { id: string; name: string; address: string | null; latitude: number | null; longitude: number | null }[],
+) {
+  return ours.some((property) => {
+    if (looksLike({ name: place.name, address: place.address }, { ...property, latitude: null, longitude: null })) return true;
+    return property.latitude !== null && property.longitude !== null && distanceKm(place, { latitude: property.latitude, longitude: property.longitude }) < 0.04;
+  });
 }
