@@ -84,10 +84,8 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
       {targets.length === 0 ? (
         <p className="text-ink-500 text-sm font-light">The client has not said where they want to be, and the event has no places of interest yet.</p>
       ) : (
-        <p className="text-ink-500 text-xs font-light">
-          {fromEventPlaces ? "The client chose no places, so these are the event's own. " : "Where the client wants to be close to. "}
-          The properties we already have around them that fit the request are shown; those that fit in part, and those still to be contacted, behind their tabs. Hollow purple dots are places to stay we do not have yet.
-        </p>
+        // Said only when the places on the map are not the client's own.
+        fromEventPlaces && <p className="text-ink-500 text-xs font-light">The client chose no places, so these are the event&apos;s own.</p>
       )}
       {apiKey && points.length > 0 && (
         <div className="border-ink-200/60 h-80 overflow-hidden rounded-lg border">
