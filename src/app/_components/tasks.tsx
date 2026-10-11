@@ -1263,6 +1263,7 @@ function EmailTheHotel({ propertyId, salesRequestId, eventName }: { propertyId: 
   const me = api.user.me.useQuery();
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
+  const [shown, setShown] = useState(false);
   useEffect(() => setOrigin(window.location.origin), []);
   const make = api.property.makeContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
   const off = api.property.switchOffContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
@@ -1320,63 +1321,73 @@ function EmailTheHotel({ propertyId, salesRequestId, eventName }: { propertyId: 
 
   return (
     <div className="border-ink-200/60 rounded-xl border bg-white p-5">
-      <StepTitle step={2} hint="When they ask for it in writing">
-        Email them the request
-      </StepTitle>
-      <pre className="bg-ink-50/60 text-ink-700 mt-3 max-h-56 overflow-y-auto rounded-lg px-3 py-2.5 font-sans text-[13px] font-light whitespace-pre-wrap">
-        {body(link ?? "(the link to their details form is added when you send it)")}
-      </pre>
-      {!to && <p className="text-ink-500 mt-2 text-xs font-light">No email is known for the hotel — add one in step 1, or copy the email.</p>}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
-        <button
-          type="button"
-          disabled={make.isPending}
-          onClick={() =>
-            withLink((target) => {
-              window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body(target))}`;
-            })
-          }
-          className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 font-medium text-white disabled:opacity-60"
-        >
-          {make.isPending ? "Preparing…" : "Email the request to the hotel"}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            withLink((target) => {
-              void navigator.clipboard.writeText(`${subject}\n\n${body(target)}`).then(() => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              });
-            })
-          }
-          className="text-brand-700 font-light hover:underline"
-        >
-          {copied ? "Copied" : "Copy the email"}
-        </button>
+      {/* Folded by default: the heading carries the send button; the email itself opens on request. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <StepTitle step={2} hint={p.contractingSubmittedAt ? "The hotel sent its details back" : link ? "Their details form is out" : undefined}>
+          Email them the request
+        </StepTitle>
+        <span className="flex items-center gap-4 text-[13px]">
+          <button type="button" onClick={() => setShown(!shown)} aria-expanded={shown} className="text-brand-700 font-light hover:underline">
+            {shown ? "Hide the email ▴" : "Show the email ▾"}
+          </button>
+          <button
+            type="button"
+            disabled={make.isPending}
+            onClick={() =>
+              withLink((target) => {
+                window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body(target))}`;
+              })
+            }
+            className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-1.5 font-medium text-white disabled:opacity-60"
+          >
+            {make.isPending ? "Preparing…" : "Email the request"}
+          </button>
+        </span>
       </div>
-      <p className="text-ink-500 mt-3 text-xs font-light">
-        {p.contractingSubmittedAt
-          ? `The hotel sent its details through the form on ${formatDate(p.contractingSubmittedAt)}. `
-          : link
-            ? "The hotel's details form is out, not sent back yet. "
-            : "The email carries a link to a form where the hotel checks and completes its details — not rates. "}
-        {link && (
-          <>
-            <a href={link} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
-              See what the hotel sees ↗
-            </a>
-            {" · "}
+      {shown && (
+        <>
+          <pre className="bg-ink-50/60 text-ink-700 mt-3 max-h-72 overflow-y-auto rounded-lg px-3 py-2.5 font-sans text-[13px] font-light whitespace-pre-wrap">
+            {body(link ?? "(the link to their details form is added when you send it)")}
+          </pre>
+          {!to && <p className="text-ink-500 mt-2 text-xs font-light">No email is known for the hotel — add one in step 1, or copy the email.</p>}
+          <p className="text-ink-500 mt-3 text-xs font-light">
             <button
               type="button"
-              onClick={() => window.confirm("Switch the link off? It will open nothing any more; what the hotel sent stays.") && off.mutate({ id: propertyId })}
-              className="text-[#c03654] hover:underline"
+              onClick={() =>
+                withLink((target) => {
+                  void navigator.clipboard.writeText(`${subject}\n\n${body(target)}`).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  });
+                })
+              }
+              className="text-brand-700 mr-3 text-[13px] hover:underline"
             >
-              Switch the link off
+              {copied ? "Copied" : "Copy the email"}
             </button>
-          </>
-        )}
-      </p>
+            {p.contractingSubmittedAt
+              ? `The hotel sent its details through the form on ${formatDate(p.contractingSubmittedAt)}. `
+              : link
+                ? "The hotel's details form is out, not sent back yet. "
+                : "The email carries a link to a form where the hotel checks and completes its details — not rates. "}
+            {link && (
+              <>
+                <a href={link} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                  See what the hotel sees ↗
+                </a>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => window.confirm("Switch the link off? It will open nothing any more; what the hotel sent stays.") && off.mutate({ id: propertyId })}
+                  className="text-[#c03654] hover:underline"
+                >
+                  Switch the link off
+                </button>
+              </>
+            )}
+          </p>
+        </>
+      )}
       {make.error && <FormError message={friendlyError(make.error)} />}
     </div>
   );

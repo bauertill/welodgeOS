@@ -1780,11 +1780,12 @@ the contract.
 
   1. **Call the hotel** — its contact details, below.
   2. **Email them the request** — after the call the hotel usually asks for it in writing.
-     The email is shown as it will go: a greeting (the first contact's first name, if
+     Folded to one line by default (2026-10-11): the step's heading with **Email the
+     request**, and *Show the email ▾* to open it. Opened, the email is shown as it will go: a greeting (the first contact's first name, if
      known), the request for the event — each line's units, type, dates and nights, and
      what to be close to — asking for availability and rates, and the link to the hotel's
      own details form (§3.9), made the first time it is needed. **The client's name and
-     budget are never in it.** *Email the request to the hotel* opens it in your own
+     budget are never in it.** *Email the request* opens it in your own
      mailbox, addressed to the hotel's general email, else its first contact's, else its
      email for contracts; *Copy the email* copies subject and text instead. Beneath, whether
      the hotel's form is out or came back, *See what the hotel sees* and *Switch the link off*.
