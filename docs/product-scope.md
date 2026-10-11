@@ -1713,6 +1713,7 @@ stored on the request, so it cannot disagree with the stock sheet.
 | Stage | Meaning |
 | --- | --- |
 | *Initial interest* | The client has asked. We are looking for units and preparing a proposal. Monday: *Discovery* |
+| *Rate card sent* | The client has a rate card's link; we are waiting to hear which rooms they want. Reached on its own when the link is made (2026-10-11) |
 | *Proposal sent* | We have sent a proposal and are waiting for the answer |
 | *Blocked* | The client is holding rooms while they decide |
 | *Signed* | Closed: the client has signed — and their contract is registered against the request (below) |
@@ -1721,9 +1722,10 @@ stored on the request, so it cannot disagree with the stock sheet.
 | *Lost* | Closed: the client went elsewhere or dropped the plan |
 
 **On a request's page the stage is a progress bar** (2026-10-03): *Initial interest →
-Proposal sent → Blocked → Signed*, the steps passed ticked and the current one marked,
-each a click away. The next move is a button — *Mark proposal sent*, then *Mark signed* or
-*Mark blocked* — and the other ways a request ends (*Released*, *No reply*, *Lost*) are under
+Rate card sent → Proposal sent → Blocked → Signed*, the steps passed ticked and the current
+one marked, each a click away. The next move is a button — *Mark rate card sent* or *Mark
+proposal sent*, then *Mark proposal sent* or *Mark blocked*, then *Mark signed* or *Mark
+blocked* — and the other ways a request ends (*Released*, *No reply*, *Lost*) are under
 *Close as…*, each with what it means. A request closed that way shows as such — "Lost —
 closed on 3 Oct" — with *Reopen*, which takes it back to *Proposal sent* if one was sent,
 or else *Initial interest*. A signed one shows every step done.
@@ -1732,7 +1734,8 @@ The stage is changed by hand, with one click, in any direction: a released reque
 reopened. Moving to *Proposal sent* dates the proposal today, unless a date is already
 there. Moving to a closing stage records the day it closed; reopening clears that. One
 move is made for us: making a rate card's link takes a request at *Initial interest* to
-*Proposal sent* (2026-10-11, the rate card below). Nothing else moves a request on its own —
+*Rate card sent* (2026-10-11, the rate card below; requests that already had a link moved
+there when the stage was added). Nothing else moves a request on its own —
 a block that has passed its date is not released by the system (§2.4).
 
 **Signed needs the client's contract.** A request can be marked *Signed* only once a client
@@ -2017,9 +2020,9 @@ room category at the rate we sell it for.
   Lodge** needs at least a room, a change of dates or a note. They can come back and send
   again: the link shows their last answer filled in. Each answer is kept as sent — the rooms,
   the rate at that moment and the notes — and a later one does not rewrite it.
-- **Making the link is sending the proposal** (2026-10-11): a request still at *Initial
-  interest* moves to *Proposal sent* the moment a rate card's link is made (dated that day,
-  on its history). A request further along is left where it is.
+- **Making the link is sending the rate card** (2026-10-11): a request still at *Initial
+  interest* moves to **Rate card sent** — its own group on the sales board — the moment a
+  rate card's link is made, on its history. A request further along is left where it is.
 - **What we see of it**: the account manager and whoever made the card are told (§2.9); the
   answer is written on the request's history; the card in our popup lists **The client's
   answers**, newest first, a change of dates in orange; the request's *Rate cards* shows how

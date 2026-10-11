@@ -780,10 +780,11 @@ function SignNeedsContract({
 }
 
 /** The way a request goes when it goes well (doc §4.11) — Blocked is a step some skip. */
-const pipeline: SalesRequestStage[] = ["INITIAL_INTEREST", "PROPOSAL_SENT", "BLOCKED", "SIGNED"];
+const pipeline: SalesRequestStage[] = ["INITIAL_INTEREST", "RATE_CARD_SENT", "PROPOSAL_SENT", "BLOCKED", "SIGNED"];
 /** The ways it ends without being signed. */
 const closings: SalesRequestStage[] = ["RELEASED", "NO_REPLY", "LOST"];
 const moveOnLabels: Partial<Record<SalesRequestStage, string>> = {
+  RATE_CARD_SENT: "Mark rate card sent",
   PROPOSAL_SENT: "Mark proposal sent",
   BLOCKED: "Mark blocked",
   SIGNED: "Mark signed",
@@ -808,7 +809,8 @@ function StagePicker({ request }: { request: FullRequest }) {
   };
   const closedOtherwise = closings.includes(request.stage);
   const at = pipeline.indexOf(request.stage);
-  const nextSteps = at === 0 ? ["PROPOSAL_SENT"] : at === 1 ? ["SIGNED", "BLOCKED"] : at === 2 ? ["SIGNED"] : [];
+  const nextSteps =
+    at === 0 ? ["RATE_CARD_SENT", "PROPOSAL_SENT"] : at === 1 ? ["PROPOSAL_SENT", "BLOCKED"] : at === 2 ? ["SIGNED", "BLOCKED"] : at === 3 ? ["SIGNED"] : [];
 
   return (
     <Card>

@@ -2,6 +2,7 @@ import type { NotificationKind, Prisma, PrismaClient } from "generated/prisma";
 
 import { addDays, dayKey, today } from "~/lib/dates";
 import { formatDate } from "~/lib/format";
+import { openStages } from "~/lib/sales";
 import { MENTION_PATTERN } from "~/lib/updates";
 import { layoutEmail, sendEmail } from "~/server/email";
 
@@ -103,7 +104,7 @@ export async function runDaily(db: PrismaClient) {
   // Sales requests whose follow-up date has come (doc §4.11): their owner is
   // reminded once for each date set.
   const due = await db.salesRequest.findMany({
-    where: { followUpOn: { lte: day }, ownerId: { not: null }, stage: { in: ["INITIAL_INTEREST", "PROPOSAL_SENT", "BLOCKED"] } },
+    where: { followUpOn: { lte: day }, ownerId: { not: null }, stage: { in: openStages } },
     select: { id: true, ownerId: true, followUpOn: true, nextStep: true, client: { select: { name: true } } },
   });
   for (const request of due) {

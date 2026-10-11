@@ -1103,6 +1103,7 @@ model ClientContact {
 /// order a request moves through them; the rest close it.
 enum SalesRequestStage {
   INITIAL_INTEREST
+  RATE_CARD_SENT
   PROPOSAL_SENT
   BLOCKED
   SIGNED

@@ -8,6 +8,7 @@ import type { SalesRequestStage } from "generated/prisma";
 
 export const salesStageLabels: Record<SalesRequestStage, string> = {
   INITIAL_INTEREST: "Initial interest",
+  RATE_CARD_SENT: "Rate card sent",
   PROPOSAL_SENT: "Proposal sent",
   BLOCKED: "Blocked",
   SIGNED: "Signed",
@@ -18,6 +19,7 @@ export const salesStageLabels: Record<SalesRequestStage, string> = {
 
 export const salesStageHints: Record<SalesRequestStage, string> = {
   INITIAL_INTEREST: "The client has asked. We are looking for units and preparing a proposal.",
+  RATE_CARD_SENT: "The client has a rate card's link. We are waiting to hear which rooms they want.",
   PROPOSAL_SENT: "We have sent the client a proposal and are waiting for their answer.",
   BLOCKED: "The client is holding rooms while they decide.",
   SIGNED: "The client has signed. Closed.",
@@ -27,7 +29,7 @@ export const salesStageHints: Record<SalesRequestStage, string> = {
 };
 
 /** Still being worked, in the order a request moves through them. */
-export const openStages: SalesRequestStage[] = ["INITIAL_INTEREST", "PROPOSAL_SENT", "BLOCKED"];
+export const openStages: SalesRequestStage[] = ["INITIAL_INTEREST", "RATE_CARD_SENT", "PROPOSAL_SENT", "BLOCKED"];
 /** The ways a request ends. */
 export const closedStages: SalesRequestStage[] = ["SIGNED", "RELEASED", "NO_REPLY", "LOST"];
 export const salesStageOrder: SalesRequestStage[] = [...openStages, ...closedStages];
@@ -36,6 +38,7 @@ export const isClosed = (stage: SalesRequestStage) => closedStages.includes(stag
 
 export const salesStageStyles: Record<SalesRequestStage, string> = {
   INITIAL_INTEREST: "bg-[#fff4e0] text-[#a15c00]",
+  RATE_CARD_SENT: "bg-[#e6f0fb] text-[#1d5fa8]",
   PROPOSAL_SENT: "bg-[#ffe9e0] text-[#b33f12]",
   BLOCKED: "bg-brand-50 text-brand-800",
   SIGNED: "bg-[#e3f8ee] text-[#0a7a47]",

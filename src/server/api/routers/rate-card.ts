@@ -371,7 +371,7 @@ export const rateCardRouter = createTRPCRouter({
       where: { rateCardProperty: { rateCardId: input.id }, sellingCents: { not: null }, OR: [{ available: null }, { minNights: null }] },
     });
     if (missing) throw new TRPCError({ code: "BAD_REQUEST", message: "Say how many units are available and the minimum stay for every room offered, and save, before making the link." });
-    // Making the link is sending the proposal: a request still at Initial interest moves to Proposal sent (doc §4.11).
+    // Making the link is sending the rate card: a request still at Initial interest moves to Rate card sent (doc §4.11).
     return ctx.db.$transaction(async (tx) => {
       const card = await tx.rateCard.update({
         where: { id: input.id },
@@ -379,8 +379,8 @@ export const rateCardRouter = createTRPCRouter({
         select: { shareToken: true, salesRequestId: true, name: true, salesRequest: { select: { stage: true } } },
       });
       await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card link made: ${card.name}` });
-      if (card.salesRequest.stage === "INITIAL_INTEREST") await moveStage(tx, ctx.session.user.id, card.salesRequestId, "PROPOSAL_SENT");
-      return { shareToken: card.shareToken!, movedToProposal: card.salesRequest.stage === "INITIAL_INTEREST" };
+      if (card.salesRequest.stage === "INITIAL_INTEREST") await moveStage(tx, ctx.session.user.id, card.salesRequestId, "RATE_CARD_SENT");
+      return { shareToken: card.shareToken!, movedToRateCardSent: card.salesRequest.stage === "INITIAL_INTEREST" };
     });
   }),
 
