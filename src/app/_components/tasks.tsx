@@ -1396,7 +1396,6 @@ function EmailTheHotel({
             : ""
       }`,
   );
-  const places = r ? ([...r.closeTo.map((place) => place.name), ...r.closeToPoints.map((point) => point.label), r.closeToOther].filter(Boolean) as string[]) : [];
   const subject = `Accommodation request — ${eventName} — ${p.name}`;
   const body = (target: string | null) =>
     [
@@ -1405,11 +1404,10 @@ function EmailTheHotel({
       `Thank you for your time. As discussed, here is our accommodation request for ${eventName}:`,
       "",
       ...(lines.length ? lines : ["• (the rooms and dates we spoke about)"]),
-      ...(places.length ? ["", `Ideally close to: ${places.join(", ")}`] : []),
       "",
       "Could you let us know your availability and rates for these dates?",
       ...(target
-        ? ["", `To help us prepare, please also check and complete ${p.name}'s details here — rooms, sizes, amenities and contacts; no account needed:`, target]
+        ? ["", "Please also fill in your hotel's details here:", target]
         : []),
       "",
       "Thank you, and kind regards,",
