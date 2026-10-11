@@ -296,9 +296,15 @@ export function InventoryGrid({
         categories: property.categories
           .map((category) => ({ ...category, slots: category.slots.filter((slot) => !slot.empty) }))
           .filter((category) => category.slots.length > 0),
-      }));
-    // Every property on the list keeps its line, even with nothing on it (doc §3.6).
+      }))
+      // Hidden by default: a hotel with nothing on its rooms, or no rooms yet — Show empty brings them back (doc §3.6).
+      .filter((property) => property.categories.length > 0);
   }, [allProperties, showEmpty, propertyId]);
+  // Hotels with nothing to show unless asked: all rooms empty, or no room categories yet.
+  const emptyHotels = useMemo(
+    () => allProperties.filter((property) => property.categories.every((category) => category.slots.every((slot) => slot.empty))).length,
+    [allProperties],
+  );
   // All of a property's rooms, before the empty ones are hidden — to say what its line holds.
   const roomsOf = useMemo(
     () => new Map(allProperties.map((property) => [property.id, property.categories.reduce((sum, category) => sum + category.slots.length, 0)])),
@@ -307,7 +313,8 @@ export function InventoryGrid({
   const properties = useMemo(() => {
     const wanted = issueFilter ? issues.get(issueFilter)?.slots : null;
     // Hotels with rooms on the sheet first, then those whose rooms are all empty, then those with no rooms yet — by name within each.
-    const rank = (property: (typeof shownProperties)[number]) => (property.categories.length > 0 ? 0 : (roomsOf.get(property.id) ?? 0) > 0 ? 1 : 2);
+    const rank = (property: (typeof shownProperties)[number]) =>
+      property.categories.some((category) => category.slots.some((slot) => !slot.empty)) ? 0 : (roomsOf.get(property.id) ?? 0) > 0 ? 1 : 2;
     if (!wanted) return [...shownProperties].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
     return shownProperties
       .map((property) => ({
@@ -649,17 +656,19 @@ export function InventoryGrid({
           }))}
         />
 
-        {!propertyId && (emptyRooms > 0 || showEmpty) && (
+        {!propertyId && (emptyRooms > 0 || emptyHotels > 0 || showEmpty) && (
           <button
             type="button"
             onClick={() => setShowEmpty(!showEmpty)}
             aria-pressed={showEmpty}
-            title="Rooms with nothing on them in these dates — no supplier or client side, and nobody asking"
+            title="Rooms with nothing on them in these dates — no supplier or client side, and nobody asking — and hotels on the list with no rooms yet"
             className={`rounded-full px-4 py-2 text-[13px] font-light transition-colors ${
               showEmpty ? "bg-brand-700 text-white" : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
             }`}
           >
-            {showEmpty ? "Hide empty rooms" : `Show empty rooms (${emptyRooms})`}
+            {showEmpty
+              ? "Hide the empty ones"
+              : `Show empty (${[emptyHotels ? `${emptyHotels} ${emptyHotels === 1 ? "hotel" : "hotels"}` : null, emptyRooms ? `${emptyRooms} rooms` : null].filter(Boolean).join(", ")})`}
           </button>
         )}
 

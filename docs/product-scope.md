@@ -662,13 +662,13 @@ recorded against it (§3.10).
 a property on the event's Properties list is on the Inventory tab's stock sheet from the
 moment the category is there with its number of rooms — numbered #1 to that count, blank
 until something is recorded on it. Rooms of a property marked *Rejected* are left off; a
-category with no number of rooms has no rows. **Every property on the list has its line on
-the sheet** (2026-10-11), whatever it holds: one with no room categories yet says *No room
-categories yet — add them on its page*; one whose rooms are all empty in the dates shown —
-hidden by default, as empty rooms are — says *N rooms, nothing on them in these dates —
-show the empty rooms*. The hotels with rooms on the sheet come first, then those whose rooms
-are all empty, then those with no rooms yet, by name within each. So a property added to the Properties list, from sourcing, a contact
-task or by hand, is on the Inventory tab at once. Whether a room category is marked
+category with no number of rooms has no rows. **Empty hotels are hidden by default** (2026-10-11): a hotel on the list whose rooms are
+all empty in the dates shown, or with no room categories yet, is left off the sheet until
+**Show empty** is on — its label counts both ("Show empty (6 hotels, 162 rooms)"). Shown,
+a hotel with no room categories says *No room categories yet — add them on its page*, and
+one whose rooms are all empty lists them. The hotels with rooms on the sheet come first,
+then those whose rooms are all empty, then those with no rooms yet, by name within each.
+Whether a room category is marked
 *Contracted* (§3.5) is information for the team; it no longer decides what can be put on
 the sheet.
 
