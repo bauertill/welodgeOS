@@ -1132,8 +1132,8 @@ them would make the board too long; the row says how many there are and links st
 to the tab.
 
 **For which sales request** (2026-10-11). A quotation can be for one client's request —
-the hotel quoted for that group — chosen at the top of the form from the event's open
-requests; a new one starts with the request the property's open hotel contact task is
+the hotel quoted for that group — found at the top of the form by typing the client's
+name (the event's open requests are searched, however many), or left general; a new one starts with the request the property's open hotel contact task is
 about, else *None — a general quote for the event*. A quotation tied to a request says
 *For {client}*, is written on the request's history, and moves the property on that
 request's sourcing task (§4.11).

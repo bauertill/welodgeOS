@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { RateIncludesPicker } from "~/app/_components/room-categories";
 import { dayKey } from "~/lib/dates";
@@ -440,25 +441,21 @@ function QuotationEditor({
         });
       }}
     >
-      <Field label="For which sales request">
-        <Select
+      <Field label="For which sales request — search by client, or leave it general">
+        <Combobox
           value={forRequest ?? ""}
-          onChange={(e) => {
+          onChange={(value) => {
             setRequestTouched(true);
-            setSalesRequestId(e.target.value || null);
+            setSalesRequestId(value || null);
           }}
-        >
-          <option value="">None — a general quote for the event</option>
-          {(requests.data?.requests ?? []).map((request) => (
-            <option key={request.id} value={request.id}>
-              {request.name}
-              {request.description ? ` — ${request.description.slice(0, 60)}` : ""}
-            </option>
-          ))}
-          {quotation?.salesRequest && !requests.data?.requests.some((request) => request.id === quotation.salesRequest!.id) && (
-            <option value={quotation.salesRequest.id}>{quotation.salesRequest.client.name}</option>
-          )}
-        </Select>
+          placeholder="None — a general quote for the event"
+          options={[
+            ...(requests.data?.requests ?? []).map((request) => ({ id: request.id, label: request.name, detail: request.description?.slice(0, 60) ?? null })),
+            ...(quotation?.salesRequest && !requests.data?.requests.some((request) => request.id === quotation.salesRequest!.id)
+              ? [{ id: quotation.salesRequest.id, label: quotation.salesRequest.client.name }]
+              : []),
+          ]}
+        />
       </Field>
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9.5rem_9.5rem_5.5rem]">
         <Field label="Name — the group or scenario">
