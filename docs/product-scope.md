@@ -1131,6 +1131,13 @@ first. They are not shown under the property's row on the Properties tab, where 
 them would make the board too long; the row says how many there are and links straight
 to the tab.
 
+**For which sales request** (2026-10-11). A quotation can be for one client's request —
+the hotel quoted for that group — chosen at the top of the form from the event's open
+requests; a new one starts with the request the property's open hotel contact task is
+about, else *None — a general quote for the event*. A quotation tied to a request says
+*For {client}*, is written on the request's history, and moves the property on that
+request's sourcing task (§4.11).
+
 **The property's page** is laid out so that it fits on a screen rather than being a long
 stack of cards:
 
@@ -1811,7 +1818,12 @@ the contract.
   how many there are, and so do those **To be contacted** — on the event with their hotel
   contact task still open (below), shown there whatever they would be judged, with a link
   to the task; adding a place with *Add to properties board* opens that tab. Once the task
-  is done the property is judged like any other. *Not enough known* and *Does not fit* are not shown at all (the
+  is done the property is judged like any other. **A quotation for this request** (2026-10-11)
+  takes it out of *To be contacted* at once, task open or not: it is judged on the
+  quotation — the rooms quoted (as the hotel put it, else the most for any one stay) against
+  the rooms wanted, its lowest rate against the budget — marked **Quoted**, linking to the
+  quotation, and always shown, under *Fits* or *Fits in part*, however far. Its contact
+  task, if still open, keeps its link. *Not enough known* and *Does not fit* are not shown at all (the
   owner's call, 2026-10-03) — one with no unit count or price is left out until those are
   filled in on its page. Each can be opened, or added to the event in one click.
 - **Properties not in the system**, under them (2026-10-03): places to stay within **5 km**

@@ -7,7 +7,9 @@ import { percent } from "~/lib/finance";
 import { formatDate, formatMoney } from "~/lib/format";
 import { describeRateIncludes } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { openStages } from "~/lib/sales";
 import { logAudit } from "~/server/audit";
+import { HOTEL_CONTACT } from "~/server/hotel-contact";
 
 /**
  * Quotations (doc §3.10): what a hotel offered for an event, kept apart from
@@ -51,6 +53,8 @@ const quotationInput = z.object({
     .max(2000)
     .refine((value) => value === "" || /^https?:\/\//.test(value), "Paste the whole link, starting with https://"),
   notes: z.string().max(5000),
+  /** The client's request it was quoted for, if one (doc §4.11). */
+  salesRequestId: z.string().nullable().default(null),
   lines: z.array(lineInput).min(1, "Add at least one line — rooms of a category, for a period, at a rate.").max(200),
 });
 
@@ -61,6 +65,7 @@ const include = {
   },
   contract: { select: { id: true, name: true, eventId: true } },
   addedBy: { select: { name: true, email: true } },
+  salesRequest: { select: { id: true, client: { select: { name: true } } } },
 } satisfies Prisma.QuotationInclude;
 
 type Loaded = Prisma.QuotationGetPayload<{ include: typeof include }>;
@@ -103,6 +108,28 @@ export const quotationRouter = createTRPCRouter({
     return quotations.map(withTotals);
   }),
 
+  /**
+   * The client requests a quotation on this hotel can be for: the open ones on
+   * its event. The one its open hotel contact task is about comes first, as
+   * the likely one (doc §4.11).
+   */
+  requestsFor: protectedProcedure.input(z.object({ scoutingEntryId: z.string() })).query(async ({ ctx, input }) => {
+    const entry = await ctx.db.scoutingEntry.findUniqueOrThrow({ where: { id: input.scoutingEntryId }, select: { eventId: true, propertyId: true } });
+    const [requests, task] = await Promise.all([
+      ctx.db.salesRequest.findMany({
+        where: { eventId: entry.eventId, stage: { in: openStages } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, client: { select: { name: true } }, description: true },
+      }),
+      ctx.db.task.findFirst({
+        where: { propertyId: entry.propertyId, eventId: entry.eventId, salesRequestId: { not: null }, status: { not: "DONE" }, type: { name: HOTEL_CONTACT } },
+        orderBy: { createdAt: "desc" },
+        select: { salesRequestId: true },
+      }),
+    ]);
+    return { requests: requests.map((request) => ({ id: request.id, name: request.client.name, description: request.description })), likely: task?.salesRequestId ?? null };
+  }),
+
   /** Add a quotation, or change one — its lines are replaced by the ones given. */
   save: protectedProcedure
     .input(z.object({ scoutingEntryId: z.string(), id: z.string().optional(), quotation: quotationInput }))
@@ -110,8 +137,12 @@ export const quotationRouter = createTRPCRouter({
       ctx.db.$transaction(async (tx) => {
         const entry = await tx.scoutingEntry.findUniqueOrThrow({
           where: { id: input.scoutingEntryId },
-          select: { propertyId: true, property: { select: { categories: { select: { id: true } } } } },
+          select: { propertyId: true, eventId: true, property: { select: { name: true, categories: { select: { id: true } } } } },
         });
+        if (input.quotation.salesRequestId) {
+          const request = await tx.salesRequest.findUnique({ where: { id: input.quotation.salesRequestId }, select: { eventId: true } });
+          if (request?.eventId !== entry.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That sales request is not for this event." });
+        }
         const own = new Set(entry.property.categories.map((category) => category.id));
         const { lines, ...fields } = input.quotation;
         for (const line of lines) {
@@ -138,8 +169,9 @@ export const quotationRouter = createTRPCRouter({
           otherTaxes: blank(fields.otherTaxes),
           documentUrl: blank(fields.documentUrl),
           notes: blank(fields.notes),
+          salesRequestId: fields.salesRequestId,
         };
-        const before = input.id ? await tx.quotation.findUnique({ where: { id: input.id }, select: { scoutingEntryId: true } }) : null;
+        const before = input.id ? await tx.quotation.findUnique({ where: { id: input.id }, select: { scoutingEntryId: true, salesRequestId: true } }) : null;
         if (input.id && before?.scoutingEntryId !== input.scoutingEntryId) {
           throw new TRPCError({ code: "NOT_FOUND", message: "That quotation is not this hotel's." });
         }
@@ -161,6 +193,16 @@ export const quotationRouter = createTRPCRouter({
           })),
         });
         const full = withTotals(await tx.quotation.findUniqueOrThrow({ where: { id: saved.id }, include }));
+        // On the request's history too, once tied to it (doc §4.11).
+        if (fields.salesRequestId && fields.salesRequestId !== before?.salesRequestId) {
+          await logAudit(tx, {
+            actorId: ctx.session.user.id,
+            entity: "SalesRequest",
+            entityId: fields.salesRequestId,
+            summary: `Quotation from ${entry.property.name}: ${full.name}`,
+            changes: `${full.roomNights} room-nights · ${formatMoney(full.totalCents, full.currency)}`,
+          });
+        }
         await logAudit(tx, {
           actorId: ctx.session.user.id,
           entity: "ScoutingEntry",

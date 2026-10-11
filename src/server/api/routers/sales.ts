@@ -1321,6 +1321,15 @@ export const salesRouter = createTRPCRouter({
         })
       ).map((task) => [task.propertyId!, task.outcome!]),
     );
+    // Quoted for this very request (doc §4.11): judged on the quotation, no longer "to be contacted".
+    const quotes = new Map<string, { id: string; name: string; rooms: number | null; currency: string; lines: { checkIn: Date; checkOut: Date; rooms: number; rateCents: number }[] }>();
+    for (const quote of await ctx.db.quotation.findMany({
+      where: { salesRequestId: request.id, status: { not: "DECLINED" } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, rooms: true, currency: true, scoutingEntry: { select: { propertyId: true } }, lines: { select: { checkIn: true, checkOut: true, rooms: true, rateCents: true } } },
+    })) {
+      if (!quotes.has(quote.scoutingEntry.propertyId)) quotes.set(quote.scoutingEntry.propertyId, quote);
+    }
     const properties = await ctx.db.property.findMany({
       where: { latitude: { not: null }, longitude: { not: null } },
       select: {
@@ -1346,8 +1355,11 @@ export const salesRouter = createTRPCRouter({
       });
     const suggestions = properties
       .map((property) => {
+        const quote = quotes.get(property.id);
         const judged = fit(
-          { type: property.type, latitude: property.latitude!, longitude: property.longitude!, categories: priced(property.categories), stated: property.totalRooms },
+          quote
+            ? { type: property.type, latitude: property.latitude!, longitude: property.longitude!, categories: quotedAs(quote), stated: null, quoted: true }
+            : { type: property.type, latitude: property.latitude!, longitude: property.longitude!, categories: priced(property.categories), stated: property.totalRooms },
           targets,
           wanted,
         );
@@ -1360,13 +1372,16 @@ export const salesRouter = createTRPCRouter({
           latitude: property.latitude!,
           longitude: property.longitude!,
           onEvent: onList.has(property.id),
-          contactTaskId: contactTasks.get(property.id) ?? null,
-          declined: declined.get(property.id) ?? null,
+          contactTaskId: quote ? null : (contactTasks.get(property.id) ?? null),
+          /** Its open contact task, even once quoted — still there to finish. */
+          openContactTaskId: contactTasks.get(property.id) ?? null,
+          declined: quote ? null : (declined.get(property.id) ?? null),
+          quote: quote ? { id: quote.id, name: quote.name } : null,
           ...judged,
         };
       })
       // Near enough to matter: within reach of one of the places, or already on the event.
-      .filter((property) => property.onEvent || property.km === null || property.km <= 15)
+      .filter((property) => property.quote !== null || property.onEvent || property.km === null || property.km <= 15)
       .sort((a, b) => {
         const order = { good: 0, unclear: 1, partly: 2, poor: 3 } as const;
         return order[a.verdict] - order[b.verdict] || (a.km ?? 99) - (b.km ?? 99);
@@ -1374,7 +1389,10 @@ export const salesRouter = createTRPCRouter({
       // Every one still to be contacted, then the best of the rest.
       .filter(
         (property, index, all) =>
-          property.contactTaskId !== null || property.declined !== null || all.slice(0, index).filter((other) => other.contactTaskId === null && other.declined === null).length < 25,
+          property.quote !== null ||
+          property.contactTaskId !== null ||
+          property.declined !== null ||
+          all.slice(0, index).filter((other) => other.contactTaskId === null && other.declined === null).length < 25,
       );
     return {
       eventId: request.eventId,
@@ -1488,3 +1506,19 @@ export const salesRouter = createTRPCRouter({
       return { ok: true };
     }),
 });
+
+/**
+ * A quotation as a candidate's rooms and price (doc §4.11): the rooms it is
+ * for — as the hotel put it, else the most quoted for any one stay — at its
+ * lowest rate.
+ */
+function quotedAs(quote: { rooms: number | null; currency: string; lines: { checkIn: Date; checkOut: Date; rooms: number; rateCents: number }[] }) {
+  const perStay = new Map<string, number>();
+  for (const line of quote.lines) {
+    const key = `${line.checkIn.getTime()}-${line.checkOut.getTime()}`;
+    perStay.set(key, (perStay.get(key) ?? 0) + line.rooms);
+  }
+  const rooms = quote.rooms ?? Math.max(0, ...perStay.values());
+  const lowest = quote.lines.length ? Math.min(...quote.lines.map((line) => line.rateCents)) : null;
+  return [{ unitCount: rooms, bedrooms: null, priceCents: lowest, currency: quote.currency }];
+}

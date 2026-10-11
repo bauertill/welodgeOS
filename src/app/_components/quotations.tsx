@@ -202,6 +202,7 @@ function QuotationCard({
             <span className={`ml-2 rounded-full px-2 py-0.5 align-middle text-[11px] font-medium ${statusStyles[quotation.status]}`}>
               {quotationStatusLabels[quotation.status]}
             </span>
+            {quotation.salesRequest && <span className="text-brand-700 ml-2 text-xs font-medium">For {quotation.salesRequest.client.name}</span>}
           </p>
           <p className="text-ink-500 mt-0.5 text-xs font-light">
             {[
@@ -352,6 +353,11 @@ function QuotationEditor({
     documentUrl: quotation?.documentUrl ?? "",
     notes: quotation?.notes ?? "",
   });
+  // Which client's request it was quoted for (doc §4.11) — for a new one, the request its open contact task is about.
+  const requests = api.quotation.requestsFor.useQuery({ scoutingEntryId });
+  const [salesRequestId, setSalesRequestId] = useState<string | null>(quotation ? quotation.salesRequestId : null);
+  const [requestTouched, setRequestTouched] = useState(Boolean(quotation));
+  const forRequest = requestTouched ? salesRequestId : (requests.data?.likely ?? null);
   // What the rates include, the same choice as on a room category (§3.9).
   const [includes, setIncludes] = useState<RateInclusion[]>(quotation?.rateIncludes ?? []);
   const [cleaningIncluded, setCleaningIncluded] = useState(quotation?.cleaning != null);
@@ -382,6 +388,7 @@ function QuotationEditor({
     onSuccess: () => {
       void utils.quotation.invalidate();
       void utils.scouting.listForEvent.invalidate();
+      void utils.sales.sourcing.invalidate();
       onDone();
     },
   });
@@ -427,11 +434,32 @@ function QuotationEditor({
             rateIncludes: includes,
             cleaning: cleaningIncluded && cleaning ? cleaning : null,
             totBasisPoints: tot === null ? null : Math.round(tot * 100),
+            salesRequestId: forRequest,
             lines: parsed,
           },
         });
       }}
     >
+      <Field label="For which sales request">
+        <Select
+          value={forRequest ?? ""}
+          onChange={(e) => {
+            setRequestTouched(true);
+            setSalesRequestId(e.target.value || null);
+          }}
+        >
+          <option value="">None — a general quote for the event</option>
+          {(requests.data?.requests ?? []).map((request) => (
+            <option key={request.id} value={request.id}>
+              {request.name}
+              {request.description ? ` — ${request.description.slice(0, 60)}` : ""}
+            </option>
+          ))}
+          {quotation?.salesRequest && !requests.data?.requests.some((request) => request.id === quotation.salesRequest!.id) && (
+            <option value={quotation.salesRequest.id}>{quotation.salesRequest.client.name}</option>
+          )}
+        </Select>
+      </Field>
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9.5rem_9.5rem_5.5rem]">
         <Field label="Name — the group or scenario">
           <Input value={draft.name} onChange={(e) => set("name")(e.target.value)} placeholder="Austria House staff" autoFocus />

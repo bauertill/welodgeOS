@@ -36,6 +36,8 @@ export type Candidate = {
    */
   categories: { unitCount: number; bedrooms: number | null; priceCents: number | null; currency: string; indicative?: boolean }[];
   stated: number | null;
+  /** Judged on the hotel's quotation for this very request: its rooms and its rates (doc §4.11). */
+  quoted?: boolean;
 };
 
 export type Check = { ok: boolean | null; text: string };
@@ -68,7 +70,11 @@ export function fit(candidate: Candidate, targets: Target[], wanted: Wanted) {
   // The units: all its categories together, or its stated total.
   const units = candidate.categories.reduce((sum, category) => sum + category.unitCount, 0) || candidate.stated || 0;
   if (wanted.units > 0) {
-    checks.push(units ? { ok: units >= wanted.units, text: `${units} units (${wanted.units} wanted)` } : { ok: null, text: "Units not known" });
+    checks.push(
+      units
+        ? { ok: units >= wanted.units, text: `${units} ${candidate.quoted ? "rooms quoted" : "units"} (${wanted.units} wanted)` }
+        : { ok: null, text: "Units not known" },
+    );
   }
 
   // The price: its lowest event rate, against a per-night budget in the same currency.
@@ -80,7 +86,7 @@ export function fit(candidate: Candidate, targets: Target[], wanted: Wanted) {
         ? { ok: null, text: "No quote for the event to compare" }
         : {
             ok: cheapest.priceCents! <= wanted.budgetCents,
-            text: `From ${(cheapest.priceCents! / 100).toFixed(0)} ${wanted.budgetCurrency} a night${cheapest.indicative ? " (indicative)" : ""}`,
+            text: `${candidate.quoted ? "Quoted from" : "From"} ${(cheapest.priceCents! / 100).toFixed(0)} ${wanted.budgetCurrency} a night${cheapest.indicative ? " (indicative)" : ""}`,
           },
     );
   }
@@ -88,6 +94,17 @@ export function fit(candidate: Candidate, targets: Target[], wanted: Wanted) {
   const failed = checks.filter((check) => check.ok === false).length;
   const unknown = checks.filter((check) => check.ok === null).length;
   // "Fits" only when every check could be made and passed.
-  const verdict: "good" | "unclear" | "partly" | "poor" = failed === 0 ? (unknown === 0 ? "good" : "unclear") : failed === 1 ? "partly" : "poor";
+  // A hotel that quoted for the request is never hidden: it fits, or fits in part.
+  const verdict: "good" | "unclear" | "partly" | "poor" = candidate.quoted
+    ? failed === 0
+      ? "good"
+      : "partly"
+    : failed === 0
+      ? unknown === 0
+        ? "good"
+        : "unclear"
+      : failed === 1
+        ? "partly"
+        : "poor";
   return { verdict, checks, km: nearest?.km ?? null };
 }

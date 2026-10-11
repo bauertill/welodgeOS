@@ -271,6 +271,15 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                   className="accent-brand-500 h-4 w-4 shrink-0"
                 />
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${verdictStyles[standing(property)].badge}`}>{verdictStyles[standing(property)].label}</span>
+                {property.quote && (
+                  <Link
+                    href={`/properties/${property.id}#quotations`}
+                    title={`Their quotation for this request: ${property.quote.name}`}
+                    className="bg-brand-50 text-brand-800 hover:bg-brand-100 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                  >
+                    Quoted
+                  </Link>
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="text-ink-900 text-[13px] font-medium">{property.name}</span>
                   <span className="text-ink-500 ml-2 text-xs font-light">
@@ -291,8 +300,8 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                   <Link href={`/properties/${property.id}${eventId ? `?back=${encodeURIComponent(`/events/${eventId}`)}` : ""}`} className="text-brand-700 hover:underline">
                     Open
                   </Link>
-                  {property.contactTaskId && (
-                    <Link href={`/tasks/${property.contactTaskId}`} className="text-brand-700 font-medium hover:underline">
+                  {property.openContactTaskId && (
+                    <Link href={`/tasks/${property.openContactTaskId}`} className="text-brand-700 font-medium hover:underline">
                       Contact task →
                     </Link>
                   )}

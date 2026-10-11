@@ -508,6 +508,11 @@ model Quotation {
   scoutingEntry   ScoutingEntry @relation(fields: [scoutingEntryId], references: [id], onDelete: Cascade)
   scoutingEntryId String
 
+  /// The client's request it was quoted for, when it was — a quotation for one
+  /// group (doc §3.10, §4.11). Empty for a general quote for the event.
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId String?
+
   receivedOn        DateTime?       @db.Date
   /// Until when the hotel holds the offer.
   validUntil        DateTime?       @db.Date
@@ -544,6 +549,7 @@ model Quotation {
   updatedAt DateTime @updatedAt
 
   @@index([scoutingEntryId])
+  @@index([salesRequestId])
 }
 
 /// One line of a quotation: rooms of one category, for one period, at one rate.
@@ -1203,10 +1209,12 @@ model SalesRequest {
   nightRequests RoomNightRequest[]
   contracts     Contract[]
 
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  tasks     Task[]
-  rateCards RateCard[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  tasks      Task[]
+  rateCards  RateCard[]
+  /// The hotels' quotations for this request's group (doc §3.10).
+  quotations Quotation[]
 
   @@index([clientId])
   @@index([eventId])
