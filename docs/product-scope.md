@@ -1817,7 +1817,8 @@ the contract.
      known), the request for the event — each line's units, type, dates and nights (not
      where the client wants to be, since 2026-10-11) — asking for availability and rates,
      and "If you could please complete your property's information on this *link*, it will
-     help us prepare." — the word *link* a hyperlink to the hotel's own details form (§3.9),
+     help us prepare.", closing "Thank you, and kind regards," — no name or company, which the
+     sender's own email signature adds — the word *link* a hyperlink to the hotel's own details form (§3.9),
      made the first time it is needed. **The client's name and budget are never in it.**
      Since a word can be a hyperlink only in formatted text, **Email the request** copies the
      email as formatted text and opens your own mailbox addressed to the person the hotel

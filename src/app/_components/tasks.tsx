@@ -1354,7 +1354,6 @@ function EmailTheHotel({
   const utils = api.useUtils();
   const property = api.property.byId.useQuery({ id: propertyId });
   const request = api.sales.byId.useQuery({ id: salesRequestId ?? "" }, { enabled: Boolean(salesRequestId) });
-  const me = api.user.me.useQuery();
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
   const [shown, setShown] = useState(false);
@@ -1412,9 +1411,8 @@ function EmailTheHotel({
     "",
     LINK,
     "",
+    // No name or company: the sender's own email signature follows.
     "Thank you, and kind regards,",
-    me.data?.name ?? "",
-    "We Lodge",
   ];
   const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   /** As formatted text: the word "link" is a hyperlink — what is pasted into the email. */
