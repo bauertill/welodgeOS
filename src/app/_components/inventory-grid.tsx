@@ -306,7 +306,9 @@ export function InventoryGrid({
   );
   const properties = useMemo(() => {
     const wanted = issueFilter ? issues.get(issueFilter)?.slots : null;
-    if (!wanted) return shownProperties;
+    // Hotels with rooms on the sheet first, then those whose rooms are all empty, then those with no rooms yet — by name within each.
+    const rank = (property: (typeof shownProperties)[number]) => (property.categories.length > 0 ? 0 : (roomsOf.get(property.id) ?? 0) > 0 ? 1 : 2);
+    if (!wanted) return [...shownProperties].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
     return shownProperties
       .map((property) => ({
         ...property,
@@ -315,7 +317,7 @@ export function InventoryGrid({
           .filter((category) => category.slots.length > 0),
       }))
       .filter((property) => property.categories.length > 0);
-  }, [shownProperties, issueFilter, issues]);
+  }, [shownProperties, issueFilter, issues, roomsOf]);
   // ...and opens them, since the point is to see them.
   useEffect(() => {
     if (!issueFilter) return;

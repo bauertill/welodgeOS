@@ -666,7 +666,8 @@ category with no number of rooms has no rows. **Every property on the list has i
 the sheet** (2026-10-11), whatever it holds: one with no room categories yet says *No room
 categories yet — add them on its page*; one whose rooms are all empty in the dates shown —
 hidden by default, as empty rooms are — says *N rooms, nothing on them in these dates —
-show the empty rooms*. So a property added to the Properties list, from sourcing, a contact
+show the empty rooms*. The hotels with rooms on the sheet come first, then those whose rooms
+are all empty, then those with no rooms yet, by name within each. So a property added to the Properties list, from sourcing, a contact
 task or by hand, is on the Inventory tab at once. Whether a room category is marked
 *Contracted* (§3.5) is information for the team; it no longer decides what can be put on
 the sheet.
