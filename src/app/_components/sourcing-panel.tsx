@@ -7,7 +7,9 @@ import { useEffect, useRef, useState } from "react";
 import { env } from "~/env";
 import { propertyTypeLabels } from "~/lib/scouting";
 import { NEAR_KM, WITHIN_KM } from "~/lib/sourcing-fit";
+import { Select } from "~/app/_components/form";
 import { RateCardEditor } from "~/app/_components/rate-card-editor";
+import { formatMoney } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 const mapId = env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? "DEMO_MAP_ID";
@@ -207,12 +209,6 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-ink-900 text-[14px] font-medium">Properties we already have nearby</h3>
           <span className="flex flex-wrap items-center gap-3 text-xs">
-            {(cards.data ?? []).map((card) => (
-              <button key={card.id} type="button" onClick={() => setOpenCard(card.id)} className="text-brand-700 hover:underline">
-                {card.name.split(" — ")[0]} ({card._count.properties})
-                {card._count.responses > 0 && <span className="font-medium"> · {card._count.responses === 1 ? "1 answer" : `${card._count.responses} answers`}</span>} →
-              </button>
-            ))}
             <button
               type="button"
               disabled={picked.length === 0 || createCard.isPending}
@@ -564,5 +560,91 @@ function MapCard({ children }: { children: React.ReactNode }) {
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * A request's rate cards, beside the sourcing task (doc §4.11): one chosen
+ * from a dropdown — the newest to start — with a glance at what it offers,
+ * whether the client has its link and has answered, and Open for the popup.
+ */
+export function RateCardsBox({ salesRequestId }: { salesRequestId: string }) {
+  const cards = api.rateCard.forRequest.useQuery({ salesRequestId });
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const list = cards.data ?? [];
+  const current = list.find((card) => card.id === chosen) ?? list[0] ?? null;
+  const detail = api.rateCard.byId.useQuery({ id: current?.id ?? "" }, { enabled: Boolean(current) });
+  const c = detail.data && detail.data.id === current?.id ? detail.data : null;
+
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Rate cards{list.length ? ` (${list.length})` : ""}</h2>
+      {list.length === 0 ? (
+        <p className="text-ink-500 text-[13px] font-light">None yet — tick properties under Properties we already have nearby and press Create rate card.</p>
+      ) : (
+        <>
+          <Select value={current?.id ?? ""} onChange={(e) => setChosen(e.target.value)} aria-label="Rate card">
+            {list.map((card) => (
+              <option key={card.id} value={card.id}>
+                {card.name.split(" — ")[0]} · {card.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                {card._count.responses > 0 ? ` · ${card._count.responses === 1 ? "1 answer" : `${card._count.responses} answers`}` : ""}
+              </option>
+            ))}
+          </Select>
+          {current && (
+            <div className="mt-3 text-[13px]">
+              <p className="text-ink-500 text-xs font-light">
+                {current.shareToken ? "The client has the link" : "Not shared yet"}
+                {current._count.responses > 0 && (
+                  <span className="text-brand-700 font-medium"> · {current._count.responses === 1 ? "1 answer" : `${current._count.responses} answers`}</span>
+                )}
+              </p>
+              {!c ? (
+                <p className="text-ink-500 mt-2 text-xs font-light">Loading…</p>
+              ) : (
+                <ul className="mt-2 space-y-2">
+                  {c.properties.map((property) => (
+                    <li key={property.id}>
+                      <p className="text-ink-900 font-medium">{property.name}</p>
+                      {property.lines.map((line) => (
+                        <p key={line.id} className="text-ink-500 flex justify-between gap-2 text-xs font-light">
+                          <span className="truncate">
+                            {line.name}
+                            {line.available ? ` · ${line.available} available` : ""}
+                            {line.minNights ? ` · min ${line.minNights} nights` : ""}
+                          </span>
+                          <span className="text-ink-900 shrink-0">{line.sellingCents !== null ? formatMoney(line.sellingCents, c.currency) : "Not offered"}</span>
+                        </p>
+                      ))}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-3 flex items-center gap-4">
+                <button type="button" onClick={() => setOpen(current.id)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3.5 py-1.5 text-xs font-medium text-white">
+                  Open
+                </button>
+                {current.shareToken && (
+                  <a href={`/rate-card/${current.shareToken}`} target="_blank" rel="noreferrer" className="text-brand-700 text-xs hover:underline">
+                    The client&apos;s page ↗
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {open && (
+        <RateCardEditor
+          id={open}
+          onClose={() => {
+            setOpen(null);
+            void cards.refetch();
+            void detail.refetch();
+          }}
+        />
+      )}
+    </div>
   );
 }

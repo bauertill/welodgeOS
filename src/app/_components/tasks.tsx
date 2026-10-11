@@ -15,7 +15,7 @@ import { Popup } from "~/app/_components/popup";
 import { WebsiteLink } from "~/app/_components/website-link";
 import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
-import { SourcingPanel } from "~/app/_components/sourcing-panel";
+import { RateCardsBox, SourcingPanel } from "~/app/_components/sourcing-panel";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
 import { daysUntil, dayKey, nightsBetween } from "~/lib/dates";
@@ -952,6 +952,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           </button>
         </div>
 
+        {sourcing && <RateCardsBox salesRequestId={t.salesRequest!.id} />}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-4 text-[15px] font-medium">Status</h2>
           <TaskStatusSteps status={t.status} pending={setStatus.isPending} onMove={(status) => setStatus.mutate({ id: t.id, status })} />

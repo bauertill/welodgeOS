@@ -1942,8 +1942,10 @@ room category at the rate we sell it for.
 
 - **Made from the sourcing task.** Each property under *Properties we already have nearby*
   has a tick box; **Create rate card (n)** makes a card from those ticked and opens it. A
-  request can have several; they are listed on the sourcing task and on the request's page
-  (*Rate cards*), and open there again.
+  request can have several. On the sourcing task they sit in a **Rate cards** box on the
+  right: a dropdown of the cards, newest first, and below it a glance at the chosen one — its
+  properties, rooms and rates, whether the client has the link, how many answers — with
+  *Open* for the popup. The request's page lists them too (*Rate cards*).
 - **Edited in a popup**, for us: its name; a word to the client at the top, if wanted; and
   per property a **short description** — written by hand, or with **✨ Write it for me** /
   **✨ Polish it**, which has Claude write two or three factual sentences from what we know of
