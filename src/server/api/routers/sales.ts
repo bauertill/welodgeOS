@@ -1186,9 +1186,9 @@ export const salesRouter = createTRPCRouter({
         throw new TRPCError({ code: "BAD_REQUEST", message: "This request has a contract, so it cannot be deleted — close it instead." });
       }
       await tx.notification.deleteMany({ where: { link: `/sales/${request.id}` } });
-      // Its sourcing task goes with it, unless it was already done (doc §4.11).
+      // Its sourcing task and the hotel contact tasks it led to go with it, unless already done (doc §4.11).
       const sourcing = await tx.task.findMany({
-        where: { salesRequestId: request.id, type: { name: "Sourcing" }, status: { not: "DONE" } },
+        where: { salesRequestId: request.id, type: { name: { in: ["Sourcing", HOTEL_CONTACT] } }, status: { not: "DONE" } },
         select: { id: true, title: true },
       });
       await tx.task.deleteMany({ where: { id: { in: sourcing.map((task) => task.id) } } });
