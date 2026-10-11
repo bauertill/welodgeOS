@@ -201,9 +201,10 @@ model Property {
   updates         Update[]
   contracts       Contract[]
 
-  scoutedBy   User?   @relation(fields: [scoutedById], references: [id], onDelete: SetNull)
+  scoutedBy   User?              @relation(fields: [scoutedById], references: [id], onDelete: SetNull)
   scoutedById String?
   tasks       Task[]
+  rateCards   RateCardProperty[]
 
   /// The hotel's own contracting-details form (doc §3.9): the unguessable
   /// part of its link; empty means no link, or switched off.
@@ -262,6 +263,7 @@ model RoomCategory {
   categoryContracts CategoryContract[]
 
   quotationLines QuotationLine[]
+  rateCardLines  RateCardLine[]
 
   @@index([propertyId])
 }
@@ -733,6 +735,7 @@ model User {
 
   scoutedProperties        Property[]
   propertyContractingLinks Property[]      @relation("PropertyContractingLinkMadeBy")
+  rateCards                RateCard[]
   quotationsAdded          Quotation[]     @relation("QuotationAddedBy")
   scoutingEntries          ScoutingEntry[] @relation("AddedBy")
 
@@ -1194,9 +1197,10 @@ model SalesRequest {
   nightRequests RoomNightRequest[]
   contracts     Contract[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
   tasks     Task[]
+  rateCards RateCard[]
 
   @@index([clientId])
   @@index([eventId])
@@ -1659,4 +1663,66 @@ model SalesRequestPoint {
   position       Int          @default(0)
 
   @@index([salesRequestId])
+}
+
+// --- Rate cards (doc §4.11) ----------------------------------------------------
+
+/// What we offer a client for a sales request: chosen properties, each room
+/// category at the rate we sell it for. Our buying rate is kept beside it, for
+/// us only — the client's copy never shows it.
+model RateCard {
+  id                String       @id @default(cuid())
+  name              String
+  salesRequest      SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  salesRequestId    String
+  /// Every rate on the card is in this currency (§4.5).
+  currency          String
+  /// The markup last applied to all selling rates, in hundredths of a percent: 15.00% is 1500.
+  markupBasisPoints Int?
+  /// A short word to the client above the properties.
+  intro             String?
+  /// The unguessable part of the client's link; empty means not shared, or switched off.
+  shareToken        String?      @unique
+  createdBy         User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById       String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  properties RateCardProperty[]
+
+  @@index([salesRequestId])
+}
+
+model RateCardProperty {
+  id          String   @id @default(cuid())
+  rateCard    RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  rateCardId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId  String
+  position    Int      @default(0)
+  /// A short description for the client — written by the team, with help if wanted.
+  description String?
+
+  lines RateCardLine[]
+
+  @@index([rateCardId])
+}
+
+/// One room category's rate on a rate card.
+model RateCardLine {
+  id                 String           @id @default(cuid())
+  rateCardProperty   RateCardProperty @relation(fields: [rateCardPropertyId], references: [id], onDelete: Cascade)
+  rateCardPropertyId String
+  category           RoomCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId         String?
+  /// The category's name when the card was made — kept should the category change.
+  name               String
+  sleeps             Int?
+  /// Our cost per night, from the event rate when the card was made; for us only.
+  buyingCents        Int?
+  /// What the client pays per night; empty means not offered on this card.
+  sellingCents       Int?
+  position           Int              @default(0)
+
+  @@index([rateCardPropertyId])
 }

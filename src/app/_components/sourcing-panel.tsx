@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { env } from "~/env";
 import { propertyTypeLabels } from "~/lib/scouting";
 import { NEAR_KM, WITHIN_KM } from "~/lib/sourcing-fit";
+import { RateCardEditor } from "~/app/_components/rate-card-editor";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 const mapId = env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? "DEMO_MAP_ID";
@@ -56,6 +57,17 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
   const [focus, setFocus] = useState<string | null>(null);
   // Only the ones that fit entirely are shown at first; the rest wait behind their tabs.
   const [tab, setTab] = useState<Verdict>("good");
+  // Properties ticked for a rate card (doc §4.11), and the card open in its editor.
+  const [picked, setPicked] = useState<string[]>([]);
+  const [openCard, setOpenCard] = useState<string | null>(null);
+  const cards = api.rateCard.forRequest.useQuery({ salesRequestId });
+  const createCard = api.rateCard.create.useMutation({
+    onSuccess: (made) => {
+      setPicked([]);
+      void cards.refetch();
+      setOpenCard(made.id);
+    },
+  });
   // Not in the system: searched on the map once per visit, kept for an hour.
   const [radiusKm, setRadiusKm] = useState(5);
   const discover = api.sales.sourcingDiscover.useQuery({ id: salesRequestId, radiusKm }, { staleTime: 3600_000, refetchOnWindowFocus: false });
@@ -192,7 +204,29 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
       )}
 
       <div>
-        <h3 className="text-ink-900 mb-2 text-[14px] font-medium">Properties we already have nearby</h3>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-ink-900 text-[14px] font-medium">Properties we already have nearby</h3>
+          <span className="flex flex-wrap items-center gap-3 text-xs">
+            {(cards.data ?? []).map((card) => (
+              <button key={card.id} type="button" onClick={() => setOpenCard(card.id)} className="text-brand-700 hover:underline">
+                {card.name.split(" — ")[0]} ({card._count.properties}) →
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={picked.length === 0 || createCard.isPending}
+              onClick={() => createCard.mutate({ salesRequestId, propertyIds: picked })}
+              title={picked.length === 0 ? "Tick the properties to offer first" : undefined}
+              className="bg-brand-400 hover:bg-brand-500 rounded-full px-3.5 py-1.5 font-medium text-white disabled:opacity-50"
+            >
+              {createCard.isPending ? "Making…" : picked.length ? `Create rate card (${picked.length})` : "Create rate card"}
+            </button>
+          </span>
+        </div>
+        {picked.length === 0 && (cards.data ?? []).length === 0 && suggestions.length > 0 && (
+          <p className="text-ink-500 mb-2 text-xs font-light">Tick the properties to offer the client, then Create rate card.</p>
+        )}
+        {createCard.error && <p className="mb-2 text-xs text-[#c03654]">{createCard.error.message}</p>}
         {suggestions.length === 0 ? (
           <p className="text-ink-500 text-sm font-light">
             None that fits within {WITHIN_KM * 2} km yet — see the places not in the system below, or scout new ones on {eventName ? `${eventName}'s` : "the event's"} Properties tab.
@@ -231,6 +265,13 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                 onMouseEnter={() => setFocus(property.id)}
                 className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 ${focus === property.id ? "border-brand-300 bg-brand-50/40" : "border-ink-200/60"}`}
               >
+                <input
+                  type="checkbox"
+                  checked={picked.includes(property.id)}
+                  onChange={(e) => setPicked((current) => (e.target.checked ? [...current, property.id] : current.filter((id) => id !== property.id)))}
+                  aria-label={`Put ${property.name} on a rate card`}
+                  className="accent-brand-500 h-4 w-4 shrink-0"
+                />
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${verdictStyles[standing(property)].badge}`}>{verdictStyles[standing(property)].label}</span>
                 <span className="min-w-0 flex-1">
                   <span className="text-ink-900 text-[13px] font-medium">{property.name}</span>
@@ -294,6 +335,15 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
           adder={addFound}
           focus={focus}
           setFocus={setFocus}
+        />
+      )}
+      {openCard && (
+        <RateCardEditor
+          id={openCard}
+          onClose={() => {
+            setOpenCard(null);
+            void cards.refetch();
+          }}
         />
       )}
     </div>

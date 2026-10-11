@@ -1934,8 +1934,39 @@ deleted with it, unless already done (the confirmation says so; 2026-10-11 for t
 tasks) — the hotels themselves stay on the properties board. Its other tasks, and done ones,
 stay, no longer tied to it. The deletion is recorded on the client's history.
 
-Not built yet: suggesting the properties that meet a request's criteria to share with the
-client, and the rate card sent back to a client.
+#### The rate card (2026-10-11)
+
+What the sourcing leads to: **a rate card for the client** — the properties we offer, each
+room category at the rate we sell it for.
+
+- **Made from the sourcing task.** Each property under *Properties we already have nearby*
+  has a tick box; **Create rate card (n)** makes a card from those ticked and opens it. A
+  request can have several; they are listed on the sourcing task and on the request's page
+  (*Rate cards*), and open there again.
+- **Edited in a popup**, for us: its name; a word to the client at the top, if wanted; and
+  per property a **short description** — written by hand, or with **✨ Write it for me** /
+  **✨ Polish it**, which has Claude write two or three factual sentences from what we know of
+  the property (kind, stars, area, distance, amenities, room types) or polish the draft,
+  never inventing facts (needs `ANTHROPIC_API_KEY`; until it is set the button says so).
+  Each room category shows **our cost per night** — its event rate (§3.9) when the card was
+  made, in the card's currency (the request's budget currency, else the rates') — and **what
+  the client pays per night**, typed in; the margin beside it, red when below cost. A
+  **markup** (15% to start) is applied to every room with a cost by *Apply to all*, then any
+  rate changed by hand. A property can be taken off the card. A room left without a selling
+  rate is not offered.
+- **What the client sees** — the preview, the printout (*Print or save as PDF*) and the
+  client's link are one design: our logo, *Rate card*, the event, "Prepared for {client}" and
+  the event's dates, the request ("20 × Single room · 10–31 Jul 2028 · 21 nights"), the word
+  to the client, then each property — name and stars, kind and area, how far from the nearest
+  venue, its description and its rooms with the rate per night — and a line that rates are
+  per room per night, in the currency, subject to availability. **Never our buying rates or
+  margins**: the client's copy is made without them. Properties with no rate offered are
+  left out of it.
+- **The client's link** (`/rate-card/…`): made on the card, opened without signing in;
+  *Copy link*, *Open*, *Switch off*. It shows what is saved.
+
+Not built yet: suggesting properties to the client before a rate card; a rate card's history
+of versions.
 
 **What a request holds:**
 
@@ -2789,7 +2820,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; delete one that went nowhere (refused with rooms or a contract). Property suggestions and the rate card not built |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (Claude writing helper once ANTHROPIC_API_KEY is set), preview, print/PDF and a client link, never our buying rates; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |

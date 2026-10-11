@@ -12,6 +12,7 @@ import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_c
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { NewClientPopup } from "~/app/_components/new-client-popup";
+import { RateCardEditor } from "~/app/_components/rate-card-editor";
 import { TaskStatusBadge } from "~/app/_components/tasks";
 import { contactOutcomeLabels, contactOutcomeStyle } from "~/lib/tasks";
 import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
@@ -1155,6 +1156,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
         <div className="space-y-5">
           <RequestTasks request={request} />
+          <RequestRateCards salesRequestId={request.id} />
           <FollowUpCard request={request} />
           <ContractCard request={request} />
           <DetailsCard request={request} />
@@ -1164,6 +1166,40 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** The request's rate cards (doc §4.11) — made on its sourcing task, opened and changed here too. */
+function RequestRateCards({ salesRequestId }: { salesRequestId: string }) {
+  const cards = api.rateCard.forRequest.useQuery({ salesRequestId });
+  const [open, setOpen] = useState<string | null>(null);
+  if (!cards.data || cards.data.length === 0) return null;
+  return (
+    <Card>
+      <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Rate cards</h2>
+      <ul className="space-y-1.5 text-[13px]">
+        {cards.data.map((card) => (
+          <li key={card.id} className="flex items-baseline justify-between gap-2">
+            <button type="button" onClick={() => setOpen(card.id)} className="text-ink-900 hover:text-brand-700 min-w-0 truncate text-left font-light hover:underline">
+              {card.name}
+            </button>
+            <span className="text-ink-500 shrink-0 text-xs font-light">
+              {card._count.properties} {card._count.properties === 1 ? "property" : "properties"}
+              {card.shareToken ? " · shared" : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {open && (
+        <RateCardEditor
+          id={open}
+          onClose={() => {
+            setOpen(null);
+            void cards.refetch();
+          }}
+        />
+      )}
+    </Card>
   );
 }
 

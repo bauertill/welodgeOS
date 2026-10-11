@@ -1,0 +1,320 @@
+import { randomBytes } from "crypto";
+import type { Prisma, PrismaClient } from "generated/prisma";
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+
+import { env } from "~/env";
+import { nearestPlace } from "~/lib/scouting";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import { logAudit } from "~/server/audit";
+import { eventRates } from "~/server/event-rates";
+
+/**
+ * Rate cards (doc §4.11): what we offer a client for a sales request — the
+ * properties chosen on its sourcing task, each room category at the rate we
+ * sell it for. Our buying rate (the event rate, §3.9) is kept beside each, for
+ * us; the client's copy — by link, or printed — never shows it.
+ */
+
+type Db = Prisma.TransactionClient | PrismaClient;
+
+const DEFAULT_MARKUP = 1500; // 15.00%
+const withMarkup = (cents: number, basisPoints: number) => Math.round((cents * (10_000 + basisPoints)) / 10_000);
+
+const cardInclude = {
+  salesRequest: {
+    select: {
+      id: true,
+      client: { select: { name: true } },
+      event: { select: { id: true, name: true, startDate: true, endDate: true, placesOfInterest: { select: { name: true, category: true, latitude: true, longitude: true } } } },
+      lines: { orderBy: { position: "asc" } },
+    },
+  },
+  properties: {
+    orderBy: { position: "asc" },
+    include: {
+      property: { select: { id: true, name: true, type: true, stars: true, city: true, area: true, latitude: true, longitude: true, website: true } },
+      lines: { orderBy: { position: "asc" } },
+    },
+  },
+} satisfies Prisma.RateCardInclude;
+type LoadedCard = Prisma.RateCardGetPayload<{ include: typeof cardInclude }>;
+
+/** The card as it is read: each property with how far it is from the nearest venue (worked out, never stored). */
+function shape(card: LoadedCard) {
+  const places = card.salesRequest.event?.placesOfInterest ?? [];
+  const venues = places.filter((place) => place.category === "VENUE");
+  return {
+    id: card.id,
+    name: card.name,
+    currency: card.currency,
+    markupBasisPoints: card.markupBasisPoints,
+    intro: card.intro,
+    shareToken: card.shareToken,
+    updatedAt: card.updatedAt,
+    clientName: card.salesRequest.client.name,
+    salesRequestId: card.salesRequest.id,
+    event: card.salesRequest.event ? { name: card.salesRequest.event.name, startDate: card.salesRequest.event.startDate, endDate: card.salesRequest.event.endDate } : null,
+    asked: card.salesRequest.lines.map((line) => ({ rooms: line.rooms, roomType: line.roomType, checkIn: line.checkIn, checkOut: line.checkOut })),
+    properties: card.properties.map((entry) => {
+      const from = entry.property.latitude !== null && entry.property.longitude !== null ? { latitude: entry.property.latitude, longitude: entry.property.longitude } : null;
+      const nearest = nearestPlace(from, venues.length ? venues : places);
+      return {
+        id: entry.id,
+        propertyId: entry.property.id,
+        name: entry.property.name,
+        type: entry.property.type,
+        stars: entry.property.stars,
+        where: entry.property.area ?? entry.property.city,
+        website: entry.property.website,
+        nearest: nearest ? { name: nearest.place.name, km: nearest.km } : null,
+        description: entry.description,
+        lines: entry.lines.map((line) => ({ id: line.id, name: line.name, sleeps: line.sleeps, buyingCents: line.buyingCents, sellingCents: line.sellingCents })),
+      };
+    }),
+  };
+}
+
+async function loadCard(db: Db, where: Prisma.RateCardWhereUniqueInput) {
+  const card = await db.rateCard.findUnique({ where, include: cardInclude });
+  return card ? shape(card) : null;
+}
+
+export const rateCardRouter = createTRPCRouter({
+  /** A new card from the properties ticked on a sourcing task: every room category, bought at its event rate, sold at it plus the markup. */
+  create: protectedProcedure
+    .input(z.object({ salesRequestId: z.string(), propertyIds: z.array(z.string()).min(1, "Tick at least one property.").max(30) }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.$transaction(async (tx) => {
+        const request = await tx.salesRequest.findUniqueOrThrow({
+          where: { id: input.salesRequestId },
+          select: { eventId: true, budgetCurrency: true, client: { select: { name: true } }, event: { select: { name: true } }, _count: { select: { rateCards: true } } },
+        });
+        const properties = await tx.property.findMany({
+          where: { id: { in: input.propertyIds } },
+          select: { id: true, categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, capacity: true, unitCount: true } } },
+        });
+        const rates = request.eventId ? (await eventRates(tx, { propertyIds: input.propertyIds, eventId: request.eventId })).get(request.eventId) : undefined;
+        const currency = request.budgetCurrency ?? [...(rates?.values() ?? [])][0]?.currency ?? "USD";
+        const card = await tx.rateCard.create({
+          data: {
+            name: `Rate card${request._count.rateCards ? ` ${request._count.rateCards + 1}` : ""} — ${request.client.name}${request.event ? ` — ${request.event.name}` : ""}`,
+            salesRequestId: input.salesRequestId,
+            currency,
+            markupBasisPoints: DEFAULT_MARKUP,
+            createdById: ctx.session.user.id,
+            properties: {
+              create: input.propertyIds
+                .map((id) => properties.find((property) => property.id === id))
+                .filter((property): property is (typeof properties)[number] => Boolean(property))
+                .map((property, position) => ({
+                  propertyId: property.id,
+                  position,
+                  lines: {
+                    create: property.categories.map((category, index) => {
+                      const rate = rates?.get(category.id);
+                      const buying = rate && rate.currency === currency ? rate.minCents : null;
+                      return {
+                        categoryId: category.id,
+                        name: category.name,
+                        sleeps: category.capacity,
+                        buyingCents: buying,
+                        sellingCents: buying === null ? null : withMarkup(buying, DEFAULT_MARKUP),
+                        position: index,
+                      };
+                    }),
+                  },
+                })),
+            },
+          },
+        });
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.salesRequestId, summary: `Rate card made: ${card.name}` });
+        return { id: card.id };
+      });
+    }),
+
+  /** A sales request's rate cards, newest first. */
+  forRequest: protectedProcedure.input(z.object({ salesRequestId: z.string() })).query(({ ctx, input }) =>
+    ctx.db.rateCard.findMany({
+      where: { salesRequestId: input.salesRequestId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, createdAt: true, updatedAt: true, shareToken: true, _count: { select: { properties: true } } },
+    }),
+  ),
+
+  byId: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const card = await loadCard(ctx.db, { id: input.id });
+    if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card no longer exists." });
+    return card;
+  }),
+
+  /** The card as edited: its name and word to the client, the markup last applied, each property's description and each selling rate. */
+  save: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().trim().min(1, "Give the rate card a name.").max(200),
+        intro: z.string().max(3000),
+        markupBasisPoints: z.number().int().min(-10_000).max(100_000).nullable(),
+        properties: z
+          .array(
+            z.object({
+              id: z.string(),
+              description: z.string().max(3000),
+              lines: z.array(z.object({ id: z.string(), sellingCents: z.number().int().min(0).nullable() })).max(60),
+            }),
+          )
+          .max(30),
+        /** Taken off the card. */
+        removedPropertyIds: z.array(z.string()).max(30).default([]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(async (tx) => {
+        const card = await tx.rateCard.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, salesRequestId: true, properties: { select: { id: true, lines: { select: { id: true } } } } } });
+        const ownProperties = new Set(card.properties.map((property) => property.id));
+        const ownLines = new Set(card.properties.flatMap((property) => property.lines.map((line) => line.id)));
+        await tx.rateCard.update({
+          where: { id: card.id },
+          data: { name: input.name, intro: input.intro.trim() || null, markupBasisPoints: input.markupBasisPoints },
+        });
+        if (input.removedPropertyIds.length) {
+          await tx.rateCardProperty.deleteMany({ where: { id: { in: input.removedPropertyIds.filter((id) => ownProperties.has(id)) } } });
+        }
+        for (const [position, property] of input.properties.entries()) {
+          if (!ownProperties.has(property.id) || input.removedPropertyIds.includes(property.id)) continue;
+          await tx.rateCardProperty.update({ where: { id: property.id }, data: { description: property.description.trim() || null, position } });
+          for (const line of property.lines) {
+            if (!ownLines.has(line.id)) continue;
+            await tx.rateCardLine.update({ where: { id: line.id }, data: { sellingCents: line.sellingCents } });
+          }
+        }
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card saved: ${input.name}` });
+      });
+      return { ok: true };
+    }),
+
+  remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const card = await ctx.db.rateCard.delete({ where: { id: input.id } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card deleted: ${card.name}` });
+    return { ok: true };
+  }),
+
+  /** A link for the client — no sign-in, no buying rates. A new one replaces the old. */
+  share: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const card = await ctx.db.rateCard.update({ where: { id: input.id }, data: { shareToken: randomBytes(24).toString("base64url") }, select: { shareToken: true, salesRequestId: true, name: true } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card link made: ${card.name}` });
+    return { shareToken: card.shareToken! };
+  }),
+
+  unshare: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.rateCard.update({ where: { id: input.id }, data: { shareToken: null } });
+    return { ok: true };
+  }),
+
+  /** The client's copy, by its link: everything but our buying rates, and only the rates offered. */
+  shared: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
+    const card = await loadCard(ctx.db, { shareToken: input.token });
+    if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
+    return clientCopy(card);
+  }),
+
+  /**
+   * A short description of a property for the card, written — or a draft
+   * polished — by Claude from what we know of it. Needs ANTHROPIC_API_KEY.
+   */
+  describe: protectedProcedure
+    .input(z.object({ rateCardPropertyId: z.string(), draft: z.string().max(3000) }))
+    .mutation(async ({ ctx, input }) => {
+      const key = env.ANTHROPIC_API_KEY;
+      if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The writing helper needs an AI key (ANTHROPIC_API_KEY) — Till can add it." });
+      const entry = await ctx.db.rateCardProperty.findUniqueOrThrow({
+        where: { id: input.rateCardPropertyId },
+        include: {
+          rateCard: { include: cardInclude },
+          property: {
+            select: {
+              name: true,
+              type: true,
+              stars: true,
+              city: true,
+              area: true,
+              yearBuilt: true,
+              breakfast: true,
+              gym: true,
+              publicTransport: true,
+              amenities: { select: { label: true } },
+              categories: { select: { name: true, unitCount: true, size: true } },
+            },
+          },
+        },
+      });
+      const card = shape(entry.rateCard);
+      const here = card.properties.find((property) => property.id === entry.id);
+      const p = entry.property;
+      const facts = [
+        `Name: ${p.name}`,
+        `Kind: ${p.type.toLowerCase()}${p.stars ? `, ${p.stars} stars` : ""}`,
+        p.area || p.city ? `Where: ${[p.area, p.city].filter(Boolean).join(", ")}` : null,
+        here?.nearest ? `Distance: ${here.nearest.km.toFixed(1)} km from ${here.nearest.name}` : null,
+        p.yearBuilt ? `Built: ${p.yearBuilt}` : null,
+        p.amenities.length ? `Amenities: ${p.amenities.map((amenity) => amenity.label).join(", ")}` : null,
+        p.categories.length ? `Room types: ${p.categories.map((category) => `${category.name}${category.size ? ` (${category.size})` : ""}`).join(", ")}` : null,
+        p.breakfast ? `Breakfast: ${p.breakfast}` : null,
+        p.gym ? `Gym: ${p.gym}` : null,
+        p.publicTransport ? `Public transport: ${p.publicTransport}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: "claude-sonnet-5",
+          max_tokens: 300,
+          system:
+            "You write short property descriptions for a rate card that an accommodation agency sends to corporate clients (sports federations, broadcasters, sponsors) for a major event. Two or three plain, factual sentences, no more than 60 words, warm but not salesy, in British English. Use only the facts given — never invent amenities, views or distances. Reply with the description alone.",
+          messages: [
+            {
+              role: "user",
+              content: `${facts}\n\n${input.draft.trim() ? `Polish this draft, keeping its facts:\n${input.draft.trim()}` : "Write the description."}`,
+            },
+          ],
+        }),
+        signal: AbortSignal.timeout(30_000),
+      }).catch(() => null);
+      if (!response?.ok) throw new TRPCError({ code: "BAD_GATEWAY", message: "The writing helper did not answer — try again in a moment." });
+      const data = (await response.json()) as { content?: { type: string; text?: string }[] };
+      const text = (data.content ?? [])
+        .filter((part) => part.type === "text")
+        .map((part) => part.text ?? "")
+        .join("")
+        .trim();
+      if (!text) throw new TRPCError({ code: "BAD_GATEWAY", message: "The writing helper gave no text — try again." });
+      return { description: text };
+    }),
+});
+
+/** What the client sees: no buying rates, only the rates offered, only properties offering one. */
+export function clientCopy(card: ReturnType<typeof shape>) {
+  return {
+    name: card.name,
+    currency: card.currency,
+    intro: card.intro,
+    clientName: card.clientName,
+    event: card.event,
+    asked: card.asked,
+    properties: card.properties
+      .map((property) => ({
+        id: property.id,
+        name: property.name,
+        type: property.type,
+        stars: property.stars,
+        where: property.where,
+        nearest: property.nearest,
+        description: property.description,
+        lines: property.lines.filter((line) => line.sellingCents !== null).map((line) => ({ id: line.id, name: line.name, sleeps: line.sleeps, sellingCents: line.sellingCents! })),
+      }))
+      .filter((property) => property.lines.length > 0),
+  };
+}

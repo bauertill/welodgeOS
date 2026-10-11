@@ -33,6 +33,8 @@ export const env = createEnv({
     // Google Routes API, for travel times (doc §3.8). Never sent to the
     // browser. Not used yet.
     GOOGLE_MAPS_SERVER_KEY: z.string().optional(),
+    /** Claude, for the rate card's writing helper (doc §4.11); without it the helper says so. */
+    ANTHROPIC_API_KEY: z.string().optional(),
     // GIPHY, for GIFs in chat (doc §2.7). Never sent to the browser; without
     // it the GIF picker says so instead of searching.
     GIPHY_API_KEY: z.string().optional(),
@@ -76,6 +78,7 @@ export const env = createEnv({
     APP_URL: process.env.APP_URL,
     CRON_SECRET: process.env.CRON_SECRET,
     GOOGLE_MAPS_SERVER_KEY: process.env.GOOGLE_MAPS_SERVER_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     GIPHY_API_KEY: process.env.GIPHY_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,

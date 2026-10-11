@@ -399,3 +399,9 @@ document.
       highest-value places to start.
 - [x] **Prisma migration history** — created 2026-09-25, see §1. Schema
       changes are now migrations, and the build applies them.
+
+- [ ] **Anthropic API key for the rate card's writing helper** (`product-scope.md`
+      §4.11, 2026-10-11). Set `ANTHROPIC_API_KEY` on Vercel (Production and Preview)
+      and in the local `.env`. Until then *✨ Write it for me* says the key is missing;
+      everything else on the rate card works. Uses Claude Sonnet 5, a few hundred
+      tokens per description.
