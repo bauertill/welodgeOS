@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AddToList } from "~/app/_components/add-to-list";
+import { EventSetupPopup } from "~/app/_components/event-setup-popup";
 import { EventTabs } from "~/app/_components/event-tabs";
 import {
   ScoutingList,
@@ -72,9 +73,12 @@ export default async function EventPropertiesPage({
             {" · "}
           </>
         )}
-        <Link href={`/events/${event.id}/edit#places`} className="text-brand-700 hover:underline">
-          {places.length === 0 ? "Add places of interest" : "Change places of interest"}
-        </Link>
+        <EventSetupPopup
+          part="places"
+          eventId={event.id}
+          eventName={event.name}
+          label={places.length === 0 ? "Add places of interest" : "Change places of interest"}
+        />
       </p>
 
       {/* Who leads the event, and who sources it (doc §2.3) — given each new sales request's sourcing task. */}
@@ -85,9 +89,14 @@ export default async function EventPropertiesPage({
           {event.accommodationManagers.length ? event.accommodationManagers.map((person) => person.name ?? person.email).join(", ") : "nobody yet"}
         </span>
         {" · "}
-        <Link href={`/events/${event.id}/edit#team`} className="text-brand-700 hover:underline">
-          {event.projectLead || event.accommodationManagers.length ? "Change the team" : "Set the team"}
-        </Link>
+        <EventSetupPopup
+          part="team"
+          eventId={event.id}
+          eventName={event.name}
+          label={event.projectLead || event.accommodationManagers.length ? "Change the team" : "Set the team"}
+          projectLeadId={event.projectLead?.id ?? null}
+          accommodationManagerIds={event.accommodationManagers.map((person) => person.id)}
+        />
       </p>
 
       <ScoutingList eventId={event.id} places={places} amenities={amenities} />

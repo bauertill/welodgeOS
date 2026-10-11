@@ -130,7 +130,8 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
     >
       {draft === null && <FormError message={error} />}
 
-      {rows.length === 0 && draft === null && (
+      {places.isLoading && <p className="text-ink-500 text-sm font-light">Loading…</p>}
+      {!places.isLoading && rows.length === 0 && draft === null && (
         <p className="text-ink-500 text-sm font-light">
           Nothing recorded yet. Add the venue first — the scouting list measures
           every property against the nearest one.

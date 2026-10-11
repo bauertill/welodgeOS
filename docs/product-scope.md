@@ -699,8 +699,12 @@ places the way there is for properties (§3.5), so each event keeps its own list
 **Where they are managed.** Places of interest are part of setting the event up, so they are
 added, edited and removed in the **event's settings** (its Edit page), beside its name, dates
 and city — not on the Properties tab, which only measures to them. The Properties tab keeps
-one line naming them ("Distances are measured to: Crypto.com Arena, IBC"), with a link
-straight to them in the settings, or a prompt to add some if there are none. They still
+one line naming them ("Distances are measured to: Crypto.com Arena, IBC"), with *Change
+places of interest* — which opens them **in a popup** over the tab (2026-10-11), the same as
+in the settings, so nobody loses their place — or a prompt to add some if there are none. The
+team line beneath it (*Change the team*, §2.3) opens in a popup the same way. **As a rule,
+changing or adding something opens in a popup over the page rather than another page** (the
+owner's, 2026-10-11). They still
 appear as pins on the Properties tab's map.
 
 | Field | Notes |
