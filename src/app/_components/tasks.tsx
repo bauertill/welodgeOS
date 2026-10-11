@@ -932,6 +932,8 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
               </div>
             )
           )}
+          {/* Right under the request, easy to find on the call (doc §4.11). */}
+          {hotelContact && t.status !== "DONE" && <CantHelp taskId={t.id} propertyName={t.property!.name} />}
           <dl className="space-y-2 text-sm font-light">
             {rows.map(([label, value]) => (
               <div key={label} className="flex gap-3">
@@ -953,7 +955,6 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           <h2 className="text-ink-900 mb-4 text-[15px] font-medium">Status</h2>
           <TaskStatusSteps status={t.status} pending={setStatus.isPending} onMove={(status) => setStatus.mutate({ id: t.id, status })} />
           {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
-          {hotelContact && t.status !== "DONE" && <CantHelp taskId={t.id} propertyName={t.property!.name} />}
         </div>
       </div>
     </div>
@@ -1275,7 +1276,7 @@ function CantHelp({ taskId, propertyName }: { taskId: string; propertyName: stri
     },
   });
   return (
-    <div className="border-ink-200/60 mt-4 border-t pt-3">
+    <div className="mb-4">
       <button
         type="button"
         onClick={() => setOpen(true)}

@@ -1822,7 +1822,8 @@ the contract.
   A contact task made from the event's map has no request, so its email asks for
   availability for the event without listing rooms and dates.
 
-  **When the hotel cannot help** (2026-10-11): *They can't help us*, under the task's status,
+  **When the hotel cannot help** (2026-10-11): *They can't help us*, right under the client's
+  request in the task's details (above who completes it),
   asks why — **No availability** (full, or not enough rooms for these dates), **No groups**
   (no group bookings) or **Not interested** (does not want to work with us) — and for a
   note, then closes the task (Done) with that reason. The reason is the task's label: a
