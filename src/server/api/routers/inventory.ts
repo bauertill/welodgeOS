@@ -228,9 +228,17 @@ async function listedSlots(
       propertyId: input.propertyId,
       property: input.minStars ? { stars: { gte: input.minStars } } : undefined,
     },
-    select: { property: { select: { categories: { where: { id: input.categoryId, unitCount: { gt: 0 } }, select: { id: true, unitCount: true } } } } },
+    select: {
+      property: {
+        select: { id: true, name: true, stars: true, categories: { where: { id: input.categoryId, unitCount: { gt: 0 } }, select: { id: true, unitCount: true } } },
+      },
+    },
   });
-  const categories = entries.flatMap((entry) => entry.property.categories);
+  return { slots: await slotsOf(db, entries.flatMap((entry) => entry.property.categories)), properties: entries.map(({ property: { categories: _, ...property } }) => property) };
+}
+
+/** The rooms of these categories, made the first time they are needed. */
+async function slotsOf(db: Prisma.TransactionClient, categories: { id: string; unitCount: number }[]) {
   if (categories.length === 0) return [];
   await db.roomSlot.createMany({
     data: categories.flatMap((category) =>
@@ -942,7 +950,10 @@ export const inventoryRouter = createTRPCRouter({
       // rooms with a night that matches — "hide hotels with a status" falls
       // out of the same filter rather than a second one.
       const filtered = Boolean(input.clientId || input.acquisitionState || input.salesState);
-      const listed = filtered ? [] : await listedSlots(ctx.db, input);
+      // Every property on the list shows, rooms or not — one with no room
+      // categories yet still has its line on the sheet (doc §3.6).
+      const listing = filtered ? { slots: [], properties: [] } : await listedSlots(ctx.db, input);
+      const listed = listing.slots;
       const properties = new Map<
         string,
         {
@@ -969,6 +980,9 @@ export const inventoryRouter = createTRPCRouter({
           .map((night) => night.slotId),
       );
 
+      for (const listedProperty of input.categoryId ? [] : listing.properties) {
+        properties.set(listedProperty.id, { ...listedProperty, categories: new Map() });
+      }
       for (const night of [...nights.map((night) => ({ slotId: night.slotId, slot: night.slot })), ...listed.map((slot) => ({ slotId: slot.id, slot }))]) {
         const propertyRow = night.slot.category.property;
         let property = properties.get(propertyRow.id);

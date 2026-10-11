@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
@@ -295,9 +296,14 @@ export function InventoryGrid({
         categories: property.categories
           .map((category) => ({ ...category, slots: category.slots.filter((slot) => !slot.empty) }))
           .filter((category) => category.slots.length > 0),
-      }))
-      .filter((property) => property.categories.length > 0);
+      }));
+    // Every property on the list keeps its line, even with nothing on it (doc §3.6).
   }, [allProperties, showEmpty, propertyId]);
+  // All of a property's rooms, before the empty ones are hidden — to say what its line holds.
+  const roomsOf = useMemo(
+    () => new Map(allProperties.map((property) => [property.id, property.categories.reduce((sum, category) => sum + category.slots.length, 0)])),
+    [allProperties],
+  );
   const properties = useMemo(() => {
     const wanted = issueFilter ? issues.get(issueFilter)?.slots : null;
     if (!wanted) return shownProperties;
@@ -759,13 +765,29 @@ export function InventoryGrid({
                           <Chevron open={propertyOpen} />
                           {property.name}
                           {property.stars ? ` · ${property.stars}★` : ""}
-                          {available.data && <AvailableTag count={freeInProperty(property)} />}
-                          {property.categories.every((category) => nothingSecured.has(category.id)) && (
+                          {available.data && property.categories.length > 0 && <AvailableTag count={freeInProperty(property)} />}
+                          {property.categories.length > 0 && property.categories.every((category) => nothingSecured.has(category.id)) && (
                             <span className="text-ink-500 ml-2 text-[11px] font-light">
                               Nothing secured for these dates
                             </span>
                           )}
                         </button>
+                        {property.categories.length === 0 &&
+                          ((roomsOf.get(property.id) ?? 0) === 0 ? (
+                            <span className="text-ink-500 ml-6 block text-[11px] font-light">
+                              No room categories yet —{" "}
+                              <Link href={`/properties/${property.id}#rooms`} className="text-brand-700 hover:underline">
+                                add them on its page
+                              </Link>
+                            </span>
+                          ) : (
+                            <span className="text-ink-500 ml-6 block text-[11px] font-light">
+                              {roomsOf.get(property.id)} rooms, nothing on them in these dates —{" "}
+                              <button type="button" onClick={() => setShowEmpty(true)} className="text-brand-700 hover:underline">
+                                show the empty rooms
+                              </button>
+                            </span>
+                          ))}
                       </td>
                     </tr>
 
