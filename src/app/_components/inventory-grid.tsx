@@ -668,7 +668,9 @@ export function InventoryGrid({
           >
             {showEmpty
               ? "Hide the empty ones"
-              : `Show empty (${[emptyHotels ? `${emptyHotels} ${emptyHotels === 1 ? "hotel" : "hotels"}` : null, emptyRooms ? `${emptyRooms} rooms` : null].filter(Boolean).join(", ")})`}
+              : emptyHotels
+                ? `Show empty (${emptyHotels} ${emptyHotels === 1 ? "hotel" : "hotels"})`
+                : "Show empty rooms"}
           </button>
         )}
 

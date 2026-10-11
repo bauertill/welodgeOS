@@ -664,7 +664,7 @@ moment the category is there with its number of rooms — numbered #1 to that co
 until something is recorded on it. Rooms of a property marked *Rejected* are left off; a
 category with no number of rooms has no rows. **Empty hotels are hidden by default** (2026-10-11): a hotel on the list whose rooms are
 all empty in the dates shown, or with no room categories yet, is left off the sheet until
-**Show empty** is on — its label counts both ("Show empty (6 hotels, 162 rooms)"). Shown,
+**Show empty** is on — its label counts the hotels ("Show empty (6 hotels)"). Shown,
 a hotel with no room categories says *No room categories yet — add them on its page*, and
 one whose rooms are all empty lists them. The hotels with rooms on the sheet come first,
 then those whose rooms are all empty, then those with no rooms yet, by name within each.
