@@ -2001,8 +2001,20 @@ room category at the rate we sell it for.
 - **Photos and video on the card** (2026-10-11). A new card starts with each property's
   first six photos (its Media tab, §3.10). In our popup each property shows all its
   photos for clients as thumbnails: those on this card numbered in the order the client
-  sees them, click one to put it on or take it off. A property with no photos or video
-  is flagged there, with a link to its Media tab — a warning, not a block. The client
+  sees them, click one to put it on or take it off.
+- **Every property on a card must have media** (the owner's rule, 2026-10-11): clients have
+  to see what it looks like. *Media* is a YouTube video, a Dropbox photos folder or a photo
+  picked for clients (its Media tab, §3.10). A property with none can still be put on a
+  card, but then:
+  - **a Get media task is made** for it — for the request's account manager (or, with
+    none, whoever made the card), asked by whoever made it, tied to the property, the event
+    and the request, and they are told (§2.9). One open task per property, however many
+    cards it is on. The task says what to get and has *Open its Media tab →*;
+  - **the card cannot be shared**: in our popup the property shows in red, "No photos or
+    video yet", with its task, and *Make a link for the client* stays off, naming the
+    properties holding it back;
+  - **once the media is in** — a video or folder link saved, or a photo added — the task
+    closes on its own ("Done — the property has its media now"), and the link can be made. The client
   sees the cover large with up to four more beside it ("+3 more"), each opening full size
   to page through with its room and caption; the YouTube video playing in the card;
   *See all photos* opening the Dropbox folder; and beside a room, "2 photos" of that

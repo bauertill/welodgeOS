@@ -866,6 +866,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
 
   const sourcing = t.salesRequest && t.type?.name === "Sourcing";
   const hotelContact = t.property && t.event && t.type?.name === "Hotel contact";
+  const getMedia = t.property && t.type?.name === "Get media";
 
   return (
     <div className="grid items-start gap-5 lg:grid-cols-3">
@@ -908,6 +909,23 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           />
         )}
         {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
+        {/* The get media task (doc §4.11): straight to where the media goes. */}
+        {getMedia && (
+          <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+            <h2 className="text-ink-900 text-[15px] font-medium">Photos or a video of {t.property!.name}</h2>
+            <p className="text-ink-500 mt-1 mb-3 text-[13px] font-light">
+              {t.status === "DONE"
+                ? "In — the rate card can be shared."
+                : "Put the Dropbox folder and a few picked photos, or a YouTube link, on its Media tab. This task closes on its own once they are in."}
+            </p>
+            <Link
+              href={`/properties/${t.property!.id}#media`}
+              className="bg-brand-400 hover:bg-brand-500 inline-block rounded-full px-4 py-2 text-[13px] font-medium text-white"
+            >
+              Open its Media tab →
+            </Link>
+          </div>
+        )}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Comments</h2>
           <TaskComments taskId={t.id} />

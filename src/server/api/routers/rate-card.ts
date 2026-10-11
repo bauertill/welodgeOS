@@ -10,6 +10,7 @@ import { nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { moveStage } from "~/server/api/routers/sales";
 import { logAudit } from "~/server/audit";
+import { ensureGetMediaTask, GET_MEDIA, hasMedia, withMedia } from "~/server/get-media";
 import { deliverImmediate, notify } from "~/server/notify";
 import { eventRates } from "~/server/event-rates";
 
@@ -57,6 +58,7 @@ const cardInclude = {
           videoUrl: true,
           photosUrl: true,
           photos: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], include: { category: { select: { name: true } } } },
+          tasks: { where: { status: { not: "DONE" }, type: { name: GET_MEDIA } }, select: { id: true }, take: 1 },
         },
       },
       lines: { orderBy: { position: "asc" } },
@@ -132,6 +134,9 @@ function shape(card: LoadedCard) {
         })),
         /** … and those this card shows, in order. */
         photoIds: entry.photos.map((photo) => photo.photoId),
+        /** No video, photos folder or photo: the card is not shared until it has (doc §4.11). */
+        hasMedia: Boolean(entry.property.videoUrl?.trim() || entry.property.photosUrl?.trim() || entry.property.photos.length),
+        getMediaTaskId: entry.property.tasks[0]?.id ?? null,
         lines: entry.lines.map((line) => ({
           id: line.id,
           categoryId: line.categoryId,
@@ -166,6 +171,7 @@ export const rateCardRouter = createTRPCRouter({
           where: { id: { in: input.propertyIds } },
           select: {
             id: true,
+            ...withMedia,
             categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, capacity: true, unitCount: true } },
             photos: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], take: CARD_PHOTOS, select: { id: true } },
           },
@@ -207,6 +213,10 @@ export const rateCardRouter = createTRPCRouter({
           },
         });
         await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.salesRequestId, summary: `Rate card made: ${card.name}` });
+        // Any property with no photos or video yet: a task to get them, as the card cannot be shared without (doc §4.11).
+        for (const property of properties.filter((one) => !hasMedia(one))) {
+          await ensureGetMediaTask(tx, { propertyId: property.id, salesRequestId: input.salesRequestId, actorId: ctx.session.user.id });
+        }
         return { id: card.id };
       });
     }),
@@ -371,6 +381,16 @@ export const rateCardRouter = createTRPCRouter({
       where: { rateCardProperty: { rateCardId: input.id }, sellingCents: { not: null }, OR: [{ available: null }, { minNights: null }] },
     });
     if (missing) throw new TRPCError({ code: "BAD_REQUEST", message: "Say how many units are available and the minimum stay for every room offered, and save, before making the link." });
+    // Clients have to see what each property looks like (doc §4.11).
+    const bare = (
+      await ctx.db.rateCardProperty.findMany({ where: { rateCardId: input.id }, select: { property: { select: { name: true, ...withMedia } } } })
+    ).filter((entry) => !hasMedia(entry.property));
+    if (bare.length) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `${bare.map((entry) => entry.property.name).join(", ")} ${bare.length === 1 ? "has" : "have"} no photos or video yet — the card can be shared once ${bare.length === 1 ? "it has" : "they have"} (see the Get media task).`,
+      });
+    }
     // Making the link is sending the rate card: a request still at Initial interest moves to Rate card sent (doc §4.11).
     return ctx.db.$transaction(async (tx) => {
       const card = await tx.rateCard.update({

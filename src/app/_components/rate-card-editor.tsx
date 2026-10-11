@@ -107,6 +107,8 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
   const c = card.data;
   const dirty = draft !== null && JSON.stringify(draft) !== saved;
   /** Rooms offered without how many units or the shortest stay — not saved until given (doc §4.11). */
+  /** Properties with no photos or video — the card is not shared while there are any (doc §4.11). */
+  const bare = c && draft ? c.properties.filter((property) => !draft.removed.includes(property.id) && !property.hasMedia) : [];
   const incomplete = draft
     ? draft.properties
         .filter((property) => !draft.removed.includes(property.id))
@@ -304,6 +306,8 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                     photos={source.allPhotos}
                     chosen={property.photoIds}
                     hasVideo={Boolean(source.videoUrl)}
+                    hasMedia={source.hasMedia}
+                    getMediaTaskId={source.getMediaTaskId}
                     onChange={(photoIds) => setProperty(property.id, (one) => ({ ...one, photoIds }))}
                   />
                   <table className="mt-3 w-full text-left text-[13px]">
@@ -409,9 +413,17 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 </button>
               </span>
             ) : (
-              <Button type="button" variant="secondary" disabled={share.isPending} onClick={() => share.mutate({ id })}>
-                {share.isPending ? "Making the link…" : "Make a link for the client"}
-              </Button>
+              <>
+                <Button type="button" variant="secondary" disabled={share.isPending || bare.length > 0} onClick={() => share.mutate({ id })}>
+                  {share.isPending ? "Making the link…" : "Make a link for the client"}
+                </Button>
+                {bare.length > 0 && (
+                  <p className="mt-2 text-xs text-[#a3243d]">
+                    Not yet: {bare.map((property) => property.name).join(", ")} {bare.length === 1 ? "has" : "have"} no photos or video. Its Get media task is
+                    open; once the media is in, the link can be made.
+                  </p>
+                )}
+              </>
             )}
             {share.error && <p className="mt-2 text-xs text-[#c03654]">{friendlyError(share.error)}</p>}
           </div>
@@ -501,19 +513,38 @@ function CardPhotos({
   photos,
   chosen,
   hasVideo,
+  hasMedia,
+  getMediaTaskId,
   onChange,
 }: {
   propertyId: string;
   photos: { id: string; src: string; caption: string | null; categoryName: string | null }[];
   chosen: string[];
   hasVideo: boolean;
+  hasMedia: boolean;
+  getMediaTaskId: string | null;
   onChange: (photoIds: string[]) => void;
 }) {
   const mediaHref = `/properties/${propertyId}#media`;
+  if (!hasMedia) {
+    return (
+      <p className="mt-3 rounded-lg bg-[#fde8ec] px-3 py-2 text-xs text-[#a3243d]">
+        <span className="font-medium">No photos or video yet — the card cannot be shared until it has.</span>{" "}
+        {getMediaTaskId && (
+          <a href={`/tasks/${getMediaTaskId}`} target="_blank" rel="noreferrer" className="font-medium underline">
+            Get media task ↗
+          </a>
+        )}{" "}
+        <a href={mediaHref} target="_blank" rel="noreferrer" className="underline">
+          Media tab ↗
+        </a>
+      </p>
+    );
+  }
   if (photos.length === 0) {
     return (
       <p className="mt-3 rounded-lg bg-[#fff4e0] px-3 py-2 text-xs text-[#8a5a00]">
-        {hasVideo ? "No photos for this property yet — the client sees the video only." : "No photos or video for this property yet."}{" "}
+        {hasVideo ? "No photos picked for this property yet — the client sees the video only." : "No photos picked yet — the client gets the link to the photos folder only."}{" "}
         <a href={mediaHref} target="_blank" rel="noreferrer" className="font-medium underline">
           Add them on its Media tab ↗
         </a>

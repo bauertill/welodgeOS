@@ -4,6 +4,7 @@ import { z } from "zod";
 import { isDropboxFolder, isLink, photoSrc } from "~/lib/media";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
+import { closeGetMediaTasks } from "~/server/get-media";
 
 const MAX_PHOTOS = 60;
 const link = z.string().trim().max(2000);
@@ -54,6 +55,7 @@ export const mediaRouter = createTRPCRouter({
         (before.photosUrl ?? "") !== input.photosUrl ? "photos folder" : null,
       ].filter(Boolean);
       if (changed.length) await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: input.propertyId, summary: `Media: ${changed.join(" and ")} link changed` });
+      await closeGetMediaTasks(ctx.db, { propertyId: input.propertyId, actorId: ctx.session.user.id });
       return { ok: true };
     }),
 
@@ -86,6 +88,7 @@ export const mediaRouter = createTRPCRouter({
         });
         if (fresh.length) {
           await logAudit(tx, { actorId: ctx.session.user.id, entity: "Property", entityId: input.propertyId, summary: `Media: ${fresh.length} ${fresh.length === 1 ? "photo" : "photos"} added for clients` });
+          await closeGetMediaTasks(tx, { propertyId: input.propertyId, actorId: ctx.session.user.id });
         }
         return { added: fresh.length, skipped: photos.length - fresh.length };
       });
