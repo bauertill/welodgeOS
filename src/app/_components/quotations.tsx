@@ -601,7 +601,7 @@ export function QuotationPopup({ scoutingEntryId, forRequestId, onClose }: { sco
   const context = api.quotation.formContext.useQuery({ scoutingEntryId });
   const c = context.data;
   return (
-    <Popup title={c ? `Their quote — ${c.property.name}` : "Their quote"} subtitle={c ? `For ${c.event.name}. Saved on the property's Quotations tab.` : undefined} size="medium" onClose={onClose}>
+    <Popup title={c ? `Their quote — ${c.property.name}` : "Their quote"} subtitle={c ? `For ${c.event.name}. Saved on the property's Quotations tab.` : undefined} size="large" onClose={onClose}>
       {!c ? (
         <p className="text-ink-500 text-sm font-light">Loading…</p>
       ) : c.property.categories.length === 0 ? (
