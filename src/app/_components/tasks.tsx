@@ -1358,6 +1358,7 @@ function EmailTheHotel({
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
   const [shown, setShown] = useState(false);
+  const [pasteHint, setPasteHint] = useState(false);
   useEffect(() => setOrigin(window.location.origin), []);
   const make = api.property.makeContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
   const off = api.property.switchOffContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
@@ -1397,28 +1398,55 @@ function EmailTheHotel({
       }`,
   );
   const subject = `Accommodation request — ${eventName} — ${p.name}`;
-  const body = (target: string | null) =>
-    [
-      greeting,
-      "",
-      `Thank you for your time. As discussed, here is our accommodation request for ${eventName}:`,
-      "",
-      ...(lines.length ? lines : ["• (the rooms and dates we spoke about)"]),
-      "",
-      "Could you let us know your availability and rates for these dates?",
-      ...(target
-        ? ["", "Please also fill in your hotel's details here:", target]
-        : []),
-      "",
-      "Thank you, and kind regards,",
-      me.data?.name ?? "",
-      "We Lodge",
-    ].join("\n");
+  // The email, line by line; LINK marks the sentence whose word "link" goes to the hotel's form.
+  const LINK = "\u0000link";
+  const linkSentence = { before: "If you could please complete your property's information on this ", word: "link", after: ", it will help us prepare." };
+  const emailLines = [
+    greeting,
+    "",
+    `Thank you for your time. As discussed, here is our accommodation request for ${eventName}:`,
+    "",
+    ...(lines.length ? lines : ["• (the rooms and dates we spoke about)"]),
+    "",
+    "Could you let us know your availability and rates for these dates?",
+    "",
+    LINK,
+    "",
+    "Thank you, and kind regards,",
+    me.data?.name ?? "",
+    "We Lodge",
+  ];
+  const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  /** As formatted text: the word "link" is a hyperlink — what is pasted into the email. */
+  const emailHtml = (target: string) =>
+    emailLines
+      .map((line) =>
+        line === LINK
+          ? `${escapeHtml(linkSentence.before)}<a href="${escapeHtml(target)}">${linkSentence.word}</a>${escapeHtml(linkSentence.after)}`
+          : escapeHtml(line),
+      )
+      .join("<br>");
+  /** As plain text, where nothing can be a hyperlink: the address after the word. */
+  const emailText = (target: string) =>
+    emailLines.map((line) => (line === LINK ? `${linkSentence.before}${linkSentence.word} (${target})${linkSentence.after}` : line)).join("\n");
 
   // The link is made the first time it is needed, so the email always carries one.
-  const withLink = (then: (target: string) => void) => {
-    if (link) then(link);
-    else make.mutate({ id: propertyId }, { onSuccess: (made) => then(linkFor(made.contractingToken)!) });
+  const ensureLink = () =>
+    link ? Promise.resolve(link) : make.mutateAsync({ id: propertyId }).then((made) => linkFor(made.contractingToken)!);
+  /** Copies the email as formatted text (plain text alongside, for where formatting is not taken). */
+  const copyEmail = async () => {
+    const target = ensureLink();
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": target.then((t) => new Blob([emailHtml(t)], { type: "text/html" })),
+          "text/plain": target.then((t) => new Blob([emailText(t)], { type: "text/plain" })),
+        }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(emailText(await target));
+    }
+    return target;
   };
 
   return (
@@ -1435,34 +1463,64 @@ function EmailTheHotel({
           <button
             type="button"
             disabled={make.isPending}
-            onClick={() =>
-              withLink((target) => {
-                emailed.mutate({ id: taskId });
-                window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body(target))}`;
-              })
-            }
+            onClick={() => {
+              // Copied as formatted text, so "link" is a hyperlink; the mailbox opens addressed, to paste it into.
+              copyEmail()
+                .then(() => {
+                  setPasteHint(true);
+                  setTimeout(() => setPasteHint(false), 15000);
+                  window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}`;
+                })
+                .catch(() =>
+                  // No clipboard (an old browser): the email as plain text, the address in full.
+                  ensureLink().then((target) => {
+                    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailText(target))}`;
+                  }),
+                )
+                .finally(() => emailed.mutate({ id: taskId }));
+            }}
             className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-1.5 font-medium text-white disabled:opacity-60"
           >
             {make.isPending ? "Preparing…" : "Email the request"}
           </button>
         </span>
       </div>
+      {pasteHint && (
+        <p className="bg-brand-50 text-brand-800 mt-3 rounded-lg px-3 py-2 text-[13px]">
+          The email is copied — paste it into the message (⌘V, or Ctrl+V), then send. The word &ldquo;link&rdquo; goes to their details form.
+        </p>
+      )}
       {shown && (
         <>
-          <pre className="bg-ink-50/60 text-ink-700 mt-3 max-h-72 overflow-y-auto rounded-lg px-3 py-2.5 font-sans text-[13px] font-light whitespace-pre-wrap">
-            {body(link ?? "(the link to their details form is added when you send it)")}
-          </pre>
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            Subject: <span className="text-ink-700">{subject}</span>
+          </p>
+          <div className="bg-ink-50/60 text-ink-700 mt-1 max-h-72 overflow-y-auto rounded-lg px-3 py-2.5 text-[13px] font-light whitespace-pre-wrap">
+            {emailLines.map((line, index) => (
+              <span key={index} className="block min-h-[1.25em]">
+                {line === LINK ? (
+                  <>
+                    {linkSentence.before}
+                    <a href={link ?? undefined} target="_blank" rel="noreferrer" className="text-brand-700 underline" title={link ?? "Made when the email is sent"}>
+                      {linkSentence.word}
+                    </a>
+                    {linkSentence.after}
+                  </>
+                ) : (
+                  line
+                )}
+              </span>
+            ))}
+          </div>
           {!to && <p className="text-ink-500 mt-2 text-xs font-light">No email is known for the hotel — add one in step 1, or copy the email.</p>}
           <p className="text-ink-500 mt-3 text-xs font-light">
             <button
               type="button"
               onClick={() =>
-                withLink((target) => {
-                  void navigator.clipboard.writeText(`${subject}\n\n${body(target)}`).then(() => {
-                    emailed.mutate({ id: taskId });
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  });
+                void copyEmail().then(() => {
+                  emailed.mutate({ id: taskId });
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
                 })
               }
               className="text-brand-700 mr-3 text-[13px] hover:underline"

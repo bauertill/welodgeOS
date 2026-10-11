@@ -1816,12 +1816,15 @@ the contract.
      request**, and *Show the email ▾* to open it. Opened, the email is shown as it will go: a greeting (the first contact's first name, if
      known), the request for the event — each line's units, type, dates and nights (not
      where the client wants to be, since 2026-10-11) — asking for availability and rates,
-     and "Please also fill in your hotel's details here:" with the link to the hotel's own
-     details form (§3.9), made the first time it is needed. **The client's name and
-     budget are never in it.** *Email the request* opens it in your own
-     mailbox, addressed to the person the hotel named on the call (and greeting them by
-     first name), else the hotel's general email, else its first contact's, else its email
-     for contracts; *Copy the email* copies subject and text instead. Beneath, whether
+     and "If you could please complete your property's information on this *link*, it will
+     help us prepare." — the word *link* a hyperlink to the hotel's own details form (§3.9),
+     made the first time it is needed. **The client's name and budget are never in it.**
+     Since a word can be a hyperlink only in formatted text, **Email the request** copies the
+     email as formatted text and opens your own mailbox addressed to the person the hotel
+     named on the call (else the hotel's general email, else its first contact's, else its
+     email for contracts), with the subject filled in — the email is then pasted into the
+     message (⌘V), which the task says; *Copy the email* copies it the same way. Where
+     formatting is not taken, the plain text carries the form's address after the word. Beneath, whether
      the hotel's form is out or came back, *See what the hotel sees* and *Switch the link off*.
   3. **What to find out** — the checklist below, with *Hotel details*, *Quotations* and the
      terms.
