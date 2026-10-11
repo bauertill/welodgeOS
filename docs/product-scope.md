@@ -386,12 +386,12 @@ team asks of each other. **Tasks** in the menu opens **one board that everyone s
 | --- | --- |
 | Task | What it is, in a line — *Get photos and a video of Hotel Carmel*. Required |
 | Details | Anything the person doing it needs to know |
-| To complete | The team member or members who do it. Can be left empty for now |
+| To complete | The team member or members who do it, from a dropdown of the team to search and tick (2026-10-11). Can be left empty for now |
 | Requested by | Who asked for it — whoever adds it, unless someone else is chosen |
 | Deadline | Optional, a calendar day. Shown in red as *Overdue* once passed and not done |
 | Status | *Backlog* (noted for later), *To do*, *In progress*, *Done*. A new task is *To do* unless chosen otherwise |
 | Priority | High, Medium, Low, or none |
-| Type | Named by the team as they need them — *Get media*, a scouting task — from *+ New type…* on the form. There is no fixed list; **each type will get its own workflow** inside *In progress* later (the owner's plan, 2026-10-02), so for now a type is a label |
+| Type | Set by the system on the tasks it makes — *Sourcing*, *Hotel contact*, *Get media* — each with its own steps on the task. **Not chosen on the form** (the owner's call, 2026-10-11): a task added by hand has none, and editing a task keeps the type it has. The board can still be filtered by type |
 | About | Optional: an event, a property, a client and a sales request — each a link. Choosing a sales request also fills in its client and event when they were left empty |
 | Comments | A running thread under the task, with `@Name` mentions as in Feedback (§2.6). The author can edit their own comment, which then says *Edited* |
 

@@ -16,7 +16,7 @@ import { WebsiteLink } from "~/app/_components/website-link";
 import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RateCardsBox, SourcingPanel } from "~/app/_components/sourcing-panel";
-import { AssigneePicker } from "~/app/_components/assignee-picker";
+import { AssigneePicker, PeopleSelect } from "~/app/_components/assignee-picker";
 import { QuotationPopup } from "~/app/_components/quotations";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
@@ -646,7 +646,6 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
   const utils = api.useUtils();
   const me = api.user.me.useQuery();
   const people = api.user.list.useQuery();
-  const types = api.task.types.useQuery();
   const events = api.event.list.useQuery();
   const clients = api.clients.list.useQuery();
   const properties = api.property.list.useQuery({});
@@ -671,14 +670,7 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
     if (!task && me.data && !draft.requestedById) setDraft((current) => ({ ...current, requestedById: me.data!.id }));
   }, [me.data, task, draft.requestedById]);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
-  const [newType, setNewType] = useState<string | null>(null);
-  const addType = api.task.addType.useMutation({
-    onSuccess: (type) => {
-      void utils.task.types.invalidate();
-      set("typeId", type.id);
-      setNewType(null);
-    },
-  });
+
 
   const done = (id: string) => {
     void utils.task.invalidate();
@@ -688,7 +680,7 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
   };
   const create = api.task.create.useMutation({ onSuccess: (saved) => done(saved.id) });
   const update = api.task.update.useMutation({ onSuccess: (saved) => done(saved.id) });
-  const error = create.error ?? update.error ?? addType.error;
+  const error = create.error ?? update.error;
   const pending = create.isPending || update.isPending;
 
   const peopleList = people.data ?? [];
@@ -731,31 +723,11 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
         <Textarea rows={3} value={draft.details} onChange={(e) => set("details", e.target.value)} placeholder="Anything the person completing it needs to know" />
       </Field>
 
-      <div>
-        <Label>To complete — who does it</Label>
-        <div className="flex flex-wrap gap-1.5">
-          {peopleList.map((person) => {
-            const chosen = draft.assigneeIds.includes(person.id);
-            return (
-              <button
-                key={person.id}
-                type="button"
-                aria-pressed={chosen}
-                onClick={() =>
-                  set("assigneeIds", chosen ? draft.assigneeIds.filter((id) => id !== person.id) : [...draft.assigneeIds, person.id])
-                }
-                className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
-                  chosen ? "border-brand-400 bg-brand-50 text-brand-800 font-medium" : "border-ink-200 text-ink-500 hover:text-ink-900 bg-white font-light"
-                }`}
-              >
-                {person.name ?? person.email}
-              </button>
-            );
-          })}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>To complete — who does it</Label>
+          <PeopleSelect people={peopleList} value={draft.assigneeIds} onChange={(ids) => set("assigneeIds", ids)} />
         </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-4">
         <Field label="Requested by">
           <Select value={draft.requestedById} onChange={(e) => set("requestedById", e.target.value)}>
             <option value="">Nobody said</option>
@@ -766,6 +738,8 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
             ))}
           </Select>
         </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Deadline — optional">
           <Input type="date" value={draft.deadline} onChange={(e) => set("deadline", e.target.value)} />
         </Field>
@@ -788,33 +762,6 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
             ))}
           </Select>
         </Field>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label>Type</Label>
-          {newType === null ? (
-            <Select value={draft.typeId} onChange={(e) => (e.target.value === "__new__" ? setNewType("") : set("typeId", e.target.value))}>
-              <option value="">None</option>
-              {(types.data ?? []).map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-              <option value="__new__">+ New type…</option>
-            </Select>
-          ) : (
-            <div className="flex gap-2">
-              <Input value={newType} onChange={(e) => setNewType(e.target.value)} placeholder="Get media" autoFocus aria-label="New type" />
-              <Button type="button" variant="secondary" disabled={!newType.trim() || addType.isPending} onClick={() => addType.mutate({ name: newType })}>
-                Add
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setNewType(null)}>
-                Cancel
-              </Button>
-            </div>
-          )}
-        </div>
       </div>
 
       <div>

@@ -94,3 +94,72 @@ export function AssigneePicker({ taskId, assignees, children }: { taskId: string
     </span>
   );
 }
+
+/**
+ * Who completes a task, chosen in its form (doc §2.8): a dropdown of the team
+ * to search and tick — several can share a task.
+ */
+export function PeopleSelect({ people, value, onChange }: { people: Person[]; value: string[]; onChange: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => !ref.current?.contains(event.target as Node) && setOpen(false);
+    const escape = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+  const chosen = people.filter((person) => value.includes(person.id));
+  const wanted = search.trim().toLowerCase();
+  const shown = people.filter((person) => !wanted || `${person.name ?? ""} ${person.email ?? ""}`.toLowerCase().includes(wanted));
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="border-ink-200 focus:border-brand-400 focus:ring-brand-400/20 flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2 text-left text-sm font-light outline-none focus:ring-4"
+      >
+        <span className={`truncate ${chosen.length ? "text-ink-900" : "text-ink-400"}`}>
+          {chosen.length ? chosen.map((person) => person.name ?? person.email).join(", ") : "Nobody yet"}
+        </span>
+        <span className="text-ink-500 text-xs">▾</span>
+      </button>
+      {open && (
+        <div className="border-ink-200/70 absolute top-full left-0 z-30 mt-1 w-full min-w-60 rounded-xl border bg-white p-2 shadow-lg">
+          <input
+            autoFocus
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search the team"
+            className="border-ink-200 mb-1 w-full rounded-lg border px-2.5 py-1.5 text-[13px] font-light outline-none"
+          />
+          <div role="listbox" aria-multiselectable className="max-h-64 overflow-y-auto">
+            {shown.map((person) => {
+              const on = value.includes(person.id);
+              return (
+                <button
+                  key={person.id}
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  onClick={() => onChange(on ? value.filter((id) => id !== person.id) : [...value, person.id])}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] ${on ? "bg-brand-50 text-brand-800" : "text-ink-700 hover:bg-ink-50"}`}
+                >
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${on ? "border-brand-500 bg-brand-500 text-white" : "border-ink-300"}`}>{on ? "✓" : ""}</span>
+                  <span className="truncate">{person.name ?? person.email}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
