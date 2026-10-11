@@ -16,6 +16,7 @@ import { WebsiteLink } from "~/app/_components/website-link";
 import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RateCardsBox, SourcingPanel } from "~/app/_components/sourcing-panel";
+import { AssigneePicker } from "~/app/_components/assignee-picker";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
 import { daysUntil, dayKey, nightsBetween } from "~/lib/dates";
@@ -429,7 +430,9 @@ function TaskCard({
         <p className="text-ink-900 line-clamp-2 text-[13px] leading-snug font-medium">{shortTitle(task)}</p>
         <span className="flex shrink-0 items-center gap-1.5">
           <PriorityBadge priority={task.priority} />
-          <Assignees people={task.assignees} />
+          <AssigneePicker taskId={task.id} assignees={task.assignees}>
+            <Assignees people={task.assignees} />
+          </AssigneePicker>
         </span>
       </div>
       <div className="text-ink-500 mt-1 flex items-center gap-x-1.5 overflow-hidden text-[11px] font-light whitespace-nowrap">
@@ -879,7 +882,15 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
   }
 
   const rows: [string, React.ReactNode][] = [
-    ["To complete", t.assignees.length ? t.assignees.map((person) => person.name ?? person.email).join(", ") : "Nobody yet"],
+    [
+      "To complete",
+      <AssigneePicker key="to" taskId={t.id} assignees={t.assignees}>
+        <span className="text-ink-900 hover:text-brand-700">
+          {t.assignees.length ? t.assignees.map((person) => person.name ?? person.email).join(", ") : "Nobody yet"}
+          <span className="text-brand-700 ml-1.5 text-xs">Change</span>
+        </span>
+      </AssigneePicker>,
+    ],
     ["Requested by", t.requestedBy ? (t.requestedBy.name ?? t.requestedBy.email) : "—"],
     ["Deadline", <Deadline key="d" task={t} />],
     ["Priority", t.priority ? <PriorityBadge key="p" priority={t.priority} /> : "—"],

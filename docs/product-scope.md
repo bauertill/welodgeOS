@@ -405,6 +405,10 @@ team asks of each other. **Tasks** in the menu opens **one board that everyone s
   — event, property, client — shows on hovering, and in full once opened. A column shows
   its first 15 cards and *Show n more*; *Done* shows its 5 most recently finished, the rest
   under *Show n more*, and holds what was finished in the last 30 days.
+- **Reassigning in one click** (2026-10-11): the people on a card, and *To complete* on a
+  task's page (*Change*), open a list of the team — search it, click a name to put them on
+  or take them off. It saves at once, without opening the task, and whoever is newly put
+  on is told (§2.9).
 - **List** — every task in a table: status, priority, type, who completes it, who asked,
   deadline, soonest deadline first. It can also be filtered by status, and shows every
   finished task.
