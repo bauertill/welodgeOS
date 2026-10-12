@@ -13,6 +13,8 @@ import { distanceKm } from "~/lib/scouting";
 
 export const NEAR_KM = 3;
 export const WITHIN_KM = 8;
+/** Beyond this from the client's nearest place, a property is "Far away" on the sourcing task, however else it fits (2026-10-12). */
+export const FAR_KM = 10;
 
 export type Target = { label: string; latitude: number; longitude: number };
 export type Wanted = {

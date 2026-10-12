@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { env } from "~/env";
 import { propertyTypeLabels } from "~/lib/scouting";
-import { NEAR_KM, WITHIN_KM } from "~/lib/sourcing-fit";
+import { FAR_KM, NEAR_KM, WITHIN_KM } from "~/lib/sourcing-fit";
 import { Select } from "~/app/_components/form";
 import { NewAnswers } from "~/app/_components/sales-requests";
 import { RateCardEditor } from "~/app/_components/rate-card-editor";
@@ -19,6 +19,8 @@ const verdictStyles = {
   unclear: { dot: "bg-[#1d5fa8]", badge: "bg-[#e6f0fb] text-[#1d5fa8]", label: "Not enough known" },
   partly: { dot: "bg-[#e5a400]", badge: "bg-[#fff4e0] text-[#8a5a00]", label: "Fits in part" },
   poor: { dot: "bg-[#9a9a9a]", badge: "bg-ink-50 text-ink-500", label: "Does not fit" },
+  /** More than FAR_KM from the client's nearest place — never "fits in part". */
+  far: { dot: "bg-[#7a7a7a]", badge: "bg-ink-50 text-ink-700", label: "Far away" },
   /** Added to the board, its hotel contact task still open: not judged until we hear back. */
   contact: { dot: "bg-brand-500", badge: "bg-brand-50 text-brand-800", label: "To be contacted" },
   /** Contacted for this request, and could not help — kept apart, for this request only. */
@@ -26,10 +28,21 @@ const verdictStyles = {
 } as const;
 type Verdict = keyof typeof verdictStyles;
 // Only those that fit, entirely or in part, are offered, and those still to be contacted; the rest are left out.
-// One that fails nothing but cannot be fully judged — no units or price yet — fits in part (2026-10-12).
-const verdictOrder: Verdict[] = ["good", "partly", "contact", "declined"];
-const standing = (property: { verdict: Verdict; contactTaskId: string | null; declined: string | null }): Verdict =>
-  property.contactTaskId ? "contact" : property.declined ? "declined" : property.verdict === "unclear" ? "partly" : property.verdict;
+// One that fails nothing but cannot be fully judged — no units or price yet — fits in part; one more
+// than FAR_KM away is Far away, whatever else (2026-10-12).
+const verdictOrder: Verdict[] = ["good", "partly", "far", "contact", "declined"];
+const standing = (property: { verdict: Verdict; km: number | null; contactTaskId: string | null; declined: string | null }): Verdict =>
+  property.contactTaskId
+    ? "contact"
+    : property.declined
+      ? "declined"
+      : property.verdict === "poor"
+        ? "poor"
+        : property.km !== null && property.km > FAR_KM
+          ? "far"
+          : property.verdict === "unclear"
+            ? "partly"
+            : property.verdict;
 
 /** Frames the map around every pin once they are known. */
 function FitAll({ points }: { points: { latitude: number; longitude: number }[] }) {
