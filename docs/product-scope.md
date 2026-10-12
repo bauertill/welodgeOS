@@ -2096,9 +2096,8 @@ of versions.
 - **What they want with the rooms** (2026-10-12), asked on the client's needs form and in
   ours, so the hotels get as much as possible: **people per unit** on each line;
   **Breakfast** and **Parking** — Yes or No, or left unsaid (click again to clear) — and
-  for parking, how many cars; **Cleaning** — Daily, Every few days, Weekly or Not needed;
-  and **Also important** — any of our amenities (Wi-Fi, kitchen, meeting rooms…; breakfast
-  and parking being asked on their own). They show on the request and the sourcing task,
+  for parking, how many cars; and **Cleaning** — Daily, Every few days, Weekly or Not
+  needed — each on a line of its own, its choices beside it. They show on the request and the sourcing task,
   are written on its history, and go into the email to a hotel under "What the guests would
   like".
 - **What they asked for**, in their words — however vague — and **the details** above,

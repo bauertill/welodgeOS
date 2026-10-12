@@ -59,7 +59,6 @@ export type DetailsValues = {
   cleaning: CleaningWanted | null;
   parking: boolean | null;
   parkingSpaces: string;
-  mustHaveIds: string[];
 };
 
 type StoredLine = { rooms: number; roomType: string | null; people?: number | null; checkIn: Date | string | null; checkOut: Date | string | null };
@@ -78,7 +77,6 @@ export function detailsFrom(
   cleaning?: CleaningWanted | null;
   parking?: boolean | null;
   parkingSpaces?: number | null;
-  mustHaveIds?: string[];
   },
   /** The event's currency, for a budget not given yet. */
   defaultCurrency = "EUR",
@@ -105,7 +103,6 @@ export function detailsFrom(
     cleaning: values.cleaning ?? null,
     parking: values.parking ?? null,
     parkingSpaces: values.parkingSpaces ? String(values.parkingSpaces) : "",
-    mustHaveIds: values.mustHaveIds ?? [],
   };
 }
 
@@ -148,7 +145,6 @@ function toInput(
     cleaning: values.cleaning,
     parking: values.parking,
     parkingSpaces,
-    mustHaveIds: values.mustHaveIds,
   };
 }
 
@@ -160,7 +156,6 @@ export function DetailsFields({
   forClient = false,
   find,
   eventStart,
-  amenities = [],
 }: {
   values: DetailsValues;
   onChange: (values: DetailsValues) => void;
@@ -170,8 +165,6 @@ export function DetailsFields({
   find: (address: string) => Promise<{ latitude: number; longitude: number; address: string | null } | null>;
   /** "2028-07-10": the event's first day — the calendars open on its month. */
   eventStart?: string | null;
-  /** What they can say matters to them, from our amenity list. */
-  amenities?: { id: string; label: string }[];
 }) {
   const set = <K extends keyof DetailsValues>(key: K, value: DetailsValues[K]) => onChange({ ...values, [key]: value });
   const setLine = (index: number, patch: Partial<LineDraft>) =>
@@ -310,43 +303,27 @@ export function DetailsFields({
       </div>
       <div>
         <Label>{forClient ? "What you would like with the rooms" : "What they want with the rooms"}</Label>
-        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-          <YesNo label="Breakfast" value={values.breakfast} onChange={(value) => set("breakfast", value)} />
-          <div>
-            <span className="text-ink-500 mb-1 block text-[12px]">Cleaning</span>
-            <div className="flex flex-wrap gap-1.5">
-              {cleaningWantedOrder.map((option) => (
-                <Choice key={option} on={values.cleaning === option} onClick={() => set("cleaning", values.cleaning === option ? null : option)}>
-                  {cleaningWantedLabels[option]}
-                </Choice>
-              ))}
-            </div>
-          </div>
-          <div>
-            <YesNo label="Parking" value={values.parking} onChange={(value) => set("parking", value)} />
+        <div className="border-ink-200/60 divide-ink-200/60 divide-y rounded-lg border">
+          <WishRow label="Breakfast">
+            <YesNo value={values.breakfast} onChange={(value) => set("breakfast", value)} />
+          </WishRow>
+          <WishRow label="Parking">
+            <YesNo value={values.parking} onChange={(value) => set("parking", value)} />
             {values.parking && (
-              <span className="mt-1.5 flex items-center gap-2 text-[13px] font-light">
-                <Input value={values.parkingSpaces} onChange={(e) => set("parkingSpaces", e.target.value)} inputMode="numeric" placeholder="3" aria-label="How many cars" className="w-20 px-2" />
+              <span className="text-ink-700 ml-2 flex items-center gap-2 text-[13px] font-light">
+                <Input value={values.parkingSpaces} onChange={(e) => set("parkingSpaces", e.target.value)} inputMode="numeric" placeholder="3" aria-label="How many cars" className="w-16 px-2 py-1" />
                 cars
               </span>
             )}
-          </div>
+          </WishRow>
+          <WishRow label="Cleaning">
+            {cleaningWantedOrder.map((option) => (
+              <Choice key={option} on={values.cleaning === option} onClick={() => set("cleaning", values.cleaning === option ? null : option)}>
+                {cleaningWantedLabels[option]}
+              </Choice>
+            ))}
+          </WishRow>
         </div>
-        {amenities.length > 0 && (
-          <div className="mt-3">
-            <span className="text-ink-500 mb-1 block text-[12px]">{forClient ? "Also important to you" : "Also important to them"}</span>
-            <div className="flex flex-wrap gap-1.5">
-              {amenities.map((amenity) => {
-                const on = values.mustHaveIds.includes(amenity.id);
-                return (
-                  <Choice key={amenity.id} on={on} onClick={() => set("mustHaveIds", on ? values.mustHaveIds.filter((id) => id !== amenity.id) : [...values.mustHaveIds, amenity.id])}>
-                    {amenity.label}
-                  </Choice>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
       <Field label={forClient ? "Anything else we should know" : "Client's comments"}>
         <Textarea rows={3} value={values.clientComments} onChange={(e) => set("clientComments", e.target.value)} placeholder="Arriving in two groups, a quiet floor, close to each other…" />
@@ -372,18 +349,25 @@ function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; c
 }
 
 /** Yes, No — or, clicked again, not said. */
-function YesNo({ label, value, onChange }: { label: string; value: boolean | null; onChange: (value: boolean | null) => void }) {
+function YesNo({ value, onChange }: { value: boolean | null; onChange: (value: boolean | null) => void }) {
   return (
-    <div>
-      <span className="text-ink-500 mb-1 block text-[12px]">{label}</span>
-      <div className="flex gap-1.5">
-        <Choice on={value === true} onClick={() => onChange(value === true ? null : true)}>
-          Yes
-        </Choice>
-        <Choice on={value === false} onClick={() => onChange(value === false ? null : false)}>
-          No
-        </Choice>
-      </div>
+    <>
+      <Choice on={value === true} onClick={() => onChange(value === true ? null : true)}>
+        Yes
+      </Choice>
+      <Choice on={value === false} onClick={() => onChange(value === false ? null : false)}>
+        No
+      </Choice>
+    </>
+  );
+}
+
+/** One wish on its line: its name, then its choices. */
+function WishRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center">
+      <span className="text-ink-700 w-24 shrink-0 text-[13px]">{label}</span>
+      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
     </div>
   );
 }
@@ -416,7 +400,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const places = api.place.listForEvent.useQuery({ eventId: request.event?.id ?? "" }, { enabled: Boolean(request.event) });
   const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints, mustHaveIds: request.mustHaves.map((amenity) => amenity.id) }, currencyForCountry(request.event?.country)));
+  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
   const [problem, setProblem] = useState<string | null>(null);
   const save = api.sales.saveDetails.useMutation({
     onSuccess: () => {
@@ -426,8 +410,6 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
   });
   const placeList = (places.data ?? []).map((place) => ({ id: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }));
   const geocode = api.property.geocode.useMutation();
-  const amenities = api.amenity.list.useQuery();
-  const mustHaveOptions = (amenities.data ?? []).filter((amenity) => amenity.key !== "breakfast-included" && amenity.key !== "parking");
   const closeTo = [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther]
     .filter(Boolean)
     .join(", ");
@@ -442,7 +424,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
           <button
             type="button"
             onClick={() => {
-              setValues(detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints, mustHaveIds: request.mustHaves.map((amenity) => amenity.id) }, currencyForCountry(request.event?.country)));
+              setValues(detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
               setEditing(true);
             }}
             className="text-brand-700 text-[13px] font-light hover:underline"
@@ -468,7 +450,6 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
             places={placeList}
             find={(address) => geocode.mutateAsync({ address })}
             eventStart={eventStay(request.event)?.checkIn}
-            amenities={mustHaveOptions}
           />
           <div className="mt-4 space-y-2">
             <FormError message={problem ?? (save.error ? friendlyError(save.error) : null)} />
@@ -721,7 +702,6 @@ export function NeedsForm({ token }: { token: string }) {
             forClient
             find={(address) => geocode.mutateAsync({ token, address })}
             eventStart={form.data.stay?.checkIn}
-            amenities={form.data.amenities}
           />
           <div className="mt-5 space-y-2">
             <FormError message={problem ?? (submit.error ? friendlyError(submit.error) : null)} />

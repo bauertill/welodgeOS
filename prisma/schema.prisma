@@ -282,7 +282,6 @@ model Amenity {
   sortOrder Int    @default(0)
 
   properties Property[]     @relation("PropertyAmenities")
-  wantedBy   SalesRequest[] @relation("SalesRequestMustHaves")
 
   @@index([sortOrder])
 }
@@ -1181,8 +1180,6 @@ model SalesRequest {
   /// Parking wanted, and for how many cars.
   parking       Boolean?
   parkingSpaces Int?
-  /// What else matters to them, from the amenity list.
-  mustHaves     Amenity[]       @relation("SalesRequestMustHaves")
   /// When it became a sales request — its details first given. Empty while it
   /// is still an enquiry.
   detailedAt    DateTime?

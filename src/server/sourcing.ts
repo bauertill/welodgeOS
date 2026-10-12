@@ -21,7 +21,6 @@ export async function ensureSourcingTask(tx: Prisma.TransactionClient, requestId
       lines: { orderBy: { position: "asc" } },
       closeTo: { select: { name: true } },
       closeToPoints: { select: { label: true } },
-      mustHaves: { select: { label: true }, orderBy: { sortOrder: "asc" } },
       tasks: { select: { id: true, type: { select: { name: true } } } },
     },
   });

@@ -96,7 +96,6 @@ const include = {
   closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
   lines: { orderBy: [{ position: "asc" }] },
   closeToPoints: { orderBy: [{ position: "asc" }] },
-  mustHaves: { select: { id: true, label: true }, orderBy: { sortOrder: "asc" } },
 } satisfies Prisma.SalesRequestInclude;
 
 async function needsLinkInUse(db: Prisma.TransactionClient, token: string) {
@@ -145,7 +144,6 @@ const detailsInput = z.object({
   cleaning: z.nativeEnum(CleaningWanted).nullable().default(null),
   parking: z.boolean().nullable().default(null),
   parkingSpaces: z.number().int().min(1).max(10_000).nullable().default(null),
-  mustHaveIds: z.array(z.string()).max(50).default([]),
 });
 
 /**
@@ -196,7 +194,6 @@ async function saveDetails(
       cleaning: details.cleaning,
       parking: details.parking,
       parkingSpaces: details.parking ? details.parkingSpaces : null,
-      mustHaves: { set: details.mustHaveIds.map((amenityId) => ({ id: amenityId })) },
       detailedAt: before.detailedAt ?? new Date(),
     },
     include,
@@ -1324,12 +1321,7 @@ export const salesRouter = createTRPCRouter({
         cleaning: request.cleaning,
         parking: request.parking,
         parkingSpaces: request.parkingSpaces,
-        mustHaveIds: request.mustHaves.map((amenity) => amenity.id),
       },
-      /** What they can say matters to them (doc §4.11) — breakfast and parking are asked on their own. */
-      amenities: (await ctx.db.amenity.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, key: true, label: true } })).filter(
-        (amenity) => amenity.key !== "breakfast-included" && amenity.key !== "parking",
-      ),
     };
   }),
 
