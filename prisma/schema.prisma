@@ -281,7 +281,8 @@ model Amenity {
   label     String
   sortOrder Int    @default(0)
 
-  properties Property[] @relation("PropertyAmenities")
+  properties Property[]     @relation("PropertyAmenities")
+  wantedBy   SalesRequest[] @relation("SalesRequestMustHaves")
 
   @@index([sortOrder])
 }
@@ -1110,6 +1111,14 @@ enum SalesRequestStage {
   LOST
 }
 
+/// How often the client wants the rooms cleaned (doc §4.11).
+enum CleaningWanted {
+  DAILY
+  EVERY_FEW_DAYS
+  WEEKLY
+  NONE
+}
+
 /// Why a request was lost or declined (doc §4.11).
 enum LostReason {
   DECLINED
@@ -1164,9 +1173,19 @@ model SalesRequest {
   closeToOther   String?
   /// What the client adds in their own words.
   clientComments String?
+
+  // What the client wants with the rooms (doc §4.11, 2026-10-12) — passed on to the hotels.
+  /// Breakfast wanted: yes, no, or not said.
+  breakfast     Boolean?
+  cleaning      CleaningWanted?
+  /// Parking wanted, and for how many cars.
+  parking       Boolean?
+  parkingSpaces Int?
+  /// What else matters to them, from the amenity list.
+  mustHaves     Amenity[]       @relation("SalesRequestMustHaves")
   /// When it became a sales request — its details first given. Empty while it
   /// is still an enquiry.
-  detailedAt     DateTime?
+  detailedAt    DateTime?
 
   /// The client's private link to tell us their needs (doc §4.11), like the
   /// contracting link: empty means none, or switched off.
@@ -1664,6 +1683,8 @@ model SalesRequestLine {
   rooms          Int
   /// "Twin room", "2-bedroom apartment" — chosen, or in words.
   roomType       String?
+  /// How many people share each unit — the client's say (doc §4.11).
+  people         Int?
   checkIn        DateTime?    @db.Date
   checkOut       DateTime?    @db.Date
   position       Int          @default(0)

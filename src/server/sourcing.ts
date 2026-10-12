@@ -1,6 +1,7 @@
 import type { Prisma } from "generated/prisma";
 
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
+import { peopleWords, wishesInWords } from "~/lib/needs";
 import { logAudit } from "~/server/audit";
 import { notify } from "~/server/notify";
 
@@ -20,6 +21,7 @@ export async function ensureSourcingTask(tx: Prisma.TransactionClient, requestId
       lines: { orderBy: { position: "asc" } },
       closeTo: { select: { name: true } },
       closeToPoints: { select: { label: true } },
+      mustHaves: { select: { label: true }, orderBy: { sortOrder: "asc" } },
       tasks: { select: { id: true, type: { select: { name: true } } } },
     },
   });
@@ -32,7 +34,7 @@ export async function ensureSourcingTask(tx: Prisma.TransactionClient, requestId
   const managers = request.event.accommodationManagers.map((person) => person.id);
   const lead = request.event.projectLeadId;
   const units = request.lines.map((line) =>
-    [`${line.rooms} × ${line.roomType ?? "units"}`, line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : line.checkIn ? `from ${formatDate(line.checkIn)}` : null]
+    [`${line.rooms} × ${line.roomType ?? "units"}`, peopleWords(line.people), line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : line.checkIn ? `from ${formatDate(line.checkIn)}` : null]
       .filter(Boolean)
       .join(", "),
   );
@@ -41,6 +43,7 @@ export async function ensureSourcingTask(tx: Prisma.TransactionClient, requestId
     ...units,
     request.budgetCents !== null && request.budgetCurrency ? `Budget: ${formatMoney(request.budgetCents, request.budgetCurrency)}` : null,
     closeTo.length ? `Close to: ${closeTo.join(", ")}` : null,
+    ...wishesInWords(request),
     request.clientComments ? `The client says: ${request.clientComments}` : null,
   ]
     .filter(Boolean)

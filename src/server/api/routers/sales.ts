@@ -1,4 +1,4 @@
-import { BudgetBasis, LostReason, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
+import { BudgetBasis, CleaningWanted, LostReason, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -15,6 +15,7 @@ import {
   lostReasonLabels,
   salesStageLabels,
 } from "~/lib/sales";
+import { peopleWords, wishesInWords } from "~/lib/needs";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
@@ -95,6 +96,7 @@ const include = {
   closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
   lines: { orderBy: [{ position: "asc" }] },
   closeToPoints: { orderBy: [{ position: "asc" }] },
+  mustHaves: { select: { id: true, label: true }, orderBy: { sortOrder: "asc" } },
 } satisfies Prisma.SalesRequestInclude;
 
 async function needsLinkInUse(db: Prisma.TransactionClient, token: string) {
@@ -112,6 +114,8 @@ export const budgetBasisLabels: Record<BudgetBasis, string> = {
 const lineInput = z.object({
   rooms: z.number().int().min(1, "Say how many units on each line, like 20").max(10_000),
   roomType: z.string().max(200),
+  /** How many share each unit. */
+  people: z.number().int().min(1).max(50).nullable().default(null),
   checkIn: day,
   checkOut: day,
 });
@@ -136,6 +140,12 @@ const detailsInput = z.object({
   closeToOther: z.string().max(2000),
   /** Room types and occupancy, in words. */
   clientComments: z.string().max(10_000),
+  // What they want with the rooms (doc §4.11) — left out, nothing said.
+  breakfast: z.boolean().nullable().default(null),
+  cleaning: z.nativeEnum(CleaningWanted).nullable().default(null),
+  parking: z.boolean().nullable().default(null),
+  parkingSpaces: z.number().int().min(1).max(10_000).nullable().default(null),
+  mustHaveIds: z.array(z.string()).max(50).default([]),
 });
 
 /**
@@ -166,6 +176,7 @@ async function saveDetails(
         create: details.lines.map((line, position) => ({
           rooms: line.rooms,
           roomType: blank(line.roomType),
+          people: line.people,
           checkIn: line.checkIn ? parseDay(line.checkIn) : null,
           checkOut: line.checkOut ? parseDay(line.checkOut) : null,
           position,
@@ -181,6 +192,11 @@ async function saveDetails(
       },
       closeToOther: blank(details.closeToOther),
       clientComments: blank(details.clientComments),
+      breakfast: details.breakfast,
+      cleaning: details.cleaning,
+      parking: details.parking,
+      parkingSpaces: details.parking ? details.parkingSpaces : null,
+      mustHaves: { set: details.mustHaveIds.map((amenityId) => ({ id: amenityId })) },
       detailedAt: before.detailedAt ?? new Date(),
     },
     include,
@@ -218,6 +234,7 @@ function readable(request: Loaded) {
         .map((line) =>
           [
             `${line.rooms} × ${line.roomType ?? "units"}`,
+            peopleWords(line.people),
             line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : null,
           ]
             .filter(Boolean)
@@ -231,6 +248,7 @@ function readable(request: Loaded) {
     closeToNames:
       [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther].filter(Boolean).join(", ") ||
       null,
+    wishes: wishesInWords(request).join("\n") || null,
     value:
       request.valueCents !== null && request.valueCurrency
         ? formatMoney(request.valueCents, request.valueCurrency)
@@ -252,6 +270,7 @@ const historyFields = [
   { key: "budgetAmount", label: "Budget" },
   { key: "closeToNames", label: "Close to" },
   { key: "clientComments", label: "Client's comments" },
+  { key: "wishes", label: "What they want" },
   ...interestFields.map(({ key, label }) => ({ key, label })),
   ...contractingFields.map(({ key, label }) => ({ key, label })),
 ] as { key: keyof ReturnType<typeof readable>; label: string }[];
@@ -1290,6 +1309,7 @@ export const salesRouter = createTRPCRouter({
         lines: request.lines.map((line) => ({
           rooms: line.rooms,
           roomType: line.roomType ?? "",
+          people: line.people,
           checkIn: line.checkIn ? dayKey(line.checkIn) : "",
           checkOut: line.checkOut ? dayKey(line.checkOut) : "",
         })),
@@ -1300,7 +1320,16 @@ export const salesRouter = createTRPCRouter({
         points: request.closeToPoints.map(({ label, address, latitude, longitude }) => ({ label, address: address ?? "", latitude, longitude })),
         closeToOther: request.closeToOther ?? "",
         clientComments: request.clientComments ?? "",
+        breakfast: request.breakfast,
+        cleaning: request.cleaning,
+        parking: request.parking,
+        parkingSpaces: request.parkingSpaces,
+        mustHaveIds: request.mustHaves.map((amenity) => amenity.id),
       },
+      /** What they can say matters to them (doc §4.11) — breakfast and parking are asked on their own. */
+      amenities: (await ctx.db.amenity.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, key: true, label: true } })).filter(
+        (amenity) => amenity.key !== "breakfast-included" && amenity.key !== "parking",
+      ),
     };
   }),
 

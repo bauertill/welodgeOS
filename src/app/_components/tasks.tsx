@@ -17,6 +17,7 @@ import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RateCardsBox, SourcingPanel } from "~/app/_components/sourcing-panel";
 import { AssigneePicker, PeopleSelect } from "~/app/_components/assignee-picker";
+import { peopleWords, wishes, wishesInWords } from "~/lib/needs";
 import { QuotationPopup } from "~/app/_components/quotations";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
@@ -1391,7 +1392,7 @@ function EmailTheHotel({
   const r = request.data;
   const lines = (r?.lines ?? []).map(
     (line) =>
-      `• ${line.rooms} × ${line.roomType ?? "units"}${
+      `• ${line.rooms} × ${line.roomType ?? "units"}${line.people ? ` (${peopleWords(line.people)})` : ""}${
         line.checkIn && line.checkOut
           ? `, ${formatRange(line.checkIn, line.checkOut)} (${nightsBetween(line.checkIn, line.checkOut)} nights)`
           : line.checkIn
@@ -1410,6 +1411,8 @@ function EmailTheHotel({
     "",
     ...(lines.length ? lines : ["• (the rooms and dates we spoke about)"]),
     "",
+    // What the guests would like with the rooms (doc §4.11) — the hotel prices it in.
+    ...(r && wishesInWords(r).length ? ["What the guests would like:", ...wishesInWords(r).map((wish) => `• ${wish}`), ""] : []),
     "Could you let us know your availability and rates for these dates?",
     "",
     LINK,
@@ -1756,17 +1759,22 @@ function ClientRequest({ salesRequestId }: { salesRequestId: string }) {
                 {line.rooms} × {line.roomType ?? "units"}
               </span>
               <span className="text-ink-500 block text-xs font-light">
-                {line.checkIn && line.checkOut
-                  ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
-                  : line.checkIn
-                    ? `From ${formatDate(line.checkIn)}`
-                    : "Dates not given"}
+                {[
+                  line.checkIn && line.checkOut
+                    ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
+                    : line.checkIn
+                      ? `From ${formatDate(line.checkIn)}`
+                      : "Dates not given",
+                  peopleWords(line.people),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
             </li>
           ))}
         </ul>
       )}
-      {(r.budgetCents !== null || places.length > 0 || r.clientComments) && (
+      {(r.budgetCents !== null || places.length > 0 || r.clientComments || wishes(r).length > 0) && (
         <div className="border-brand-200/70 mt-3 space-y-2 border-t pt-3 text-sm font-light">
           {r.budgetCents !== null && r.budgetCurrency && (
             <p>
@@ -1785,6 +1793,12 @@ function ClientRequest({ salesRequestId }: { salesRequestId: string }) {
               ))}
             </div>
           )}
+          {wishes(r).map((wish) => (
+            <p key={wish.label}>
+              <span className="text-ink-500">{wish.label} </span>
+              <span className="text-ink-900 font-medium">{wish.value}</span>
+            </p>
+          ))}
           {r.clientComments && <p className="text-ink-700 italic">“{r.clientComments}”</p>}
         </div>
       )}

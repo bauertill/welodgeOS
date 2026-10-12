@@ -1,6 +1,6 @@
 "use client";
 
-import type { BudgetBasis } from "generated/prisma";
+import type { BudgetBasis, CleaningWanted } from "generated/prisma";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -11,6 +11,7 @@ import { DatePicker } from "~/app/_components/date-picker";
 import { Card } from "~/app/_components/ui";
 import { dayKey, nightsBetween } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
+import { cleaningWantedLabels, cleaningWantedOrder, peopleWords, wishes } from "~/lib/needs";
 import { currencyForCountry, roomTypeGroups } from "~/lib/sales";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -35,10 +36,11 @@ export const budgetBasisLabels: Record<BudgetBasis, string> = {
   TOTAL: "in total",
 };
 
-export type LineDraft = { rooms: string; roomType: string; checkIn: string; checkOut: string };
+export type LineDraft = { rooms: string; roomType: string; people: string; checkIn: string; checkOut: string };
 const blankLine = (from?: LineDraft): LineDraft => ({
   rooms: "",
   roomType: "",
+  people: from?.people ?? "",
   // Another period usually starts where the last one ended.
   checkIn: from?.checkOut ?? "",
   checkOut: "",
@@ -53,9 +55,14 @@ export type DetailsValues = {
   points: Point[];
   closeToOther: string;
   clientComments: string;
+  breakfast: boolean | null;
+  cleaning: CleaningWanted | null;
+  parking: boolean | null;
+  parkingSpaces: string;
+  mustHaveIds: string[];
 };
 
-type StoredLine = { rooms: number; roomType: string | null; checkIn: Date | string | null; checkOut: Date | string | null };
+type StoredLine = { rooms: number; roomType: string | null; people?: number | null; checkIn: Date | string | null; checkOut: Date | string | null };
 
 export function detailsFrom(
   values: {
@@ -67,6 +74,11 @@ export function detailsFrom(
   closeToOther: string | null;
   clientComments: string | null;
   points?: { label: string; address: string | null; latitude: number; longitude: number }[];
+  breakfast?: boolean | null;
+  cleaning?: CleaningWanted | null;
+  parking?: boolean | null;
+  parkingSpaces?: number | null;
+  mustHaveIds?: string[];
   },
   /** The event's currency, for a budget not given yet. */
   defaultCurrency = "EUR",
@@ -77,6 +89,7 @@ export function detailsFrom(
       ? values.lines.map((line) => ({
           rooms: line.rooms ? String(line.rooms) : "",
           roomType: line.roomType ?? "",
+          people: line.people ? String(line.people) : "",
           checkIn: day(line.checkIn),
           checkOut: day(line.checkOut),
         }))
@@ -88,6 +101,11 @@ export function detailsFrom(
     closeToOther: values.closeToOther ?? "",
     points: (values.points ?? []).map((point) => ({ ...point, address: point.address ?? "" })),
     clientComments: values.clientComments ?? "",
+    breakfast: values.breakfast ?? null,
+    cleaning: values.cleaning ?? null,
+    parking: values.parking ?? null,
+    parkingSpaces: values.parkingSpaces ? String(values.parkingSpaces) : "",
+    mustHaveIds: values.mustHaveIds ?? [],
   };
 }
 
@@ -101,16 +119,21 @@ export function detailsInput(values: DetailsValues): { problem: string } | { inp
     const rooms = Number(line.rooms);
     if (!line.rooms.trim() || !Number.isInteger(rooms) || rooms < 1) return { problem: `${label}say how many units, like 20.` };
     if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) return { problem: `${label}the departure must be after the arrival.` };
-    lines.push({ rooms, roomType: line.roomType, checkIn: line.checkIn, checkOut: line.checkOut });
+    const people = line.people.trim() ? Number(line.people) : null;
+    if (people !== null && (!Number.isInteger(people) || people < 1)) return { problem: `${label}people per unit should be a number, like 2.` };
+    lines.push({ rooms, roomType: line.roomType, people, checkIn: line.checkIn, checkOut: line.checkOut });
   }
   const budget = values.budget.trim() ? Number(values.budget.replace(/[’'\s,]/g, "")) : null;
   if (budget !== null && (!Number.isFinite(budget) || budget < 0)) return { problem: "The budget should be an amount, like 180." };
-  return { input: toInput(values, lines, budget) };
+  const spaces = values.parking && values.parkingSpaces.trim() ? Number(values.parkingSpaces) : null;
+  if (spaces !== null && (!Number.isInteger(spaces) || spaces < 1)) return { problem: "Parking: say how many cars, like 3." };
+  return { input: toInput(values, lines, budget, spaces) };
 }
 function toInput(
   values: DetailsValues,
-  lines: { rooms: number; roomType: string; checkIn: string; checkOut: string }[],
+  lines: { rooms: number; roomType: string; people: number | null; checkIn: string; checkOut: string }[],
   budget: number | null,
+  parkingSpaces: number | null,
 ) {
   return {
     lines,
@@ -121,6 +144,11 @@ function toInput(
     points: values.points,
     closeToOther: values.closeToOther,
     clientComments: values.clientComments,
+    breakfast: values.breakfast,
+    cleaning: values.cleaning,
+    parking: values.parking,
+    parkingSpaces,
+    mustHaveIds: values.mustHaveIds,
   };
 }
 
@@ -132,6 +160,7 @@ export function DetailsFields({
   forClient = false,
   find,
   eventStart,
+  amenities = [],
 }: {
   values: DetailsValues;
   onChange: (values: DetailsValues) => void;
@@ -141,6 +170,8 @@ export function DetailsFields({
   find: (address: string) => Promise<{ latitude: number; longitude: number; address: string | null } | null>;
   /** "2028-07-10": the event's first day — the calendars open on its month. */
   eventStart?: string | null;
+  /** What they can say matters to them, from our amenity list. */
+  amenities?: { id: string; label: string }[];
 }) {
   const set = <K extends keyof DetailsValues>(key: K, value: DetailsValues[K]) => onChange({ ...values, [key]: value });
   const setLine = (index: number, patch: Partial<LineDraft>) =>
@@ -154,7 +185,7 @@ export function DetailsFields({
         <Label>{forClient ? "The units you need, and when" : "Units and periods"}</Label>
         <div className="space-y-2">
           {values.lines.map((line, index) => (
-            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[4.75rem_minmax(11rem,1fr)_8.75rem_8.75rem_1.25rem] sm:items-end sm:border-0 sm:p-0">
+            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[4.75rem_minmax(10rem,1fr)_5.5rem_8.75rem_8.75rem_1.25rem] sm:items-end sm:border-0 sm:p-0">
               <label className="min-w-0">
                 <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap">
                   Units
@@ -189,6 +220,10 @@ export function DetailsFields({
                     <option value="__other__">Something else…</option>
                   </Select>
                 )}
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap">People / unit</span>
+                <Input value={line.people} onChange={(e) => setLine(index, { people: e.target.value })} inputMode="numeric" placeholder="2" aria-label={`Line ${index + 1} people per unit`} className="px-2" />
               </label>
               <label className="min-w-0">
                 <span className="text-ink-500 mb-1 block text-[11px]">Arrival</span>
@@ -273,9 +308,82 @@ export function DetailsFields({
           <Input value={values.closeToOther} onChange={(e) => set("closeToOther", e.target.value)} aria-label="Close to, in words" className="mt-2" />
         )}
       </div>
+      <div>
+        <Label>{forClient ? "What you would like with the rooms" : "What they want with the rooms"}</Label>
+        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          <YesNo label="Breakfast" value={values.breakfast} onChange={(value) => set("breakfast", value)} />
+          <div>
+            <span className="text-ink-500 mb-1 block text-[12px]">Cleaning</span>
+            <div className="flex flex-wrap gap-1.5">
+              {cleaningWantedOrder.map((option) => (
+                <Choice key={option} on={values.cleaning === option} onClick={() => set("cleaning", values.cleaning === option ? null : option)}>
+                  {cleaningWantedLabels[option]}
+                </Choice>
+              ))}
+            </div>
+          </div>
+          <div>
+            <YesNo label="Parking" value={values.parking} onChange={(value) => set("parking", value)} />
+            {values.parking && (
+              <span className="mt-1.5 flex items-center gap-2 text-[13px] font-light">
+                <Input value={values.parkingSpaces} onChange={(e) => set("parkingSpaces", e.target.value)} inputMode="numeric" placeholder="3" aria-label="How many cars" className="w-20 px-2" />
+                cars
+              </span>
+            )}
+          </div>
+        </div>
+        {amenities.length > 0 && (
+          <div className="mt-3">
+            <span className="text-ink-500 mb-1 block text-[12px]">{forClient ? "Also important to you" : "Also important to them"}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {amenities.map((amenity) => {
+                const on = values.mustHaveIds.includes(amenity.id);
+                return (
+                  <Choice key={amenity.id} on={on} onClick={() => set("mustHaveIds", on ? values.mustHaveIds.filter((id) => id !== amenity.id) : [...values.mustHaveIds, amenity.id])}>
+                    {amenity.label}
+                  </Choice>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
       <Field label={forClient ? "Anything else we should know" : "Client's comments"}>
-        <Textarea rows={3} value={values.clientComments} onChange={(e) => set("clientComments", e.target.value)} placeholder="Breakfast needed, a meeting room, arriving in two groups…" />
+        <Textarea rows={3} value={values.clientComments} onChange={(e) => set("clientComments", e.target.value)} placeholder="Arriving in two groups, a quiet floor, close to each other…" />
       </Field>
+    </div>
+  );
+}
+
+/** A pill to choose, on or off. */
+function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-[13px] transition-colors ${
+        on ? "border-brand-400 bg-brand-50 text-brand-800 font-medium" : "border-ink-200 text-ink-500 hover:text-ink-900 bg-white font-light"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Yes, No — or, clicked again, not said. */
+function YesNo({ label, value, onChange }: { label: string; value: boolean | null; onChange: (value: boolean | null) => void }) {
+  return (
+    <div>
+      <span className="text-ink-500 mb-1 block text-[12px]">{label}</span>
+      <div className="flex gap-1.5">
+        <Choice on={value === true} onClick={() => onChange(value === true ? null : true)}>
+          Yes
+        </Choice>
+        <Choice on={value === false} onClick={() => onChange(value === false ? null : false)}>
+          No
+        </Choice>
+      </div>
     </div>
   );
 }
@@ -308,7 +416,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const places = api.place.listForEvent.useQuery({ eventId: request.event?.id ?? "" }, { enabled: Boolean(request.event) });
   const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
+  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints, mustHaveIds: request.mustHaves.map((amenity) => amenity.id) }, currencyForCountry(request.event?.country)));
   const [problem, setProblem] = useState<string | null>(null);
   const save = api.sales.saveDetails.useMutation({
     onSuccess: () => {
@@ -318,6 +426,8 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
   });
   const placeList = (places.data ?? []).map((place) => ({ id: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }));
   const geocode = api.property.geocode.useMutation();
+  const amenities = api.amenity.list.useQuery();
+  const mustHaveOptions = (amenities.data ?? []).filter((amenity) => amenity.key !== "breakfast-included" && amenity.key !== "parking");
   const closeTo = [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther]
     .filter(Boolean)
     .join(", ");
@@ -332,7 +442,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
           <button
             type="button"
             onClick={() => {
-              setValues(detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
+              setValues(detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints, mustHaveIds: request.mustHaves.map((amenity) => amenity.id) }, currencyForCountry(request.event?.country)));
               setEditing(true);
             }}
             className="text-brand-700 text-[13px] font-light hover:underline"
@@ -358,6 +468,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
             places={placeList}
             find={(address) => geocode.mutateAsync({ address })}
             eventStart={eventStay(request.event)?.checkIn}
+            amenities={mustHaveOptions}
           />
           <div className="mt-4 space-y-2">
             <FormError message={problem ?? (save.error ? friendlyError(save.error) : null)} />
@@ -385,11 +496,16 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
                       {line.rooms} × {line.roomType ?? "units"}
                     </span>
                     <span className="text-ink-700 block text-[13px] font-light">
-                      {line.checkIn && line.checkOut
-                        ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
-                        : line.checkIn
-                          ? `From ${formatDate(line.checkIn)}`
-                          : "Dates not given"}
+                      {[
+                        line.checkIn && line.checkOut
+                          ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
+                          : line.checkIn
+                            ? `From ${formatDate(line.checkIn)}`
+                            : "Dates not given",
+                        peopleWords(line.people),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
                   </li>
                 ))}
@@ -417,6 +533,12 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
                   <p className="text-ink-900">—</p>
                 )}
               </div>
+              {wishes(request).map((wish) => (
+                <div key={wish.label}>
+                  <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">{wish.label}</p>
+                  <p className="text-ink-900 font-medium">{wish.value}</p>
+                </div>
+              ))}
               {request.clientComments && (
                 <div className="sm:col-span-2">
                   <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">In their words</p>
@@ -599,6 +721,7 @@ export function NeedsForm({ token }: { token: string }) {
             forClient
             find={(address) => geocode.mutateAsync({ token, address })}
             eventStart={form.data.stay?.checkIn}
+            amenities={form.data.amenities}
           />
           <div className="mt-5 space-y-2">
             <FormError message={problem ?? (submit.error ? friendlyError(submit.error) : null)} />

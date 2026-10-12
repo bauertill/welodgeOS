@@ -2093,6 +2093,14 @@ of versions.
   client's contacts, §4.10), the event (or none — not every enquiry is for one of our
   events) and the account manager, who is whoever registers it unless they choose someone
   else.
+- **What they want with the rooms** (2026-10-12), asked on the client's needs form and in
+  ours, so the hotels get as much as possible: **people per unit** on each line;
+  **Breakfast** and **Parking** — Yes or No, or left unsaid (click again to clear) — and
+  for parking, how many cars; **Cleaning** — Daily, Every few days, Weekly or Not needed;
+  and **Also important** — any of our amenities (Wi-Fi, kitchen, meeting rooms…; breakfast
+  and parking being asked on their own). They show on the request and the sourcing task,
+  are written on its history, and go into the email to a hotel under "What the guests would
+  like".
 - **What they asked for**, in their words — however vague — and **the details** above,
   shown on the request's page in a tinted box so they stand out (2026-10-12): each line large
   ("20 × Single room") with its dates and nights beneath, then the budget, the places as
