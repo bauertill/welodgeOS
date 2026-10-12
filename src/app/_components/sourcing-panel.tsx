@@ -26,9 +26,10 @@ const verdictStyles = {
 } as const;
 type Verdict = keyof typeof verdictStyles;
 // Only those that fit, entirely or in part, are offered, and those still to be contacted; the rest are left out.
+// One that fails nothing but cannot be fully judged — no units or price yet — fits in part (2026-10-12).
 const verdictOrder: Verdict[] = ["good", "partly", "contact", "declined"];
 const standing = (property: { verdict: Verdict; contactTaskId: string | null; declined: string | null }): Verdict =>
-  property.contactTaskId ? "contact" : property.declined ? "declined" : property.verdict;
+  property.contactTaskId ? "contact" : property.declined ? "declined" : property.verdict === "unclear" ? "partly" : property.verdict;
 
 /** Frames the map around every pin once they are known. */
 function FitAll({ points }: { points: { latitude: number; longitude: number }[] }) {

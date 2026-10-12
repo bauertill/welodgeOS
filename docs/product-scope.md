@@ -1846,9 +1846,10 @@ the contract.
   quotation — the rooms quoted (as the hotel put it, else the most for any one stay) against
   the rooms wanted, its lowest rate against the budget — marked **Quoted**, linking to the
   quotation, and always shown, under *Fits* or *Fits in part*, however far. Its contact
-  task, if still open, keeps its link. *Not enough known* and *Does not fit* are not shown at all (the
-  owner's call, 2026-10-03) — one with no unit count or price is left out until those are
-  filled in on its page. Each can be opened, or added to the event in one click.
+  task, if still open, keeps its link. *Does not fit* is not shown at all (the owner's call, 2026-10-03).
+  *Not enough known* — no check failed, but some could not be made, as for a hotel with no
+  unit count or price yet — is shown under *Fits in part* (2026-10-12; it had been hidden,
+  which made a hotel vanish once its contact task was gone), the missing checks in grey. Each can be opened, or added to the event in one click.
 - **Properties not in the system**, under them (2026-10-03): places to stay within **5 km**
   of the client's places that are not among our properties — widened to 10 or 20 km with
   *Search within* — found on the map when the task is opened — hotels, and serviced apartments or aparthotels when apartments are asked for —
