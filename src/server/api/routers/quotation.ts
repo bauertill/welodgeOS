@@ -1,8 +1,8 @@
-import { Cleaning, QuotationStatus, RateInclusion, type Prisma } from "generated/prisma";
+import { CancellationKind, Cleaning, QuotationStatus, RateInclusion, type Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { nightsBetween, parseDay } from "~/lib/dates";
+import { nightsBetween, parseDay, today } from "~/lib/dates";
 import { percent } from "~/lib/finance";
 import { formatDate, formatMoney } from "~/lib/format";
 import { describeRateIncludes } from "~/lib/scouting";
@@ -33,6 +33,24 @@ const lineInput = z.object({
   occupancy: z.number().int().min(1).max(20).nullable(),
 });
 
+/** A payment as quoted: on signature, or on a date — a share of the total. */
+const paymentInput = z
+  .object({
+    onSignature: z.boolean(),
+    dueOn: optionalDay,
+    percentBasisPoints: z.number().int().min(1, "Each payment needs its percentage, like 20").max(10_000),
+  })
+  .refine((payment) => payment.onSignature || payment.dueOn, "Each payment is due on signature or on a date — give the date");
+
+/** A cancellation cut-off as quoted: by this date, this share. */
+const cancellationInput = z.object({
+  kind: z.nativeEnum(CancellationKind),
+  cutoffOn: day,
+  percentBasisPoints: z.number().int().min(0).max(10_000).nullable(),
+  feeBasisPoints: z.number().int().min(0).max(10_000).nullable(),
+  remarks: z.string().max(500),
+});
+
 const quotationInput = z.object({
   name: z.string().trim().min(1, "Give the quotation a name — the group or scenario, like Austria House staff").max(300),
   receivedOn: optionalDay,
@@ -55,6 +73,8 @@ const quotationInput = z.object({
   notes: z.string().max(5000),
   /** The client's request it was quoted for, if one (doc §4.11). */
   salesRequestId: z.string().nullable().default(null),
+  payments: z.array(paymentInput).max(20).default([]),
+  cancellations: z.array(cancellationInput).max(20).default([]),
   lines: z.array(lineInput).min(1, "Add at least one line — rooms of a category, for a period, at a rate.").max(200),
 });
 
@@ -63,6 +83,8 @@ const include = {
     orderBy: [{ position: "asc" }, { checkIn: "asc" }],
     include: { category: { select: { id: true, name: true } } },
   },
+  payments: { orderBy: { position: "asc" } },
+  cancellations: { orderBy: { position: "asc" } },
   contract: { select: { id: true, name: true, eventId: true } },
   addedBy: { select: { name: true, email: true } },
   salesRequest: { select: { id: true, client: { select: { name: true } } } },
@@ -156,7 +178,7 @@ export const quotationRouter = createTRPCRouter({
           if (request?.eventId !== entry.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That sales request is not for this event." });
         }
         const own = new Set(entry.property.categories.map((category) => category.id));
-        const { lines, ...fields } = input.quotation;
+        const { lines, payments, cancellations, ...fields } = input.quotation;
         for (const line of lines) {
           if (!own.has(line.categoryId)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Every line must be one of this hotel's own room categories." });
@@ -190,6 +212,29 @@ export const quotationRouter = createTRPCRouter({
         const saved = input.id
           ? await tx.quotation.update({ where: { id: input.id }, data })
           : await tx.quotation.create({ data: { ...data, scoutingEntryId: input.scoutingEntryId, addedById: ctx.session.user.id } });
+        // Its payments and cut-offs, like its lines, are replaced as a whole.
+        await tx.quotationPayment.deleteMany({ where: { quotationId: saved.id } });
+        await tx.quotationPayment.createMany({
+          data: payments.map((payment, position) => ({
+            quotationId: saved.id,
+            onSignature: payment.onSignature,
+            dueOn: payment.onSignature ? null : toDay(payment.dueOn),
+            percentBasisPoints: payment.percentBasisPoints,
+            position,
+          })),
+        });
+        await tx.quotationCancellation.deleteMany({ where: { quotationId: saved.id } });
+        await tx.quotationCancellation.createMany({
+          data: cancellations.map((cut, position) => ({
+            quotationId: saved.id,
+            kind: cut.kind,
+            cutoffOn: parseDay(cut.cutoffOn),
+            percentBasisPoints: cut.percentBasisPoints,
+            feeBasisPoints: cut.feeBasisPoints,
+            remarks: blank(cut.remarks),
+            position,
+          })),
+        });
         // The lines are the quotation's own rows: replaced as a whole.
         await tx.quotationLine.deleteMany({ where: { quotationId: saved.id } });
         await tx.quotationLine.createMany({
@@ -294,6 +339,25 @@ export const quotationRouter = createTRPCRouter({
           ownerId: entry.accountManagerId ?? ctx.session.user.id,
         },
         select: { id: true, name: true, eventId: true },
+      });
+      // Its payments and cut-offs become the contract's own (doc §7.1): a payment on signature falls due today.
+      await tx.contractPayment.createMany({
+        data: quotation.payments.map((payment, index) => ({
+          contractId: contract.id,
+          description: payment.onSignature ? "On signature" : `Payment ${index + 1}`,
+          dueOn: payment.onSignature ? today() : payment.dueOn!,
+          percentBasisPoints: payment.percentBasisPoints,
+        })),
+      });
+      await tx.contractCancellation.createMany({
+        data: quotation.cancellations.map((cut) => ({
+          contractId: contract.id,
+          kind: cut.kind,
+          cutoffOn: cut.cutoffOn,
+          percentBasisPoints: cut.percentBasisPoints,
+          feeBasisPoints: cut.feeBasisPoints,
+          remarks: cut.remarks,
+        })),
       });
       await tx.quotation.update({ where: { id: quotation.id }, data: { status: "ACCEPTED", contractId: contract.id } });
       await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary: `Contract made from the quotation "${quotation.name}"` });

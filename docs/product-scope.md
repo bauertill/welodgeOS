@@ -1139,6 +1139,19 @@ first. They are not shown under the property's row on the Properties tab, where 
 them would make the board too long; the row says how many there are and links straight
 to the tab.
 
+**Payments and cancellation cut-offs, line by line** (2026-10-12), so they can be followed
+on a deadline board later. **Payments**: each *On signature* or *On a date*, and its
+percentage of the total; one line to start, *+ Add a payment* for more, and the form says
+what they add up to (green at 100%). **Cancellation cut-offs**: each a kind — *Cancellation
+fee* (the share charged from the date), *Attrition* (the share that may be reduced, free,
+until the date), *Release* (the share that may be handed back until the date) or *Other* —
+its date and its percentage; *+ Add a cut-off* for more. A line left empty is ignored. The
+quote shows them as "30% on signature · 70% on 1 Dec 2027" and "100% charged from 1 May
+2028 · attrition 10% until 1 Mar 2028". The old free-text boxes stay underneath as *Other
+payment / cancellation terms, in words*, so quotes typed before keep what they say. **Accept
+and make the contract** carries the lines over as the contract's own payments (one on
+signature falling due the day it is made) and cancellation deadlines (§7.1).
+
 **A quote before the room categories** (2026-10-11). A hotel often quotes before its rooms
 are on the property, so a quotation can be started anyway: each line's *Room category* has
 *+ New room category…* (and, with none yet, the form opens on it) — a name, how many rooms

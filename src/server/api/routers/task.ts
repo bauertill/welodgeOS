@@ -199,7 +199,7 @@ export const taskRouter = createTRPCRouter({
             cleaning: true,
             totBasisPoints: true,
             otherTaxes: true,
-            _count: { select: { lines: true } },
+            _count: { select: { lines: true, payments: true, cancellations: true } },
           },
         },
         categoryContracts: {
@@ -230,8 +230,8 @@ export const taskRouter = createTRPCRouter({
         text: categories.length ? `${detailed} of ${categories.length} with their ${property.type === "APARTMENT" ? "bedrooms" : "beds"}` : "Once there are categories",
       },
       { key: "amenities", ok: property._count.amenities > 0, text: property._count.amenities ? `${property._count.amenities} recorded` : "None yet" },
-      { key: "paymentTerms", ok: has(entry?.paymentTerms) || quotes.some((quote) => has(quote.paymentTerms)), text: "" },
-      { key: "cancellationTerms", ok: has(entry?.cancellationTerms) || quotes.some((quote) => has(quote.cancellationTerms)), text: "" },
+      { key: "paymentTerms", ok: has(entry?.paymentTerms) || quotes.some((quote) => has(quote.paymentTerms) || quote._count.payments > 0), text: "" },
+      { key: "cancellationTerms", ok: has(entry?.cancellationTerms) || quotes.some((quote) => has(quote.cancellationTerms) || quote._count.cancellations > 0), text: "" },
       {
         key: "rate",
         ok: pricedQuotes > 0 || pricedCategories > 0,

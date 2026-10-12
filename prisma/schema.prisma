@@ -281,7 +281,7 @@ model Amenity {
   label     String
   sortOrder Int    @default(0)
 
-  properties Property[]     @relation("PropertyAmenities")
+  properties Property[] @relation("PropertyAmenities")
 
   @@index([sortOrder])
 }
@@ -541,7 +541,10 @@ model Quotation {
   contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
   contractId String?
 
-  lines QuotationLine[]
+  lines         QuotationLine[]
+  /// The payments and cancellation cut-offs as quoted, line by line (doc §3.10) — they become the contract's.
+  payments      QuotationPayment[]
+  cancellations QuotationCancellation[]
 
   addedBy   User?    @relation("QuotationAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
   addedById String?
@@ -550,6 +553,39 @@ model Quotation {
 
   @@index([scoutingEntryId])
   @@index([salesRequestId])
+}
+
+/// A payment as quoted (doc §3.10): on signature or on a date, a share of the total.
+model QuotationPayment {
+  id                 String    @id @default(cuid())
+  quotation          Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationId        String
+  /// Due when the contract is signed, rather than on a date.
+  onSignature        Boolean   @default(false)
+  dueOn              DateTime? @db.Date
+  /// A share of the total, in hundredths of a percent: 20% is 2000.
+  percentBasisPoints Int
+  position           Int       @default(0)
+
+  @@index([quotationId])
+}
+
+/// A cancellation cut-off as quoted (doc §3.10): by this date, this share — the
+/// fee for cancelling, or what may be reduced or released free.
+model QuotationCancellation {
+  id                 String           @id @default(cuid())
+  quotation          Quotation        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationId        String
+  kind               CancellationKind
+  cutoffOn           DateTime         @db.Date
+  /// How much may go by the cut-off — for attrition or release. 10% is 1000.
+  percentBasisPoints Int?
+  /// What cancelling costs from the cut-off, as a share — a cancellation fee.
+  feeBasisPoints     Int?
+  remarks            String?
+  position           Int              @default(0)
+
+  @@index([quotationId])
 }
 
 /// One line of a quotation: rooms of one category, for one period, at one rate.

@@ -170,7 +170,21 @@ function QuotationCard({
   });
   const error = setStatus.error ?? remove.error ?? makeContract.error;
   const terms = [
+    [
+      "Payments",
+      quotation.payments.map((payment) => `${percent(payment.percentBasisPoints)} ${payment.onSignature ? "on signature" : `on ${formatDate(payment.dueOn!)}`}`).join(" · ") || null,
+    ],
     ["Payment terms", quotation.paymentTerms],
+    [
+      "Cancellation",
+      quotation.cancellations
+        .map((cut) =>
+          cut.feeBasisPoints !== null
+            ? `${percent(cut.feeBasisPoints)} charged from ${formatDate(cut.cutoffOn)}`
+            : `${cut.kind === "ATTRITION" ? "attrition" : cut.kind === "RELEASE" ? "release" : "other"}${cut.percentBasisPoints !== null ? ` ${percent(cut.percentBasisPoints)}` : ""} until ${formatDate(cut.cutoffOn)}`,
+        )
+        .join(" · ") || null,
+    ],
     ["Cancellation terms", quotation.cancellationTerms],
     ["Rates include", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
     ["TOT", percent(quotation.totBasisPoints)],
@@ -321,6 +335,21 @@ function QuotationCard({
 }
 
 type LineDraft = { categoryId: string; checkIn: string; checkOut: string; rooms: string; rate: string; occupancy: string };
+type PaymentDraft = { onSignature: boolean; dueOn: string; percent: string };
+/** A cut-off's meaning: a cancellation fee from the date, or what may go — attrition, release — by it. */
+type CutKind = "FEE" | "ATTRITION" | "RELEASE" | "OTHER";
+type CancellationDraft = { kind: CutKind; cutoffOn: string; percent: string; remarks: string };
+const cutKindLabels: Record<CutKind, { label: string; percent: string }> = {
+  FEE: { label: "Cancellation fee", percent: "% charged from this date" },
+  ATTRITION: { label: "Attrition", percent: "% may be reduced, free, until this date" },
+  RELEASE: { label: "Release", percent: "% may be handed back until this date" },
+  OTHER: { label: "Other", percent: "%" },
+};
+const toPercent = (basisPoints: number | null) => (basisPoints === null ? "" : String(basisPoints / 100));
+const toBasisPoints = (text: string) => {
+  const value = Number(text.trim().replace(",", ".").replace("%", ""));
+  return text.trim() && Number.isFinite(value) && value >= 0 && value <= 100 ? Math.round(value * 100) : null;
+};
 
 function QuotationEditor({
   scoutingEntryId,
@@ -386,6 +415,23 @@ function QuotationEditor({
     })) ?? [blankLine()],
   );
   const [problem, setProblem] = useState<string | null>(null);
+  // Payments and cancellation cut-offs, line by line (doc §3.10) — one to start, more when quoted.
+  const [payments, setPayments] = useState<PaymentDraft[]>(
+    quotation?.payments.length
+      ? quotation.payments.map((payment) => ({ onSignature: payment.onSignature, dueOn: payment.dueOn ? dayKey(payment.dueOn) : "", percent: toPercent(payment.percentBasisPoints) }))
+      : [{ onSignature: true, dueOn: "", percent: "" }],
+  );
+  const [cancellations, setCancellations] = useState<CancellationDraft[]>(
+    quotation?.cancellations.length
+      ? quotation.cancellations.map((cut) => ({
+          kind: cut.feeBasisPoints !== null ? "FEE" : cut.kind === "ATTRITION" || cut.kind === "RELEASE" ? cut.kind : "OTHER",
+          cutoffOn: dayKey(cut.cutoffOn),
+          percent: toPercent(cut.feeBasisPoints ?? cut.percentBasisPoints),
+          remarks: cut.remarks ?? "",
+        }))
+      : [{ kind: "FEE", cutoffOn: "", percent: "", remarks: "" }],
+  );
+  const paidShare = payments.reduce((sum, payment) => sum + (toBasisPoints(payment.percent) ?? 0), 0);
   const set = (key: keyof typeof draft) => (value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const setLine = (index: number, key: keyof LineDraft, value: string) =>
     setLines((current) => current.map((line, i) => (i === index ? { ...line, [key]: value } : line)));
@@ -430,6 +476,28 @@ function QuotationEditor({
         if (cleaningIncluded && !cleaning) return setProblem("Say how often the rooms are cleaned, or untick cleaning.");
         const tot = draft.tot.trim() ? Number(draft.tot.replace(",", ".").replace("%", "")) : null;
         if (tot !== null && (!Number.isFinite(tot) || tot < 0 || tot > 100)) return setProblem("TOT should be a percentage, like 15.");
+        const paymentsOut = [];
+        for (const [i, payment] of payments.entries()) {
+          if (!payment.percent.trim() && !payment.dueOn) continue;
+          const share = toBasisPoints(payment.percent);
+          if (share === null || share === 0) return setProblem(`Payment ${i + 1}: give its percentage, like 20.`);
+          if (!payment.onSignature && !payment.dueOn) return setProblem(`Payment ${i + 1}: give the date it is due, or choose On signature.`);
+          paymentsOut.push({ onSignature: payment.onSignature, dueOn: payment.onSignature ? "" : payment.dueOn, percentBasisPoints: share });
+        }
+        const cancellationsOut = [];
+        for (const [i, cut] of cancellations.entries()) {
+          if (!cut.percent.trim() && !cut.cutoffOn && !cut.remarks.trim()) continue;
+          if (!cut.cutoffOn) return setProblem(`Cancellation ${i + 1}: give the cut-off date.`);
+          const share = cut.percent.trim() ? toBasisPoints(cut.percent) : null;
+          if (cut.percent.trim() && share === null) return setProblem(`Cancellation ${i + 1}: the percentage should be between 0 and 100.`);
+          cancellationsOut.push({
+            kind: cut.kind === "FEE" ? ("OTHER" as const) : cut.kind,
+            cutoffOn: cut.cutoffOn,
+            percentBasisPoints: cut.kind === "FEE" ? null : share,
+            feeBasisPoints: cut.kind === "FEE" ? (share ?? 0) : null,
+            remarks: cut.remarks,
+          });
+        }
         const { tot: _tot, ...fields } = draft;
         save.mutate({
           scoutingEntryId,
@@ -442,6 +510,8 @@ function QuotationEditor({
             totBasisPoints: tot === null ? null : Math.round(tot * 100),
             salesRequestId: forRequest,
             lines: parsed,
+            payments: paymentsOut,
+            cancellations: cancellationsOut,
           },
         });
       }}
@@ -561,12 +631,111 @@ function QuotationEditor({
         </div>
       </div>
 
+      <div className="space-y-4">
+        <div>
+          <div className="mb-1.5 flex items-baseline gap-3">
+            <span className="text-ink-700 text-[13px] font-medium">Payments</span>
+            <span className={`text-xs ${paidShare === 10_000 ? "text-[#0a7a47]" : "text-ink-500"}`}>Adds up to {Number((paidShare / 100).toFixed(2))}%</span>
+          </div>
+          <div className="space-y-2">
+            {payments.map((payment, index) => (
+              <div key={index} className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={payment.onSignature ? "SIGNATURE" : "DATE"}
+                  onChange={(e) => setPayments((current) => current.map((one, i) => (i === index ? { ...one, onSignature: e.target.value === "SIGNATURE" } : one)))}
+                  aria-label={`Payment ${index + 1} due`}
+                  className="w-36"
+                >
+                  <option value="SIGNATURE">On signature</option>
+                  <option value="DATE">On a date</option>
+                </Select>
+                {!payment.onSignature && (
+                  <Input
+                    type="date"
+                    value={payment.dueOn}
+                    onChange={(e) => setPayments((current) => current.map((one, i) => (i === index ? { ...one, dueOn: e.target.value } : one)))}
+                    aria-label={`Payment ${index + 1} date`}
+                    className="w-40 px-2"
+                  />
+                )}
+                <span className="flex items-center gap-1">
+                  <Input
+                    value={payment.percent}
+                    onChange={(e) => setPayments((current) => current.map((one, i) => (i === index ? { ...one, percent: e.target.value } : one)))}
+                    inputMode="decimal"
+                    placeholder="20"
+                    aria-label={`Payment ${index + 1} percentage`}
+                    className="w-16 px-2"
+                  />
+                  <span className="text-ink-500 text-[13px]">%</span>
+                </span>
+                {payments.length > 1 && (
+                  <button type="button" onClick={() => setPayments((current) => current.filter((_, i) => i !== index))} className="text-ink-400 text-lg leading-none hover:text-[#c03654]" aria-label={`Remove payment ${index + 1}`}>
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={() => setPayments((current) => [...current, { onSignature: false, dueOn: "", percent: "" }])} className="text-brand-700 mt-1.5 text-xs font-medium hover:underline">
+            + Add a payment
+          </button>
+        </div>
+        <div>
+          <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">Cancellation cut-offs</span>
+          <div className="space-y-2">
+            {cancellations.map((cut, index) => (
+              <div key={index} className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={cut.kind}
+                  onChange={(e) => setCancellations((current) => current.map((one, i) => (i === index ? { ...one, kind: e.target.value as CutKind } : one)))}
+                  aria-label={`Cancellation ${index + 1} kind`}
+                  className="w-44"
+                >
+                  {(Object.keys(cutKindLabels) as CutKind[]).map((kind) => (
+                    <option key={kind} value={kind}>
+                      {cutKindLabels[kind].label}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  type="date"
+                  value={cut.cutoffOn}
+                  onChange={(e) => setCancellations((current) => current.map((one, i) => (i === index ? { ...one, cutoffOn: e.target.value } : one)))}
+                  aria-label={`Cancellation ${index + 1} cut-off`}
+                  className="w-40 px-2"
+                />
+                <span className="flex items-center gap-1">
+                  <Input
+                    value={cut.percent}
+                    onChange={(e) => setCancellations((current) => current.map((one, i) => (i === index ? { ...one, percent: e.target.value } : one)))}
+                    inputMode="decimal"
+                    placeholder="50"
+                    aria-label={`Cancellation ${index + 1} percentage`}
+                    className="w-16 px-2"
+                  />
+                  <span className="text-ink-500 text-[12px] whitespace-nowrap">{cutKindLabels[cut.kind].percent}</span>
+                </span>
+                {cancellations.length > 1 && (
+                  <button type="button" onClick={() => setCancellations((current) => current.filter((_, i) => i !== index))} className="text-ink-400 text-lg leading-none hover:text-[#c03654]" aria-label={`Remove cancellation ${index + 1}`}>
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={() => setCancellations((current) => [...current, { kind: current.at(-1)?.kind ?? "FEE", cutoffOn: "", percent: "", remarks: "" }])} className="text-brand-700 mt-1.5 text-xs font-medium hover:underline">
+            + Add a cut-off
+          </button>
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Payment terms, as quoted">
-          <Textarea rows={2} value={draft.paymentTerms} onChange={(e) => set("paymentTerms")(e.target.value)} placeholder="20% on signature, 20% on 1 Dec 2026…" />
+        <Field label="Other payment terms, in words — optional">
+          <Textarea rows={2} value={draft.paymentTerms} onChange={(e) => set("paymentTerms")(e.target.value)} placeholder="Deposit by bank transfer only…" />
         </Field>
-        <Field label="Cancellation terms, as quoted">
-          <Textarea rows={2} value={draft.cancellationTerms} onChange={(e) => set("cancellationTerms")(e.target.value)} placeholder="10% attrition until 10 May 2028…" />
+        <Field label="Other cancellation terms, in words — optional">
+          <Textarea rows={2} value={draft.cancellationTerms} onChange={(e) => set("cancellationTerms")(e.target.value)} placeholder="Name changes free until 14 days before arrival…" />
         </Field>
         {/* Not a Field: a label around the list would tick the first item
             on any click inside it. */}
