@@ -872,6 +872,8 @@ function NewCategory({
 export function QuotesReceived({ salesRequestId }: { salesRequestId: string }) {
   const quotes = api.quotation.forRequest.useQuery({ salesRequestId });
   const list = quotes.data ?? [];
+  const [open, setOpen] = useState<string | null>(null);
+  const opened = list.find((quote) => quote.id === open) ?? null;
   return (
     <div className="border-ink-200/60 rounded-xl border bg-white p-5">
       <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Quotes received{list.length ? ` (${list.length})` : ""}</h2>
@@ -881,9 +883,10 @@ export function QuotesReceived({ salesRequestId }: { salesRequestId: string }) {
         <ul className="space-y-2">
           {list.map((quote) => (
             <li key={quote.id}>
-              <Link
-                href={`/properties/${quote.property.id}?back=${encodeURIComponent(`/events/${quote.eventId}`)}#quotations`}
-                className={`border-brand-200 bg-brand-50/50 hover:border-brand-400 block rounded-lg border px-3 py-2.5 text-[13px] transition-colors ${quote.status === "DECLINED" ? "opacity-60" : ""}`}
+              <button
+                type="button"
+                onClick={() => setOpen(quote.id)}
+                className={`border-brand-200 bg-brand-50/50 hover:border-brand-400 block w-full rounded-lg border px-3 py-2.5 text-left text-[13px] transition-colors ${quote.status === "DECLINED" ? "opacity-60" : ""}`}
               >
                 <span className="flex items-baseline justify-between gap-2">
                   <span className="text-ink-900 min-w-0 truncate font-medium">{quote.property.name}</span>
@@ -900,11 +903,47 @@ export function QuotesReceived({ salesRequestId }: { salesRequestId: string }) {
                     .join(" · ")}
                 </span>
                 <span className="text-ink-900 mt-0.5 block text-[13px] font-semibold">{formatMoney(quote.totalCents, quote.currency)}</span>
-              </Link>
+              </button>
             </li>
           ))}
         </ul>
       )}
+      {opened && <QuotePopup quote={opened} onClose={() => setOpen(null)} />}
     </div>
+  );
+}
+
+/** One quotation in full, over the page (doc §4.11): its lines and terms, changed or accepted right there. */
+function QuotePopup({ quote, onClose }: { quote: RouterOutputs["quotation"]["forRequest"][number]; onClose: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const context = api.quotation.formContext.useQuery({ scoutingEntryId: quote.scoutingEntryId });
+  const c = context.data;
+  return (
+    <Popup
+      title={`${quote.property.name} — ${quote.name}`}
+      subtitle={
+        <Link href={`/properties/${quote.property.id}?back=${encodeURIComponent(`/events/${quote.eventId}`)}#quotations`} className="text-brand-700 hover:underline">
+          Open the hotel&apos;s page →
+        </Link>
+      }
+      size="large"
+      onClose={onClose}
+    >
+      {editing ? (
+        c ? (
+          <QuotationEditor
+            scoutingEntryId={quote.scoutingEntryId}
+            categories={c.property.categories}
+            stay={{ checkIn: dayKey(c.event.startDate), checkOut: dayKey(c.event.endDate) }}
+            quotation={quote}
+            onDone={() => setEditing(false)}
+          />
+        ) : (
+          <p className="text-ink-500 text-sm font-light">Loading…</p>
+        )
+      ) : (
+        <QuotationCard quotation={quote} eventId={quote.eventId} startOpen onEdit={() => setEditing(true)} />
+      )}
+    </Popup>
   );
 }
