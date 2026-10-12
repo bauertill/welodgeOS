@@ -1933,7 +1933,9 @@ the contract.
      the property's Quotations tab for the event like any other, listed here (name, for
      which client, period, room-nights, total), ticks *Rate* below and moves the property on
      the request's sourcing task. A hotel with no room categories yet can still be quoted:
-     they are added from the quote's lines (§3.10).
+     they are added from the quote's lines (§3.10). A new quote — from here or from the
+     hotel's page — also moves the hotel's contact task, if not yet started, to **In progress**
+     (2026-10-12), noted on its log, and tells whoever asked for it and whoever completes it.
   4. **What to find out** — the checklist below, with *Hotel details*, *Quotations* and the
      terms.
 
