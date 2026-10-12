@@ -10,6 +10,8 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { openStages } from "~/lib/sales";
 import { logAudit } from "~/server/audit";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
+import { notify } from "~/server/notify";
+import { taskStatusLabels } from "~/lib/tasks";
 
 /**
  * Quotations (doc §3.10): what a hotel offered for an event, kept apart from
@@ -227,6 +229,31 @@ export const quotationRouter = createTRPCRouter({
         const saved = input.id
           ? await tx.quotation.update({ where: { id: input.id }, data })
           : await tx.quotation.create({ data: { ...data, scoutingEntryId: input.scoutingEntryId, addedById: ctx.session.user.id } });
+        // Their quote is in: the hotel's contact task, if not yet started, is now in progress (doc §4.11).
+        if (!input.id) {
+          const started = await tx.task.findMany({
+            where: { propertyId: entry.propertyId, eventId: entry.eventId, status: { in: ["BACKLOG", "TODO"] }, type: { name: HOTEL_CONTACT } },
+            select: { id: true, title: true, status: true, requestedById: true, assignees: { select: { id: true } } },
+          });
+          for (const task of started) {
+            await tx.task.update({ where: { id: task.id }, data: { status: "IN_PROGRESS" } });
+            await logAudit(tx, {
+              actorId: ctx.session.user.id,
+              entity: "Task",
+              entityId: task.id,
+              summary: `In progress — their quote came in: ${fields.name}`,
+              changes: `Status: ${taskStatusLabels[task.status]} → ${taskStatusLabels.IN_PROGRESS}`,
+            });
+            await notify(tx, {
+              to: [task.requestedById, ...task.assignees.map((person) => person.id)],
+              actorId: ctx.session.user.id,
+              kind: "TASK_STATUS",
+              title: `"${task.title}" is in progress — the hotel's quote came in`,
+              link: `/tasks/${task.id}`,
+              taskId: task.id,
+            });
+          }
+        }
         // Its payments and cut-offs, like its lines, are replaced as a whole.
         await tx.quotationPayment.deleteMany({ where: { quotationId: saved.id } });
         await tx.quotationPayment.createMany({

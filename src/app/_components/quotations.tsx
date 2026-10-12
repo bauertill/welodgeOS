@@ -440,7 +440,9 @@ function QuotationEditor({
       void utils.quotation.invalidate();
       void utils.scouting.listForEvent.invalidate();
       void utils.sales.sourcing.invalidate();
-      void utils.task.gathering.invalidate();
+      // Its contact task may have moved to In progress (doc §4.11).
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
       onDone();
     },
   });
