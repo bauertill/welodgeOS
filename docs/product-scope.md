@@ -2093,7 +2093,10 @@ of versions.
   client's contacts, §4.10), the event (or none — not every enquiry is for one of our
   events) and the account manager, who is whoever registers it unless they choose someone
   else.
-- **What they asked for**, in their words — however vague — and **the details** above.
+- **What they asked for**, in their words — however vague — and **the details** above,
+  shown on the request's page in a tinted box so they stand out (2026-10-12): each line large
+  ("20 × Single room") with its dates and nights beneath, then the budget, the places as
+  tags and the client's own words.
   Requests registered before 2026-10-03 also kept their earlier free-text boxes (location,
   period, budget, pre and post, what the rate should include, extra services), shown under
   *More detail* where they have any.

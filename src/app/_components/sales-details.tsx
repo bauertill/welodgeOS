@@ -9,7 +9,7 @@ import { CloseToPicker, type Point } from "~/app/_components/close-to-picker";
 import { InfoTip } from "~/app/_components/info-tip";
 import { DatePicker } from "~/app/_components/date-picker";
 import { Card } from "~/app/_components/ui";
-import { dayKey } from "~/lib/dates";
+import { dayKey, nightsBetween } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
 import { currencyForCountry, roomTypeGroups } from "~/lib/sales";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -372,50 +372,63 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
           </div>
         </form>
       ) : request.detailedAt ? (
-        <dl className="space-y-2 text-sm font-light">
-          {request.lines.length > 0 && (
-            <div className="border-ink-200/60 mb-2 overflow-x-auto rounded-lg border">
-              <table className="w-full text-left text-[13px]">
-                <thead className="bg-ink-50/60">
-                  <tr className="text-ink-500 text-[10px] tracking-wider uppercase">
-                    <th className="px-3 py-2 font-medium" title={UNIT_HINT}>Units</th>
-                    <th className="px-3 py-2 font-medium">Type</th>
-                    <th className="px-3 py-2 font-medium">Period</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {request.lines.map((line) => (
-                    <tr key={line.id} className="border-ink-200/40 border-t">
-                      <td className="text-ink-900 px-3 py-2">{line.rooms}</td>
-                      <td className="px-3 py-2">{line.roomType ?? "—"}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : line.checkIn ? `From ${formatDate(line.checkIn)}` : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        // What the client asked, made to stand out (doc §4.11): each line large, its dates beneath.
+        <div>
+          <div className="border-brand-200 bg-brand-50/60 rounded-xl border px-5 py-4">
+            {request.lines.length === 0 ? (
+              <p className="text-ink-500 text-sm font-light">No units given yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {request.lines.map((line) => (
+                  <li key={line.id}>
+                    <span className="text-ink-900 block text-lg font-semibold" title={UNIT_HINT}>
+                      {line.rooms} × {line.roomType ?? "units"}
+                    </span>
+                    <span className="text-ink-700 block text-[13px] font-light">
+                      {line.checkIn && line.checkOut
+                        ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
+                        : line.checkIn
+                          ? `From ${formatDate(line.checkIn)}`
+                          : "Dates not given"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="border-brand-200/70 mt-4 grid gap-x-6 gap-y-3 border-t pt-3 text-sm sm:grid-cols-2">
+              <div>
+                <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">Budget</p>
+                <p className="text-ink-900 font-medium">
+                  {request.budgetCents !== null && request.budgetCurrency ? formatMoney(request.budgetCents, request.budgetCurrency) : "—"}
+                  {request.budgetCents !== null && request.budgetBasis && <span className="text-ink-500 font-light"> {budgetBasisLabels[request.budgetBasis]}</span>}
+                </p>
+              </div>
+              <div>
+                <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">Close to</p>
+                {closeTo ? (
+                  <div className="mt-0.5 flex flex-wrap gap-1.5">
+                    {closeTo.split(", ").map((place) => (
+                      <span key={place} className="bg-ink-900 rounded-full px-2.5 py-0.5 text-xs text-white">
+                        {place}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-ink-900">—</p>
+                )}
+              </div>
+              {request.clientComments && (
+                <div className="sm:col-span-2">
+                  <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">In their words</p>
+                  <p className="text-ink-700 italic whitespace-pre-line">“{request.clientComments}”</p>
+                </div>
+              )}
             </div>
-          )}
-          {[
-            [
-              "Budget",
-              request.budgetCents !== null && request.budgetCurrency
-                ? `${formatMoney(request.budgetCents, request.budgetCurrency)}${request.budgetBasis ? ` ${budgetBasisLabels[request.budgetBasis]}` : ""}`
-                : null,
-            ],
-            ["Close to", closeTo || null],
-            ["Client's comments", request.clientComments],
-          ].map(([label, value]) => (
-            <div key={label} className="flex gap-3">
-              <dt className="text-ink-500 w-36 shrink-0">{label}</dt>
-              <dd className="text-ink-900 min-w-0 break-words whitespace-pre-line">{value ?? "—"}</dd>
-            </div>
-          ))}
+          </div>
           {request.needsSubmittedAt && (
-            <p className="text-ink-500 pt-1 text-xs font-light">Sent by the client through their link {formatMomentInWords(request.needsSubmittedAt)}.</p>
+            <p className="text-ink-500 pt-2 text-xs font-light">Sent by the client through their link {formatMomentInWords(request.needsSubmittedAt)}.</p>
           )}
-        </dl>
+        </div>
       ) : (
         <p className="text-ink-500 text-sm font-light">
           Still an enquiry. Call the client, or email them below — with your link to book a call, or a form to tell us their needs — and the
