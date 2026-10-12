@@ -1,4 +1,4 @@
-import { BudgetBasis, CleaningWanted, LostReason, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
+import { BudgetBasis, LostReason, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -141,7 +141,6 @@ const detailsInput = z.object({
   clientComments: z.string().max(10_000),
   // What they want with the rooms (doc §4.11) — left out, nothing said.
   breakfast: z.boolean().nullable().default(null),
-  cleaning: z.nativeEnum(CleaningWanted).nullable().default(null),
   parking: z.boolean().nullable().default(null),
   parkingSpaces: z.number().int().min(1).max(10_000).nullable().default(null),
 });
@@ -191,7 +190,6 @@ async function saveDetails(
       closeToOther: blank(details.closeToOther),
       clientComments: blank(details.clientComments),
       breakfast: details.breakfast,
-      cleaning: details.cleaning,
       parking: details.parking,
       parkingSpaces: details.parking ? details.parkingSpaces : null,
       detailedAt: before.detailedAt ?? new Date(),
@@ -1318,7 +1316,6 @@ export const salesRouter = createTRPCRouter({
         closeToOther: request.closeToOther ?? "",
         clientComments: request.clientComments ?? "",
         breakfast: request.breakfast,
-        cleaning: request.cleaning,
         parking: request.parking,
         parkingSpaces: request.parkingSpaces,
       },

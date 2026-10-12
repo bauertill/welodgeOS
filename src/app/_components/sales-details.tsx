@@ -1,6 +1,6 @@
 "use client";
 
-import type { BudgetBasis, CleaningWanted } from "generated/prisma";
+import type { BudgetBasis } from "generated/prisma";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -11,7 +11,7 @@ import { DatePicker } from "~/app/_components/date-picker";
 import { Card } from "~/app/_components/ui";
 import { dayKey, nightsBetween } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
-import { cleaningWantedLabels, cleaningWantedOrder, peopleWords, wishes } from "~/lib/needs";
+import { peopleWords, wishes } from "~/lib/needs";
 import { currencyForCountry, roomTypeGroups } from "~/lib/sales";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -56,7 +56,6 @@ export type DetailsValues = {
   closeToOther: string;
   clientComments: string;
   breakfast: boolean | null;
-  cleaning: CleaningWanted | null;
   parking: boolean | null;
   parkingSpaces: string;
 };
@@ -74,7 +73,6 @@ export function detailsFrom(
   clientComments: string | null;
   points?: { label: string; address: string | null; latitude: number; longitude: number }[];
   breakfast?: boolean | null;
-  cleaning?: CleaningWanted | null;
   parking?: boolean | null;
   parkingSpaces?: number | null;
   },
@@ -100,7 +98,6 @@ export function detailsFrom(
     points: (values.points ?? []).map((point) => ({ ...point, address: point.address ?? "" })),
     clientComments: values.clientComments ?? "",
     breakfast: values.breakfast ?? null,
-    cleaning: values.cleaning ?? null,
     parking: values.parking ?? null,
     parkingSpaces: values.parkingSpaces ? String(values.parkingSpaces) : "",
   };
@@ -142,7 +139,6 @@ function toInput(
     closeToOther: values.closeToOther,
     clientComments: values.clientComments,
     breakfast: values.breakfast,
-    cleaning: values.cleaning,
     parking: values.parking,
     parkingSpaces,
   };
@@ -315,13 +311,6 @@ export function DetailsFields({
                 cars
               </span>
             )}
-          </WishRow>
-          <WishRow label="Cleaning">
-            {cleaningWantedOrder.map((option) => (
-              <Choice key={option} on={values.cleaning === option} onClick={() => set("cleaning", values.cleaning === option ? null : option)}>
-                {cleaningWantedLabels[option]}
-              </Choice>
-            ))}
           </WishRow>
         </div>
       </div>

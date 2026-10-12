@@ -1,24 +1,13 @@
-import type { CleaningWanted } from "generated/prisma";
-
 /**
- * What the client wants with the rooms (doc §4.11): breakfast, cleaning,
- * parking and how many share a unit — said the same way
+ * The client's preferences (doc §4.11): breakfast, parking and how many
+ * share a unit — said the same way
  * on the request, on the sourcing task and in the email to a hotel.
  */
-export const cleaningWantedLabels: Record<CleaningWanted, string> = {
-  DAILY: "Daily",
-  EVERY_FEW_DAYS: "Every few days",
-  WEEKLY: "Weekly",
-  NONE: "Not needed",
-};
-export const cleaningWantedOrder: CleaningWanted[] = ["DAILY", "EVERY_FEW_DAYS", "WEEKLY", "NONE"];
-
 /** "2 people per unit". */
 export const peopleWords = (people: number | null | undefined) => (people ? `${people} ${people === 1 ? "person" : "people"} per unit` : null);
 
 type Wishes = {
   breakfast: boolean | null;
-  cleaning: CleaningWanted | null;
   parking: boolean | null;
   parkingSpaces: number | null;
 };
@@ -27,7 +16,6 @@ type Wishes = {
 export function wishes(request: Wishes): { label: string; value: string }[] {
   return [
     request.breakfast !== null ? { label: "Breakfast", value: request.breakfast ? "Yes" : "No" } : null,
-    request.cleaning ? { label: "Cleaning", value: cleaningWantedLabels[request.cleaning] } : null,
     request.parking !== null
       ? {
           label: "Parking",
