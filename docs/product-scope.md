@@ -2098,8 +2098,8 @@ of versions.
   **Breakfast** and **Parking** — Yes or No, or left unsaid (click again to clear) — and
   for parking, how many cars; and **Cleaning** — Daily, Every few days, Weekly or Not
   needed — each on a line of its own, its choices beside it. They show on the request and the sourcing task,
-  are written on its history, and go into the email to a hotel under "What the guests would
-  like".
+  are written on its history, and go into the email to a hotel under "Guest preferences".
+  On the form the section is *Your preferences* (ours: *Their preferences*).
 - **What they asked for**, in their words — however vague — and **the details** above,
   shown on the request's page in a tinted box so they stand out (2026-10-12): each line large
   ("20 × Single room") with its dates and nights beneath, then the budget, the places as

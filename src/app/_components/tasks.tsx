@@ -1412,7 +1412,7 @@ function EmailTheHotel({
     ...(lines.length ? lines : ["• (the rooms and dates we spoke about)"]),
     "",
     // What the guests would like with the rooms (doc §4.11) — the hotel prices it in.
-    ...(r && wishesInWords(r).length ? ["What the guests would like:", ...wishesInWords(r).map((wish) => `• ${wish}`), ""] : []),
+    ...(r && wishesInWords(r).length ? ["Guest preferences:", ...wishesInWords(r).map((wish) => `• ${wish}`), ""] : []),
     "Could you let us know your availability and rates for these dates?",
     "",
     LINK,

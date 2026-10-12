@@ -302,7 +302,7 @@ export function DetailsFields({
         )}
       </div>
       <div>
-        <Label>{forClient ? "What you would like with the rooms" : "What they want with the rooms"}</Label>
+        <Label>{forClient ? "Your preferences" : "Their preferences"}</Label>
         <div className="border-ink-200/60 divide-ink-200/60 divide-y rounded-lg border">
           <WishRow label="Breakfast">
             <YesNo value={values.breakfast} onChange={(value) => set("breakfast", value)} />

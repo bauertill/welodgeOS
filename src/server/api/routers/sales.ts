@@ -267,7 +267,7 @@ const historyFields = [
   { key: "budgetAmount", label: "Budget" },
   { key: "closeToNames", label: "Close to" },
   { key: "clientComments", label: "Client's comments" },
-  { key: "wishes", label: "What they want" },
+  { key: "wishes", label: "Preferences" },
   ...interestFields.map(({ key, label }) => ({ key, label })),
   ...contractingFields.map(({ key, label }) => ({ key, label })),
 ] as { key: keyof ReturnType<typeof readable>; label: string }[];
