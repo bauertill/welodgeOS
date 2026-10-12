@@ -18,7 +18,7 @@ import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RateCardsBox, SourcingPanel } from "~/app/_components/sourcing-panel";
 import { AssigneePicker, PeopleSelect } from "~/app/_components/assignee-picker";
 import { peopleWords, wishes, wishesInWords } from "~/lib/needs";
-import { QuotationPopup } from "~/app/_components/quotations";
+import { QuotationPopup, QuotesReceived } from "~/app/_components/quotations";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
 import { daysUntil, dayKey, nightsBetween } from "~/lib/dates";
@@ -955,6 +955,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           </button>
         </div>
 
+        {sourcing && <QuotesReceived salesRequestId={t.salesRequest!.id} />}
         {sourcing && <RateCardsBox salesRequestId={t.salesRequest!.id} />}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-4 text-[15px] font-medium">Status</h2>

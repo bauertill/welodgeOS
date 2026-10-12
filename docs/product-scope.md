@@ -1163,7 +1163,10 @@ the hotel quoted for that group — found at the top of the form by typing the c
 name (the event's open requests are searched, however many), or left general; a new one starts with the request the property's open hotel contact task is
 about, else *None — a general quote for the event*. A quotation tied to a request says
 *For {client}*, is written on the request's history, and moves the property on that
-request's sourcing task (§4.11).
+request's sourcing task (§4.11). It is also listed in **Quotes received** (2026-10-12), a card on the
+request's sourcing task and on the request's page: each hotel, the quotation's name, its
+period, rooms, lowest rate a night, total and status, opening on the hotel's Quotations
+tab. General quotes for the event are not listed there.
 
 **The property's page** is laid out so that it fits on a screen rather than being a long
 stack of cards:

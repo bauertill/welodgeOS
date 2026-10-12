@@ -12,6 +12,7 @@ import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_c
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { NewClientPopup } from "~/app/_components/new-client-popup";
+import { QuotesReceived } from "~/app/_components/quotations";
 import { RateCardEditor } from "~/app/_components/rate-card-editor";
 import { TaskStatusBadge } from "~/app/_components/tasks";
 import { contactOutcomeLabels, contactOutcomeStyle } from "~/lib/tasks";
@@ -1176,6 +1177,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
         <div className="space-y-5">
           <RequestTasks request={request} />
+          <QuotesReceived salesRequestId={request.id} />
           <RequestRateCards salesRequestId={request.id} />
           <FollowUpCard request={request} />
           <ContractCard request={request} />

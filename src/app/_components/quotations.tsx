@@ -863,3 +863,48 @@ function NewCategory({
     </div>
   );
 }
+
+/**
+ * The quotations hotels sent for a client's request (doc §4.11) — a card on
+ * its sourcing task and on its page: which hotel, for what, at what rate,
+ * each opening on the hotel's Quotations tab.
+ */
+export function QuotesReceived({ salesRequestId }: { salesRequestId: string }) {
+  const quotes = api.quotation.forRequest.useQuery({ salesRequestId });
+  const list = quotes.data ?? [];
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Quotes received{list.length ? ` (${list.length})` : ""}</h2>
+      {list.length === 0 ? (
+        <p className="text-ink-500 text-[13px] font-light">{quotes.isLoading ? "…" : "None yet. A hotel's quote registered for this request shows here."}</p>
+      ) : (
+        <ul className="space-y-2">
+          {list.map((quote) => (
+            <li key={quote.id}>
+              <Link
+                href={`/properties/${quote.property.id}?back=${encodeURIComponent(`/events/${quote.eventId}`)}#quotations`}
+                className={`border-brand-200 bg-brand-50/50 hover:border-brand-400 block rounded-lg border px-3 py-2.5 text-[13px] transition-colors ${quote.status === "DECLINED" ? "opacity-60" : ""}`}
+              >
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-ink-900 min-w-0 truncate font-medium">{quote.property.name}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusStyles[quote.status]}`}>{quotationStatusLabels[quote.status]}</span>
+                </span>
+                <span className="text-ink-500 block truncate text-xs font-light">{quote.name}</span>
+                <span className="text-ink-700 mt-1 block text-xs">
+                  {[
+                    quote.from && quote.to ? formatRange(quote.from, quote.to) : null,
+                    quote.rooms ? `${quote.rooms} rooms` : `${quote.roomNights} room-nights`,
+                    quote.lowestRateCents !== null ? `from ${formatMoney(quote.lowestRateCents, quote.currency)} a night` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                <span className="text-ink-900 mt-0.5 block text-[13px] font-semibold">{formatMoney(quote.totalCents, quote.currency)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

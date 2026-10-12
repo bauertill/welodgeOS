@@ -152,6 +152,21 @@ export const quotationRouter = createTRPCRouter({
     return { requests: requests.map((request) => ({ id: request.id, name: request.client.name, description: request.description })), likely: task?.salesRequestId ?? null };
   }),
 
+  /** The quotations hotels sent for one client request, newest first (doc §4.11) — on its sourcing task and its page. */
+  forRequest: protectedProcedure.input(z.object({ salesRequestId: z.string() })).query(async ({ ctx, input }) => {
+    const quotations = await ctx.db.quotation.findMany({
+      where: { salesRequestId: input.salesRequestId },
+      orderBy: [{ createdAt: "desc" }],
+      include: { ...include, scoutingEntry: { select: { eventId: true, property: { select: { id: true, name: true } } } } },
+    });
+    return quotations.map((quotation) => ({
+      ...withTotals(quotation),
+      property: quotation.scoutingEntry.property,
+      eventId: quotation.scoutingEntry.eventId,
+      lowestRateCents: quotation.lines.length ? Math.min(...quotation.lines.map((line) => line.rateCents)) : null,
+    }));
+  }),
+
   /** What the quotation form needs outside the property's page: its room categories and the event's dates (doc §4.11). */
   formContext: protectedProcedure.input(z.object({ scoutingEntryId: z.string() })).query(async ({ ctx, input }) => {
     const entry = await ctx.db.scoutingEntry.findUniqueOrThrow({
