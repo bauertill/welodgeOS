@@ -738,7 +738,8 @@ on a layer's **⋯**, its name, colour and distance switch, *Remove* (the layer 
 after asking) and **+ Add a place** — a name, then its address searched or *Pick it on the
 map* and a click on the spot, a red "＋ New place here" pin showing where it goes before it is
 saved; and **Import from Google My Maps**: in My Maps, *Export
-to KML/KMZ* with *Export to a .KML file* ticked, then upload it; each My Maps layer becomes one
+to KML/KMZ* with *Export as KML instead of KMZ* ticked (and *Keep data up to date with network
+link KML* not), then upload it; each My Maps layer becomes one
 of ours (or adds to ours of the same name), with its colour, each point a place with its
 description as notes; lines and shapes are counted and left out, and a place whose name the
 event already has is skipped. When places were first put into layers, each went into one of

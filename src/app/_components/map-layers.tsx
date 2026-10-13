@@ -313,7 +313,7 @@ export function LayersPanel({
                 event.target.value = "";
                 setNote(null);
                 if (!chosen) return;
-                if (/\.kmz$/i.test(chosen.name)) return setNote({ text: "That is a KMZ file. In My Maps, export again and tick “Export to a .KML file”.", bad: true });
+                if (/\.kmz$/i.test(chosen.name)) return setNote({ text: "That is a KMZ file. In My Maps, export again and tick “Export as KML instead of KMZ”.", bad: true });
                 try {
                   const read = readKml(await chosen.text());
                   if (!read.layers.length) return setNote({ text: "No places found in that file.", bad: true });
