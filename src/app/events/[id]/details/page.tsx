@@ -1,4 +1,3 @@
-import { MapLayersCard } from "~/app/_components/map-layers";
 import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
@@ -100,10 +99,6 @@ export default async function EventDetailsPage({ params }: { params: Promise<{ i
         </Card>
 
         <Card>
-          <MapLayersCard eventId={event.id} />
-        </Card>
-
-        <Card>
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <h2 className="text-ink-900 text-[15px] font-medium">Places of interest</h2>
             <span className="text-[13px] font-light">
@@ -132,7 +127,9 @@ export default async function EventDetailsPage({ params }: { params: Promise<{ i
           {event.placesOfInterest.length > 12 && (
             <p className="text-ink-500 mt-2 text-xs font-light">…and {event.placesOfInterest.length - 12} more — all of them under Change places of interest.</p>
           )}
-          <p className="text-ink-500 mt-3 text-xs font-light">Distances and travel times are measured to the places on layers marked &ldquo;Distances measured&rdquo;.</p>
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            Map layers — adding, importing from Google My Maps, choosing which are measured to — are run from the Layers panel on the Properties tab&apos;s map.
+          </p>
         </Card>
 
         <Card>

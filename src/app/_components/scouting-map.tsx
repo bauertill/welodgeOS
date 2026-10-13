@@ -14,6 +14,7 @@ import type { PlaceCategory, ScoutingStatus } from "generated/prisma";
 import { env } from "~/env";
 import { formatDay } from "~/lib/format";
 import { placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
+import { LayersPanel } from "~/app/_components/map-layers";
 import { TravelTimes } from "~/app/_components/travel-times";
 import { api } from "~/trpc/react";
 
@@ -107,47 +108,6 @@ function useShown(eventId: string | undefined, layers: MapLayer[]) {
     showAll: () => save(["transit:on"]),
     hideAll: () => save(ids),
   };
-}
-
-function LayersPanel({ layers, places, shown }: { layers: MapLayer[]; places: MapPlace[]; shown: ReturnType<typeof useShown> }) {
-  const [open, setOpen] = useState(true);
-  const row = (id: string, name: string, swatch: React.ReactNode, count?: number) => (
-    <label key={id} className="hover:bg-ink-50 flex cursor-pointer items-center gap-2 rounded px-1.5 py-1">
-      <input type="checkbox" checked={shown.isShown(id)} onChange={() => shown.toggle(id)} className="accent-brand-500 h-3.5 w-3.5" />
-      {swatch}
-      <span className="text-ink-900 min-w-0 flex-1 truncate">{name}</span>
-      {count !== undefined && <span className="text-ink-500 text-[11px]">{count}</span>}
-    </label>
-  );
-  return (
-    <div className="absolute top-16 left-2.5 z-10 w-56 rounded-lg bg-white text-[12px] shadow-lg">
-      <button type="button" onClick={() => setOpen(!open)} className="text-ink-900 flex w-full items-center justify-between px-3 py-2 font-medium">
-        Layers <span className="text-ink-500">{open ? "▴" : "▾"}</span>
-      </button>
-      {open && (
-        <div className="border-ink-200/60 max-h-80 overflow-y-auto border-t px-1.5 py-1.5">
-          {layers.map((layer) =>
-            row(
-              layer.id,
-              layer.name,
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: layer.color }} />,
-              places.filter((place) => place.layerId === layer.id).length,
-            ),
-          )}
-          {row("properties", "Our properties", <span className="bg-brand-500 inline-block h-2.5 w-2.5 shrink-0 rounded-full" />)}
-          {row("transit", "Public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
-          <div className="text-brand-700 flex justify-between px-1.5 pt-1.5 text-[11px]">
-            <button type="button" onClick={shown.showAll} className="hover:underline">
-              Show all
-            </button>
-            <button type="button" onClick={shown.hideAll} className="hover:underline">
-              Hide all
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 /** What the map needs of §5.3's availability figures, per room category. */
@@ -437,6 +397,9 @@ export function ScoutingMap({
   // A place on a hidden layer is not drawn; one on no layer always is.
   const visiblePlaces = places.filter((place) => !place.layerId || shown.isShown(place.layerId));
   const showProperties = shown.isShown("properties");
+  // A place being added from the Layers panel: its spot, and whether the next map click sets it.
+  const [draftPoint, setDraftPoint] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [picking, setPicking] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
 
   /**
@@ -497,7 +460,18 @@ export function ScoutingMap({
   return (
     <div className="border-ink-200/60 flex flex-col overflow-hidden rounded-xl border md:flex-row">
       <div className="relative min-w-0 flex-1">
-        {layers.length > 0 && <LayersPanel layers={layers} places={places} shown={shown} />}
+        {eventId && (
+          <LayersPanel
+            eventId={eventId}
+            layers={layers}
+            places={places}
+            shown={shown}
+            draftPoint={draftPoint}
+            setDraftPoint={setDraftPoint}
+            picking={picking}
+            setPicking={setPicking}
+          />
+        )}
         <APIProvider apiKey={apiKey}>
           <GoogleMap
             mapId={mapId}
@@ -505,10 +479,16 @@ export function ScoutingMap({
             defaultZoom={points.length ? 12 : 6}
             gestureHandling="greedy"
             clickableIcons={false}
-            onClick={() => {
+            onClick={(event) => {
+              if (picking && event.detail.latLng) {
+                setDraftPoint({ latitude: event.detail.latLng.lat, longitude: event.detail.latLng.lng });
+                setPicking(false);
+                return;
+              }
               if (Date.now() - pinClickedAt.current < 300) return;
               setOpenId(null);
             }}
+            draggableCursor={picking ? "crosshair" : undefined}
             style={{ height: "32rem", width: "100%" }}
           >
             <FitBounds points={points} />
@@ -564,6 +544,11 @@ export function ScoutingMap({
                 />
               </AdvancedMarker>
             ))}
+            {draftPoint && (
+              <AdvancedMarker position={{ lat: draftPoint.latitude, lng: draftPoint.longitude }} title="The new place" zIndex={950}>
+                <span className="block -translate-y-1/2 rounded-full bg-[#e5533d] px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">＋ New place here</span>
+              </AdvancedMarker>
+            )}
             {searchPoint && (
               <AdvancedMarker position={{ lat: searchPoint.latitude, lng: searchPoint.longitude }} title={searchPoint.label} zIndex={900}>
                 <span className="bg-brand-500 block max-w-64 truncate rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">
