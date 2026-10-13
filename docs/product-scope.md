@@ -2150,10 +2150,14 @@ room category at the rate we sell it for.
   the event's) and a note, with what that comes to at the rate shown. **+ Add another
   period** adds more dates for the same room — each period its own number of rooms, dates
   and note, and any can be removed. More rooms than are available, or a stay shorter than
-  the minimum, is marked in red and cannot be sent. Under the card, **Your
-  answer** sums up the rooms chosen, and has **Our dates have changed** — the new arrival
-  and departure and what changed — their name and email, and a note to us. **Send to We
-  Lodge** needs at least a room, a change of dates or a note. They can come back and send
+  the minimum, is marked in red and cannot be sent. **Send to We Lodge →** sits right
+  under the rooms they chose (2026-10-13, so nobody has to scroll to find it), and again
+  under the map in **Your answer**, which sums up the rooms chosen with the total. Either
+  opens a popup over the card: their choice and its total, **Our dates have changed** —
+  the new arrival and departure and what changed — their name and email, a note to us,
+  and *Send to We Lodge*. A client with no room to choose — only new dates or a question —
+  opens the same popup with *Dates changed, or a question? Write to us*. Sending needs at
+  least a room, a change of dates or a note. They can come back and send
   again: the link shows their last answer filled in. Each answer is kept as sent — the rooms,
   the rate at that moment and the notes — and a later one does not rewrite it.
 - **Making the link is sending the proposal** (2026-10-11): a request at *Initial interest*

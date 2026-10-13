@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
+import { Popup } from "~/app/_components/popup";
 import { PrintButton } from "~/app/_components/print-button";
 import { RateCardMap } from "~/app/_components/rate-card-map";
 import { RateCardView } from "~/app/_components/rate-card-view";
@@ -18,7 +19,9 @@ type Period = { rooms: string; checkIn: string; checkOut: string; note: string }
  * A rate card on the client's link (doc §4.11), answerable: "I'm interested"
  * on a room opens how many, which nights and a note — as many periods as
  * they need; "Our dates have changed"
- * takes the new dates; Send to We Lodge sends it all — and can be sent again.
+ * takes the new dates; Send to We Lodge — beside the rooms chosen and at the
+ * foot — opens a popup with what they chose, their name and a note, and sends
+ * it all; it can be sent again.
  */
 export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   const first = card.asked.find((line) => line.checkIn && line.checkOut);
@@ -45,9 +48,11 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   const [datesChanged, setDatesChanged] = useState(false);
   const [newDates, setNewDates] = useState({ checkIn: defaultIn, checkOut: defaultOut, note: "" });
   const [sent, setSent] = useState<Date | null>(null);
+  const [sending, setSending] = useState(false);
   const answer = api.rateCard.answer.useMutation({
     onSuccess: () => {
       setSent(new Date());
+      setSending(false);
       setNote("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
@@ -78,6 +83,10 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
     if (line.minNights !== null && n !== null && n < line.minNights) return `The minimum stay is ${line.minNights} nights`;
     return null;
   };
+  const total = chosen.reduce((sum, [lineId, periods]) => {
+    const found = lines.get(lineId);
+    return found ? sum + periods.reduce((part, pick) => part + found.line.sellingCents * (Number(pick.rooms) || 0) * (nights(pick) ?? 0), 0) : sum;
+  }, 0);
   const blocked = Object.entries(picks).some(([lineId, periods]) => {
     const found = lines.get(lineId);
     return found ? periods.some((pick) => problem(found.line, pick)) : false;
@@ -168,9 +177,14 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                   </div>
                 );
               })}
-              <button type="button" onClick={() => addPeriod(line.id)} className="text-brand-700 text-xs font-medium hover:underline">
-                + Add another period
-              </button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button type="button" onClick={() => addPeriod(line.id)} className="text-brand-700 text-xs font-medium hover:underline">
+                  + Add another period
+                </button>
+                <Button type="button" onClick={() => setSending(true)}>
+                  {sent || last ? "Send again to We Lodge →" : "Send to We Lodge →"}
+                </Button>
+              </div>
             </div>
           );
         }}
@@ -205,66 +219,118 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
             })}
           </ul>
         )}
-
-        <label className="mt-5 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={datesChanged} onChange={(e) => setDatesChanged(e.target.checked)} className="accent-brand-500 h-4 w-4" />
-          <span className="text-ink-900 font-medium">Our dates have changed</span>
-        </label>
-        {datesChanged && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-[9.5rem_9.5rem_1fr]">
-            <Field label="New arrival">
-              <Input type="date" value={newDates.checkIn} onChange={(e) => setNewDates({ ...newDates, checkIn: e.target.value })} />
-            </Field>
-            <Field label="New departure">
-              <Input type="date" value={newDates.checkOut} onChange={(e) => setNewDates({ ...newDates, checkOut: e.target.value })} />
-            </Field>
-            <Field label="What changed — optional">
-              <Input value={newDates.note} onChange={(e) => setNewDates({ ...newDates, note: e.target.value })} placeholder="The team now arrives two days earlier" />
-            </Field>
-          </div>
+        {total > 0 && (
+          <p className="text-ink-900 border-ink-200/70 mt-2 border-t pt-2 text-sm">
+            Total <span className="font-semibold">{formatMoney(total, card.currency)}</span>
+            <span className="text-ink-500 font-light"> — subject to availability until confirmed</span>
+          </p>
         )}
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <Field label="Your name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label="Your email">
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Field>
-          <Field label="A note for We Lodge — optional" className="sm:col-span-2">
-            <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-          </Field>
-        </div>
-
-        <div className="mt-4 space-y-2">
-          <FormError message={answer.error ? friendlyError(answer.error) : null} />
-          {blocked && <p className="text-xs text-[#c03654]">Please check the rooms marked in red above — the number of rooms or the length of stay.</p>}
-          <Button
-            type="button"
-            disabled={answer.isPending || blocked || (chosen.length === 0 && !datesChanged && !note.trim())}
-            onClick={() =>
-              answer.mutate({
-                token,
-                name,
-                email,
-                note,
-                dateChange: datesChanged ? newDates : null,
-                items: chosen.flatMap(([lineId, periods]) =>
-                  periods.map((pick) => ({
-                    lineId,
-                    rooms: Math.max(1, Math.round(Number(pick.rooms) || 1)),
-                    checkIn: pick.checkIn,
-                    checkOut: pick.checkOut,
-                    note: pick.note,
-                  })),
-                ),
-              })
-            }
-          >
-            {answer.isPending ? "Sending…" : sent || last ? "Send again" : "Send to We Lodge"}
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+          <Button type="button" onClick={() => setSending(true)} disabled={chosen.length === 0}>
+            {sent || last ? "Send again to We Lodge →" : "Send to We Lodge →"}
           </Button>
+          <button type="button" onClick={() => setSending(true)} className="text-brand-700 text-sm hover:underline">
+            Dates changed, or a question? Write to us
+          </button>
         </div>
       </section>
+
+      {sending && (
+        <Popup size="medium" title="Send to We Lodge" subtitle="Check your choice, tell us who you are, and send." onClose={() => setSending(false)}>
+          <div className="space-y-4">
+            <div className="rounded-xl bg-white px-5 py-4">
+              <h3 className="text-ink-900 text-[15px] font-semibold">Your choice</h3>
+              {chosen.length === 0 ? (
+                <p className="text-ink-500 mt-1 text-sm font-light">No rooms chosen yet — press &ldquo;I&apos;m interested&rdquo; on the rooms you would like.</p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-sm">
+                  {chosen.flatMap(([lineId, periods]) => {
+                    const found = lines.get(lineId);
+                    if (!found) return [];
+                    return periods.map((pick, index) => (
+                      <li key={`${lineId}-${index}`} className="text-ink-700 font-light">
+                        <span className="text-ink-900 font-medium">
+                          {pick.rooms} × {found.line.name}
+                        </span>{" "}
+                        at {found.property.name}
+                        {pick.checkIn && pick.checkOut && pick.checkOut > pick.checkIn
+                          ? ` · ${formatRange(parseDay(pick.checkIn), parseDay(pick.checkOut))} · ${nights(pick)} nights`
+                          : ""}
+                      </li>
+                    ));
+                  })}
+                </ul>
+              )}
+              {total > 0 && (
+                <p className="text-ink-900 border-ink-200/70 mt-2 border-t pt-2 text-sm">
+                  Total <span className="font-semibold">{formatMoney(total, card.currency)}</span>
+                  <span className="text-ink-500 font-light"> — subject to availability until confirmed</span>
+                </p>
+              )}
+            </div>
+            <div className="rounded-xl bg-white px-5 py-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={datesChanged} onChange={(e) => setDatesChanged(e.target.checked)} className="accent-brand-500 h-4 w-4" />
+                <span className="text-ink-900 font-medium">Our dates have changed</span>
+              </label>
+              {datesChanged && (
+                <div className="mt-3 grid gap-3 sm:grid-cols-[9.5rem_9.5rem_1fr]">
+                  <Field label="New arrival">
+                    <Input type="date" value={newDates.checkIn} onChange={(e) => setNewDates({ ...newDates, checkIn: e.target.value })} />
+                  </Field>
+                  <Field label="New departure">
+                    <Input type="date" value={newDates.checkOut} onChange={(e) => setNewDates({ ...newDates, checkOut: e.target.value })} />
+                  </Field>
+                  <Field label="What changed — optional">
+                    <Input value={newDates.note} onChange={(e) => setNewDates({ ...newDates, note: e.target.value })} placeholder="The team now arrives two days earlier" />
+                  </Field>
+                </div>
+              )}
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <Field label="Your name">
+                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                </Field>
+                <Field label="Your email">
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </Field>
+                <Field label="A note for We Lodge — optional" className="sm:col-span-2">
+                  <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+                </Field>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <FormError message={answer.error ? friendlyError(answer.error) : null} />
+                {blocked && <p className="text-xs text-[#c03654]">Please check the rooms marked in red on the card — the number of rooms or the length of stay.</p>}
+                <Button
+                  type="button"
+                  disabled={answer.isPending || blocked || (chosen.length === 0 && !datesChanged && !note.trim())}
+                  onClick={() =>
+                    answer.mutate({
+                      token,
+                      name,
+                      email,
+                      note,
+                      dateChange: datesChanged ? newDates : null,
+                      items: chosen.flatMap(([lineId, periods]) =>
+                        periods.map((pick) => ({
+                          lineId,
+                          rooms: Math.max(1, Math.round(Number(pick.rooms) || 1)),
+                          checkIn: pick.checkIn,
+                          checkOut: pick.checkOut,
+                          note: pick.note,
+                        })),
+                      ),
+                    })
+                  }
+                >
+                  {answer.isPending ? "Sending…" : "Send to We Lodge"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Popup>
+      )}
     </div>
   );
 }
