@@ -746,12 +746,12 @@ event already has is skipped. When places were first put into layers, each went 
 its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *Other places*
 (not measured until switched on). A place's form has its **Map layer**.
 
-**The metro** (2026-10-13): *+ Add metro lines & stations* in the Layers panel fetches the
-metro and light rail around the event's places from OpenStreetMap — several of its servers
-asked at once, as one is often busy; when all are, it says so, to try again in a few minutes —
-into two layers: **Metro lines**, each line drawn in its official colour and thicker than
-Google's own transit lines, and **Metro stations**, a 🚉 per station with the lines serving
-it. Run again (*Refresh metro lines & stations*), it replaces both.
+**Metro stations** (2026-10-13): *+ Add metro stations* in the Layers panel finds the metro
+and light-rail stations within 2.5 km of each place distances are measured to (the venues),
+from Google Maps — so they are named as Google names them — into a **Metro stations** layer, a
+🚉 for each; run again (*Refresh metro stations*), it replaces them. The **lines** are Google's
+own, shown by the *Google public transport* tick box, thin as Google draws them (the owner's
+call: our own thicker lines, from OpenStreetMap, were tried and dropped the same day).
 
 **Adding a property from the map** (2026-10-13), for what is seen on the ground — under
 development, not on Google: **＋ Add a property** at the top of the map, then a click on the

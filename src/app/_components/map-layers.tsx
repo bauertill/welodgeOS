@@ -125,7 +125,7 @@ export function LayersPanel({
   });
   const metro = api.mapLayer.importMetro.useMutation({
     onSuccess: (done) => {
-      setNote({ text: `Metro added: ${done.lines} lines, ${done.stations} stations.` });
+      setNote({ text: `Metro stations added: ${done.stations}.` });
       refresh();
     },
     onError: (error) => setNote({ text: friendlyError(error) ?? "That did not work — try again.", bad: true }),
@@ -278,7 +278,7 @@ export function LayersPanel({
                 layer.id,
                 layer.name,
                 <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: layer.color }} />,
-                layer.lines?.length ? layer.lines.length : places.filter((place) => place.layerId === layer.id).length,
+                places.filter((place) => place.layerId === layer.id).length,
                 layer,
               )}
               {editing?.id === layer.id && layerForm}
@@ -318,9 +318,9 @@ export function LayersPanel({
                 metro.mutate({ eventId });
               }}
               className="text-brand-700 text-left font-medium hover:underline disabled:opacity-60"
-              title="Metro and light-rail lines, in their colours, and their stations, from OpenStreetMap"
+              title="Metro and light-rail stations around the event's places, from Google Maps"
             >
-              {metro.isPending ? "Fetching the metro…" : layers.some((layer) => layer.name === "Metro lines") ? "Refresh metro lines & stations" : "+ Add metro lines & stations"}
+              {metro.isPending ? "Finding the stations…" : layers.some((layer) => layer.name === "Metro stations") ? "Refresh metro stations" : "+ Add metro stations"}
             </button>
             <input
               ref={file}

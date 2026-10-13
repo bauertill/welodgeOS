@@ -116,28 +116,10 @@ model MapLayer {
   position Int     @default(0)
 
   places    PlaceOfInterest[]
-  lines     MapLine[]
   createdAt DateTime          @default(now())
 
   @@unique([eventId, name])
   @@index([eventId, position])
-}
-
-/// A line drawn on an event's map (doc §3.7) — a metro or light-rail line, in
-/// its own colour, from OpenStreetMap.
-model MapLine {
-  id      String   @id @default(cuid())
-  layer   MapLayer @relation(fields: [layerId], references: [id], onDelete: Cascade)
-  layerId String
-  /// "Metro A Line".
-  name    String
-  /// "A".
-  ref     String?
-  color   String
-  /// Its path as runs of [latitude, longitude] points.
-  path    Json
-
-  @@index([layerId])
 }
 
 /// Somewhere guests need to get to for one event: a stadium, an airport, a

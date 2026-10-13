@@ -66,39 +66,7 @@ export type MapPlace = {
 };
 
 /** A layer of the event's map (doc §3.7): its places shown or hidden together. */
-export type MapLayer = {
-  id: string;
-  name: string;
-  color: string;
-  measured: boolean;
-  /** Lines drawn on it — metro and light rail (doc §3.7). */
-  lines?: { id: string; name: string; ref: string | null; color: string; path: unknown }[];
-};
-
-/** A layer's lines, drawn thicker than Google's own transit lines, each in its colour. */
-function Lines({ lines }: { lines: NonNullable<MapLayer["lines"]> }) {
-  const map = useMap();
-  const maps = useMapsLibrary("maps");
-  useEffect(() => {
-    if (!map || !maps) return;
-    const drawn = lines.flatMap((line) =>
-      (line.path as [number, number][][]).map(
-        (run) =>
-          new maps.Polyline({
-            map,
-            path: run.map(([lat, lng]) => ({ lat, lng })),
-            strokeColor: line.color,
-            strokeWeight: 5,
-            strokeOpacity: 0.9,
-            clickable: false,
-            zIndex: 5,
-          }),
-      ),
-    );
-    return () => drawn.forEach((polyline) => polyline.setMap(null));
-  }, [map, maps, lines]);
-  return null;
-}
+export type MapLayer = { id: string; name: string; color: string; measured: boolean };
 
 /** Google's own public transport — every metro, rail and bus line with its stations — on or off. */
 function TransitLayer({ on }: { on: boolean }) {
@@ -603,11 +571,6 @@ export function ScoutingMap({
           >
             <FitBounds points={points} />
             <TransitLayer on={shown.isShown("transit")} />
-            {layers
-              .filter((layer) => layer.lines?.length && shown.isShown(layer.id) && !onlyPlaceId)
-              .map((layer) => (
-                <Lines key={layer.id} lines={layer.lines!} />
-              ))}
 
             {visiblePlaces.map((place) => (
               <AdvancedMarker
