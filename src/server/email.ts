@@ -1,11 +1,23 @@
 import { env } from "~/env";
 
 /**
- * Sends one email through Resend (doc §2.9). Without a key — locally, and on
- * staging, which must never email the real addresses its copied data holds —
- * the email is written to the server log instead, and counts as sent.
+ * Away from the live site — staging, a computer — only these are ever emailed
+ * (owner, 2026-10-13): staging runs on a copy of the live data, every real
+ * address in it, and testing there must not reach anyone else.
+ */
+export const TEST_ADDRESSES = ["brandon@welodge.net", "ami@welodge.net", "till@welodge.net", "volki@welodge.net", "britz.brandon@gmail.com"];
+
+/**
+ * Sends one email through Resend (doc §2.9). Without a key, or off the live
+ * site to anyone not in TEST_ADDRESSES, the email is written to the server log
+ * instead, and counts as sent.
  */
 export async function sendEmail(message: { to: string; subject: string; text: string; html: string }) {
+  const live = env.VERCEL_ENV === "production";
+  if (!live && !TEST_ADDRESSES.includes(message.to.trim().toLowerCase())) {
+    console.log(`\n[email] Not sent — off the live site, ${message.to} is not on the test list: ${message.subject}\n`);
+    return true;
+  }
   if (!env.RESEND_API_KEY) {
     console.log(`\n[email] To ${message.to}: ${message.subject}\n${message.text}\n`);
     return true;
@@ -16,7 +28,7 @@ export async function sendEmail(message: { to: string; subject: string; text: st
     body: JSON.stringify({
       from: env.NOTIFICATIONS_FROM ?? "We Lodge OS <notifications@welodge.net>",
       to: message.to,
-      subject: message.subject,
+      subject: live ? message.subject : `[Test] ${message.subject}`,
       text: message.text,
       html: message.html,
     }),

@@ -246,10 +246,13 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
          and optionally DMARC) to add where welodge.net's DNS is managed, then
          *Verify*.
       2. Create an API key (sending access only).
-      3. On the Vercel project, **Production only** (never Preview — staging
-         runs on a copy of the live data with real addresses): set
-         `RESEND_API_KEY`, `NOTIFICATIONS_FROM` = `We Lodge OS
-         <notifications@welodge.net>`, and `APP_URL` = `https://os.welodge.net`.
+      3. On the Vercel project, **Production**: set `RESEND_API_KEY`,
+         `NOTIFICATIONS_FROM` = `We Lodge OS <notifications@welodge.net>`, and
+         `APP_URL` = `https://os.welodge.net`. **Preview (staging)** may have
+         the same key and `NOTIFICATIONS_FROM`, with `APP_URL` =
+         `https://staging.welodge.net`: since 2026-10-13 off the live site only
+         brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed
+         (`TEST_ADDRESSES` in `src/server/email.ts`), subjects marked [Test].
       4. Set `CRON_SECRET` (any long random text) on the project, so only
          Vercel can start the morning run in `vercel.json`
          (`/api/cron/daily`, 06:00 UTC).

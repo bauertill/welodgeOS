@@ -479,10 +479,13 @@ whichever is chosen. Emails link straight to the task.
 writes the *due tomorrow* and *overdue* notifications, then sends each person who chose the
 daily summary their email. Run twice, it sends nothing twice.
 
-**Emails are sent through Resend**, from a We Lodge address, and **only by the live site**:
-staging runs on a copy of the live data, real addresses included, and never emails anyone.
-Until Resend is set up (Till, `docs/todos.md`), nothing is emailed and the bell works on its
-own.
+**Emails are sent through Resend**, from a We Lodge address. **Off the live site — staging,
+or a computer — only these are ever emailed** (the owner, 2026-10-13): brandon@, ami@,
+till@ and volki@welodge.net, and britz.brandon@gmail.com, their subjects starting *[Test]*. Staging runs on a
+copy of the live data, every real address included, so anyone else is skipped there (the
+email goes to the server log). The live site is told apart by Vercel itself, not by a
+setting someone could forget. Until Resend is set up (Till, `docs/todos.md`), nothing is
+emailed and the bell works on its own.
 
 ## 3. Phase 1 — Scouting
 
@@ -3018,7 +3021,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
-| §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set on the live site (Till) |
+| §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |

@@ -21,9 +21,11 @@ export const env = createEnv({
     DATABASE_URL: z.string().url(),
     // Resend, for notification emails (doc §2.9) — separate from the sign-in
     // key so setting it does not bring back email sign-in. Set on the live
-    // site only: staging runs on a copy of the live data, real addresses
-    // included, and must never email them. Without it emails go to the log.
+    // site, and on staging too: away from the live site only the team in
+    // src/server/email.ts is ever emailed (doc §2.9). Without it emails go to the log.
     RESEND_API_KEY: z.string().optional(),
+    // Set by Vercel itself: "production" on the live site, "preview" on staging.
+    VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
     // "We Lodge OS <notifications@welodge.net>" — a domain verified in Resend.
     NOTIFICATIONS_FROM: z.string().optional(),
     // The site's own address, for links in emails.
@@ -78,6 +80,7 @@ export const env = createEnv({
     EMAIL_FROM: process.env.EMAIL_FROM,
     DATABASE_URL: process.env.DATABASE_URL,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
+    VERCEL_ENV: process.env.VERCEL_ENV,
     NOTIFICATIONS_FROM: process.env.NOTIFICATIONS_FROM,
     APP_URL: process.env.APP_URL,
     CRON_SECRET: process.env.CRON_SECRET,
