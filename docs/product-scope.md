@@ -746,9 +746,25 @@ event already has is skipped. When places were first put into layers, each went 
 its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *Other places*
 (not measured until switched on). A place's form has its **Map layer**.
 
+**The metro** (2026-10-13): *+ Add metro lines & stations* in the Layers panel fetches the
+metro and light rail around the event's places from OpenStreetMap — several of its servers
+asked at once, as one is often busy; when all are, it says so, to try again in a few minutes —
+into two layers: **Metro lines**, each line drawn in its official colour and thicker than
+Google's own transit lines, and **Metro stations**, a 🚉 per station with the lines serving
+it. Run again (*Refresh metro lines & stations*), it replaces both.
+
+**Adding a property from the map** (2026-10-13), for what is seen on the ground — under
+development, not on Google: **＋ Add a property** at the top of the map, then a click on the
+spot, or **📍 Use where I am** from a phone in front of it. A red "＋ New property here" pin
+shows the spot (*Move it* to click again); beside the map, its name (a working one will do),
+Hotel / Apartments / Aparthotel, stars for a hotel, *Under development*, the address — looked
+up from the spot, to change if need be — and a note. **Add to properties board** does what
+adding a found place does: the property, on the event's board, with a hotel contact task;
+its notes say it was spotted on the ground and added from the map, with what was noted.
+
 On the **Properties tab's map**, the **Layers** panel ticks each layer on or off (measured
 ones starred), with **Our
-properties** and Google's **Public transport** (every metro, rail and bus line with its
+properties** and **Google public transport** (every metro, rail and bus line with its
 stations — off to start), and *Show all* / *Hide all* — there in full screen too (the map's
 own full-screen button, top right, takes the panel with it); the choice is remembered per event in
 the browser. **Places show as small round icons in their layer's colour** (2026-10-13; names on

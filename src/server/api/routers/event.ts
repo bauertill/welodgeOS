@@ -38,7 +38,10 @@ export const eventRouter = createTRPCRouter({
             orderBy: [{ category: "asc" }, { name: "asc" }],
             include: { layer: { select: { id: true, name: true, color: true, measured: true } } },
           },
-          mapLayers: { orderBy: [{ position: "asc" }, { name: "asc" }], select: { id: true, name: true, color: true, measured: true } },
+          mapLayers: {
+            orderBy: [{ position: "asc" }, { name: "asc" }],
+            select: { id: true, name: true, color: true, measured: true, lines: { select: { id: true, name: true, ref: true, color: true, path: true } } },
+          },
           projectLead: { select: { id: true, name: true, email: true } },
           accommodationManagers: { select: { id: true, name: true, email: true }, orderBy: { name: "asc" } },
         },

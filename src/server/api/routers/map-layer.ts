@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
+import { fetchMetro } from "~/server/metro";
 
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Choose a colour");
 
@@ -17,7 +18,7 @@ export const mapLayerRouter = createTRPCRouter({
     ctx.db.mapLayer.findMany({
       where: { eventId: input.eventId },
       orderBy: [{ position: "asc" }, { name: "asc" }],
-      include: { _count: { select: { places: true } } },
+      include: { _count: { select: { places: true, lines: true } } },
     }),
   ),
 
@@ -44,6 +45,65 @@ export const mapLayerRouter = createTRPCRouter({
     const layer = await ctx.db.mapLayer.delete({ where: { id: input.id }, include: { _count: { select: { places: true } } } });
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Event", entityId: layer.eventId, summary: `Map layer removed: ${layer.name}` });
     return { ok: true };
+  }),
+
+  /**
+   * The metro around the event (doc §3.7), from OpenStreetMap: a *Metro lines*
+   * layer with each line in its colour, and a *Metro stations* layer, each
+   * station with the lines serving it. The area is the event's places, with a
+   * margin; running it again replaces both.
+   */
+  importMetro: protectedProcedure.input(z.object({ eventId: z.string() })).mutation(async ({ ctx, input }) => {
+    const places = await ctx.db.placeOfInterest.findMany({
+      where: { eventId: input.eventId, NOT: { layer: { name: { in: ["Metro stations"] } } } },
+      select: { latitude: true, longitude: true },
+    });
+    if (!places.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Add the event's places first — the metro is fetched for the area around them." });
+    const lats = places.map((place) => place.latitude);
+    const lngs = places.map((place) => place.longitude);
+    const margin = 0.1;
+    const metro = await fetchMetro({ south: Math.min(...lats) - margin, north: Math.max(...lats) + margin, west: Math.min(...lngs) - margin, east: Math.max(...lngs) + margin });
+    if (!metro) throw new TRPCError({ code: "BAD_REQUEST", message: "OpenStreetMap is busy right now and did not answer — try again in a few minutes." });
+    if (!metro.lines.length && !metro.stations.length) throw new TRPCError({ code: "BAD_REQUEST", message: "No metro or light rail found around the event's places." });
+    return ctx.db.$transaction(
+      async (tx) => {
+        const count = await tx.mapLayer.count({ where: { eventId: input.eventId } });
+        const linesLayer = await tx.mapLayer.upsert({
+          where: { eventId_name: { eventId: input.eventId, name: "Metro lines" } },
+          update: {},
+          create: { eventId: input.eventId, name: "Metro lines", color: "#e3131b", position: count },
+        });
+        const stationsLayer = await tx.mapLayer.upsert({
+          where: { eventId_name: { eventId: input.eventId, name: "Metro stations" } },
+          update: {},
+          create: { eventId: input.eventId, name: "Metro stations", color: "#2b4c9b", position: count + 1 },
+        });
+        await tx.mapLine.deleteMany({ where: { layerId: linesLayer.id } });
+        await tx.mapLine.createMany({ data: metro.lines.map((line) => ({ layerId: linesLayer.id, name: line.name, ref: line.ref, color: line.color, path: line.path })) });
+        await tx.placeOfInterest.deleteMany({ where: { layerId: stationsLayer.id } });
+        const taken = new Set((await tx.placeOfInterest.findMany({ where: { eventId: input.eventId }, select: { name: true } })).map((place) => place.name.toLowerCase()));
+        const stations = metro.stations.filter((station) => !taken.has(station.name.toLowerCase()));
+        await tx.placeOfInterest.createMany({
+          data: stations.map((station) => ({
+            eventId: input.eventId,
+            layerId: stationsLayer.id,
+            name: station.name,
+            category: "TRAIN_STATION" as const,
+            lines: station.lines.join(", ") || null,
+            latitude: station.latitude,
+            longitude: station.longitude,
+          })),
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Event",
+          entityId: input.eventId,
+          summary: `Metro added to the map: ${metro.lines.length} lines, ${stations.length} stations`,
+        });
+        return { lines: metro.lines.length, stations: stations.length };
+      },
+      { timeout: 60_000 },
+    );
   }),
 
   /**

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { stageOf } from "~/lib/stages";
 
 import { categoryContractStatusLabels, distanceKm, scoutingStatusLabels } from "~/lib/scouting";
+import { reverseGeocode } from "~/server/places";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
 import { findNearby, knownAlready } from "~/server/discover";
@@ -368,6 +369,66 @@ export const scoutingRouter = createTRPCRouter({
       await deliverImmediate(ctx.db);
       return result;
     }),
+
+  /**
+   * A property added by pointing at the map (doc §3.9, 2026-10-13) — spotted
+   * on the ground, under development, not on Google: on our properties and
+   * the event's board, with a hotel contact task, as one found by search.
+   */
+  addFromMap: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        name: z.string().trim().min(1, "Give it a name — even a working one, like Hotel under construction on 5th").max(300),
+        type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]),
+        stars: z.number().int().min(1).max(5).nullable(),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        address: z.string().max(500),
+        city: z.string().max(200).nullable(),
+        country: z.string().max(200).nullable(),
+        underDevelopment: z.boolean(),
+        note: z.string().max(5000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.db.$transaction(async (tx) => {
+        const event = await tx.event.findUniqueOrThrow({ where: { id: input.eventId }, select: { name: true } });
+        const made = await createFoundProperty(tx, {
+          place: {
+            name: input.name,
+            type: input.type,
+            latitude: input.latitude,
+            longitude: input.longitude,
+            address: input.address.trim() || null,
+            city: input.city,
+            country: input.country,
+            website: null,
+            phone: null,
+            stars: input.stars,
+            rooms: null,
+            source: "map",
+          },
+          eventId: input.eventId,
+          salesRequestId: null,
+          foundWhile: `for ${event.name}`,
+          actorId: ctx.session.user.id,
+        });
+        const extra = [input.underDevelopment ? "Under development." : null, input.note.trim() || null].filter(Boolean).join(" ");
+        if (extra) {
+          const property = await tx.property.findUniqueOrThrow({ where: { id: made.id }, select: { notes: true } });
+          await tx.property.update({ where: { id: made.id }, data: { notes: [property.notes, extra].filter(Boolean).join("\n") } });
+        }
+        return made;
+      });
+      await deliverImmediate(ctx.db);
+      return result;
+    }),
+
+  /** The address at a point on the map, to start a property added there. */
+  addressAt: protectedProcedure
+    .input(z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }))
+    .query(({ input }) => reverseGeocode(input.latitude, input.longitude)),
 
   /** Properties not yet on this event's list, for the "add" picker. */
   candidates: protectedProcedure

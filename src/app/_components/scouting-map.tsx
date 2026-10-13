@@ -15,6 +15,7 @@ import { env } from "~/env";
 import { formatDay } from "~/lib/format";
 import { placeIcon } from "~/lib/place-icons";
 import { placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
+import { AddPropertyForm } from "~/app/_components/add-property-on-map";
 import { LayersPanel } from "~/app/_components/map-layers";
 import { TravelTimes } from "~/app/_components/travel-times";
 import { api } from "~/trpc/react";
@@ -65,7 +66,39 @@ export type MapPlace = {
 };
 
 /** A layer of the event's map (doc §3.7): its places shown or hidden together. */
-export type MapLayer = { id: string; name: string; color: string; measured: boolean };
+export type MapLayer = {
+  id: string;
+  name: string;
+  color: string;
+  measured: boolean;
+  /** Lines drawn on it — metro and light rail (doc §3.7). */
+  lines?: { id: string; name: string; ref: string | null; color: string; path: unknown }[];
+};
+
+/** A layer's lines, drawn thicker than Google's own transit lines, each in its colour. */
+function Lines({ lines }: { lines: NonNullable<MapLayer["lines"]> }) {
+  const map = useMap();
+  const maps = useMapsLibrary("maps");
+  useEffect(() => {
+    if (!map || !maps) return;
+    const drawn = lines.flatMap((line) =>
+      (line.path as [number, number][][]).map(
+        (run) =>
+          new maps.Polyline({
+            map,
+            path: run.map(([lat, lng]) => ({ lat, lng })),
+            strokeColor: line.color,
+            strokeWeight: 5,
+            strokeOpacity: 0.9,
+            clickable: false,
+            zIndex: 5,
+          }),
+      ),
+    );
+    return () => drawn.forEach((polyline) => polyline.setMap(null));
+  }, [map, maps, lines]);
+  return null;
+}
 
 /** Google's own public transport — every metro, rail and bus line with its stations — on or off. */
 function TransitLayer({ on }: { on: boolean }) {
@@ -429,6 +462,10 @@ export function ScoutingMap({
   // A place being added from the Layers panel: its spot, and whether the next map click sets it.
   const [draftPoint, setDraftPoint] = useState<{ latitude: number; longitude: number } | null>(null);
   const [picking, setPicking] = useState(false);
+  // A property added by pointing at the map: the form open, its spot, and whether the next click sets it.
+  const [addingProperty, setAddingProperty] = useState(false);
+  const [propertyPoint, setPropertyPoint] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [pickingProperty, setPickingProperty] = useState(false);
   // Full screen takes the whole map — the Layers panel and a property's card with it — not Google's map alone.
   const frame = useRef<HTMLDivElement>(null);
   const [fullScreen, setFullScreen] = useState(false);
@@ -502,6 +539,22 @@ export function ScoutingMap({
   return (
     <div ref={frame} className="border-ink-200/60 flex flex-col overflow-hidden rounded-xl border bg-white md:flex-row">
       <div className="relative min-w-0 flex-1">
+        {eventId && !addingProperty && (
+          <button
+            type="button"
+            onClick={() => {
+              setOpenId(null);
+              setAddingProperty(true);
+              setPickingProperty(true);
+            }}
+            className="bg-brand-400 hover:bg-brand-500 absolute top-2.5 left-1/2 z-10 -translate-x-1/2 rounded-full px-4 py-2 text-[13px] font-medium text-white shadow-md"
+          >
+            ＋ Add a property
+          </button>
+        )}
+        {pickingProperty && (
+          <p className="bg-ink-900 absolute top-14 left-1/2 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs text-white shadow-md">Click where the property is</p>
+        )}
         <button
           type="button"
           onClick={toggleFullScreen}
@@ -531,6 +584,11 @@ export function ScoutingMap({
             gestureHandling="greedy"
             clickableIcons={false}
             onClick={(event) => {
+              if (pickingProperty && event.detail.latLng) {
+                setPropertyPoint({ latitude: event.detail.latLng.lat, longitude: event.detail.latLng.lng });
+                setPickingProperty(false);
+                return;
+              }
               if (picking && event.detail.latLng) {
                 setDraftPoint({ latitude: event.detail.latLng.lat, longitude: event.detail.latLng.lng });
                 setPicking(false);
@@ -539,12 +597,17 @@ export function ScoutingMap({
               if (Date.now() - pinClickedAt.current < 300) return;
               setOpenId(null);
             }}
-            draggableCursor={picking ? "crosshair" : undefined}
+            draggableCursor={picking || pickingProperty ? "crosshair" : undefined}
             fullscreenControl={false}
             style={{ height: fullScreen ? "100vh" : "32rem", width: "100%" }}
           >
             <FitBounds points={points} />
             <TransitLayer on={shown.isShown("transit")} />
+            {layers
+              .filter((layer) => layer.lines?.length && shown.isShown(layer.id) && !onlyPlaceId)
+              .map((layer) => (
+                <Lines key={layer.id} lines={layer.lines!} />
+              ))}
 
             {visiblePlaces.map((place) => (
               <AdvancedMarker
@@ -609,6 +672,11 @@ export function ScoutingMap({
                 />
               </AdvancedMarker>
             ))}
+            {propertyPoint && (
+              <AdvancedMarker position={{ lat: propertyPoint.latitude, lng: propertyPoint.longitude }} title="The new property" zIndex={960}>
+                <span className="block -translate-y-1/2 rounded-full bg-[#e5533d] px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">＋ New property here</span>
+              </AdvancedMarker>
+            )}
             {draftPoint && (
               <AdvancedMarker position={{ lat: draftPoint.latitude, lng: draftPoint.longitude }} title="The new place" zIndex={950}>
                 <span className="block -translate-y-1/2 rounded-full bg-[#e5533d] px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">＋ New place here</span>
@@ -624,6 +692,23 @@ export function ScoutingMap({
           </GoogleMap>
         </APIProvider>
       </div>
+
+      {addingProperty && eventId && (
+        <aside className="border-ink-200/60 w-full shrink-0 overflow-y-auto border-t bg-white p-4 md:w-80 md:border-t-0 md:border-l">
+          <AddPropertyForm
+            eventId={eventId}
+            point={propertyPoint}
+            setPoint={setPropertyPoint}
+            picking={pickingProperty}
+            setPicking={setPickingProperty}
+            onClose={() => {
+              setAddingProperty(false);
+              setPickingProperty(false);
+              setPropertyPoint(null);
+            }}
+          />
+        </aside>
+      )}
 
       {openId && renderFound && found.some((place) => place.key === openId) && (
         <aside className="border-ink-200/60 w-full shrink-0 border-t bg-white p-4 md:w-80 md:border-t-0 md:border-l">

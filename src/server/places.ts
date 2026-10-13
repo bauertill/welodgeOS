@@ -97,3 +97,23 @@ export async function geocode(parts: (string | null | undefined)[]) {
   const first = results[0];
   return first ? { latitude: Number(first.lat), longitude: Number(first.lon), address: first.display_name ?? null } : null;
 }
+
+/** The address at a point on the map, from OpenStreetMap — for a property added by pointing at it (doc §3.9). */
+export async function reverseGeocode(latitude: number, longitude: number) {
+  const url = new URL("https://nominatim.openstreetmap.org/reverse");
+  url.searchParams.set("lat", String(latitude));
+  url.searchParams.set("lon", String(longitude));
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("zoom", "18");
+  const response = await fetch(url, { headers: { "User-Agent": "WeLodgeOS (os@welodge.net)" }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  if (!response?.ok) return null;
+  const found = (await response.json().catch(() => null)) as {
+    display_name?: string;
+    address?: { house_number?: string; road?: string; city?: string; town?: string; village?: string; suburb?: string; country?: string };
+  } | null;
+  if (!found?.address) return null;
+  const a = found.address;
+  const street = [a.house_number, a.road].filter(Boolean).join(" ");
+  const city = a.city ?? a.town ?? a.village ?? a.suburb ?? null;
+  return { address: [street, city].filter(Boolean).join(", ") || (found.display_name ?? null), city, country: a.country ?? null };
+}

@@ -23,7 +23,7 @@ export const foundPlaceInput = z.object({
   phone: z.string().max(200).nullable(),
   stars: z.number().int().min(1).max(5).nullable(),
   rooms: z.number().int().min(1).nullable(),
-  source: z.enum(["google", "osm"]),
+  source: z.enum(["google", "osm", "map"]),
 });
 
 export async function createFoundProperty(
@@ -41,6 +41,8 @@ export async function createFoundProperty(
   const already = await tx.property.findFirst({ where: { name: { equals: place.name, mode: "insensitive" } }, select: { id: true } });
   if (already) throw new TRPCError({ code: "BAD_REQUEST", message: `${place.name} is already in our properties.` });
   const where = place.source === "google" ? "Google Maps" : "OpenStreetMap";
+  // Spotted on the ground and pointed at on the map, rather than found by search (doc §3.9).
+  const how = place.source === "map" ? `Spotted on the ground and added from the map ${input.foundWhile}` : `Found on ${where} ${input.foundWhile}`;
   const property = await tx.property.create({
     data: {
       name: place.name,
@@ -55,10 +57,10 @@ export async function createFoundProperty(
       stars: place.type === "HOTEL" ? place.stars : null,
       totalRooms: place.rooms,
       scoutedById: input.actorId,
-      notes: `Found on ${where} ${input.foundWhile}.`,
+      notes: `${how}.`,
     },
   });
-  await logAudit(tx, { actorId: input.actorId, entity: "Property", entityId: property.id, summary: `Added — found on ${where} ${input.foundWhile}` });
+  await logAudit(tx, { actorId: input.actorId, entity: "Property", entityId: property.id, summary: `Added — ${how.charAt(0).toLowerCase()}${how.slice(1)}` });
   let taskId: string | null = null;
   if (input.eventId) {
     const entry = await tx.scoutingEntry.create({ data: { eventId: input.eventId, propertyId: property.id, addedById: input.actorId } });

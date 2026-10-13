@@ -123,6 +123,13 @@ export function LayersPanel({
       refresh();
     },
   });
+  const metro = api.mapLayer.importMetro.useMutation({
+    onSuccess: (done) => {
+      setNote({ text: `Metro added: ${done.lines} lines, ${done.stations} stations.` });
+      refresh();
+    },
+    onError: (error) => setNote({ text: friendlyError(error) ?? "That did not work — try again.", bad: true }),
+  });
   const closeAdding = () => {
     setAdding(null);
     setDraftPoint(null);
@@ -271,7 +278,7 @@ export function LayersPanel({
                 layer.id,
                 layer.name,
                 <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: layer.color }} />,
-                places.filter((place) => place.layerId === layer.id).length,
+                layer.lines?.length ? layer.lines.length : places.filter((place) => place.layerId === layer.id).length,
                 layer,
               )}
               {editing?.id === layer.id && layerForm}
@@ -279,7 +286,7 @@ export function LayersPanel({
             </div>
           ))}
           {row("properties", "Our properties", <span className="bg-brand-500 inline-block h-2.5 w-2.5 shrink-0 rounded-full" />)}
-          {row("transit", "Public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
+          {row("transit", "Google public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
           <div className="text-brand-700 flex justify-between px-1.5 pt-1 text-[11px]">
             <button type="button" onClick={shown.showAll} className="hover:underline">
               Show all
@@ -302,6 +309,18 @@ export function LayersPanel({
             </button>
             <button type="button" onClick={() => file.current?.click()} className="text-brand-700 text-left font-medium hover:underline">
               Import from Google My Maps
+            </button>
+            <button
+              type="button"
+              disabled={metro.isPending}
+              onClick={() => {
+                setNote(null);
+                metro.mutate({ eventId });
+              }}
+              className="text-brand-700 text-left font-medium hover:underline disabled:opacity-60"
+              title="Metro and light-rail lines, in their colours, and their stations, from OpenStreetMap"
+            >
+              {metro.isPending ? "Fetching the metro…" : layers.some((layer) => layer.name === "Metro lines") ? "Refresh metro lines & stations" : "+ Add metro lines & stations"}
             </button>
             <input
               ref={file}

@@ -66,6 +66,7 @@ function firstIn(text: string, list: [RegExp, string][]) {
 }
 
 export function placeIcon(place: { name: string; notes?: string | null; layerName?: string | null; category?: string }) {
+  if (place.category === "TRAIN_STATION") return "🚉";
   return (
     firstIn(place.name, sports) ??
     firstIn(place.notes ?? "", sports) ??
