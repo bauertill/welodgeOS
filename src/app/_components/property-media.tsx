@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Photo } from "~/app/_components/photo";
 import { env } from "~/env";
-import { youtubeEmbed } from "~/lib/media";
+import { DROPBOX_APP_KEY, youtubeEmbed } from "~/lib/media";
 import { api } from "~/trpc/react";
 
 type ChooserFile = { name: string; link: string };
@@ -163,7 +163,7 @@ function MediaLinks({ propertyId, videoUrl, photosUrl, onSaved }: { propertyId: 
 }
 
 function AddPhotos({ propertyId, onAdded }: { propertyId: string; onAdded: () => void }) {
-  const appKey = env.NEXT_PUBLIC_DROPBOX_APP_KEY;
+  const appKey = env.NEXT_PUBLIC_DROPBOX_APP_KEY ?? DROPBOX_APP_KEY;
   const [pasting, setPasting] = useState(false);
   const [links, setLinks] = useState("");
   const [result, setResult] = useState<string | null>(null);

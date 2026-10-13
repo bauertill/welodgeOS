@@ -406,7 +406,7 @@ document.
       everything else on the rate card works. Uses Claude Sonnet 5, a few hundred
       tokens per description.
 
-- [ ] **Dropbox app key, to pick property photos straight from Dropbox**
+- [x] **Dropbox app key, to pick property photos straight from Dropbox** — done 2026-10-13: Brandon made the app (We Lodge OS) and its key is in `src/lib/media.ts` (public by design, so no Vercel setting is needed). Originally:
       (`product-scope.md` §3.10, Media, 2026-10-11). At dropbox.com/developers create an
       app ("Scoped access", "Full Dropbox"), and under *Chooser / Saver / Embedder
       domains* add `os.welodge.net`, `staging.welodge.net` and `localhost`. Put its

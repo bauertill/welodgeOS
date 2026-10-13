@@ -1243,8 +1243,8 @@ stack of cards:
     subfolders — *Open in Dropbox*.
   - **Photos for clients**: the best few, picked from that folder — up to 60. **Choose
     from Dropbox** opens Dropbox's own picker, to tick photos across the folder and its
-    subfolders (needs the Dropbox app key — Till, `docs/todos.md`); until then **Paste
-    photo links** takes Dropbox *Copy link* links, one per line. A folder's link is
+    subfolders (We Lodge's Dropbox app, set up 2026-10-13); **Paste photo links** also
+    takes Dropbox *Copy link* links, one per line. A folder's link is
     refused there, and a photo already in is not added twice. Each photo has a caption
     and a room category (or *Whole property*), so it shows beside that room on a rate
     card; the first is the **Cover**, *Make cover* and ← → change the order; *Remove*

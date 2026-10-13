@@ -3,6 +3,14 @@
  * their shared links; videos stay on YouTube. Nothing is uploaded to us.
  */
 
+/**
+ * We Lodge's Dropbox app, for Dropbox's Chooser on a property's Media tab (doc
+ * §3.10). Public by design — Dropbox puts it in the page — and limited to our
+ * web addresses in the app's settings, so it lives here rather than as a
+ * secret; NEXT_PUBLIC_DROPBOX_APP_KEY, if set, overrides it.
+ */
+export const DROPBOX_APP_KEY = "icaoauw2wn4wzuj";
+
 /** Is this a Dropbox link? */
 export function isDropbox(url: string) {
   try {
