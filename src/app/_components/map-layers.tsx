@@ -123,13 +123,6 @@ export function LayersPanel({
       refresh();
     },
   });
-  const metro = api.mapLayer.importMetro.useMutation({
-    onSuccess: (done) => {
-      setNote({ text: `Metro stations added: ${done.stations}.` });
-      refresh();
-    },
-    onError: (error) => setNote({ text: friendlyError(error) ?? "That did not work — try again.", bad: true }),
-  });
   const closeAdding = () => {
     setAdding(null);
     setDraftPoint(null);
@@ -309,18 +302,6 @@ export function LayersPanel({
             </button>
             <button type="button" onClick={() => file.current?.click()} className="text-brand-700 text-left font-medium hover:underline">
               Import from Google My Maps
-            </button>
-            <button
-              type="button"
-              disabled={metro.isPending}
-              onClick={() => {
-                setNote(null);
-                metro.mutate({ eventId });
-              }}
-              className="text-brand-700 text-left font-medium hover:underline disabled:opacity-60"
-              title="Metro and light-rail stations around the event's places, from Google Maps"
-            >
-              {metro.isPending ? "Finding the stations…" : layers.some((layer) => layer.name === "Metro stations") ? "Refresh metro stations" : "+ Add metro stations"}
             </button>
             <input
               ref={file}

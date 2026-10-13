@@ -746,17 +746,14 @@ event already has is skipped. When places were first put into layers, each went 
 its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *Other places*
 (not measured until switched on). A place's form has its **Map layer**.
 
-**Metro stations** (2026-10-13): *+ Add metro stations* in the Layers panel finds the metro
-and light-rail stations within 2.5 km of each place distances are measured to (the venues),
-from Google Maps — so they are named as Google names them — into a **Metro stations** layer, a
-🚉 for each; run again (*Refresh metro stations*), it replaces them. The **lines** are Google's
-own, shown by the *Google public transport* tick box, thin as Google draws them (the owner's
-call: our own thicker lines, from OpenStreetMap, were tried and dropped the same day).
-
-**Adding a property from the map** (2026-10-13), for what is seen on the ground — under
-development, not on Google: **＋ Add a property** at the top of the map, then a click on the
-spot, or **📍 Use where I am** from a phone in front of it. A red "＋ New property here" pin
-shows the spot (*Move it* to click again); beside the map, its name (a working one will do),
+**Adding anything from the map** (2026-10-13): **＋ Add to the map** at the top of the map, then
+a click on the spot, or **📍 Use where I am** from a phone in front of it; a red "＋ New here"
+pin shows the spot (*Move it* to click again). Beside the map, it is **a property** or **a
+place**. **A place** — a nation house, a fan zone, a meeting point, a metro station — has a
+name, the layer it goes on (or *+ A new layer…* named there and then), its address and a note,
+and *Add to the map* puts it there. (Metro stations fetched from Google or OpenStreetMap were
+tried and dropped the same day — added by hand instead.) **A property**, for what is seen on
+the ground — under development, not on Google — has its name (a working one will do),
 Hotel / Apartments / Aparthotel, stars for a hotel, *Under development*, the address — looked
 up from the spot, to change if need be — and a note. **Add to properties board** does what
 adding a found place does: the property, on the event's board, with a hotel contact task;

@@ -517,11 +517,11 @@ export function ScoutingMap({
             }}
             className="bg-brand-400 hover:bg-brand-500 absolute top-2.5 left-1/2 z-10 -translate-x-1/2 rounded-full px-4 py-2 text-[13px] font-medium text-white shadow-md"
           >
-            ＋ Add a property
+            ＋ Add to the map
           </button>
         )}
         {pickingProperty && (
-          <p className="bg-ink-900 absolute top-14 left-1/2 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs text-white shadow-md">Click where the property is</p>
+          <p className="bg-ink-900 absolute top-14 left-1/2 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs text-white shadow-md">Click the spot on the map</p>
         )}
         <button
           type="button"
@@ -637,7 +637,7 @@ export function ScoutingMap({
             ))}
             {propertyPoint && (
               <AdvancedMarker position={{ lat: propertyPoint.latitude, lng: propertyPoint.longitude }} title="The new property" zIndex={960}>
-                <span className="block -translate-y-1/2 rounded-full bg-[#e5533d] px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">＋ New property here</span>
+                <span className="block -translate-y-1/2 rounded-full bg-[#e5533d] px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">＋ New here</span>
               </AdvancedMarker>
             )}
             {draftPoint && (
@@ -660,6 +660,7 @@ export function ScoutingMap({
         <aside className="border-ink-200/60 w-full shrink-0 overflow-y-auto border-t bg-white p-4 md:w-80 md:border-t-0 md:border-l">
           <AddPropertyForm
             eventId={eventId}
+            layers={layers}
             point={propertyPoint}
             setPoint={setPropertyPoint}
             picking={pickingProperty}

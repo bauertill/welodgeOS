@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
-import { measuredPlaces } from "~/lib/scouting";
-import { fetchStations } from "~/server/metro";
 
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Choose a colour");
 
@@ -46,55 +44,6 @@ export const mapLayerRouter = createTRPCRouter({
     const layer = await ctx.db.mapLayer.delete({ where: { id: input.id }, include: { _count: { select: { places: true } } } });
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Event", entityId: layer.eventId, summary: `Map layer removed: ${layer.name}` });
     return { ok: true };
-  }),
-
-  /**
-   * The metro and light-rail stations around the event's places (doc §3.7),
-   * from Google Maps, into a *Metro stations* layer; run again, it replaces
-   * them. The lines are Google's own Public transport layer.
-   */
-  importMetro: protectedProcedure.input(z.object({ eventId: z.string() })).mutation(async ({ ctx, input }) => {
-    const places = await ctx.db.placeOfInterest.findMany({
-      where: { eventId: input.eventId, NOT: { layer: { name: "Metro stations" } } },
-      select: { latitude: true, longitude: true, category: true, layer: { select: { measured: true } } },
-    });
-    // Around the places distances are measured to — the venues — or every place.
-    const around = measuredPlaces(places);
-    if (!around.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Add the event's places first — stations are found around them." });
-    const stations = await fetchStations(around);
-    if (!stations) throw new TRPCError({ code: "BAD_REQUEST", message: "Google Maps did not answer — try again in a minute." });
-    if (!stations.length) throw new TRPCError({ code: "BAD_REQUEST", message: "No metro or light-rail stations found near the event's places." });
-    return ctx.db.$transaction(
-      async (tx) => {
-        const layer = await tx.mapLayer.upsert({
-          where: { eventId_name: { eventId: input.eventId, name: "Metro stations" } },
-          update: {},
-          create: { eventId: input.eventId, name: "Metro stations", color: "#2b4c9b", position: await tx.mapLayer.count({ where: { eventId: input.eventId } }) },
-        });
-        await tx.placeOfInterest.deleteMany({ where: { layerId: layer.id } });
-        const taken = new Set((await tx.placeOfInterest.findMany({ where: { eventId: input.eventId }, select: { name: true } })).map((place) => place.name.toLowerCase()));
-        const fresh = stations.filter((station) => {
-          const key = station.name.toLowerCase();
-          if (taken.has(key)) return false;
-          taken.add(key);
-          return true;
-        });
-        await tx.placeOfInterest.createMany({
-          data: fresh.map((station) => ({
-            eventId: input.eventId,
-            layerId: layer.id,
-            name: station.name,
-            category: "TRAIN_STATION" as const,
-            address: station.address,
-            latitude: station.latitude,
-            longitude: station.longitude,
-          })),
-        });
-        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Event", entityId: input.eventId, summary: `Metro stations added to the map: ${fresh.length}` });
-        return { stations: fresh.length };
-      },
-      { timeout: 60_000 },
-    );
   }),
 
   /**
