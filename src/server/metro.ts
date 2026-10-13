@@ -57,7 +57,7 @@ export async function fetchMetro(box: Box): Promise<{ lines: MetroLine[]; statio
   const bbox = `${box.south},${box.west},${box.north},${box.east}`;
   const [relations, nodes] = await Promise.all([
     overpass<OsmRelation>(`[out:json][timeout:90];relation["type"="route"]["route"~"^(subway|light_rail)$"](${bbox});out geom;`),
-    overpass<OsmNode>(`[out:json][timeout:60];node["railway"="station"]["station"~"^(subway|light_rail)$"](${bbox});out tags;`),
+    overpass<OsmNode>(`[out:json][timeout:60];node["railway"="station"]["station"~"^(subway|light_rail)$"](${bbox});out body;`),
   ]);
   if (!relations || !nodes) return null;
 
