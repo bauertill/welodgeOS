@@ -64,7 +64,7 @@ export const mediaRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const photos = input.photos.filter((photo) => photo.url);
       for (const photo of photos) {
-        if (!isLink(photo.url)) throw new TRPCError({ code: "BAD_REQUEST", message: "Each photo needs its own link, starting with https://" });
+        if (!isLink(photo.url)) throw new TRPCError({ code: "BAD_REQUEST", message: "Each photo or video needs its own link, starting with https://" });
         if (isDropboxFolder(photo.url)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "That is a link to a folder — use Copy link on the photo itself, or put the folder under Photos folder." });
         }
@@ -87,7 +87,7 @@ export const mediaRouter = createTRPCRouter({
           })),
         });
         if (fresh.length) {
-          await logAudit(tx, { actorId: ctx.session.user.id, entity: "Property", entityId: input.propertyId, summary: `Media: ${fresh.length} ${fresh.length === 1 ? "photo" : "photos"} added for clients` });
+          await logAudit(tx, { actorId: ctx.session.user.id, entity: "Property", entityId: input.propertyId, summary: `Media: ${fresh.length} ${fresh.length === 1 ? "photo or video" : "photos and videos"} added for clients` });
           await closeGetMediaTasks(tx, { propertyId: input.propertyId, actorId: ctx.session.user.id });
         }
         return { added: fresh.length, skipped: photos.length - fresh.length };

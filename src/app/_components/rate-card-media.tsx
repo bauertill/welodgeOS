@@ -82,7 +82,7 @@ function Lightbox({ photos, start, name, onClose }: { photos: CardPhoto[]; start
         </button>
       </div>
       <div className="relative min-h-0 flex-1" onClick={(event) => event.stopPropagation()}>
-        <Photo key={photo.src} src={photo.src} alt={photo.caption ?? name} sizes="100vw" className="!object-contain" priority />
+        <Photo key={photo.src} src={photo.src} alt={photo.caption ?? name} sizes="100vw" controls className="!object-contain" priority />
         {photos.length > 1 && (
           <>
             <button type="button" onClick={() => go(-1)} aria-label="Previous photo" className="absolute top-1/2 left-3 -translate-y-1/2 rounded-full bg-white/15 px-3 py-2 text-2xl text-white hover:bg-white/25">

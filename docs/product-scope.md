@@ -1241,7 +1241,10 @@ stack of cards:
   - **Video**: the YouTube link (the same *Video* field as before), played on the tab.
   - **Photos folder**: the Dropbox link to the property's folder, with its room-category
     subfolders — *Open in Dropbox*.
-  - **Photos for clients**: the best few, picked from that folder — up to 60. **Choose
+  - **Photos & videos for clients**: the best few, picked from that folder — up to 60. **Videos
+    count too** (2026-10-13; often all there is): picked from Dropbox or pasted the same way,
+    told by their file name (.mp4, .mov…), shown with their first frame and a ▶, and on a
+    rate card playing full size when opened — the cover too, if a video is first. **Choose
     from Dropbox** opens Dropbox's own picker, to tick photos across the folder and its
     subfolders (We Lodge's Dropbox app, set up 2026-10-13); **Paste photo links** also
     takes Dropbox *Copy link* links, one per line. A folder's link is

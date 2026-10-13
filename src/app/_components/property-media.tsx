@@ -56,7 +56,7 @@ export function PropertyMedia({ propertyId }: { propertyId: string }) {
       <MediaLinks propertyId={propertyId} videoUrl={data.videoUrl} photosUrl={data.photosUrl} onSaved={refresh} />
       <section>
         <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-ink-900 text-[14px] font-medium">Photos for clients ({data.photos.length})</h3>
+          <h3 className="text-ink-900 text-[14px] font-medium">Photos & videos for clients ({data.photos.length})</h3>
           {data.photosUrl && (
             <a href={data.photosUrl} target="_blank" rel="noreferrer" className="text-brand-700 text-xs hover:underline">
               Open the Dropbox folder ↗
@@ -64,11 +64,11 @@ export function PropertyMedia({ propertyId }: { propertyId: string }) {
           )}
         </div>
         <p className="text-ink-500 mb-3 text-xs font-light">
-          The best few, picked from the Dropbox folder — they are what rate cards can show. The first is the cover. Tag a photo with its room category and it shows beside that room.
+          The best few photos and videos, picked from the Dropbox folder — they are what rate cards can show. The first is the cover. Tag a photo with its room category and it shows beside that room.
         </p>
         <AddPhotos propertyId={propertyId} onAdded={refresh} />
         {data.photos.length === 0 ? (
-          <p className="text-ink-500 bg-ink-50/60 mt-3 rounded-lg px-4 py-6 text-center text-[13px] font-light">No photos picked yet.</p>
+          <p className="text-ink-500 bg-ink-50/60 mt-3 rounded-lg px-4 py-6 text-center text-[13px] font-light">No photos or videos picked yet.</p>
         ) : (
           <ul className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {data.photos.map((photo, index) => (
@@ -170,7 +170,7 @@ function AddPhotos({ propertyId, onAdded }: { propertyId: string; onAdded: () =>
   const [chooserError, setChooserError] = useState<string | null>(null);
   const add = api.media.addPhotos.useMutation({
     onSuccess: ({ added, skipped }) => {
-      setResult(`${added} ${added === 1 ? "photo" : "photos"} added${skipped ? ` · ${skipped} already there` : ""}.`);
+      setResult(`${added} added${skipped ? ` · ${skipped} already there` : ""}.`);
       setLinks("");
       setPasting(false);
       onAdded();
@@ -185,7 +185,7 @@ function AddPhotos({ propertyId, onAdded }: { propertyId: string; onAdded: () =>
         success: (files) => add.mutate({ propertyId, photos: files.map((file) => ({ url: file.link, name: file.name })) }),
         linkType: "preview",
         multiselect: true,
-        extensions: ["images"],
+        extensions: ["images", "video"],
         folderselect: false,
       });
     } catch {
@@ -202,7 +202,7 @@ function AddPhotos({ propertyId, onAdded }: { propertyId: string; onAdded: () =>
           </Button>
         )}
         <Button type="button" variant="secondary" onClick={() => setPasting(!pasting)}>
-          Paste photo links
+          Paste links
         </Button>
         {result && <span className="text-xs text-[#0a7a47]">{result}</span>}
       </div>
@@ -230,7 +230,7 @@ function AddPhotos({ propertyId, onAdded }: { propertyId: string; onAdded: () =>
               })
             }
           >
-            {add.isPending ? "Adding…" : "Add photos"}
+            {add.isPending ? "Adding…" : "Add"}
           </Button>
         </div>
       )}

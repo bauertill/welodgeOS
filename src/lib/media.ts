@@ -11,6 +11,15 @@
  */
 export const DROPBOX_APP_KEY = "icaoauw2wn4wzuj";
 
+/** Is this a video file — told by the name at the end of its link (doc §3.10, 2026-10-13)? */
+export function isVideo(url: string) {
+  try {
+    return /\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i.test(decodeURIComponent(new URL(url).pathname));
+  } catch {
+    return /\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|$)/i.test(url);
+  }
+}
+
 /** Is this a Dropbox link? */
 export function isDropbox(url: string) {
   try {
