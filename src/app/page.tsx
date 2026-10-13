@@ -1,3 +1,4 @@
+import { OpenEventLink } from "~/app/_components/open-event-link";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -98,12 +99,9 @@ export default async function DashboardPage() {
             {events.map((event) => (
               <tr key={event.id}>
                 <Td>
-                  <Link
-                    href={`/events/${event.id}`}
-                    className="hover:text-brand-700 font-medium"
-                  >
+                  <OpenEventLink eventId={event.id} className="hover:text-brand-700 font-medium">
                     {event.name}
-                  </Link>
+                  </OpenEventLink>
                 </Td>
                 <Td>
                   {[event.city, event.country].filter(Boolean).join(", ") || "—"}

@@ -92,8 +92,14 @@ managers are given each new sales request's sourcing task, and the project lead 
 of it (§4.11). Changes to the team are in the event's log.
 
 
-**An event's tabs** (2026-10-11): **Event details** first, then Properties, Inventory,
-Deadlines and Position. *Event details* shows the event — name, dates and nights, city,
+**An event's tabs** (reordered 2026-10-13): **Properties**, Inventory, Deadlines, Position,
+and **Event details** last. **Opening an event** — from the Events menu, the events list or
+the dashboard — starts on **Properties**, unless the person chose another start tab. The
+system notices, in each browser, when someone opens an event and goes straight to the same
+other tab three times running, and asks in a bar above the tabs: "You usually go straight
+to Inventory. Open events on Inventory from now on?" — *Yes* saves it as their start tab
+(on their profile, so on any computer), *No, thanks* is not asked again for that tab.
+*Pick up where you left off* still returns to the tab last worked in. *Event details* shows the event — name, dates and nights, city,
 country, status — with *Edit*; its **team** — the project lead and the accommodation
 managers — with *Change the team*; its **places of interest**, with *Change places of
 interest*; and its Log, the latest change shown. Each change opens **in a popup** over the

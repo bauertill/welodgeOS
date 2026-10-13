@@ -832,6 +832,8 @@ model User {
   /// Their own link for booking a call (Google Calendar appointment page,
   /// Calendly…), put in the email to a client (doc §4.11).
   bookingLink        String?
+  /// The tab an event opens on for them — Properties unless they chose another (doc §3.10, 2026-10-13).
+  eventStartTab      String?
   eventsLed          Event[]              @relation("EventProjectLead")
   eventsSourced      Event[]              @relation("EventAccommodationManagers")
 }
