@@ -91,10 +91,12 @@ export function RateCardView({
       {card.intro && <p className="text-ink-700 mt-6 text-[15px] leading-relaxed font-light whitespace-pre-line">{card.intro}</p>}
 
       <div className="mt-6 space-y-5">
-        {card.properties.map((property) => (
+        {card.properties.map((property, index) => (
           <section key={property.id} className="border-ink-200/70 break-inside-avoid rounded-xl border px-5 py-5">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="text-ink-900 text-lg font-semibold">
+              <h2 className="text-ink-900 flex items-center gap-2 text-lg font-semibold">
+                {/* Numbered as on the map below it (doc §4.11). */}
+                <span className="bg-brand-500 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[12px] text-white">{index + 1}</span>
                 {property.name}
                 {property.stars ? <span className="text-brand-700 ml-2 text-sm font-medium">{"★".repeat(property.stars)}</span> : null}
               </h2>

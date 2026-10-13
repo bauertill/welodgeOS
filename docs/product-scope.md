@@ -2128,6 +2128,14 @@ room category at the rate we sell it for.
   to page through with its room and caption; the YouTube video playing in the card;
   *See all photos* opening the Dropbox folder; and beside a room, "2 photos" of that
   room. The printout keeps the photos and gives the video's and folder's links instead.
+- **On the map, for the client** (2026-10-13): under the card on the client's link, a map
+  with the suggested properties as purple squares numbered as on the card (each property's
+  name on the card carries its number), the event's venues as their sport icons, and *Show the
+  metro and public transport* (Google's). **Getting there**: from one of the properties to a
+  venue searched for by name — or one of the five nearest, offered as buttons — the distance
+  as the crow flies and, from Google, the time **on foot, by car and by public transport**
+  (an ordinary weekday morning), each with *Directions ↗* opening the route in Google Maps.
+  Asked when the client asks, never stored; only through a live link. Not on the printout.
 - **The client's link** (`/rate-card/…`): made on the card, opened without signing in;
   *Copy link*, *Open*, *Switch off*. It shows what is saved.
 - **The client answers from the link** (2026-10-11). Beside each room, **I'm interested**;

@@ -9,6 +9,7 @@ import { clientMedia, photoSrc } from "~/lib/media";
 import { measuredPlaces, nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { moveStage } from "~/server/api/routers/sales";
+import { legsForMode } from "~/server/api/routers/travel";
 import { logAudit } from "~/server/audit";
 import { ensureGetMediaTask, GET_MEDIA, hasMedia, withMedia } from "~/server/get-media";
 import { deliverImmediate, notify } from "~/server/notify";
@@ -37,7 +38,11 @@ const cardInclude = {
       id: true,
       ownerId: true,
       client: { select: { name: true } },
-      event: { select: { id: true, name: true, startDate: true, endDate: true, placesOfInterest: { select: { name: true, category: true, latitude: true, longitude: true, layer: { select: { measured: true } } } } } },
+      event: { select: { id: true, name: true, startDate: true, endDate: true, placesOfInterest: {
+            select: { id: true, name: true, category: true, notes: true, latitude: true, longitude: true, layer: { select: { measured: true, name: true, color: true } } },
+          },
+        },
+      },
       lines: { orderBy: { position: "asc" } },
     },
   },
@@ -108,6 +113,16 @@ function shape(card: LoadedCard) {
     salesRequestId: card.salesRequest.id,
     event: card.salesRequest.event ? { name: card.salesRequest.event.name, startDate: card.salesRequest.event.startDate, endDate: card.salesRequest.event.endDate } : null,
     asked: card.salesRequest.lines.map((line) => ({ rooms: line.rooms, roomType: line.roomType, checkIn: line.checkIn, checkOut: line.checkOut })),
+    venues: venues.map((place) => ({
+      id: place.id,
+      name: place.name,
+      category: place.category,
+      notes: place.notes,
+      layerName: place.layer?.name ?? null,
+      color: place.layer?.color ?? null,
+      latitude: place.latitude,
+      longitude: place.longitude,
+    })),
     properties: card.properties.map((entry) => {
       const from = entry.property.latitude !== null && entry.property.longitude !== null ? { latitude: entry.property.latitude, longitude: entry.property.longitude } : null;
       const nearest = nearestPlace(from, venues.length ? venues : places);
@@ -119,6 +134,8 @@ function shape(card: LoadedCard) {
         stars: entry.property.stars,
         where: entry.property.area ?? entry.property.city,
         website: entry.property.website,
+        latitude: entry.property.latitude,
+        longitude: entry.property.longitude,
         nearest: nearest ? { name: nearest.place.name, km: nearest.km } : null,
         description: entry.description,
         videoUrl: entry.property.videoUrl,
@@ -410,6 +427,36 @@ export const rateCardRouter = createTRPCRouter({
     return { ok: true };
   }),
 
+  /**
+   * Getting from one of the card's properties to one of its venues (doc §4.11),
+   * on the client's link: walking, by car and by public transport, from
+   * Google — asked when the client asks, never stored.
+   */
+  journey: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), rateCardPropertyId: z.string(), placeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const key = env.GOOGLE_MAPS_SERVER_KEY;
+      if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Travel times are not available right now." });
+      const card = await ctx.db.rateCard.findUnique({
+        where: { shareToken: input.token },
+        select: {
+          salesRequest: { select: { eventId: true } },
+          properties: { where: { id: input.rateCardPropertyId }, select: { property: { select: { latitude: true, longitude: true } } } },
+        },
+      });
+      const from = card?.properties[0]?.property;
+      const place = await ctx.db.placeOfInterest.findFirst({
+        where: { id: input.placeId, eventId: card?.salesRequest.eventId ?? "none" },
+        select: { latitude: true, longitude: true },
+      });
+      if (!from?.latitude || !from.longitude || !place) throw new TRPCError({ code: "NOT_FOUND", message: "That journey cannot be worked out." });
+      const origin = { latitude: from.latitude, longitude: from.longitude };
+      const [walk, car, transit] = await Promise.all(
+        (["WALK", "DRIVE", "TRANSIT"] as const).map((mode) => legsForMode(mode, origin, [place], key).then((legs) => legs[0] ?? null).catch(() => null)),
+      );
+      return { walk, car, transit };
+    }),
+
   /** The client's copy, by its link: everything but our buying rates, and only the rates offered. */
   shared: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
     const card = await loadCard(ctx.db, { shareToken: input.token });
@@ -621,10 +668,14 @@ export function clientCopy(card: ReturnType<typeof shape>) {
     lastAnswer: card.answers[0] ? (({ isNew: _isNew, ...answer }) => answer)(card.answers[0]) : null,
     event: card.event,
     asked: card.asked,
+    /** For the client's map (doc §4.11): the places distances are measured to — the venues. */
+    venues: card.venues,
     properties: card.properties
       .map((property) => ({
         id: property.id,
         name: property.name,
+        latitude: property.latitude,
+        longitude: property.longitude,
         type: property.type,
         stars: property.stars,
         where: property.where,

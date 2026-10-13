@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { PrintButton } from "~/app/_components/print-button";
+import { RateCardMap } from "~/app/_components/rate-card-map";
 import { RateCardView } from "~/app/_components/rate-card-view";
 import { dayKey, nightsBetween, parseDay } from "~/lib/dates";
 import { formatMoney, formatRange } from "~/lib/format";
@@ -173,6 +174,12 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
             </div>
           );
         }}
+      />
+
+      <RateCardMap
+        token={token}
+        properties={card.properties.map((property) => ({ id: property.id, rateCardPropertyId: property.id, name: property.name, latitude: property.latitude, longitude: property.longitude }))}
+        venues={card.venues}
       />
 
       <section className="mx-auto max-w-3xl rounded-2xl bg-white px-8 py-7 shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:hidden">

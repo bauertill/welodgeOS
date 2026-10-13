@@ -22,7 +22,7 @@ const ROUTE_MATRIX_URL =
 
 /** The three ways of getting there the business asks about (doc §3.8). */
 const MODES = ["BICYCLE", "DRIVE", "TRANSIT"] as const;
-type Mode = (typeof MODES)[number];
+type Mode = (typeof MODES)[number] | "WALK";
 
 export type Leg = { seconds: number; metres: number } | null;
 
@@ -98,7 +98,7 @@ type MatrixElement = {
  * matrix at 100 elements; one origin against an event's places is nowhere
  * near that, but the cap is why places are not batched with properties.
  */
-async function legsForMode(
+export async function legsForMode(
   mode: Mode,
   from: Coordinates,
   destinations: Coordinates[],
