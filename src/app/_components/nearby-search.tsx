@@ -192,6 +192,8 @@ export function NearbySearch({
         availability={availability}
         eventId={eventId}
         found={found.map((place) => ({ key: place.key, name: place.name, latitude: place.latitude, longitude: place.longitude }))}
+        // The custom address, pinned once chosen and while its search lasts.
+        searchPoint={searching?.address ?? (placeId === "custom" ? address : null)}
         renderFound={(key) => {
           const place = byKey.get(key);
           if (!place) return null;
@@ -208,6 +210,11 @@ export function NearbySearch({
 
       {searching && (
         <div>
+          <div className="mb-1 flex justify-end">
+            <button type="button" onClick={() => setSearching(null)} className="text-ink-500 hover:text-ink-900 text-xs hover:underline">
+              Clear search ×
+            </button>
+          </div>
           {search.isLoading ? (
             <p className="text-ink-500 text-sm font-light">Searching Google Maps…</p>
           ) : search.error ? (

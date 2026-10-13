@@ -13,7 +13,7 @@ import type { PlaceCategory, ScoutingStatus } from "generated/prisma";
 import { env } from "~/env";
 import { formatDay } from "~/lib/format";
 import { placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
-import { placeColors, TravelTimes } from "~/app/_components/travel-times";
+import { TravelTimes } from "~/app/_components/travel-times";
 import { api } from "~/trpc/react";
 
 export type MapPin = {
@@ -319,6 +319,7 @@ export function ScoutingMap({
   eventId,
   found = [],
   renderFound,
+  searchPoint = null,
 }: {
   pins: MapPin[];
   places?: MapPlace[];
@@ -328,6 +329,8 @@ export function ScoutingMap({
   found?: { key: string; name: string; latitude: number; longitude: number }[];
   /** What a found place's panel says and offers. */
   renderFound?: (key: string) => React.ReactNode;
+  /** The custom address being searched around — pinned while the search lasts. */
+  searchPoint?: { label: string; latitude: number; longitude: number } | null;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -362,8 +365,9 @@ export function ScoutingMap({
       ...pins.map((pin) => ({ lat: pin.latitude, lng: pin.longitude })),
       ...places.map((place) => ({ lat: place.latitude, lng: place.longitude })),
       ...found.map((place) => ({ lat: place.latitude, lng: place.longitude })),
+      ...(searchPoint ? [{ lat: searchPoint.latitude, lng: searchPoint.longitude }] : []),
     ],
-    [pins, places, found],
+    [pins, places, found, searchPoint],
   );
 
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -412,11 +416,13 @@ export function ScoutingMap({
                 clickable
                 onClick={() => openPin(place.id)}
               >
-                <Marker
-                  color={placeColors[place.category]}
-                  place
-                  selected={openId === place.id}
-                />
+                {/* Named on the map, as on a sourcing task: "★ IBC". */}
+                <span
+                  className={`bg-ink-900 block -translate-y-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg ${openId === place.id ? "ring-brand-300 ring-4" : ""}`}
+                >
+                  {place.category === "VENUE" ? "★ " : ""}
+                  {place.name}
+                </span>
               </AdvancedMarker>
             ))}
 
@@ -450,6 +456,13 @@ export function ScoutingMap({
                 />
               </AdvancedMarker>
             ))}
+            {searchPoint && (
+              <AdvancedMarker position={{ lat: searchPoint.latitude, lng: searchPoint.longitude }} title={searchPoint.label} zIndex={900}>
+                <span className="bg-brand-500 block max-w-64 truncate rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">
+                  📍 {searchPoint.label}
+                </span>
+              </AdvancedMarker>
+            )}
           </GoogleMap>
         </APIProvider>
       </div>
