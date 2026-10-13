@@ -424,6 +424,18 @@ export function ScoutingMap({
   // A place being added from the Layers panel: its spot, and whether the next map click sets it.
   const [draftPoint, setDraftPoint] = useState<{ latitude: number; longitude: number } | null>(null);
   const [picking, setPicking] = useState(false);
+  // Full screen takes the whole map — the Layers panel and a property's card with it — not Google's map alone.
+  const frame = useRef<HTMLDivElement>(null);
+  const [fullScreen, setFullScreen] = useState(false);
+  useEffect(() => {
+    const changed = () => setFullScreen(document.fullscreenElement === frame.current && frame.current !== null);
+    document.addEventListener("fullscreenchange", changed);
+    return () => document.removeEventListener("fullscreenchange", changed);
+  }, []);
+  const toggleFullScreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void frame.current?.requestFullscreen();
+  };
   const [openId, setOpenId] = useState<string | null>(null);
 
   /**
@@ -482,8 +494,17 @@ export function ScoutingMap({
   const openPlace = places.find((place) => place.id === openId);
 
   return (
-    <div className="border-ink-200/60 flex flex-col overflow-hidden rounded-xl border md:flex-row">
+    <div ref={frame} className="border-ink-200/60 flex flex-col overflow-hidden rounded-xl border bg-white md:flex-row">
       <div className="relative min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={toggleFullScreen}
+          title={fullScreen ? "Leave full screen" : "Full screen — with the layers"}
+          aria-label={fullScreen ? "Leave full screen" : "Full screen"}
+          className="text-ink-700 hover:text-ink-900 absolute top-2.5 right-2.5 z-10 flex h-10 w-10 items-center justify-center rounded-sm bg-white text-lg shadow-md"
+        >
+          {fullScreen ? "✕" : "⛶"}
+        </button>
         {eventId && (
           <LayersPanel
             eventId={eventId}
@@ -513,7 +534,8 @@ export function ScoutingMap({
               setOpenId(null);
             }}
             draggableCursor={picking ? "crosshair" : undefined}
-            style={{ height: "32rem", width: "100%" }}
+            fullscreenControl={false}
+            style={{ height: fullScreen ? "100vh" : "32rem", width: "100%" }}
           >
             <FitBounds points={points} />
             <TransitLayer on={shown.isShown("transit")} />

@@ -749,7 +749,8 @@ its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *O
 On the **Properties tab's map**, the **Layers** panel ticks each layer on or off (measured
 ones starred), with **Our
 properties** and Google's **Public transport** (every metro, rail and bus line with its
-stations — off to start), and *Show all* / *Hide all*; the choice is remembered per event in
+stations — off to start), and *Show all* / *Hide all* — there in full screen too (the map's
+own full-screen button, top right, takes the panel with it); the choice is remembered per event in
 the browser. **Places show as small round icons in their layer's colour** (2026-10-13; names on
 the map overwhelmed it) — the name appears on pointing at one, its details on clicking. The
 icon is the place's **sport**, read from its name or notes, the first sport mentioned (a squash
