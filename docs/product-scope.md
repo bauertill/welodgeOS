@@ -732,9 +732,12 @@ sports venues, the nation houses, the universities — each with a name, a colou
 **Measure distances to these places — and let clients choose them as "close to"**. Only the
 places on such layers are measured to (the Properties tab's distances, a sourcing task's
 default places, a rate card's "from the nearest venue") and offered to a client under *close
-to*; with none, every place is. On the **Event details** tab, a *Map layers* card lists them —
-colour, name, how many places, *Distances measured* — with *+ New layer*, *Edit*, *Remove* (the
-layer with its places, after asking) and **Import from Google My Maps**: in My Maps, *Export
+to*; with none, every place is. **They are run on the map itself** (the owner's call,
+2026-10-13), from its **Layers** panel (below) — not on the Event details tab: *+ New layer*;
+on a layer's **⋯**, its name, colour and distance switch, *Remove* (the layer with its places,
+after asking) and **+ Add a place** — a name, then its address searched or *Pick it on the
+map* and a click on the spot, a red "＋ New place here" pin showing where it goes before it is
+saved; and **Import from Google My Maps**: in My Maps, *Export
 to KML/KMZ* with *Export to a .KML file* ticked, then upload it; each My Maps layer becomes one
 of ours (or adds to ours of the same name), with its colour, each point a place with its
 description as notes; lines and shapes are counted and left out, and a place whose name the
@@ -742,7 +745,8 @@ event already has is skipped. When places were first put into layers, each went 
 its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *Other places*
 (not measured until switched on). A place's form has its **Map layer**.
 
-On the **Properties tab's map**, a **Layers** panel ticks each layer on or off, with **Our
+On the **Properties tab's map**, the **Layers** panel ticks each layer on or off (measured
+ones starred), with **Our
 properties** and Google's **Public transport** (every metro, rail and bus line with its
 stations — off to start), and *Show all* / *Hide all*; the choice is remembered per event in
 the browser. Places show as dark labels with their layer's colour, those measured to starred.
