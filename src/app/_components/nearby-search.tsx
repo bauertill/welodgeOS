@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AddressSearch } from "~/app/_components/address-search";
-import { Select } from "~/app/_components/form";
+import { Combobox } from "~/app/_components/combobox";
 import { ScoutingMap, type MapAvailability, type MapLayer, type MapPin, type MapPlace } from "~/app/_components/scouting-map";
 import { WebsiteLink } from "~/app/_components/website-link";
 import { measuredPlaces, propertyTypeLabels } from "~/lib/scouting";
@@ -39,8 +39,11 @@ export function NearbySearch({
 }) {
   const utils = api.useUtils();
   const venues = measuredPlaces(places);
-  // A place of interest, or "custom" for any address found on the map.
-  const [placeId, setPlaceId] = useState((venues[0] ?? places[0])?.id ?? "custom");
+  // One of the event's places — searched for — or, next to it, any address: whichever was set last.
+  const [placeId, setPlaceId] = useState((venues[0] ?? places[0])?.id ?? "");
+  const layerName = new Map(layers.map((layer) => [layer.id, layer.name]));
+  // Chosen by hand: the map then shows that place alone, until the search is cleared.
+  const [focused, setFocused] = useState(false);
   const [addressText, setAddressText] = useState("");
   const [address, setAddress] = useState<{ label: string; latitude: number; longitude: number } | null>(null);
   const [radiusKm, setRadiusKm] = useState(5);
@@ -134,33 +137,39 @@ export function NearbySearch({
       {(
         <div className="border-ink-200/60 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-white px-4 py-3 text-[13px]">
           <span className="text-ink-900 font-medium">Find hotels not on our list near</span>
-          <span className="w-56">
-            <Select value={placeId} onChange={(e) => setPlaceId(e.target.value)} aria-label="Near which place">
-              {places.map((place) => (
-                <option key={place.id} value={place.id}>
-                  {place.name}
-                </option>
-              ))}
-              <option value="custom">A custom address…</option>
-            </Select>
-          </span>
-          {placeId === "custom" && (
-            <span className="w-80">
-              <AddressSearch
-                value={addressText}
-                onChange={(value) => {
-                  setAddressText(value);
+          <span className="w-64">
+            <Combobox
+              value={placeId}
+              onChange={(value) => {
+                setPlaceId(value);
+                setFocused(Boolean(value));
+                if (value) {
+                  setAddressText("");
                   setAddress(null);
-                }}
-                onFound={(found) => {
-                  if (found.latitude === null || found.longitude === null) return;
-                  const label = found.name ?? found.address ?? addressText;
-                  setAddressText(found.address ?? label);
-                  setAddress({ label, latitude: found.latitude, longitude: found.longitude });
-                }}
-              />
-            </span>
-          )}
+                }
+              }}
+              placeholder="One of the event's places…"
+              options={places.map((place) => ({ id: place.id, label: place.name, detail: place.layerId ? (layerName.get(place.layerId) ?? null) : null }))}
+            />
+          </span>
+          <span className="text-ink-500 font-light">or</span>
+          <span className="w-72">
+            <AddressSearch
+              value={addressText}
+              onChange={(value) => {
+                setAddressText(value);
+                setAddress(null);
+              }}
+              onFound={(found) => {
+                if (found.latitude === null || found.longitude === null) return;
+                const label = found.name ?? found.address ?? addressText;
+                setAddressText(found.address ?? label);
+                setAddress({ label, latitude: found.latitude, longitude: found.longitude });
+                setPlaceId("");
+                setFocused(false);
+              }}
+            />
+          </span>
           <span className="text-ink-500 font-light">within</span>
           {radiusOptions.map((km) => (
             <button
@@ -175,11 +184,11 @@ export function NearbySearch({
           ))}
           <button
             type="button"
-            disabled={placeId === "custom" ? !address : !placeId}
-            title={placeId === "custom" && !address ? "Choose an address from the suggestions first" : undefined}
+            disabled={!placeId && !address}
+            title={!placeId && !address ? "Choose one of the event's places, or an address from the suggestions" : undefined}
             onClick={() => {
               setAll(false);
-              setSearching(placeId === "custom" ? { address: address!, radiusKm } : { placeId, radiusKm });
+              setSearching(placeId ? { placeId, radiusKm } : { address: address!, radiusKm });
             }}
             className="bg-brand-400 hover:bg-brand-500 ml-auto rounded-full px-4 py-1.5 font-medium text-white disabled:opacity-60"
           >
@@ -196,7 +205,8 @@ export function NearbySearch({
         eventId={eventId}
         found={found.map((place) => ({ key: place.key, name: place.name, latitude: place.latitude, longitude: place.longitude }))}
         // The custom address, pinned once chosen and while its search lasts.
-        searchPoint={searching?.address ?? (placeId === "custom" ? address : null)}
+        searchPoint={searching?.address ?? (!placeId ? address : null)}
+        onlyPlaceId={searching?.placeId ?? (focused && placeId ? placeId : null)}
         renderFound={(key) => {
           const place = byKey.get(key);
           if (!place) return null;
@@ -214,7 +224,14 @@ export function NearbySearch({
       {searching && (
         <div>
           <div className="mb-1 flex justify-end">
-            <button type="button" onClick={() => setSearching(null)} className="text-ink-500 hover:text-ink-900 text-xs hover:underline">
+            <button
+              type="button"
+              onClick={() => {
+                setSearching(null);
+                setFocused(false);
+              }}
+              className="text-ink-500 hover:text-ink-900 text-xs hover:underline"
+            >
               Clear search ×
             </button>
           </div>

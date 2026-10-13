@@ -403,6 +403,7 @@ export function ScoutingMap({
   renderFound,
   searchPoint = null,
   layers = [],
+  onlyPlaceId = null,
 }: {
   pins: MapPin[];
   places?: MapPlace[];
@@ -416,10 +417,14 @@ export function ScoutingMap({
   searchPoint?: { label: string; latitude: number; longitude: number } | null;
   /** The event's map layers (doc §3.7) — with them, a Layers panel to show or hide each. */
   layers?: MapLayer[];
+  /** A place chosen to search around: shown alone, the others hidden meanwhile. */
+  onlyPlaceId?: string | null;
 }) {
   const shown = useShown(eventId, layers);
   // A place on a hidden layer is not drawn; one on no layer always is.
-  const visiblePlaces = places.filter((place) => !place.layerId || shown.isShown(place.layerId));
+  const visiblePlaces = onlyPlaceId
+    ? places.filter((place) => place.id === onlyPlaceId)
+    : places.filter((place) => !place.layerId || shown.isShown(place.layerId));
   const showProperties = shown.isShown("properties");
   // A place being added from the Layers panel: its spot, and whether the next map click sets it.
   const [draftPoint, setDraftPoint] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -466,12 +471,13 @@ export function ScoutingMap({
 
   const points = useMemo<Point[]>(
     () => [
-      ...pins.map((pin) => ({ lat: pin.latitude, lng: pin.longitude })),
-      ...places.map((place) => ({ lat: place.latitude, lng: place.longitude })),
+      // Around a chosen place, the map frames it and what was found near it — not every property.
+      ...(onlyPlaceId ? [] : pins).map((pin) => ({ lat: pin.latitude, lng: pin.longitude })),
+      ...(onlyPlaceId ? places.filter((place) => place.id === onlyPlaceId) : places).map((place) => ({ lat: place.latitude, lng: place.longitude })),
       ...found.map((place) => ({ lat: place.latitude, lng: place.longitude })),
       ...(searchPoint ? [{ lat: searchPoint.latitude, lng: searchPoint.longitude }] : []),
     ],
-    [pins, places, found, searchPoint],
+    [pins, places, found, searchPoint, onlyPlaceId],
   );
 
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;

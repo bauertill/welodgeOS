@@ -948,7 +948,10 @@ hand.
 hotels not on our list near** one of the event's places of interest (its first venue by
 default) — or **a custom address**, found with the same Google Maps address box as a
 property's, and pinned on the map once chosen ("📍 Santa Monica Pier", 2026-10-13) until
-*Clear search ×* — **within 5, 10 or 20 km**, and *Search*. The event's places of interest
+*Clear search ×*. The place is **searched for by name** (its layer shown beside it) and the
+address box sits **next to it**, whichever was set last being searched around; a place
+chosen by hand shows **alone on the map**, zoomed to, the others hidden until *Clear search ×*
+or the place is cleared (2026-10-13) — **within 5, 10 or 20 km**, and *Search*. The event's places of interest
 are named on the map as dark labels, venues with a star ("★ IBC"), as on a sourcing task. Google Maps (Places API) is searched for
 hotels, serviced apartments and aparthotels around it; those already in our system (the same
 name or address, or the very same spot) are left out, and so are holiday lets listed through
