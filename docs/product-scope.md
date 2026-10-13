@@ -2153,11 +2153,16 @@ room category at the rate we sell it for.
   the minimum, is marked in red and cannot be sent. **Send to We Lodge →** sits right
   under the rooms they chose (2026-10-13, so nobody has to scroll to find it), and again
   under the map in **Your answer**, which sums up the rooms chosen with the total. Either
-  opens a popup over the card: their choice and its total, **Our dates have changed** —
-  the new arrival and departure and what changed — their name and email, a note to us,
-  and *Send to We Lodge*. A client with no room to choose — only new dates or a question —
-  opens the same popup with *Dates changed, or a question? Write to us*. Sending needs at
-  least a room, a change of dates or a note. They can come back and send
+  opens a popup over the card: their choice and its total, **"This is a request, not a
+  confirmed booking — a We Lodge agent will come back to you to confirm the rooms with an
+  agreement"** (the owner's wording, 2026-10-13; also under *Your answer* and in the thank
+  you), their name and email, a note to us, and *Send request*.
+- **New dates are their own small button** (2026-10-13): *My dates have changed* under
+  *Your answer*, and *tell us if your dates have changed* at the top of the card, open a
+  separate popup — new arrival and departure, what changed, name, email, a note — and
+  *Send new dates*. It sends no rooms: "a We Lodge sales member will come back to you with
+  rates and availability". (It used to be a tick box beside the rooms being sent, which
+  made no sense once the client had already filled in their dates per room.) They can come back and send
   again: the link shows their last answer filled in. Each answer is kept as sent — the rooms,
   the rate at that moment and the notes — and a later one does not rewrite it.
 - **Making the link is sending the proposal** (2026-10-11): a request at *Initial interest*

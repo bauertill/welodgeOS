@@ -19,9 +19,10 @@ type Period = { rooms: string; checkIn: string; checkOut: string; note: string }
  * A rate card on the client's link (doc §4.11), answerable: "I'm interested"
  * on a room opens how many, which nights and a note — as many periods as
  * they need; "Our dates have changed"
- * takes the new dates; Send to We Lodge — beside the rooms chosen and at the
- * foot — opens a popup with what they chose, their name and a note, and sends
- * it all; it can be sent again.
+ * — a small button of its own — opens a popup for the new dates; Send to We
+ * Lodge — beside the rooms chosen and at the foot — opens a popup with what
+ * they chose, saying plainly it is a request and not a booking. Both can be
+ * sent again.
  */
 export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   const first = card.asked.find((line) => line.checkIn && line.checkOut);
@@ -45,14 +46,15 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   const [name, setName] = useState(last?.name ?? "");
   const [email, setEmail] = useState(last?.email ?? "");
   const [note, setNote] = useState("");
-  const [datesChanged, setDatesChanged] = useState(false);
   const [newDates, setNewDates] = useState({ checkIn: defaultIn, checkOut: defaultOut, note: "" });
-  const [sent, setSent] = useState<Date | null>(null);
-  const [sending, setSending] = useState(false);
+  /** What was last sent from this page: the rooms chosen, or new dates. */
+  const [sent, setSent] = useState<"rooms" | "dates" | null>(null);
+  /** The popup open: sending the rooms chosen, or telling us the dates have changed. */
+  const [sending, setSending] = useState<"rooms" | "dates" | null>(null);
   const answer = api.rateCard.answer.useMutation({
     onSuccess: () => {
-      setSent(new Date());
-      setSending(false);
+      setSent(sending);
+      setSending(null);
       setNote("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
@@ -95,13 +97,21 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   return (
     <div className="space-y-4 pb-10">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 print:hidden">
-        <p className="text-ink-500 text-sm font-light">Choose the rooms you are interested in, or tell us if your dates have changed.</p>
+        <p className="text-ink-500 text-sm font-light">
+          Choose the rooms you are interested in, or{" "}
+          <button type="button" onClick={() => setSending("dates")} className="text-brand-700 hover:underline">
+            tell us if your dates have changed
+          </button>
+          .
+        </p>
         <PrintButton />
       </div>
 
       {sent && (
         <p className="mx-auto max-w-3xl rounded-xl bg-[#e3f8ee] px-5 py-3 text-sm text-[#0a7a47] print:hidden">
-          Thank you — your answer has been sent to We Lodge. We will come back to you shortly. You can change it below and send again.
+          {sent === "dates"
+            ? "Thank you — your new dates have been sent. A We Lodge sales member will come back to you with rates and availability."
+            : "Thank you — your request has been sent to We Lodge. It is not a confirmed booking yet: a We Lodge agent will come back to you to confirm it with an agreement. You can change it below and send again."}
         </p>
       )}
       {!sent && last && (
@@ -181,7 +191,7 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                 <button type="button" onClick={() => addPeriod(line.id)} className="text-brand-700 text-xs font-medium hover:underline">
                   + Add another period
                 </button>
-                <Button type="button" onClick={() => setSending(true)}>
+                <Button type="button" onClick={() => setSending("rooms")}>
                   {sent || last ? "Send again to We Lodge →" : "Send to We Lodge →"}
                 </Button>
               </div>
@@ -226,17 +236,18 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
           </p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Button type="button" onClick={() => setSending(true)} disabled={chosen.length === 0}>
+          <Button type="button" onClick={() => setSending("rooms")} disabled={chosen.length === 0}>
             {sent || last ? "Send again to We Lodge →" : "Send to We Lodge →"}
           </Button>
-          <button type="button" onClick={() => setSending(true)} className="text-brand-700 text-sm hover:underline">
-            Dates changed, or a question? Write to us
+          <button type="button" onClick={() => setSending("dates")} className="border-ink-200 text-ink-700 hover:border-brand-400 rounded-full border px-3 py-1 text-xs">
+            My dates have changed
           </button>
         </div>
+        <p className="text-ink-500 mt-3 text-xs font-light">Sending is a request, not a confirmed booking — a We Lodge agent confirms it with an agreement.</p>
       </section>
 
-      {sending && (
-        <Popup size="medium" title="Send to We Lodge" subtitle="Check your choice, tell us who you are, and send." onClose={() => setSending(false)}>
+      {sending === "rooms" && (
+        <Popup size="medium" title="Send your request to We Lodge" subtitle="Check your choice, tell us who you are, and send." onClose={() => setSending(null)}>
           <div className="space-y-4">
             <div className="rounded-xl bg-white px-5 py-4">
               <h3 className="text-ink-900 text-[15px] font-semibold">Your choice</h3>
@@ -268,26 +279,12 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                 </p>
               )}
             </div>
+            <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 text-sm text-[#7a5410]">
+              <span className="font-semibold">This is a request, not a confirmed booking.</span> A We Lodge agent will come back to you to confirm the rooms with an
+              agreement.
+            </p>
             <div className="rounded-xl bg-white px-5 py-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={datesChanged} onChange={(e) => setDatesChanged(e.target.checked)} className="accent-brand-500 h-4 w-4" />
-                <span className="text-ink-900 font-medium">Our dates have changed</span>
-              </label>
-              {datesChanged && (
-                <div className="mt-3 grid gap-3 sm:grid-cols-[9.5rem_9.5rem_1fr]">
-                  <Field label="New arrival">
-                    <Input type="date" value={newDates.checkIn} onChange={(e) => setNewDates({ ...newDates, checkIn: e.target.value })} />
-                  </Field>
-                  <Field label="New departure">
-                    <Input type="date" value={newDates.checkOut} onChange={(e) => setNewDates({ ...newDates, checkOut: e.target.value })} />
-                  </Field>
-                  <Field label="What changed — optional">
-                    <Input value={newDates.note} onChange={(e) => setNewDates({ ...newDates, note: e.target.value })} placeholder="The team now arrives two days earlier" />
-                  </Field>
-                </div>
-              )}
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Your name">
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
@@ -298,20 +295,19 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                   <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
                 </Field>
               </div>
-
               <div className="mt-4 space-y-2">
                 <FormError message={answer.error ? friendlyError(answer.error) : null} />
                 {blocked && <p className="text-xs text-[#c03654]">Please check the rooms marked in red on the card — the number of rooms or the length of stay.</p>}
                 <Button
                   type="button"
-                  disabled={answer.isPending || blocked || (chosen.length === 0 && !datesChanged && !note.trim())}
+                  disabled={answer.isPending || blocked || chosen.length === 0}
                   onClick={() =>
                     answer.mutate({
                       token,
                       name,
                       email,
                       note,
-                      dateChange: datesChanged ? newDates : null,
+                      dateChange: null,
                       items: chosen.flatMap(([lineId, periods]) =>
                         periods.map((pick) => ({
                           lineId,
@@ -324,9 +320,54 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                     })
                   }
                 >
-                  {answer.isPending ? "Sending…" : "Send to We Lodge"}
+                  {answer.isPending ? "Sending…" : "Send request"}
                 </Button>
               </div>
+            </div>
+          </div>
+        </Popup>
+      )}
+
+      {sending === "dates" && (
+        <Popup
+          size="medium"
+          title="Our dates have changed"
+          subtitle="Tell us your new dates — a We Lodge sales member will come back to you with rates and availability."
+          onClose={() => setSending(null)}
+        >
+          <div className="space-y-4 rounded-xl bg-white px-5 py-4">
+              <div className="grid gap-3 sm:grid-cols-[9.5rem_9.5rem_1fr]">
+                <Field label="New arrival">
+                  <Input type="date" value={newDates.checkIn} onChange={(e) => setNewDates({ ...newDates, checkIn: e.target.value })} />
+                </Field>
+                <Field label="New departure">
+                  <Input type="date" value={newDates.checkOut} onChange={(e) => setNewDates({ ...newDates, checkOut: e.target.value })} />
+                </Field>
+                <Field label="What changed — optional">
+                  <Input value={newDates.note} onChange={(e) => setNewDates({ ...newDates, note: e.target.value })} placeholder="The team now arrives two days earlier" />
+                </Field>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Your name">
+                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                </Field>
+                <Field label="Your email">
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </Field>
+                <Field label="A note for We Lodge — optional" className="sm:col-span-2">
+                  <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+                </Field>
+              </div>
+            <div className="space-y-2">
+              <FormError message={answer.error ? friendlyError(answer.error) : null} />
+              <Button
+                type="button"
+                disabled={answer.isPending || !newDates.checkIn || !newDates.checkOut || newDates.checkOut <= newDates.checkIn}
+                onClick={() => answer.mutate({ token, name, email, note, dateChange: newDates, items: [] })}
+              >
+                {answer.isPending ? "Sending…" : "Send new dates"}
+              </Button>
             </div>
           </div>
         </Popup>
