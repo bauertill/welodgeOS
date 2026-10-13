@@ -34,7 +34,7 @@ ALTER TABLE "PlaceOfInterest" ADD CONSTRAINT "PlaceOfInterest_layerId_fkey" FORE
 INSERT INTO "MapLayer" ("id", "eventId", "name", "color", "measured", "position")
 SELECT 'ml_' || md5(p."eventId" || p."category"::text), p."eventId",
   CASE p."category"::text WHEN 'VENUE' THEN 'Venues' WHEN 'TRAIN_STATION' THEN 'Train stations' WHEN 'AIRPORT' THEN 'Airports' ELSE 'Other places' END,
-  CASE p."category"::text WHEN 'VENUE' THEN '#1d1d1f' WHEN 'TRAIN_STATION' THEN '#1d5fa8' WHEN 'AIRPORT' THEN '#0a7a47' ELSE '#8a5a00' END,
+  CASE p."category"::text WHEN 'VENUE' THEN '#9b1c31' WHEN 'TRAIN_STATION' THEN '#1d5fa8' WHEN 'AIRPORT' THEN '#0a7a47' ELSE '#8a5a00' END,
   p."category"::text = 'VENUE',
   CASE p."category"::text WHEN 'VENUE' THEN 0 WHEN 'TRAIN_STATION' THEN 1 WHEN 'AIRPORT' THEN 2 ELSE 3 END
 FROM (SELECT DISTINCT "eventId", "category" FROM "PlaceOfInterest") p;

@@ -13,6 +13,7 @@ import type { PlaceCategory, ScoutingStatus } from "generated/prisma";
 
 import { env } from "~/env";
 import { formatDay } from "~/lib/format";
+import { placeIcon } from "~/lib/place-icons";
 import { placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
 import { LayersPanel } from "~/app/_components/map-layers";
 import { TravelTimes } from "~/app/_components/travel-times";
@@ -56,6 +57,9 @@ export type MapPlace = {
   layerId?: string | null;
   color?: string | null;
   measured?: boolean;
+  /** For its icon: its layer's name and its notes, where the sport is often said. */
+  layerName?: string | null;
+  notes?: string | null;
 };
 
 /** A layer of the event's map (doc §3.7): its places shown or hidden together. */
@@ -503,13 +507,17 @@ export function ScoutingMap({
                 clickable
                 onClick={() => openPin(place.id)}
               >
-                {/* Named on the map, as on a sourcing task: "★ IBC". */}
-                <span
-                  className={`bg-ink-900 flex -translate-y-1/2 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg ${openId === place.id ? "ring-brand-300 ring-4" : ""}`}
-                >
-                  {place.color && <span className="inline-block h-2 w-2 rounded-full ring-1 ring-white/60" style={{ background: place.color }} />}
-                  {(place.measured ?? place.category === "VENUE") ? "★ " : ""}
-                  {place.name}
+                {/* An icon in its layer's colour — its sport where it has one — named on pointing at it (2026-10-13). */}
+                <span className="group relative block translate-y-1/2">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[14px] leading-none shadow-md transition-transform group-hover:scale-110 ${openId === place.id ? "ring-brand-300 scale-110 ring-4" : ""}`}
+                    style={{ background: place.color ?? "#9b1c31" }}
+                  >
+                    {placeIcon(place)}
+                  </span>
+                  <span className="bg-ink-900 pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg group-hover:block">
+                    {place.name}
+                  </span>
                 </span>
               </AdvancedMarker>
             ))}

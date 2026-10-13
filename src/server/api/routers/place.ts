@@ -27,7 +27,7 @@ const placeInput = z.object({
 });
 
 const kindLayers = {
-  VENUE: { name: "Venues", color: "#1d1d1f", measured: true, position: 0 },
+  VENUE: { name: "Venues", color: "#9b1c31", measured: true, position: 0 },
   TRAIN_STATION: { name: "Train stations", color: "#1d5fa8", measured: false, position: 1 },
   AIRPORT: { name: "Airports", color: "#0a7a47", measured: false, position: 2 },
   OTHER: { name: "Other places", color: "#8a5a00", measured: false, position: 3 },

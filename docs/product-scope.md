@@ -750,7 +750,12 @@ On the **Properties tab's map**, the **Layers** panel ticks each layer on or off
 ones starred), with **Our
 properties** and Google's **Public transport** (every metro, rail and bus line with its
 stations — off to start), and *Show all* / *Hide all*; the choice is remembered per event in
-the browser. Places show as dark labels with their layer's colour, those measured to starred.
+the browser. **Places show as small round icons in their layer's colour** (2026-10-13; names on
+the map overwhelmed it) — the name appears on pointing at one, its details on clicking. The
+icon is the place's **sport**, read from its name or notes, the first sport mentioned (a squash
+centre a racket 🎾, Dodger Stadium ⚾, the Coliseum's ceremonies 🎆); with none, its kind
+(📺 IBC or broadcast, ✈️ airport, 🚉 station, 🏘️ village, 🎓 university, 🏠 nation house,
+🏟️ stadium or arena). Venues are **deep red** to start.
 
 | Field | Notes |
 | --- | --- |
