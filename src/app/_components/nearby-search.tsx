@@ -5,9 +5,9 @@ import { useState } from "react";
 
 import { AddressSearch } from "~/app/_components/address-search";
 import { Select } from "~/app/_components/form";
-import { ScoutingMap, type MapAvailability, type MapPin, type MapPlace } from "~/app/_components/scouting-map";
+import { ScoutingMap, type MapAvailability, type MapLayer, type MapPin, type MapPlace } from "~/app/_components/scouting-map";
 import { WebsiteLink } from "~/app/_components/website-link";
-import { propertyTypeLabels } from "~/lib/scouting";
+import { measuredPlaces, propertyTypeLabels } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Found = RouterOutputs["scouting"]["discoverNear"]["found"][number];
@@ -26,17 +26,19 @@ export function NearbySearch({
   eventId,
   pins,
   places,
+  layers = [],
   availability,
   onAdded,
 }: {
   eventId: string;
   pins: MapPin[];
   places: MapPlace[];
+  layers?: MapLayer[];
   availability: MapAvailability[];
   onAdded: () => void;
 }) {
   const utils = api.useUtils();
-  const venues = places.filter((place) => place.category === "VENUE");
+  const venues = measuredPlaces(places);
   // A place of interest, or "custom" for any address found on the map.
   const [placeId, setPlaceId] = useState((venues[0] ?? places[0])?.id ?? "custom");
   const [addressText, setAddressText] = useState("");
@@ -189,6 +191,7 @@ export function NearbySearch({
       <ScoutingMap
         pins={pins}
         places={places}
+        layers={layers}
         availability={availability}
         eventId={eventId}
         found={found.map((place) => ({ key: place.key, name: place.name, latitude: place.latitude, longitude: place.longitude }))}

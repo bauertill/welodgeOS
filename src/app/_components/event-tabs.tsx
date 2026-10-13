@@ -30,7 +30,8 @@ export function EventTabs({ eventId }: { eventId: string }) {
   const base = `/events/${eventId}`;
   const utils = api.useUtils();
   const me = api.user.me.useQuery(undefined, { staleTime: 60_000 });
-  const start: EventTabSlug = isEventTab(me.data?.eventStartTab) ? me.data.eventStartTab : "";
+  const chosen = me.data?.eventStartTab;
+  const start: EventTabSlug = isEventTab(chosen) ? chosen : "";
   const [offer, setOffer] = useState<EventTabSlug | null>(null);
   const setStart = api.user.setEventStartTab.useMutation({
     onSuccess: () => {

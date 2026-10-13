@@ -1,3 +1,4 @@
+import { MapLayersCard } from "~/app/_components/map-layers";
 import { notFound, redirect } from "next/navigation";
 
 import { ActivityLog } from "~/app/_components/activity-log";
@@ -99,6 +100,10 @@ export default async function EventDetailsPage({ params }: { params: Promise<{ i
         </Card>
 
         <Card>
+          <MapLayersCard eventId={event.id} />
+        </Card>
+
+        <Card>
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <h2 className="text-ink-900 text-[15px] font-medium">Places of interest</h2>
             <span className="text-[13px] font-light">
@@ -114,16 +119,20 @@ export default async function EventDetailsPage({ params }: { params: Promise<{ i
             <p className="text-ink-500 text-sm font-light">None yet — distances and travel times are measured to these.</p>
           ) : (
             <ul className="space-y-2 text-sm font-light">
-              {event.placesOfInterest.map((place) => (
+              {event.placesOfInterest.slice(0, 12).map((place) => (
                 <li key={place.id}>
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full" style={{ background: place.layer?.color ?? "#9a9a9a" }} />
                   <span className="text-ink-900 font-medium">{place.name}</span>
-                  <span className="text-ink-500"> · {placeCategoryLabels[place.category]}</span>
+                  <span className="text-ink-500"> · {place.layer?.name ?? placeCategoryLabels[place.category]}</span>
                   {place.address && <span className="text-ink-500 block text-xs">{place.address}</span>}
                 </li>
               ))}
             </ul>
           )}
-          <p className="text-ink-500 mt-3 text-xs font-light">Distances and travel times on the Properties tab are measured to these.</p>
+          {event.placesOfInterest.length > 12 && (
+            <p className="text-ink-500 mt-2 text-xs font-light">…and {event.placesOfInterest.length - 12} more — all of them under Change places of interest.</p>
+          )}
+          <p className="text-ink-500 mt-3 text-xs font-light">Distances and travel times are measured to the places on layers marked &ldquo;Distances measured&rdquo;.</p>
         </Card>
 
         <Card>

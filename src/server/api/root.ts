@@ -5,6 +5,7 @@ import { clientRouter } from "~/server/api/routers/client";
 import { eventRouter } from "~/server/api/routers/event";
 import { financeRouter } from "~/server/api/routers/finance";
 import { inventoryRouter } from "~/server/api/routers/inventory";
+import { mapLayerRouter } from "~/server/api/routers/map-layer";
 import { mediaRouter } from "~/server/api/routers/media";
 import { quotationRouter } from "~/server/api/routers/quotation";
 import { rateCardRouter } from "~/server/api/routers/rate-card";
@@ -37,6 +38,7 @@ export const appRouter = createTRPCRouter({
   sales: salesRouter,
   rateCard: rateCardRouter,
   media: mediaRouter,
+  mapLayer: mapLayerRouter,
   inventory: inventoryRouter,
   finance: financeRouter,
   reporting: reportingRouter,

@@ -73,6 +73,7 @@ model Event {
   /// Venues, airports, stations and the rest (doc §3.7). This replaced the
   /// single venue an event used to carry: a Games has several.
   placesOfInterest PlaceOfInterest[]
+  mapLayers        MapLayer[]
 
   scoutingEntries       ScoutingEntry[]
   roomNights            RoomNight[]
@@ -97,6 +98,28 @@ enum PlaceCategory {
   TRAIN_STATION
   AIRPORT
   OTHER
+}
+
+/// A layer of an event's map (doc §3.7, 2026-10-13), as in Google My Maps:
+/// a named, coloured set of places — the venues, the nation houses, the
+/// universities — shown or hidden together. Distances are measured to the
+/// places of the layers that say so.
+model MapLayer {
+  id       String  @id @default(cuid())
+  event    Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId  String
+  name     String
+  /// "#614fc9" — its places' colour on the map.
+  color    String
+  /// Distances and travel times are measured to its places, and a client can pick them as "close to".
+  measured Boolean @default(false)
+  position Int     @default(0)
+
+  places    PlaceOfInterest[]
+  createdAt DateTime          @default(now())
+
+  @@unique([eventId, name])
+  @@index([eventId, position])
 }
 
 /// Somewhere guests need to get to for one event: a stadium, an airport, a
@@ -125,6 +148,9 @@ model PlaceOfInterest {
 
   event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
   eventId       String
+  /// The map layer it is on (doc §3.7, 2026-10-13) — Venues, Nation houses, Universities…
+  layer         MapLayer?      @relation(fields: [layerId], references: [id], onDelete: Cascade)
+  layerId       String?
   salesRequests SalesRequest[] @relation("SalesRequestCloseTo")
 
   /// One name per event — two "Gare de Lyon" pins on one map is a mistake,

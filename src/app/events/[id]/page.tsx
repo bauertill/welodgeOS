@@ -31,6 +31,9 @@ export default async function EventPropertiesPage({
     name: place.name,
     category: place.category,
     lines: place.lines,
+    layerId: place.layerId,
+    color: place.layer?.color ?? null,
+    measured: place.layer ? place.layer.measured : place.category === "VENUE",
     latitude: place.latitude,
     longitude: place.longitude,
   }));
@@ -52,7 +55,7 @@ export default async function EventPropertiesPage({
 
       <EventTabs eventId={event.id} />
 
-      <ScoutingList eventId={event.id} places={places} />
+      <ScoutingList eventId={event.id} places={places} layers={event.mapLayers} />
 
       <Card className="mt-8">
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">

@@ -727,6 +727,26 @@ rule, changing or adding something opens in a popup over the page rather than an
 (the owner's, 2026-10-11). They still
 appear as pins on the Properties tab's map.
 
+**Map layers** (2026-10-13), as in Google My Maps. An event's places sit in **layers** — the
+sports venues, the nation houses, the universities — each with a name, a colour and a switch,
+**Measure distances to these places — and let clients choose them as "close to"**. Only the
+places on such layers are measured to (the Properties tab's distances, a sourcing task's
+default places, a rate card's "from the nearest venue") and offered to a client under *close
+to*; with none, every place is. On the **Event details** tab, a *Map layers* card lists them —
+colour, name, how many places, *Distances measured* — with *+ New layer*, *Edit*, *Remove* (the
+layer with its places, after asking) and **Import from Google My Maps**: in My Maps, *Export
+to KML/KMZ* with *Export to a .KML file* ticked, then upload it; each My Maps layer becomes one
+of ours (or adds to ours of the same name), with its colour, each point a place with its
+description as notes; lines and shapes are counted and left out, and a place whose name the
+event already has is skipped. When places were first put into layers, each went into one of
+its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *Other places*
+(not measured until switched on). A place's form has its **Map layer**.
+
+On the **Properties tab's map**, a **Layers** panel ticks each layer on or off, with **Our
+properties** and Google's **Public transport** (every metro, rail and bus line with its
+stations — off to start), and *Show all* / *Hide all*; the choice is remembered per event in
+the browser. Places show as dark labels with their layer's colour, those measured to starred.
+
 | Field | Notes |
 | --- | --- |
 | `event` | The event this place matters to. |

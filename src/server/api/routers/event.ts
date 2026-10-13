@@ -17,10 +17,9 @@ export const eventRouter = createTRPCRouter({
     ctx.db.event.findMany({
       orderBy: { startDate: "asc" },
       include: {
-        // Venues are places of interest now (doc §3.7), and the list names
-        // them under the event.
+        // The places distances are measured to (doc §3.7), named under the event.
         placesOfInterest: {
-          where: { category: "VENUE" },
+          where: { OR: [{ layer: { measured: true } }, { layerId: null, category: "VENUE" }] },
           orderBy: { name: "asc" },
           select: { id: true, name: true },
         },
@@ -37,7 +36,9 @@ export const eventRouter = createTRPCRouter({
         include: {
           placesOfInterest: {
             orderBy: [{ category: "asc" }, { name: "asc" }],
+            include: { layer: { select: { id: true, name: true, color: true, measured: true } } },
           },
+          mapLayers: { orderBy: [{ position: "asc" }, { name: "asc" }], select: { id: true, name: true, color: true, measured: true } },
           projectLead: { select: { id: true, name: true, email: true } },
           accommodationManagers: { select: { id: true, name: true, email: true }, orderBy: { name: "asc" } },
         },

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { env } from "~/env";
 import { nightsBetween, parseDay } from "~/lib/dates";
 import { clientMedia, photoSrc } from "~/lib/media";
-import { nearestPlace } from "~/lib/scouting";
+import { measuredPlaces, nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { moveStage } from "~/server/api/routers/sales";
 import { logAudit } from "~/server/audit";
@@ -37,7 +37,7 @@ const cardInclude = {
       id: true,
       ownerId: true,
       client: { select: { name: true } },
-      event: { select: { id: true, name: true, startDate: true, endDate: true, placesOfInterest: { select: { name: true, category: true, latitude: true, longitude: true } } } },
+      event: { select: { id: true, name: true, startDate: true, endDate: true, placesOfInterest: { select: { name: true, category: true, latitude: true, longitude: true, layer: { select: { measured: true } } } } } },
       lines: { orderBy: { position: "asc" } },
     },
   },
@@ -71,7 +71,7 @@ type LoadedCard = Prisma.RateCardGetPayload<{ include: typeof cardInclude }>;
 /** The card as it is read: each property with how far it is from the nearest venue (worked out, never stored). */
 function shape(card: LoadedCard) {
   const places = card.salesRequest.event?.placesOfInterest ?? [];
-  const venues = places.filter((place) => place.category === "VENUE");
+  const venues = measuredPlaces(places);
   return {
     id: card.id,
     name: card.name,

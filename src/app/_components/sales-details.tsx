@@ -13,6 +13,7 @@ import { dayKey, nightsBetween } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
 import { peopleWords, wishes } from "~/lib/needs";
 import { currencyForCountry, roomTypeGroups } from "~/lib/sales";
+import { measuredPlaces } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 /**
@@ -397,7 +398,8 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
       setEditing(false);
     },
   });
-  const placeList = (places.data ?? []).map((place) => ({ id: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }));
+  // What the client can be close to: the places distances are measured to (doc §3.7).
+  const placeList = measuredPlaces(places.data ?? []).map((place) => ({ id: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }));
   const geocode = api.property.geocode.useMutation();
   const closeTo = [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther]
     .filter(Boolean)

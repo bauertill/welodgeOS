@@ -16,6 +16,7 @@ import {
   salesStageLabels,
 } from "~/lib/sales";
 import { peopleWords, wishesInWords } from "~/lib/needs";
+import { measuredPlaces } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
@@ -441,14 +442,22 @@ async function sourcingContext(db: PrismaClient, id: string) {
       lines: true,
       closeTo: { select: { name: true, latitude: true, longitude: true } },
       closeToPoints: { select: { label: true, latitude: true, longitude: true } },
-      event: { select: { id: true, name: true, placesOfInterest: { select: { name: true, latitude: true, longitude: true } } } },
+      event: {
+        select: {
+          id: true,
+          name: true,
+          placesOfInterest: { select: { name: true, category: true, latitude: true, longitude: true, layer: { select: { measured: true } } } },
+        },
+      },
     },
   });
   const chosen = [
     ...request.closeTo.map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude })),
     ...request.closeToPoints,
   ];
-  const targets = chosen.length ? chosen : (request.event?.placesOfInterest ?? []).map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude }));
+  const targets = chosen.length
+    ? chosen
+    : measuredPlaces(request.event?.placesOfInterest ?? []).map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude }));
   const wanted = {
     units: Math.max(0, ...request.lines.map((line) => line.rooms)),
     apartments: request.lines.some((line) => /apartment|studio/i.test(line.roomType ?? "")),
@@ -1286,7 +1295,10 @@ export const salesRouter = createTRPCRouter({
             country: true,
             startDate: true,
             endDate: true,
-            placesOfInterest: { select: { id: true, name: true, latitude: true, longitude: true }, orderBy: { name: "asc" } },
+            placesOfInterest: {
+              select: { id: true, name: true, category: true, latitude: true, longitude: true, layer: { select: { measured: true } } },
+              orderBy: { name: "asc" },
+            },
           },
         },
       },
@@ -1295,7 +1307,8 @@ export const salesRouter = createTRPCRouter({
     return {
       clientName: request.client.name,
       eventName: request.event?.name ?? null,
-      places: request.event?.placesOfInterest ?? [],
+      // What they can choose to be close to: the places distances are measured to (doc §3.7).
+      places: measuredPlaces(request.event?.placesOfInterest ?? []).map(({ id, name, latitude, longitude }) => ({ id, name, latitude, longitude })),
       currency: currencyForCountry(request.event?.country),
       /** Where a first line's dates start: the event's own. */
       stay: request.event ? { checkIn: dayKey(request.event.startDate), checkOut: dayKey(request.event.endDate) } : null,

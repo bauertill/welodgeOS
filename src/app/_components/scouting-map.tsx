@@ -5,6 +5,7 @@ import {
   APIProvider,
   Map as GoogleMap,
   useMap,
+  useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -50,7 +51,104 @@ export type MapPlace = {
   lines: string | null;
   latitude: number;
   longitude: number;
+  /** Its map layer (doc §3.7): which, its colour, and whether distances are measured to it. */
+  layerId?: string | null;
+  color?: string | null;
+  measured?: boolean;
 };
+
+/** A layer of the event's map (doc §3.7): its places shown or hidden together. */
+export type MapLayer = { id: string; name: string; color: string; measured: boolean };
+
+/** Google's own public transport — every metro, rail and bus line with its stations — on or off. */
+function TransitLayer({ on }: { on: boolean }) {
+  const map = useMap();
+  const maps = useMapsLibrary("maps");
+  useEffect(() => {
+    if (!map || !maps || !on) return;
+    const layer = new maps.TransitLayer();
+    layer.setMap(map);
+    return () => layer.setMap(null);
+  }, [map, maps, on]);
+  return null;
+}
+
+/**
+ * What shows on the map (doc §3.7), as in Google My Maps: each layer, our
+ * properties and public transport, ticked on or off — remembered per event in
+ * this browser. Public transport starts off.
+ */
+function useShown(eventId: string | undefined, layers: MapLayer[]) {
+  const key = `welodge:map-layers:${eventId ?? "none"}`;
+  const [hidden, setHidden] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw) setHidden(JSON.parse(raw) as string[]);
+    } catch {
+      // Storage off: everything shows.
+    }
+  }, [key]);
+  const save = (next: string[]) => {
+    setHidden(next);
+    try {
+      window.localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+      // As above.
+    }
+  };
+  const ids = [...layers.map((layer) => layer.id), "properties"];
+  return {
+    isShown: (id: string) => (id === "transit" ? hidden.includes("transit:on") : !hidden.includes(id)),
+    toggle: (id: string) =>
+      id === "transit"
+        ? save(hidden.includes("transit:on") ? hidden.filter((one) => one !== "transit:on") : [...hidden, "transit:on"])
+        : save(hidden.includes(id) ? hidden.filter((one) => one !== id) : [...hidden, id]),
+    showAll: () => save(["transit:on"]),
+    hideAll: () => save(ids),
+  };
+}
+
+function LayersPanel({ layers, places, shown }: { layers: MapLayer[]; places: MapPlace[]; shown: ReturnType<typeof useShown> }) {
+  const [open, setOpen] = useState(true);
+  const row = (id: string, name: string, swatch: React.ReactNode, count?: number) => (
+    <label key={id} className="hover:bg-ink-50 flex cursor-pointer items-center gap-2 rounded px-1.5 py-1">
+      <input type="checkbox" checked={shown.isShown(id)} onChange={() => shown.toggle(id)} className="accent-brand-500 h-3.5 w-3.5" />
+      {swatch}
+      <span className="text-ink-900 min-w-0 flex-1 truncate">{name}</span>
+      {count !== undefined && <span className="text-ink-500 text-[11px]">{count}</span>}
+    </label>
+  );
+  return (
+    <div className="absolute top-16 left-2.5 z-10 w-56 rounded-lg bg-white text-[12px] shadow-lg">
+      <button type="button" onClick={() => setOpen(!open)} className="text-ink-900 flex w-full items-center justify-between px-3 py-2 font-medium">
+        Layers <span className="text-ink-500">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div className="border-ink-200/60 max-h-80 overflow-y-auto border-t px-1.5 py-1.5">
+          {layers.map((layer) =>
+            row(
+              layer.id,
+              layer.name,
+              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: layer.color }} />,
+              places.filter((place) => place.layerId === layer.id).length,
+            ),
+          )}
+          {row("properties", "Our properties", <span className="bg-brand-500 inline-block h-2.5 w-2.5 shrink-0 rounded-full" />)}
+          {row("transit", "Public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
+          <div className="text-brand-700 flex justify-between px-1.5 pt-1.5 text-[11px]">
+            <button type="button" onClick={shown.showAll} className="hover:underline">
+              Show all
+            </button>
+            <button type="button" onClick={shown.hideAll} className="hover:underline">
+              Hide all
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** What the map needs of §5.3's availability figures, per room category. */
 export type MapAvailability = {
@@ -320,6 +418,7 @@ export function ScoutingMap({
   found = [],
   renderFound,
   searchPoint = null,
+  layers = [],
 }: {
   pins: MapPin[];
   places?: MapPlace[];
@@ -331,7 +430,13 @@ export function ScoutingMap({
   renderFound?: (key: string) => React.ReactNode;
   /** The custom address being searched around — pinned while the search lasts. */
   searchPoint?: { label: string; latitude: number; longitude: number } | null;
+  /** The event's map layers (doc §3.7) — with them, a Layers panel to show or hide each. */
+  layers?: MapLayer[];
 }) {
+  const shown = useShown(eventId, layers);
+  // A place on a hidden layer is not drawn; one on no layer always is.
+  const visiblePlaces = places.filter((place) => !place.layerId || shown.isShown(place.layerId));
+  const showProperties = shown.isShown("properties");
   const [openId, setOpenId] = useState<string | null>(null);
 
   /**
@@ -391,7 +496,8 @@ export function ScoutingMap({
 
   return (
     <div className="border-ink-200/60 flex flex-col overflow-hidden rounded-xl border md:flex-row">
-      <div className="min-w-0 flex-1">
+      <div className="relative min-w-0 flex-1">
+        {layers.length > 0 && <LayersPanel layers={layers} places={places} shown={shown} />}
         <APIProvider apiKey={apiKey}>
           <GoogleMap
             mapId={mapId}
@@ -406,8 +512,9 @@ export function ScoutingMap({
             style={{ height: "32rem", width: "100%" }}
           >
             <FitBounds points={points} />
+            <TransitLayer on={shown.isShown("transit")} />
 
-            {places.map((place) => (
+            {visiblePlaces.map((place) => (
               <AdvancedMarker
                 key={place.id}
                 position={{ lat: place.latitude, lng: place.longitude }}
@@ -418,15 +525,16 @@ export function ScoutingMap({
               >
                 {/* Named on the map, as on a sourcing task: "★ IBC". */}
                 <span
-                  className={`bg-ink-900 block -translate-y-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg ${openId === place.id ? "ring-brand-300 ring-4" : ""}`}
+                  className={`bg-ink-900 flex -translate-y-1/2 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg ${openId === place.id ? "ring-brand-300 ring-4" : ""}`}
                 >
-                  {place.category === "VENUE" ? "★ " : ""}
+                  {place.color && <span className="inline-block h-2 w-2 rounded-full ring-1 ring-white/60" style={{ background: place.color }} />}
+                  {(place.measured ?? place.category === "VENUE") ? "★ " : ""}
                   {place.name}
                 </span>
               </AdvancedMarker>
             ))}
 
-            {pins.map((pin) => (
+            {(showProperties ? pins : []).map((pin) => (
               <AdvancedMarker
                 key={pin.id}
                 position={{ lat: pin.latitude, lng: pin.longitude }}

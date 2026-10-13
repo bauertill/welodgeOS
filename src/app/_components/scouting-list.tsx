@@ -7,7 +7,7 @@ import type { CategoryContractStatus, PropertyType } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
 import { Button, Select } from "~/app/_components/form";
-import type { MapPin, MapPlace } from "~/app/_components/scouting-map";
+import type { MapLayer, MapPin, MapPlace } from "~/app/_components/scouting-map";
 import {
   EmptyState,
   Pill,
@@ -26,6 +26,7 @@ import {
   scoutingStatusOrder,
   totalUnits,
   type SelectableScoutingStatus,
+  measuredPlaces,
 } from "~/lib/scouting";
 import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
@@ -50,10 +51,13 @@ const NearbySearch = dynamic(
 export function ScoutingList({
   eventId,
   places,
+  layers = [],
 }: {
   eventId: string;
   /** The event's places of interest (doc §3.7) — venues, airports, stations. */
   places: MapPlace[];
+  /** Its map layers, to show or hide on the map (doc §3.7). */
+  layers?: MapLayer[];
 }) {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("list");
@@ -128,7 +132,7 @@ export function ScoutingList({
   // An event can have several venues, so "to venue" means the nearest one and
   // has to name it (doc §3.7).
   const venues = useMemo(
-    () => places.filter((place) => place.category === "VENUE"),
+    () => measuredPlaces(places),
     [places],
   );
 
@@ -540,6 +544,7 @@ export function ScoutingList({
             eventId={eventId}
             pins={pins}
             places={places}
+            layers={layers}
             availability={availability.data ?? []}
             onAdded={() => {
               void entries.refetch();

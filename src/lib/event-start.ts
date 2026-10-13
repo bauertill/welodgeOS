@@ -17,7 +17,8 @@ export const eventTabLabels: Record<EventTabSlug, string> = {
   position: "Position",
   details: "Event details",
 };
-export const isEventTab = (value: string | null | undefined): value is EventTabSlug => eventTabSlugs.includes((value ?? "") as EventTabSlug);
+export const isEventTab = (value: string | null | undefined): value is EventTabSlug =>
+  typeof value === "string" && eventTabSlugs.includes(value as EventTabSlug);
 
 export const eventHref = (eventId: string, tab: string | null | undefined) => {
   const slug = isEventTab(tab) ? tab : "";

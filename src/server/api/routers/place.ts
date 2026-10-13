@@ -1,3 +1,4 @@
+import type { Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -21,7 +22,33 @@ const placeInput = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   notes: z.string().optional(),
+  /** Its map layer (doc §3.7); left out, the layer named after its kind, made if need be. */
+  layerId: z.string().optional(),
 });
+
+const kindLayers = {
+  VENUE: { name: "Venues", color: "#1d1d1f", measured: true, position: 0 },
+  TRAIN_STATION: { name: "Train stations", color: "#1d5fa8", measured: false, position: 1 },
+  AIRPORT: { name: "Airports", color: "#0a7a47", measured: false, position: 2 },
+  OTHER: { name: "Other places", color: "#8a5a00", measured: false, position: 3 },
+} as const;
+
+/** The layer a place goes on: the one chosen (if it is this event's), else its kind's own. */
+async function layerFor(db: Prisma.TransactionClient, eventId: string, category: keyof typeof kindLayers, layerId?: string) {
+  if (layerId) {
+    const layer = await db.mapLayer.findUnique({ where: { id: layerId }, select: { eventId: true } });
+    if (layer?.eventId !== eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That layer is not this event's." });
+    return layerId;
+  }
+  const kind = kindLayers[category];
+  const layer = await db.mapLayer.upsert({
+    where: { eventId_name: { eventId, name: kind.name } },
+    update: {},
+    create: { eventId, ...kind },
+    select: { id: true },
+  });
+  return layer.id;
+}
 
 /** Empty strings arrive from HTML inputs; the database wants nulls. */
 const blank = (value: string | undefined) =>
@@ -34,6 +61,7 @@ export const placeRouter = createTRPCRouter({
       ctx.db.placeOfInterest.findMany({
         where: { eventId: input.eventId },
         orderBy: [{ category: "asc" }, { name: "asc" }],
+        include: { layer: { select: { id: true, name: true, color: true, measured: true } } },
       }),
     ),
 
@@ -42,9 +70,11 @@ export const placeRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await refuseDuplicate(ctx.db, input.eventId, input.name);
 
+      const { layerId, ...fields } = input;
       return ctx.db.placeOfInterest.create({
         data: {
-          ...input,
+          ...fields,
+          layerId: await layerFor(ctx.db, input.eventId, input.category, layerId),
           name: input.name.trim(),
           lines: blank(input.lines),
           address: blank(input.address),
@@ -56,13 +86,14 @@ export const placeRouter = createTRPCRouter({
   update: protectedProcedure
     .input(placeInput.extend({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const { id, eventId, ...place } = input;
+      const { id, eventId, layerId, ...place } = input;
       await refuseDuplicate(ctx.db, eventId, place.name, id);
 
       return ctx.db.placeOfInterest.update({
         where: { id },
         data: {
           ...place,
+          layerId: await layerFor(ctx.db, eventId, place.category, layerId),
           name: place.name.trim(),
           lines: blank(place.lines),
           address: blank(place.address),
