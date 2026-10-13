@@ -50,7 +50,7 @@ const distance = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.
 
 /**
  * A rate card, made and changed in a popup (doc §4.11): each property's short
- * description — with a writing helper — and each room category's selling
+ * description and each room category's selling
  * rate beside our buying rate, a markup applied to all at once, a preview of
  * exactly what the client sees, and the client's link.
  */
@@ -96,7 +96,6 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
     },
   });
   const unshare = api.rateCard.unshare.useMutation({ onSuccess: () => void utils.rateCard.byId.invalidate({ id }) });
-  const describe = api.rateCard.describe.useMutation();
   const remove = api.rateCard.remove.useMutation({
     onSuccess: () => {
       void utils.rateCard.invalidate();
@@ -255,7 +254,6 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
             .filter((property) => !draft.removed.includes(property.id))
             .map((property) => {
               const source = c.properties.find((one) => one.id === property.id)!;
-              const writing = describe.isPending && describe.variables?.rateCardPropertyId === property.id;
               return (
                 <section key={property.id} className="border-ink-200/60 rounded-xl border bg-white p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -275,21 +273,8 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                     </button>
                   </div>
                   <div className="mt-2">
-                    <div className="mb-1 flex items-baseline justify-between gap-2">
+                    <div className="mb-1">
                       <span className="text-ink-700 text-[13px] font-medium">Short description</span>
-                      <button
-                        type="button"
-                        disabled={writing}
-                        onClick={() =>
-                          describe.mutate(
-                            { rateCardPropertyId: property.id, draft: property.description },
-                            { onSuccess: (result) => setProperty(property.id, (one) => ({ ...one, description: result.description })) },
-                          )
-                        }
-                        className="text-brand-700 text-xs font-medium hover:underline disabled:opacity-60"
-                      >
-                        {writing ? "Writing…" : property.description.trim() ? "✨ Polish it" : "✨ Write it for me"}
-                      </button>
                     </div>
                     <Textarea
                       rows={2}
@@ -297,9 +282,6 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                       onChange={(e) => setProperty(property.id, (one) => ({ ...one, description: e.target.value }))}
                       placeholder="Two or three sentences for the client — the area, the style, what makes it suit them."
                     />
-                    {describe.error && describe.variables?.rateCardPropertyId === property.id && (
-                      <p className="mt-1 text-xs text-[#c03654]">{friendlyError(describe.error)}</p>
-                    )}
                   </div>
                   <CardPhotos
                     propertyId={source.propertyId}

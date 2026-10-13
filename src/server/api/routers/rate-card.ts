@@ -585,6 +585,7 @@ export const rateCardRouter = createTRPCRouter({
   /**
    * A short description of a property for the card, written — or a draft
    * polished — by Claude from what we know of it. Needs ANTHROPIC_API_KEY.
+   * Not offered on screen for now (owner, 2026-10-13); kept for when the key is set.
    */
   describe: protectedProcedure
     .input(z.object({ rateCardPropertyId: z.string(), draft: z.string().max(3000) }))

@@ -402,8 +402,8 @@ document.
 
 - [ ] **Anthropic API key for the rate card's writing helper** (`product-scope.md`
       §4.11, 2026-10-11). Set `ANTHROPIC_API_KEY` on Vercel (Production and Preview)
-      and in the local `.env`. Until then *✨ Write it for me* says the key is missing;
-      everything else on the rate card works. Uses Claude Sonnet 5, a few hundred
+      and in the local `.env`. The button (*✨ Write it for me*) was taken off the
+      screen on 2026-10-13 until then — put it back in the rate card popup with the key. Uses Claude Sonnet 5, a few hundred
       tokens per description.
 
 - [x] **Dropbox app key, to pick property photos straight from Dropbox** — done 2026-10-13: Brandon made the app (We Lodge OS) and its key is in `src/lib/media.ts` (public by design, so no Vercel setting is needed). Originally:
