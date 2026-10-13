@@ -152,6 +152,7 @@ export function ScoutingList({
           longitude: entry.property.longitude!,
           status: entry.status,
           stars: entry.property.stars,
+          type: entry.property.type,
           subtitle: [
             propertyTypeLabels[entry.property.type],
             entry.property.city,

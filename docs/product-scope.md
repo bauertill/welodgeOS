@@ -755,7 +755,11 @@ the map overwhelmed it) — the name appears on pointing at one, its details on 
 icon is the place's **sport**, read from its name or notes, the first sport mentioned (a squash
 centre a racket 🎾, Dodger Stadium ⚾, the Coliseum's ceremonies 🎆); with none, its kind
 (📺 IBC or broadcast, ✈️ airport, 🚉 station, 🏘️ village, 🎓 university, 🏠 nation house,
-🏟️ stadium or arena). Venues are **deep red** to start.
+🏟️ stadium or arena). Venues are **deep red** to start. **Our properties** show as small rounded
+squares (2026-10-13): a 🛏️ bed for a hotel or aparthotel, coloured by its stars — five black,
+four blue, three green, two or fewer yellow, grey when the stars are not known — and a 🏠 house
+in purple for an apartment; name and stars on pointing, the panel on clicking (its status
+there, no longer in its colour).
 
 | Field | Notes |
 | --- | --- |

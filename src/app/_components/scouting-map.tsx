@@ -9,7 +9,7 @@ import {
 } from "@vis.gl/react-google-maps";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PlaceCategory, ScoutingStatus } from "generated/prisma";
+import type { PlaceCategory, PropertyType, ScoutingStatus } from "generated/prisma";
 
 import { env } from "~/env";
 import { formatDay } from "~/lib/format";
@@ -34,6 +34,8 @@ export type MapPin = {
    */
   status?: ScoutingStatus;
   stars?: number | null;
+  /** Hotel and aparthotel a bed, apartment a house (2026-10-13). */
+  type?: PropertyType;
   subtitle: string;
   href: string;
 };
@@ -138,6 +140,24 @@ const pinColors: Record<ScoutingStatus, string> = {
 
 /** What a pin with no status is drawn in. */
 const NEUTRAL_PIN = "#614fc9";
+
+/**
+ * A property's colour on the map (doc §3.7, 2026-10-13): apartments purple;
+ * hotels and aparthotels by their stars — five black, four blue, three green,
+ * two or fewer yellow, unknown grey.
+ */
+export const propertyColor = (pin: { type?: PropertyType; stars?: number | null }) =>
+  pin.type === "APARTMENT"
+    ? "#8f5bd6"
+    : !pin.stars
+      ? "#8a8a8a"
+      : pin.stars >= 5
+        ? "#1d1d1f"
+        : pin.stars === 4
+          ? "#1d5fa8"
+          : pin.stars === 3
+            ? "#0a7a47"
+            : "#e5a400";
 
 const pinColor = (status?: ScoutingStatus) =>
   status ? pinColors[status] : NEUTRAL_PIN;
@@ -532,10 +552,19 @@ export function ScoutingMap({
                 clickable
                 onClick={() => openPin(pin.id)}
               >
-                <Marker
-                  color={pinColor(pin.status)}
-                  selected={openId === pin.id}
-                />
+                {/* Our property (2026-10-13): a bed for a hotel, a house for an apartment, coloured by its stars. */}
+                <span className="group relative block translate-y-1/2">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-md border-2 border-white text-[14px] leading-none shadow-md transition-transform group-hover:scale-110 ${openId === pin.id ? "ring-brand-300 scale-110 ring-4" : ""}`}
+                    style={{ background: propertyColor(pin) }}
+                  >
+                    {pin.type === "APARTMENT" ? "🏠" : "🛏️"}
+                  </span>
+                  <span className="bg-ink-900 pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg group-hover:block">
+                    {pin.name}
+                    {pin.stars ? ` · ${pin.stars}★` : ""}
+                  </span>
+                </span>
               </AdvancedMarker>
             ))}
             {found.map((place) => (
