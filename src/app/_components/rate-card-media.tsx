@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Photo } from "~/app/_components/photo";
+import { isVideo } from "~/lib/media";
 
 export type CardPhoto = { src: string; caption: string | null; room: string | null };
 
@@ -38,6 +39,21 @@ export function PhotoGallery({ photos, name }: { photos: CardPhoto[]; name: stri
         ))}
       </div>
       {open !== null && <Lightbox photos={photos} start={open} name={name} onClose={() => setOpen(null)} />}
+    </>
+  );
+}
+
+/** Every photo and video of the property, opened over the card — the client stays on it. */
+export function SeeAllMedia({ media, name }: { media: CardPhoto[]; name: string }) {
+  const [open, setOpen] = useState(false);
+  const videos = media.filter((item) => isVideo(item.src)).length;
+  const label = videos === media.length ? "videos" : videos ? "photos & videos" : "photos";
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="text-brand-700 hover:underline print:hidden">
+        See all {label} ({media.length})
+      </button>
+      {open && <Lightbox photos={media} start={0} name={name} onClose={() => setOpen(false)} />}
     </>
   );
 }

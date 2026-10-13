@@ -111,5 +111,7 @@ export function clientMedia(property: {
       .map((id) => property.allPhotos.find((photo) => photo.id === id))
       .filter((photo): photo is (typeof property.allPhotos)[number] => Boolean(photo))
       .map((photo) => ({ src: photo.src, caption: photo.caption, room: photo.categoryName, categoryId: photo.categoryId })),
+    /** Every photo and video picked for clients, for "See all" — shown on the card, not in Dropbox. */
+    allMedia: property.allPhotos.map((photo) => ({ src: photo.src, caption: photo.caption, room: photo.categoryName })),
   };
 }

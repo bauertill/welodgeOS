@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 
-import { PhotoGallery, RoomPhotos, type CardPhoto } from "~/app/_components/rate-card-media";
+import { PhotoGallery, RoomPhotos, SeeAllMedia, type CardPhoto } from "~/app/_components/rate-card-media";
 import { nightsBetween } from "~/lib/dates";
 import { formatMoney, formatRange } from "~/lib/format";
 import { propertyTypeLabels } from "~/lib/scouting";
@@ -32,6 +32,8 @@ export type ClientRateCard = {
     videoUrl: string | null;
     photosUrl: string | null;
     photos: (CardPhoto & { categoryId: string | null })[];
+    /** Every photo and video picked for clients — "See all", opened on the card. */
+    allMedia?: CardPhoto[];
     lines: { id: string; categoryId: string | null; name: string; sleeps: number | null; sellingCents: number; available: number | null; minNights: number | null }[];
   }[];
 };
@@ -120,16 +122,18 @@ export function RateCardView({
                 />
               </div>
             )}
-            {(property.videoUrl ?? property.photosUrl) && (
+            {(property.videoUrl ?? property.photosUrl ?? property.allMedia?.length) && (
               <p className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
                 {property.videoUrl && (
                   <a href={property.videoUrl} target="_blank" rel="noreferrer" className={`text-brand-700 hover:underline ${property.video ? "hidden print:inline" : ""}`}>
                     Watch the video ↗<span className="hidden print:inline"> {property.videoUrl}</span>
                   </a>
                 )}
+                {/* On the card itself, so the client never leaves it; the Dropbox folder only on paper. */}
+                {property.allMedia && property.allMedia.length > 0 && <SeeAllMedia media={property.allMedia} name={property.name} />}
                 {property.photosUrl && (
-                  <a href={property.photosUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
-                    See all photos ↗<span className="hidden print:inline"> {property.photosUrl}</span>
+                  <a href={property.photosUrl} target="_blank" rel="noreferrer" className="text-brand-700 hidden hover:underline print:inline">
+                    All photos: {property.photosUrl}
                   </a>
                 )}
               </p>

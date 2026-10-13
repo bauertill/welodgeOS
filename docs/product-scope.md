@@ -2113,7 +2113,9 @@ room category at the rate we sell it for.
 - **Photos and video on the card** (2026-10-11). A new card starts with each property's
   first six photos (its Media tab, §3.10). In our popup each property shows all its
   photos for clients as thumbnails: those on this card numbered in the order the client
-  sees them, click one to put it on or take it off.
+  sees them, click one to put it on or take it off. A property with none ticked on the
+  card — say the card was made before its media came in — shows its first six instead
+  (2026-10-13), so media added later reaches the client without anyone re-ticking.
 - **Every property on a card must have media** (the owner's rule, 2026-10-11): clients have
   to see what it looks like. *Media* is a YouTube video, a Dropbox photos folder or a photo
   picked for clients (its Media tab, §3.10). A property with none can still be put on a
@@ -2129,8 +2131,10 @@ room category at the rate we sell it for.
     closes on its own ("Done — the property has its media now"), and the link can be made. The client
   sees the cover large with up to four more beside it ("+3 more"), each opening full size
   to page through with its room and caption; the YouTube video playing in the card;
-  *See all photos* opening the Dropbox folder; and beside a room, "2 photos" of that
-  room. The printout keeps the photos and gives the video's and folder's links instead.
+  *See all photos & videos (n)* opening every photo and video picked for clients over the
+  card, videos playing there with their controls — **the client never leaves the card**
+  (2026-10-13; it used to open the Dropbox folder in a new tab); and beside a room,
+  "2 photos" of that room. The printout keeps the photos and gives the video's and folder's links instead.
 - **On the map, for the client** (2026-10-13): under the card on the client's link, a map
   with the suggested properties as purple squares numbered as on the card (each property's
   name on the card carries its number), the event's venues as their sport icons, and *Show the

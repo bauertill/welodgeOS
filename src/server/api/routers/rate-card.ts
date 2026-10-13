@@ -150,7 +150,8 @@ function shape(card: LoadedCard) {
           categoryName: photo.category?.name ?? null,
         })),
         /** … and those this card shows, in order. */
-        photoIds: entry.photos.map((photo) => photo.photoId),
+        // None chosen on this card (it may be older than the media): the property's first six.
+        photoIds: entry.photos.length ? entry.photos.map((photo) => photo.photoId) : entry.property.photos.slice(0, 6).map((photo) => photo.id),
         /** No video, photos folder or photo: the card is not shared until it has (doc §4.11). */
         hasMedia: Boolean(entry.property.videoUrl?.trim() || entry.property.photosUrl?.trim() || entry.property.photos.length),
         getMediaTaskId: entry.property.tasks[0]?.id ?? null,
