@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 
+import { ContractingFields } from "~/app/_components/contracting-form";
 import { Button, Field, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { PrintButton } from "~/app/_components/print-button";
 import { RateCardMap } from "~/app/_components/rate-card-map";
 import { RateCardView } from "~/app/_components/rate-card-view";
 import { dayKey, nightsBetween, parseDay } from "~/lib/dates";
-import { formatMoney, formatRange } from "~/lib/format";
+import { formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Card = RouterOutputs["rateCard"]["shared"];
@@ -49,12 +50,26 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   const [newDates, setNewDates] = useState({ checkIn: defaultIn, checkOut: defaultOut, note: "" });
   /** What was last sent from this page: the rooms chosen, or new dates. */
   const [sent, setSent] = useState<"rooms" | "dates" | null>(null);
-  /** The popup open: sending the rooms chosen, or telling us the dates have changed. */
-  const [sending, setSending] = useState<"rooms" | "dates" | null>(null);
+  /** The popup open: sending the rooms chosen, new dates, or their contracting details. */
+  const [sending, setSending] = useState<"rooms" | "dates" | "contracting" | null>(null);
+  /** The contracting popup opened straight after sending the rooms. */
+  const [justSent, setJustSent] = useState(false);
+  const contracting = api.rateCard.contracting.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
+  const [detailsSent, setDetailsSent] = useState(false);
+  const sendDetails = api.rateCard.submitContracting.useMutation({
+    onSuccess: () => {
+      setDetailsSent(true);
+      setSending(null);
+      void contracting.refetch();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+  });
   const answer = api.rateCard.answer.useMutation({
     onSuccess: () => {
-      setSent(sending);
-      setSending(null);
+      setSent(sending === "dates" ? "dates" : "rooms");
+      // The rooms are in: now the details the agreement needs (doc §4.11, 2026-10-14).
+      setJustSent(sending === "rooms");
+      setSending(sending === "rooms" ? "contracting" : null);
       setNote("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
@@ -113,6 +128,21 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
             ? "Thank you — your new dates have been sent. A We Lodge sales member will come back to you with rates and availability."
             : "Thank you — your request has been sent to We Lodge. It is not a confirmed booking yet: a We Lodge agent will come back to you to confirm it with an agreement. You can change it below and send again."}
         </p>
+      )}
+      {detailsSent && (
+        <p className="mx-auto max-w-3xl rounded-xl bg-[#e3f8ee] px-5 py-3 text-sm text-[#0a7a47] print:hidden">
+          Thank you — your company details have been sent. We have what we need to prepare your agreement.
+        </p>
+      )}
+      {contracting.data && !contracting.data.submittedAt && (
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 print:hidden">
+          <p className="text-sm text-[#7a5410]">
+            <span className="font-semibold">Complete your contracting details</span> — your company and who signs — so we can prepare your agreement.
+          </p>
+          <Button type="button" onClick={() => setSending("contracting")}>
+            Add company details
+          </Button>
+        </div>
       )}
       {!sent && last && (
         <p className="bg-brand-50 text-brand-800 mx-auto max-w-3xl rounded-xl px-5 py-3 text-sm font-light print:hidden">
@@ -369,6 +399,39 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                 {answer.isPending ? "Sending…" : "Send new dates"}
               </Button>
             </div>
+          </div>
+        </Popup>
+      )}
+      {sending === "contracting" && (
+        <Popup
+          size="medium"
+          title={justSent ? "One more thing — your company details" : "Your company details"}
+          subtitle="We need these to prepare your agreement. They come straight to your contact at We Lodge."
+          onClose={() => setSending(null)}
+        >
+          <div className="space-y-4">
+            {justSent && <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-sm text-[#0a7a47]">✓ Your request has been sent to We Lodge.</p>}
+            {contracting.data?.submittedAt && (
+              <p className="bg-brand-50 text-brand-800 rounded-xl px-5 py-3 text-sm font-light">
+                You sent these {formatMomentInWords(contracting.data.submittedAt)} — check they are still right.
+              </p>
+            )}
+            {contracting.data ? (
+              <ContractingFields
+                values={contracting.data.values}
+                pending={sendDetails.isPending}
+                error={sendDetails.error ? friendlyError(sendDetails.error) : null}
+                onSubmit={(values) => sendDetails.mutate({ token, values })}
+                submitLabel="Send my details"
+                after={
+                  <button type="button" onClick={() => setSending(null)} className="text-ink-500 text-sm hover:underline">
+                    I&apos;ll do this later
+                  </button>
+                }
+              />
+            ) : (
+              <p className="text-ink-500 text-sm font-light">{contracting.error ? friendlyError(contracting.error) : "Loading…"}</p>
+            )}
           </div>
         </Popup>
       )}

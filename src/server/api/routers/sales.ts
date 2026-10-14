@@ -569,6 +569,57 @@ export async function changeRoomsTx(tx: Prisma.TransactionClient, actorId: strin
   return { nights: applied };
 }
 
+export const clientContractingValues = z.object(Object.fromEntries(clientContractingKeys.map((key) => [key, z.string().max(5000)])) as Record<
+  (typeof clientContractingKeys)[number],
+  z.ZodString
+>);
+
+/** The client's contracting details for a request, as they are now — for their link and their rate card. */
+export async function clientContracting(db: Prisma.TransactionClient | PrismaClient, requestId: string) {
+  const request = await db.salesRequest.findUniqueOrThrow({
+    where: { id: requestId },
+    select: { ...Object.fromEntries(clientContractingKeys.map((key) => [key, true])), contractingSubmittedAt: true } as const,
+  });
+  return {
+    submittedAt: request.contractingSubmittedAt as Date | null,
+    values: Object.fromEntries(clientContractingKeys.map((key) => [key, (request as Record<string, unknown>)[key] ?? ""])) as Record<
+      (typeof clientContractingKeys)[number],
+      string
+    >,
+  };
+}
+
+/**
+ * The client sends their contracting details — through the contracting link,
+ * or from their rate card (doc §4.11): they land on the request, the history
+ * says so, and the account manager is told. Call deliverImmediate after.
+ */
+export async function saveClientContracting(
+  tx: Prisma.TransactionClient,
+  requestId: string,
+  values: z.infer<typeof clientContractingValues>,
+  via: "through the link" | "from the rate card",
+) {
+  if (!values.tradeName.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Please give your company's trade name." });
+  const before = await tx.salesRequest.findUniqueOrThrow({ where: { id: requestId }, include });
+  const data = Object.fromEntries(clientContractingKeys.map((key) => [key, blank(values[key])]));
+  const after = await tx.salesRequest.update({ where: { id: requestId }, data: { ...data, contractingSubmittedAt: new Date() }, include });
+  await logAudit(tx, {
+    actorId: null,
+    entity: "SalesRequest",
+    entityId: requestId,
+    summary: `Contracting details sent by the client, ${via}`,
+    changes: diffFields(readable(before), readable(after), historyFields),
+  });
+  await notify(tx, {
+    to: [before.ownerId],
+    actorId: null,
+    kind: "SALES_CONTRACTING_SENT",
+    title: `${before.client.name} sent their contracting details`,
+    link: `/sales/${requestId}`,
+  });
+}
+
 /**
  * Move a request to another stage — the one way a stage changes. A request is
  * marked Signed only once the client's contract is registered against it
@@ -1161,43 +1212,15 @@ export const salesRouter = createTRPCRouter({
     .input(
       z.object({
         token: z.string().min(20).max(100),
-        values: z.object(Object.fromEntries(clientContractingKeys.map((key) => [key, z.string().max(5000)])) as Record<
-          (typeof clientContractingKeys)[number],
-          z.ZodString
-        >),
+        values: clientContractingValues,
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.db.$transaction(async (tx) => {
-        const before = await tx.salesRequest.findUnique({ where: { contractingToken: input.token }, include });
-        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-        if (!input.values.tradeName.trim()) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Please give your company's trade name." });
-        }
-        const data = Object.fromEntries(clientContractingKeys.map((key) => [key, blank(input.values[key])]));
-        const after = await tx.salesRequest.update({
-          where: { id: before.id },
-          data: { ...data, contractingSubmittedAt: new Date() },
-          include,
-        });
-        await logAudit(tx, {
-          actorId: null,
-          entity: "SalesRequest",
-          entityId: before.id,
-          summary: "Contracting details sent by the client, through the link",
-          changes: diffFields(readable(before), readable(after), historyFields),
-        });
-        await notify(tx, {
-          to: [before.ownerId],
-          actorId: null,
-          kind: "SALES_CONTRACTING_SENT",
-          title: `${before.client.name} sent their contracting details`,
-          link: `/sales/${before.id}`,
-        });
-        return { ok: true };
-      });
+      const request = await ctx.db.salesRequest.findUnique({ where: { contractingToken: input.token }, select: { id: true } });
+      if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+      await ctx.db.$transaction((tx) => saveClientContracting(tx, request.id, input.values, "through the link"));
       await deliverImmediate(ctx.db);
-      return result;
+      return { ok: true };
     }),
 
   /**

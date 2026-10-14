@@ -2160,6 +2160,15 @@ room category at the rate we sell it for.
   confirmed booking — a We Lodge agent will come back to you to confirm the rooms with an
   agreement"** (the owner's wording, 2026-10-13; also under *Your answer* and in the thank
   you), their name and email, a note to us, and *Send request*.
+- **Then their contracting details** (2026-10-14, the owner: "this is most important"):
+  once the request is sent, the popup does not close — it becomes *One more thing — your
+  company details*, with "✓ Your request has been sent" at the top and the same form as the
+  contracting link (below): the company, who signs, the contact persons. *Send my details*,
+  or **I'll do this later** — the details are **asked for, not required**, so no request is
+  lost to a missing VAT number. Until they are in, the card shows **Complete your
+  contracting details** with *Add company details* at the top; details already given — by
+  the link, or before — come filled in, to check. They land on the request exactly as the
+  link's do, recorded as sent "from the rate card", and the account manager is told.
 - **New dates are their own small button** (2026-10-13): *My dates have changed* under
   *Your answer*, and *tell us if your dates have changed* at the top of the card, open a
   separate popup — new arrival and departure, what changed, name, email, a note — and
@@ -2274,6 +2283,9 @@ follow-up and the signing come next and are not built yet (§12).
   arrival, departure and our rate per night — with what it comes to and the total. Any of it
   can be changed, lines added or removed. A rate card line with no room type behind it asks
   for one: rooms can only be blocked in a room type.
+- **Whether the agreement can be drawn up**: the popup opens with *✓ Contracting details are
+  in — the company, signed by …* in green, or, in yellow, that the company or the signatory
+  is still missing, and where it comes from (their rate card asks; the contracting link).
 - **How long it holds**: *The offer holds until* starts **seven days from today**, in the rate
   card's currency.
 - **Its terms**: the payments due (a share on signature, or by a date) and the cancellation
@@ -3088,7 +3100,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates, which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
-| §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
+| §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
 | §4.11 Agreement, follow-up, signing | **Not built** | Next: the framework agreement as a template filled from the offer and contracting details, reviewed, saved as PDF and sent by DocuSign outside; a follow-up task from the account manager's own mailbox; closed by the signed contract (Drive link) or Volki's trust guarantee — the client contract made, the rooms sold, the account manager told. Later: the PDF uploaded to Drive (Till), an AI check of the signed copy (Anthropic key) |

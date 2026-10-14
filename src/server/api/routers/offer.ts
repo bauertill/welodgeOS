@@ -68,6 +68,8 @@ export const offerRouter = createTRPCRouter({
       select: {
         id: true,
         eventId: true,
+        tradeName: true,
+        signatory1Name: true,
         client: { select: { name: true } },
         rateCards: {
           orderBy: { createdAt: "desc" },
@@ -110,6 +112,8 @@ export const offerRouter = createTRPCRouter({
     const event = await ctx.db.event.findUniqueOrThrow({ where: { id: request.eventId }, select: { name: true, startDate: true, endDate: true } });
     return {
       clientName: request.client.name,
+      /** What the agreement is drawn up with — the company and who signs (doc §4.11). */
+      contracting: { tradeName: request.tradeName, signatory: request.signatory1Name },
       event,
       responseId: answer?.id ?? null,
       currency: answer?.currency ?? request.rateCards[0]?.currency ?? "USD",

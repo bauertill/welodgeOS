@@ -105,6 +105,16 @@ function OfferForm({ salesRequestId, context, onDone }: { salesRequestId: string
 
   return (
     <div className="space-y-5">
+      {context.contracting.tradeName && context.contracting.signatory ? (
+        <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-[13px] text-[#0a7a47]">
+          ✓ Contracting details are in — {context.contracting.tradeName}, signed by {context.contracting.signatory}. The agreement can be drawn up.
+        </p>
+      ) : (
+        <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 text-[13px] text-[#7a5410]">
+          <span className="font-semibold">{context.contracting.tradeName ? "No signatory yet." : "No contracting details yet."}</span> The agreement needs the
+          client&rsquo;s company and who signs. Their rate card asks them for these; you can also send them the contracting link from the request.
+        </p>
+      )}
       <div className="rounded-xl bg-white px-5 py-4">
         <h3 className="text-ink-900 mb-1 text-[15px] font-semibold">Rooms for {context.clientName}</h3>
         <p className="text-ink-500 mb-3 text-xs font-light">

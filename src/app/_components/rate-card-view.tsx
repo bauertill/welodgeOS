@@ -122,7 +122,7 @@ export function RateCardView({
                 />
               </div>
             )}
-            {(property.videoUrl ?? property.photosUrl ?? property.allMedia?.length) && (
+            {Boolean(property.videoUrl ?? property.photosUrl ?? property.allMedia?.length) && (
               <p className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
                 {property.videoUrl && (
                   <a href={property.videoUrl} target="_blank" rel="noreferrer" className={`text-brand-700 hover:underline ${property.video ? "hidden print:inline" : ""}`}>

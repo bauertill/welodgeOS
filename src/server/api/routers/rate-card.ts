@@ -8,7 +8,7 @@ import { nightsBetween, parseDay } from "~/lib/dates";
 import { clientMedia, photoSrc } from "~/lib/media";
 import { measuredPlaces, nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
-import { moveStage } from "~/server/api/routers/sales";
+import { clientContracting, clientContractingValues, moveStage, saveClientContracting } from "~/server/api/routers/sales";
 import { legsForMode } from "~/server/api/routers/travel";
 import { logAudit } from "~/server/audit";
 import { ensureGetMediaTask, GET_MEDIA, hasMedia, withMedia } from "~/server/get-media";
@@ -464,6 +464,27 @@ export const rateCardRouter = createTRPCRouter({
     if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
     return clientCopy(card);
   }),
+
+  /**
+   * The client's contracting details, from their rate card (doc §4.11,
+   * 2026-10-14): asked for right after they send their request, and until
+   * they are in — what the agreement is drawn up with.
+   */
+  contracting: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
+    const card = await ctx.db.rateCard.findUnique({ where: { shareToken: input.token }, select: { salesRequestId: true } });
+    if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
+    return clientContracting(ctx.db, card.salesRequestId);
+  }),
+
+  submitContracting: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), values: clientContractingValues }))
+    .mutation(async ({ ctx, input }) => {
+      const card = await ctx.db.rateCard.findUnique({ where: { shareToken: input.token }, select: { salesRequestId: true } });
+      if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
+      await ctx.db.$transaction((tx) => saveClientContracting(tx, card.salesRequestId, input.values, "from the rate card"));
+      await deliverImmediate(ctx.db);
+      return { ok: true };
+    }),
 
   /**
    * The client answers from the link (doc §4.11): the rooms they are

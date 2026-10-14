@@ -295,7 +295,6 @@ model RoomCategory {
 
   quotationLines QuotationLine[]
   rateCardLines  RateCardLine[]
-  offerLines     OfferLine[]
 
   @@index([propertyId])
 }
@@ -863,7 +862,6 @@ model User {
   eventStartTab      String?
   eventsLed          Event[]              @relation("EventProjectLead")
   eventsSourced      Event[]              @relation("EventAccommodationManagers")
-  offersMade         Offer[]              @relation("OfferCreatedBy")
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
@@ -1296,8 +1294,6 @@ model SalesRequest {
   rateCards  RateCard[]
   /// The hotels' quotations for this request's group (doc §3.10).
   quotations Quotation[]
-  /// Binding offers to the client, made from their rate card answer (doc §4.11).
-  offers     Offer[]
 
   @@index([clientId])
   @@index([eventId])
@@ -1854,8 +1850,7 @@ model RateCardResponse {
   newCheckOut  DateTime? @db.Date
   datesNote    String?
 
-  items  RateCardResponseItem[]
-  offers Offer[]
+  items RateCardResponseItem[]
 
   @@index([rateCardId, createdAt])
 }
@@ -1912,94 +1907,4 @@ model RateCardPhoto {
 
   @@id([rateCardPropertyId, photoId])
   @@index([photoId])
-}
-
-/// Where an offer stands (doc §4.11, 2026-10-14). Running out is not a state:
-/// an open offer past its date is flagged, and a person extends or withdraws it.
-enum OfferStatus {
-  /// Made, its rooms blocked until validUntil, waiting for the client.
-  OPEN
-  /// The client signed the agreement.
-  SIGNED
-  /// Not signed yet, but an admin vouched for the client: the rooms are sold.
-  TRUSTED
-  /// Taken back: its rooms released.
-  WITHDRAWN
-}
-
-/// A binding offer to a client after they answered a rate card (doc §4.11,
-/// 2026-10-14): the rooms, the rates, the terms and how long it holds. Making
-/// it blocks the rooms until validUntil; the agreement is filled from it.
-model Offer {
-  id             String            @id @default(cuid())
-  salesRequest   SalesRequest      @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
-  salesRequestId String
-  /// The client's rate card answer it was made from, if any.
-  response       RateCardResponse? @relation(fields: [responseId], references: [id], onDelete: SetNull)
-  responseId     String?
-  status         OfferStatus       @default(OPEN)
-  currency       String
-  /// The rooms are held for the client until this day — the holding period.
-  validUntil     DateTime          @db.Date
-  /// What the rate includes — "Daily housekeeping", one per line.
-  inclusions     String?
-  /// Special conditions — "Breakfast at a discounted rate", one per line.
-  conditions     String?
-  createdBy      User?             @relation("OfferCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById    String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-
-  lines         OfferLine[]
-  payments      OfferPayment[]
-  cancellations OfferCancellation[]
-
-  @@index([salesRequestId])
-}
-
-/// Rooms of one category for one stay, at a rate per room per night.
-model OfferLine {
-  id         String       @id @default(cuid())
-  offer      Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  offerId    String
-  category   RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  categoryId String
-  rooms      Int
-  checkIn    DateTime     @db.Date
-  checkOut   DateTime     @db.Date
-  /// Per room per night, in the offer's currency.
-  rateCents  Int
-  position   Int          @default(0)
-
-  @@index([offerId])
-}
-
-/// A payment the client is to make, as a share of the total.
-model OfferPayment {
-  id                 String    @id @default(cuid())
-  offer              Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  offerId            String
-  /// Due on signature of the agreement, rather than on a date.
-  onSignature        Boolean   @default(false)
-  dueOn              DateTime? @db.Date
-  /// In hundredths of a percent: 20% is 2000.
-  percentBasisPoints Int
-  position           Int       @default(0)
-
-  @@index([offerId])
-}
-
-/// What the client may cancel, by when, and at what cost.
-model OfferCancellation {
-  id                 String           @id @default(cuid())
-  offer              Offer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  offerId            String
-  kind               CancellationKind
-  cutoffOn           DateTime         @db.Date
-  percentBasisPoints Int?
-  feeBasisPoints     Int?
-  remarks            String?
-  position           Int              @default(0)
-
-  @@index([offerId])
 }
