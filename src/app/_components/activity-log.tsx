@@ -58,6 +58,35 @@ export function ActivityLog({ entity, entityId, latestOnly }: { entity: string; 
   return <EntryList entries={activity.data} latestOnly={latestOnly} />;
 }
 
+/**
+ * A record's history at the foot of its page, folded to one quiet line until
+ * clicked (the owner, 2026-10-14: always minimised — it is rarely needed and
+ * open it crowds the page). Every page and popup shows its history this way.
+ */
+export function HistorySection({ entity, entityId, className = "mt-5" }: { entity: string; entityId: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const activity = api.audit.list.useQuery({ entity, entityId });
+  const count = activity.data?.length ?? 0;
+  return (
+    <div className={`${className} print:hidden`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="text-ink-500 hover:text-ink-900 flex items-center gap-1.5 px-1 text-xs font-light"
+      >
+        <span className={`inline-block transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
+        History{count ? ` (${count})` : ""}
+      </button>
+      {open && (
+        <div className="mt-2 rounded-xl bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+          <EntryList entries={activity.data} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A scouting entry's own status history plus every one of its category
  * contracts' — merged, since on the Properties tab both live in one row. */
 export function ScoutingActivityLog({ scoutingEntryId }: { scoutingEntryId: string }) {

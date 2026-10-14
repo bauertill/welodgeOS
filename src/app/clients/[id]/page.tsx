@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
-import { ActivityLog } from "~/app/_components/activity-log";
+import { HistorySection } from "~/app/_components/activity-log";
 import { ClientContactsCard, ClientDetailsCard } from "~/app/_components/client-crm";
 import { ClientSalesRequests } from "~/app/_components/sales-requests";
 import { UpdateThread } from "~/app/_components/update-thread";
@@ -62,13 +62,7 @@ export default async function ClientPage({
               <Row label="Requests open" value={String(client._count.requests)} />
             </dl>
           </Card>
-
-          <Card>
-            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-              Log
-            </h2>
-            <ActivityLog entity="Client" entityId={client.id} />
-          </Card>
+          <HistorySection entity="Client" entityId={client.id} className="" />
         </div>
       </div>
     </>

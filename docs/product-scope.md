@@ -1647,6 +1647,10 @@ that actually changed, old value to new. Like the ledger, it is append-only: not
 ever edited or deleted once written, including by the thing it describes being deleted
 itself (removing a property or a scouting entry does not take its history down with it).
 
+**On screen it is always folded** (the owner, 2026-10-14): at the foot of a sales request,
+task, client, event or contract — page or popup — a single quiet line, **▸ History (16)**,
+opens it on a click. Every page made from now on shows its history the same way.
+
 Two things this deliberately does not do, both because they are more than today needs:
 
 - **No field-level diff of nested structures.** A property's room categories or contacts

@@ -1,10 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 
-import { ActivityLog } from "~/app/_components/activity-log";
+import { HistorySection } from "~/app/_components/activity-log";
 import { EventForm } from "~/app/_components/event-form";
 import { EventTeam } from "~/app/_components/event-team";
 import { PlacesOfInterest } from "~/app/_components/places-of-interest";
-import { Card, PageHeader } from "~/app/_components/ui";
+import { PageHeader } from "~/app/_components/ui";
 import { dayKey } from "~/lib/dates";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
@@ -57,12 +57,7 @@ export default async function EditEventPage({
       </div>
 
       <div className="mt-5">
-        <Card>
-          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-            Log
-          </h2>
-          <ActivityLog entity="Event" entityId={event.id} />
-        </Card>
+          <HistorySection entity="Event" entityId={event.id} className="" />
       </div>
     </>
   );

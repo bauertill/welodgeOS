@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
-import { ActivityLog } from "~/app/_components/activity-log";
+import { HistorySection } from "~/app/_components/activity-log";
 import { EventSetupPopup } from "~/app/_components/event-setup-popup";
 import { EventTabs } from "~/app/_components/event-tabs";
 import { Card, PageHeader } from "~/app/_components/ui";
@@ -131,11 +131,7 @@ export default async function EventDetailsPage({ params }: { params: Promise<{ i
             Map layers — adding, importing from Google My Maps, choosing which are measured to — are run from the Layers panel on the Properties tab&apos;s map.
           </p>
         </Card>
-
-        <Card>
-          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Log</h2>
-          <ActivityLog latestOnly entity="Event" entityId={event.id} />
-        </Card>
+          <HistorySection entity="Event" entityId={event.id} className="" />
       </div>
     </>
   );

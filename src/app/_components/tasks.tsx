@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { ActivityLog } from "~/app/_components/activity-log";
+import { HistorySection } from "~/app/_components/activity-log";
 
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
@@ -605,12 +605,7 @@ function TaskPopup({ id, onClose }: { id: string; onClose: () => void }) {
       onClose={onClose}
     >
       <TaskView id={id} onRemoved={onClose} />
-      {t && (
-        <div className="border-ink-200/60 mt-5 rounded-xl border bg-white p-5">
-          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Log</h2>
-          <ActivityLog latestOnly entity="Task" entityId={id} />
-        </div>
-      )}
+      {t && <HistorySection entity="Task" entityId={id} />}
     </Popup>
   );
 }

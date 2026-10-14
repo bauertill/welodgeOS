@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 
-import { ActivityLog } from "~/app/_components/activity-log";
+import { HistorySection } from "~/app/_components/activity-log";
 import { SalesRequestView } from "~/app/_components/sales-requests";
-import { Card, PageHeader } from "~/app/_components/ui";
+import { PageHeader } from "~/app/_components/ui";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
@@ -22,12 +22,7 @@ export default async function SalesRequestPage({ params }: { params: Promise<{ i
         subtitle={[request.event?.name ?? "No event", request.contact?.name].filter(Boolean).join(" · ")}
       />
       <SalesRequestView request={request} />
-      <div className="mt-5">
-        <Card>
-          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">History</h2>
-          <ActivityLog entity="SalesRequest" entityId={request.id} />
-        </Card>
-      </div>
+      <HistorySection entity="SalesRequest" entityId={request.id} />
     </>
   );
 }
