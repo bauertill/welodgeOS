@@ -228,10 +228,13 @@ export function RequestOffers({ salesRequestId }: { salesRequestId: string }) {
   const offers = api.offer.forRequest.useQuery({ salesRequestId });
   const [making, setMaking] = useState(false);
   if (!offers.data?.length) return null;
+  const live = offers.data.some((offer) => offer.status !== "WITHDRAWN");
   return (
-    <section className="rounded-2xl bg-white px-6 py-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+    <section
+      className={`rounded-2xl bg-white px-6 py-5 ${live ? "border-brand-300 border-2 shadow-[0_2px_10px_rgba(115,72,214,0.10)]" : "shadow-[0_1px_3px_rgba(0,0,0,0.06)]"}`}
+    >
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-ink-900 text-lg font-semibold">Offers</h2>
+        <h2 className="text-ink-900 text-lg font-semibold">{offers.data.length === 1 ? "The offer" : "Offers"}</h2>
         <button type="button" onClick={() => setMaking(true)} className="text-brand-700 text-[13px] font-medium hover:underline">
           + Make another offer
         </button>

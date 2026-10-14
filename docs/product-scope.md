@@ -2307,6 +2307,10 @@ follow-up and the signing come next and are not built yet (§12).
   Both act on the request's blocked rooms of the offer's room types.
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
+- **The offer leads the request's page** (the owner, 2026-10-14): once one is made it sits
+  first under the stages, highlighted; the client's answer steps back below it, without its
+  highlight or its *Make an offer* button. Once the client's needs are in, *What they asked
+  for* — their first enquiry — moves to the foot of the page as **Their first enquiry**.
 
 #### The agreement (2026-10-14)
 

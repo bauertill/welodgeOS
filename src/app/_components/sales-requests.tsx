@@ -1144,19 +1144,25 @@ function DetailsEditor({
 
 export function SalesRequestView({ request }: { request: FullRequest }) {
   const router = useRouter();
+  // Once their needs are in, the first enquiry is history: it goes to the foot (doc §4.11, 2026-10-14).
+  const detailed = Boolean(request.detailedAt);
+  const firstAsk = (
+    <TextSection
+      request={request}
+      title={detailed ? "Their first enquiry" : "What they asked for"}
+      fields={interestFields.filter((field) => field.key === "description")}
+      empty="Nothing recorded yet — Edit to add what the client asked for, in their words."
+    />
+  );
   return (
     <div className="space-y-5">
       <StagePicker request={request} />
-      <ClientAnswer request={request} />
+      {/* The offer first once there is one — it is what the request is about now (doc §4.11, 2026-10-14). */}
       <RequestOffers salesRequestId={request.id} />
+      <ClientAnswer request={request} />
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-          <TextSection
-            request={request}
-            title="What they asked for"
-            fields={interestFields.filter((field) => field.key === "description")}
-            empty="Nothing recorded yet — Edit to add what the client asked for, in their words."
-          />
+          {!detailed && firstAsk}
           <RequestDetailsCard request={request} />
           {earlierInterestFields.some((field) => request[field.key]) && (
             <TextSection request={request} title="More detail" fields={earlierInterestFields} empty="" />
@@ -1176,6 +1182,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
               </>
             }
           />
+          {detailed && firstAsk}
         </div>
         <div className="space-y-5">
           <RequestTasks request={request} />
@@ -1203,6 +1210,9 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
 function ClientAnswer({ request }: { request: FullRequest }) {
   const utils = api.useUtils();
   const answers = api.rateCard.answersForRequest.useQuery({ salesRequestId: request.id });
+  // With an offer out, the answer it came from steps back: the offer has the highlight.
+  const offers = api.offer.forRequest.useQuery({ salesRequestId: request.id });
+  const offered = (offers.data ?? []).some((offer) => offer.status !== "WITHDRAWN");
   const [open, setOpen] = useState<string | null>(null);
   const [offering, setOffering] = useState<string | null>(null);
   const [earlier, setEarlier] = useState(false);
@@ -1228,8 +1238,10 @@ function ClientAnswer({ request }: { request: FullRequest }) {
   const [latest, ...older] = list;
 
   return (
-    <section className="border-brand-300 overflow-hidden rounded-2xl border-2 bg-white shadow-[0_2px_10px_rgba(115,72,214,0.10)]">
-      <div className="bg-brand-50 flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+    <section
+      className={`overflow-hidden rounded-2xl bg-white ${offered ? "shadow-[0_1px_3px_rgba(0,0,0,0.06)]" : "border-brand-300 border-2 shadow-[0_2px_10px_rgba(115,72,214,0.10)]"}`}
+    >
+      <div className={`flex flex-wrap items-center justify-between gap-3 px-6 py-4 ${offered ? "" : "bg-brand-50"}`}>
         <div>
           <h2 className="text-ink-900 flex items-center gap-2 text-lg font-semibold">
             {request.client.name} answered the rate card
@@ -1244,7 +1256,7 @@ function ClientAnswer({ request }: { request: FullRequest }) {
           <button type="button" onClick={() => setOpen(latest!.card.id)} className="border-brand-300 text-brand-700 rounded-full border px-4 py-2 text-[13px] font-medium hover:bg-white">
             Open the rate card
           </button>
-          {latest!.items.length > 0 && (
+          {latest!.items.length > 0 && !offered && (
             <button type="button" onClick={() => setOffering(latest!.id)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
               Make an offer →
             </button>
