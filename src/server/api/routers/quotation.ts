@@ -36,7 +36,7 @@ const lineInput = z.object({
 });
 
 /** A payment as quoted: on signature, or on a date — a share of the total. */
-const paymentInput = z
+export const paymentInput = z
   .object({
     onSignature: z.boolean(),
     dueOn: optionalDay,
@@ -45,7 +45,7 @@ const paymentInput = z
   .refine((payment) => payment.onSignature || payment.dueOn, "Each payment is due on signature or on a date — give the date");
 
 /** A cancellation cut-off as quoted: by this date, this share. */
-const cancellationInput = z.object({
+export const cancellationInput = z.object({
   kind: z.nativeEnum(CancellationKind),
   cutoffOn: day,
   percentBasisPoints: z.number().int().min(0).max(10_000).nullable(),

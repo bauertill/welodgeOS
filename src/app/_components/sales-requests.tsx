@@ -12,6 +12,7 @@ import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_c
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { NewClientPopup } from "~/app/_components/new-client-popup";
+import { OfferPopup, RequestOffers } from "~/app/_components/offers";
 import { QuotesReceived } from "~/app/_components/quotations";
 import { RateCardEditor } from "~/app/_components/rate-card-editor";
 import { TaskStatusBadge } from "~/app/_components/tasks";
@@ -1147,6 +1148,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
     <div className="space-y-5">
       <StagePicker request={request} />
       <ClientAnswer request={request} />
+      <RequestOffers salesRequestId={request.id} />
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           <TextSection
@@ -1202,6 +1204,7 @@ function ClientAnswer({ request }: { request: FullRequest }) {
   const utils = api.useUtils();
   const answers = api.rateCard.answersForRequest.useQuery({ salesRequestId: request.id });
   const [open, setOpen] = useState<string | null>(null);
+  const [offering, setOffering] = useState<string | null>(null);
   const [earlier, setEarlier] = useState(false);
   const markSeen = api.rateCard.markRequestSeen.useMutation({
     onSuccess: () => {
@@ -1237,9 +1240,16 @@ function ClientAnswer({ request }: { request: FullRequest }) {
             {latest!.name || latest!.email ? ` · ${[latest!.name, latest!.email].filter(Boolean).join(" · ")}` : ""} · on {latest!.card.name.split(" — ")[0]}
           </p>
         </div>
-        <button type="button" onClick={() => setOpen(latest!.card.id)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
-          Open the rate card
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setOpen(latest!.card.id)} className="border-brand-300 text-brand-700 rounded-full border px-4 py-2 text-[13px] font-medium hover:bg-white">
+            Open the rate card
+          </button>
+          {latest!.items.length > 0 && (
+            <button type="button" onClick={() => setOffering(latest!.id)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
+              Make an offer →
+            </button>
+          )}
+        </div>
       </div>
       <div className="px-6 py-5">
         <AnswerBody answer={latest!} />
@@ -1264,6 +1274,7 @@ function ClientAnswer({ request }: { request: FullRequest }) {
           </div>
         )}
       </div>
+      {offering && <OfferPopup salesRequestId={request.id} responseId={offering} onClose={() => setOffering(null)} />}
       {open && (
         <RateCardEditor
           id={open}

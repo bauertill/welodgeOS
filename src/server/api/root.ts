@@ -16,6 +16,7 @@ import { reportingRouter } from "~/server/api/routers/reporting";
 import { salesRouter } from "~/server/api/routers/sales";
 import { scoutingRouter } from "~/server/api/routers/scouting";
 import { notificationRouter } from "~/server/api/routers/notification";
+import { offerRouter } from "~/server/api/routers/offer";
 import { taskRouter } from "~/server/api/routers/task";
 import { travelRouter } from "~/server/api/routers/travel";
 import { updateRouter } from "~/server/api/routers/update";
@@ -37,6 +38,7 @@ export const appRouter = createTRPCRouter({
   clients: clientRouter,
   sales: salesRouter,
   rateCard: rateCardRouter,
+  offer: offerRouter,
   media: mediaRouter,
   mapLayer: mapLayerRouter,
   inventory: inventoryRouter,

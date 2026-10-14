@@ -2262,6 +2262,40 @@ so none of it can leak through it. Anyone with the link can open it, so it is se
 the client. **Switch off** stops it working at once — the details already sent stay —
 and **Make a new link** gives a fresh address, so an old one never comes back to life.
 
+#### The offer (2026-10-14)
+
+Once the client has answered a rate card, the next step is a **binding offer**: these rooms,
+at these rates, on these terms, held for them until a date. It is the first part of the
+offer-and-agreement stage the owner set out on 2026-10-14; the agreement document, the
+follow-up and the signing come next and are not built yet (§12).
+
+- **Make an offer →** sits beside *Open the rate card* on the client's answer, and opens a
+  popup **filled from that answer**: each room they chose as a line — room type, rooms,
+  arrival, departure and our rate per night — with what it comes to and the total. Any of it
+  can be changed, lines added or removed. A rate card line with no room type behind it asks
+  for one: rooms can only be blocked in a room type.
+- **How long it holds**: *The offer holds until* starts **seven days from today**, in the rate
+  card's currency.
+- **Its terms**: the payments due (a share on signature, or by a date) and the cancellation
+  cut-offs, in the same editor as a hotel's quotation (§3.10); what the rate includes and any
+  special conditions, one per line. They start as the **last offer made on the same event**,
+  since an event's terms rarely change from one client to the next.
+- **Making it blocks the rooms** for the client until the offer runs out — **Blocked** on the
+  inventory with that expiry and the offered rate, so no one else is offered them — through
+  the same rules, ledger and undo as the stock sheet (§4.8), picking rooms the way *Add rooms*
+  does (§4.11, Selling from the request). **All or nothing**: if a line's rooms are not free
+  for every night, nothing is made and the popup says how many are. The request moves to
+  **Negotiation** (from *Initial interest*, *Specify* or *Proposal sent*), its *Blocked until*
+  becomes the offer's date and its value the offer's total.
+- **Offers** on the request lists each one: rooms, total, who made it and when, its lines and
+  terms, and where it stands — *Open — rooms held until …*; *Ran out on … — extend or
+  withdraw*, in red; *Withdrawn — rooms released*. **An offer that runs out is only flagged**
+  (the owner, 2026-10-14): the rooms stay blocked until a person decides. **Extend the hold**
+  moves the offer and its blocks to a new date; **Withdraw** releases its rooms for others.
+  Both act on the request's blocked rooms of the offer's room types.
+- *+ Make another offer* makes one without an answer to start from — the client told us by
+  phone, say.
+
 ---
 
 ## 5. Reporting and derived views
@@ -3056,6 +3090,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
+| §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
+| §4.11 Agreement, follow-up, signing | **Not built** | Next: the framework agreement as a template filled from the offer and contracting details, reviewed, saved as PDF and sent by DocuSign outside; a follow-up task from the account manager's own mailbox; closed by the signed contract (Drive link) or Volki's trust guarantee — the client contract made, the rooms sold, the account manager told. Later: the PDF uploaded to Drive (Till), an AI check of the signed copy (Anthropic key) |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
