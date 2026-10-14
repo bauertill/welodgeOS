@@ -2311,10 +2311,10 @@ follow-up and the signing come next and are not built yet (§12).
   Both act on the request's blocked rooms of the offer's room types.
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
-- **Who signs for We Lodge** (the owner, 2026-10-14): **Volki for an event in the United
-  States, Raphael Angelo Dornier for every other** — decided by the event's country, for
-  the client's agreement and, once it is in the system, the hotels'. Volki's full name and
-  title are not in the system yet, so a US agreement shows them as a gap.
+- **Who signs for We Lodge** (the owner, 2026-10-14): **Volkhard Bauer, CEO, for an event
+  in the United States; Raphael Angelo Dornier, President of the Board, for every other** —
+  decided by the event's country, for the client's agreement and, once it is in the
+  system, the hotels'.
 - **The offer leads the request's page** (the owner, 2026-10-14): once one is made it sits
   first under the stages, highlighted, headed **The contract** (the owner's word for it on the
   page, 2026-10-14); the client's answer steps back below it, without its
@@ -3203,7 +3203,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
 | §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
-| §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Not yet: follow-up task before an offer runs out, our hotel framework agreement, uploading PDFs (Till), AI check of the signed copy, Volki's name and title |
+| §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Not yet: follow-up task before an offer runs out, our hotel framework agreement, uploading PDFs (Till), AI check of the signed copy |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |

@@ -11,8 +11,8 @@ import { formatMoney } from "~/lib/format";
 const missing = (what: string) => `[missing: ${what}]`;
 
 /**
- * Who signs for We Lodge (the owner, 2026-10-14): Volki for an event in the
- * United States, Raphael Angelo Dornier for every other.
+ * Who signs for We Lodge (the owner, 2026-10-14): Volkhard Bauer, CEO, for an
+ * event in the United States; Raphael Angelo Dornier for every other.
  */
 const SIGNATORIES = {
   world: {
@@ -21,8 +21,8 @@ const SIGNATORIES = {
     signature: "@sign For and on behalf of We Lodge AG by Raphael Angelo Dornier | in his capacity as President of the Board of Directors of We Lodge AG, he being duly authorised hereto.",
   },
   us: {
-    represented: `herein represented by ${missing("Volki's full name and title")}, being duly authorised hereto by resolution of the directors of We Lodge`,
-    signature: `@sign For and on behalf of We Lodge AG by ${missing("Volki's full name")} | ${missing("Volki's title")}, duly authorised hereto.`,
+    represented: "herein represented by Volkhard Bauer, CEO, being duly authorised hereto by resolution of the directors of We Lodge",
+    signature: "@sign For and on behalf of We Lodge AG by Volkhard Bauer | CEO of We Lodge AG, duly authorised hereto.",
   },
 };
 const inUnitedStates = (country: string | null) => /^(us|usa|u\.s\.a?\.?|united states( of america)?)$/i.test(country?.trim() ?? "");
