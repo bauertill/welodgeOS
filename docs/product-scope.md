@@ -2396,7 +2396,25 @@ offer opens it as a document, as it will print.
   cut-offs become the contract's, §7.1, and the contract is tied to the client's request);
   **2. The hotel's contract** — *✓ The hotel signed*, with the day and a Drive link, which
   marks it signed, **buys the rooms** under it at the quote's rate per room type, and closes
-  the task. Our own framework agreement for hotels is not in the system yet.
+  the task.
+- **Our agreement with a hotel — US events only** (the owner, 2026-10-14: the agreement
+  agreed with Aimbridge for the Fairfield Inn & Suites El Segundo, "exclusive for the US and
+  LA project"). When a quote's contract is on *our agreement* and the event is in the United
+  States, *Draw up our agreement →* sits beside the hotel's contract on the acquire task. It
+  is filled like the client's: **We Lodge Corp.** (Delaware) and the hotel's company — from
+  the hotel's contracting details: trade name, registration number, who signs and their
+  title, the email contracts go to, its group for a copy of notices — the date it is drawn
+  up, the event, the contract's **total** as the Remuneration and Total Guestroom Revenue,
+  the **payment schedule** in dollars and per cent (the last with the taxes on top), the
+  **cancellation fees** as date ranges ("Date of Agreement to July 15, 2027: $15,000.00
+  (25%)", the last running to the arrival date), what the quote's rate includes, and the
+  quote's rooms as Schedule 2.1; Volkhard Bauer, CEO, signs for us. What the system does not
+  know — the company's state and type, the parking — is left highlighted to fill in, and the
+  attrition policy and the rest of the Aimbridge terms are fixed wording to check for each
+  hotel. Reviewed, changed for one hotel, printed, marked as sent and its wording changed for
+  every hotel exactly as the client's agreement is. For an event outside the US it says our
+  hotel agreement is not in the system for that yet. (Two words were made neutral where the
+  draft had "his/her" and "her" for a company — "its".)
 - **Whose agreement** is asked in the quoting phase too: the quotation has *The contract will
   be on*, and the hotel contact task's checklist has *Whose agreement the contract is on —
   theirs or ours*.
@@ -3203,7 +3221,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
 | §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
-| §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Not yet: follow-up task before an offer runs out, our hotel framework agreement, uploading PDFs (Till), AI check of the signed copy |
+| §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Our agreement with hotels for US events, filled from the quote and contract. Not yet: follow-up task before an offer runs out, our hotel agreement outside the US, uploading PDFs (Till), AI check of the signed copy |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |

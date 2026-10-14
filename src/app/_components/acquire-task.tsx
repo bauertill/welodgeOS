@@ -35,7 +35,7 @@ export function AcquirePanel({ taskId, propertyId, propertyName }: { taskId: str
   const hotelSigned = api.acquire.hotelSigned.useMutation({ onSuccess: () => (setSigning(null), refresh()) });
 
   if (!data.data) return <div className={box}>{data.error ? friendlyError(data.error) : "Loading…"}</div>;
-  const { request, sold, clientContract, trusted, quotes, contracts, nights } = data.data;
+  const { request, sold, clientContract, trusted, quotes, contracts, nights, inUS } = data.data;
   const signedContract = contracts.find((contract) => contract.signedOn);
   const total = sold.reduce((sum, line) => sum + line.rooms * nightsBetween(line.checkIn, line.checkOut) * line.rateCents, 0);
   const error = agreementOn.error ?? makeContract.error ?? hotelSigned.error;
@@ -116,8 +116,8 @@ export function AcquirePanel({ taskId, propertyId, propertyName }: { taskId: str
             ))}
           </ul>
         )}
-        {quotes.some((quote) => quote.agreementOn === "WE_LODGE") && (
-          <p className="text-ink-500 mt-2 text-xs font-light">Our framework agreement for hotels is not in the system yet — use the Word version for now.</p>
+        {quotes.some((quote) => quote.agreementOn === "WE_LODGE") && !inUS && (
+          <p className="text-ink-500 mt-2 text-xs font-light">Our hotel agreement is only in the system for US events so far — use the Word version for now.</p>
         )}
       </div>
 
@@ -133,6 +133,12 @@ export function AcquirePanel({ taskId, propertyId, propertyName }: { taskId: str
                 <Link href={contractHref(contract.eventId, contract.id)} className="text-ink-900 font-medium hover:underline">
                   {contract.name}
                 </Link>
+                {/* On our paper (doc §4.11): our agreement, filled from the quote and the contract. */}
+                {inUS && quotes.some((quote) => quote.contractId === contract.id && quote.agreementOn === "WE_LODGE") && (
+                  <Link href={`/contracts/${contract.id}/agreement`} className="text-brand-700 font-medium hover:underline">
+                    {contract.agreementSentOn ? `Our agreement — sent ${formatDate(contract.agreementSentOn)}` : "Draw up our agreement →"}
+                  </Link>
+                )}
                 {contract.signedOn ? (
                   <span className="text-[#0a7a47]">✓ Signed by the hotel {formatDate(contract.signedOn)}</span>
                 ) : signing?.contractId === contract.id ? (

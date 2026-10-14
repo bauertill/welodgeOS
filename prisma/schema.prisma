@@ -709,6 +709,10 @@ model Contract {
   /// Said on purpose when the contract has no cancellation deadlines at all,
   /// so it stops being flagged as missing them.
   noCancellationTerms Boolean   @default(false)
+  /// Our agreement with the hotel as changed for it; empty means as our template fills it (doc §4.11).
+  agreementText       String?
+  /// When our agreement went to the hotel — by DocuSign, outside the system.
+  agreementSentOn     DateTime? @db.Date
 
   owner   User?   @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   ownerId String?
@@ -2032,9 +2036,9 @@ model OfferCancellation {
   @@index([offerId])
 }
 
-/// The framework agreement's wording, as the team changed it (doc §4.11,
-/// 2026-10-14). One row, "framework"; with none, the wording in
-/// src/lib/agreement-template.ts is used.
+/// An agreement's wording, as the team changed it (doc §4.11, 2026-10-14):
+/// "framework" for clients, "hotel-us" for hotels at US events; with no row,
+/// the wording in src/lib/agreement-template.ts or hotel-agreement-template.ts.
 model AgreementTemplate {
   id          String   @id
   text        String

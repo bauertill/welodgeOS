@@ -5,6 +5,7 @@ import type { Prisma, PrismaClient } from "generated/prisma";
 
 import { fillAgreement, type AgreementData } from "~/lib/agreement";
 import { DEFAULT_AGREEMENT_TEMPLATE } from "~/lib/agreement-template";
+import { DEFAULT_HOTEL_AGREEMENT_TEMPLATE } from "~/lib/hotel-agreement-template";
 import { addDays, dayKey, nightsBetween, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney } from "~/lib/format";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -67,12 +68,15 @@ const blank = (value: string) => (value.trim() ? value.trim() : null);
 export const offerTotal = (lines: { rooms: number; checkIn: Date; checkOut: Date; rateCents: number }[]) =>
   lines.reduce((sum, line) => sum + line.rooms * nightsBetween(line.checkIn, line.checkOut) * line.rateCents, 0);
 
-const TEMPLATE_ID = "framework";
+/** Our agreements, each with the wording it starts as (doc §4.11): for clients, and for hotels at US events. */
+export const AGREEMENT_TEMPLATES = { framework: DEFAULT_AGREEMENT_TEMPLATE, "hotel-us": DEFAULT_HOTEL_AGREEMENT_TEMPLATE } as const;
+export type AgreementKind = keyof typeof AGREEMENT_TEMPLATES;
+const agreementKind = z.enum(["framework", "hotel-us"]);
 
-/** The framework agreement's wording: as the team last changed it, else the original. */
-async function frameworkText(db: PrismaClient) {
-  const saved = await db.agreementTemplate.findUnique({ where: { id: TEMPLATE_ID }, include: { updatedBy: { select: { name: true } } } });
-  return { text: saved?.text ?? DEFAULT_AGREEMENT_TEMPLATE, changed: saved ? { at: saved.updatedAt, by: saved.updatedBy?.name ?? null } : null };
+/** An agreement's wording: as the team last changed it, else the original. */
+export async function frameworkText(db: PrismaClient, kind: AgreementKind = "framework") {
+  const saved = await db.agreementTemplate.findUnique({ where: { id: kind }, include: { updatedBy: { select: { name: true } } } });
+  return { text: saved?.text ?? AGREEMENT_TEMPLATES[kind], changed: saved ? { at: saved.updatedAt, by: saved.updatedBy?.name ?? null } : null };
 }
 
 /** The offer's agreement, filled from the framework, the client's contracting details, the offer and the event. */
@@ -457,20 +461,20 @@ export const offerRouter = createTRPCRouter({
     });
   }),
 
-  /** The framework agreement's wording, for every client (doc §4.11). */
-  template: protectedProcedure.query(async ({ ctx }) => {
-    const framework = await frameworkText(ctx.db);
-    return { ...framework, original: DEFAULT_AGREEMENT_TEMPLATE };
+  /** An agreement's wording, for every client — or every hotel at a US event (doc §4.11). */
+  template: protectedProcedure.input(z.object({ kind: agreementKind })).query(async ({ ctx, input }) => {
+    const framework = await frameworkText(ctx.db, input.kind);
+    return { ...framework, original: AGREEMENT_TEMPLATES[input.kind] };
   }),
 
-  /** Change the framework's wording — or, with null, go back to the original. */
-  saveTemplate: protectedProcedure.input(z.object({ text: z.string().max(200_000).nullable() })).mutation(async ({ ctx, input }) => {
-    if (input.text === null || input.text.trim() === DEFAULT_AGREEMENT_TEMPLATE.trim()) {
-      await ctx.db.agreementTemplate.deleteMany({ where: { id: TEMPLATE_ID } });
+  /** Change an agreement's wording — or, with null, go back to the original. */
+  saveTemplate: protectedProcedure.input(z.object({ kind: agreementKind, text: z.string().max(200_000).nullable() })).mutation(async ({ ctx, input }) => {
+    if (input.text === null || input.text.trim() === AGREEMENT_TEMPLATES[input.kind].trim()) {
+      await ctx.db.agreementTemplate.deleteMany({ where: { id: input.kind } });
     } else {
       await ctx.db.agreementTemplate.upsert({
-        where: { id: TEMPLATE_ID },
-        create: { id: TEMPLATE_ID, text: input.text, updatedById: ctx.session.user.id },
+        where: { id: input.kind },
+        create: { id: input.kind, text: input.text, updatedById: ctx.session.user.id },
         update: { text: input.text, updatedById: ctx.session.user.id },
       });
     }

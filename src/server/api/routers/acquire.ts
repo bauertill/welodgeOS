@@ -1,10 +1,16 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { parseDay } from "~/lib/dates";
+import type { PrismaClient } from "generated/prisma";
+
+import { inUnitedStates } from "~/lib/agreement";
+import { parseDay, today } from "~/lib/dates";
+import { fillHotelAgreement } from "~/lib/hotel-agreement";
+import { rateInclusionLabels, rateInclusionOrder, describeCleaning } from "~/lib/scouting";
 import { formatDate } from "~/lib/format";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { applyInventoryChange } from "~/server/api/routers/inventory";
+import { frameworkText } from "~/server/api/routers/offer";
 import { rectangles } from "~/server/api/routers/sales";
 import { ACQUIRE } from "~/server/acquire";
 import { logAudit } from "~/server/audit";
@@ -18,7 +24,106 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Give the date");
  * made from that quote — and, once the hotel signs, the rooms bought under it
  * and the task done.
  */
+/** Our agreement with a hotel, filled from the hotel, its quote and its contract (doc §4.11). */
+async function hotelAgreement(db: PrismaClient, contractId: string) {
+  const contract = await db.contract.findUniqueOrThrow({
+    where: { id: contractId },
+    include: {
+      payments: { orderBy: { dueOn: "asc" } },
+      cancellations: { orderBy: { cutoffOn: "asc" } },
+      event: { select: { name: true, startDate: true, endDate: true, country: true } },
+      property: {
+        select: {
+          id: true,
+          name: true,
+          tradeName: true,
+          address: true,
+          city: true,
+          registrationNumber: true,
+          signatoryName: true,
+          signatoryTitle: true,
+          contractEmail: true,
+          provider: { select: { name: true } },
+        },
+      },
+      quotations: { include: { lines: { orderBy: { position: "asc" }, include: { category: { select: { name: true } } } } } },
+    },
+  });
+  if (contract.party !== "SUPPLIER" || !contract.property) throw new TRPCError({ code: "BAD_REQUEST", message: "This is not a hotel's contract." });
+  const quote = contract.quotations[0];
+  const inclusions = quote
+    ? [
+        ...rateInclusionOrder.filter((item) => quote.rateIncludes.includes(item)).map((item) => rateInclusionLabels[item]),
+        describeCleaning(quote.cleaning, quote.cleaningOther),
+        quote.rateIncludesOther?.trim() || null,
+      ].filter((item): item is string => Boolean(item))
+    : [];
+  const property = contract.property;
+  const framework = await frameworkText(db, "hotel-us");
+  const filled = fillHotelAgreement(framework.text, {
+    date: today(),
+    hotel: {
+      name: property.name,
+      company: property.tradeName,
+      address: property.address,
+      registration: property.registrationNumber,
+      signatoryName: property.signatoryName,
+      signatoryTitle: property.signatoryTitle,
+      contractEmail: property.contractEmail,
+      group: property.provider?.name ?? null,
+    },
+    event: contract.event,
+    totalCents: contract.totalCents,
+    payments: contract.payments,
+    fees: contract.cancellations.filter((cut) => cut.feeBasisPoints !== null).map((cut) => ({ cutoffOn: cut.cutoffOn, feeBasisPoints: cut.feeBasisPoints! })),
+    inclusions,
+    lines: (quote?.lines ?? []).map((line) => ({ room: line.category.name, rooms: line.rooms, checkIn: line.checkIn, checkOut: line.checkOut, rateCents: line.rateCents })),
+  });
+  return { contract, property, filled, inUS: inUnitedStates(contract.event.country) };
+}
+
 export const acquireRouter = createTRPCRouter({
+  /** Our agreement with the hotel, to review (doc §4.11): as changed for it, or as the template fills it. */
+  hotelAgreement: protectedProcedure.input(z.object({ contractId: z.string() })).query(async ({ ctx, input }) => {
+    const { contract, property, filled, inUS } = await hotelAgreement(ctx.db, input.contractId);
+    const task = await ctx.db.task.findFirst({
+      where: { propertyId: property.id, eventId: contract.eventId, type: { name: ACQUIRE }, ...(contract.salesRequestId && { salesRequestId: contract.salesRequestId }) },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    return {
+      id: contract.id,
+      inUS,
+      title: property.name,
+      backHref: task ? `/tasks/${task.id}` : `/properties/${property.id}`,
+      backLabel: task ? "The acquire task" : property.name,
+      eventName: contract.event.name,
+      sentOn: contract.agreementSentOn,
+      text: contract.agreementText ?? filled,
+      edited: contract.agreementText !== null,
+    };
+  }),
+
+  saveHotelAgreement: protectedProcedure.input(z.object({ id: z.string(), text: z.string().max(200_000).nullable() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.contract.update({ where: { id: input.id }, data: { agreementText: input.text?.trim() ? input.text : null } });
+    await logAudit(ctx.db, {
+      actorId: ctx.session.user.id,
+      entity: "Contract",
+      entityId: input.id,
+      summary: input.text ? "Our agreement's wording changed for this hotel" : "Our agreement back to the template's wording",
+    });
+  }),
+
+  markHotelAgreementSent: protectedProcedure.input(z.object({ id: z.string(), sentOn: day.nullable() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.contract.update({ where: { id: input.id }, data: { agreementSentOn: input.sentOn ? parseDay(input.sentOn) : null } });
+    await logAudit(ctx.db, {
+      actorId: ctx.session.user.id,
+      entity: "Contract",
+      entityId: input.id,
+      summary: input.sentOn ? `Our agreement sent to the hotel on ${formatDate(parseDay(input.sentOn))}` : "Our agreement no longer marked as sent",
+    });
+  }),
+
   forTask: protectedProcedure.input(z.object({ taskId: z.string() })).query(async ({ ctx, input }) => {
     const task = await ctx.db.task.findUniqueOrThrow({
       where: { id: input.taskId },
@@ -28,6 +133,7 @@ export const acquireRouter = createTRPCRouter({
       throw new TRPCError({ code: "BAD_REQUEST", message: "This is not an acquire task." });
     }
     const { salesRequestId, propertyId, eventId } = task;
+    const event = await ctx.db.event.findUniqueOrThrow({ where: { id: eventId }, select: { country: true } });
     const [request, offers, entry, contracts, nights] = await Promise.all([
       ctx.db.salesRequest.findUniqueOrThrow({ where: { id: salesRequestId }, select: { id: true, client: { select: { name: true } } } }),
       ctx.db.offer.findMany({
@@ -47,7 +153,7 @@ export const acquireRouter = createTRPCRouter({
       ctx.db.contract.findMany({
         where: { party: "SUPPLIER", propertyId, eventId },
         orderBy: { createdAt: "desc" },
-        select: { id: true, name: true, eventId: true, signedOn: true, documentUrl: true, salesRequestId: true, totalCents: true, currency: true },
+        select: { id: true, name: true, eventId: true, signedOn: true, documentUrl: true, salesRequestId: true, totalCents: true, currency: true, agreementSentOn: true },
       }),
       ctx.db.roomNight.groupBy({
         by: ["acquisitionState"],
@@ -64,6 +170,8 @@ export const acquireRouter = createTRPCRouter({
       : [];
     return {
       status: task.status,
+      /** Our hotel agreement is for US events only so far (doc §4.11). */
+      inUS: inUnitedStates(event.country),
       request,
       sold: offers.flatMap((offer) => offer.lines.map((line) => ({ ...line, currency: offer.currency }))),
       clientContract: offers[0]?.contract ?? null,

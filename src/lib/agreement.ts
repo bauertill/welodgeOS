@@ -8,7 +8,7 @@ import { formatMoney } from "~/lib/format";
  * [missing: …], highlighted on screen, so it is seen before the agreement goes.
  */
 
-const missing = (what: string) => `[missing: ${what}]`;
+export const missing = (what: string) => `[missing: ${what}]`;
 
 /**
  * Who signs for We Lodge (the owner, 2026-10-14): Volkhard Bauer, CEO, for an
@@ -25,7 +25,7 @@ const SIGNATORIES = {
     signature: "@sign For and on behalf of We Lodge AG by Volkhard Bauer | CEO of We Lodge AG, duly authorised hereto.",
   },
 };
-const inUnitedStates = (country: string | null) => /^(us|usa|u\.s\.a?\.?|united states( of america)?)$/i.test(country?.trim() ?? "");
+export const inUnitedStates = (country: string | null) => /^(us|usa|u\.s\.a?\.?|united states( of america)?)$/i.test(country?.trim() ?? "");
 
 export type AgreementData = {
   client: { name: string | null; address: string | null; signatories: { name: string; designation: string | null }[] };
@@ -76,12 +76,12 @@ const share = (basisPoints: number) => {
   return `${value}% (${numberInWords(value)} per centum)`;
 };
 
-const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const ordinal = (day: number) => `${day}${day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th"}`;
 /** "the 15th of June 2027" — the agreement's way with dates. */
-const longDate = (date: Date) => `the ${ordinal(date.getUTCDate())} of ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+export const longDate = (date: Date) => `the ${ordinal(date.getUTCDate())} of ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 /** "21 October 2026". */
-const plainDate = (date: Date) => `${date.getUTCDate()} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+export const plainDate = (date: Date) => `${date.getUTCDate()} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 
 /** The payment schedule, numbered under the clause it sits in. */
 function paymentLines(data: AgreementData, under: string) {
