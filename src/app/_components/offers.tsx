@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -271,7 +272,10 @@ function OfferItem({ offer }: { offer: Offer }) {
             {offer.createdBy?.name ? ` by ${offer.createdBy.name}` : ""}
           </span>
         </p>
-        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${state.style}`}>{state.label}</span>
+        <span className="flex flex-wrap items-center gap-2">
+          {offer.agreementSentOn && <span className="rounded-full bg-[#e3f8ee] px-2.5 py-0.5 text-[11px] font-medium text-[#0a7a47]">Agreement sent {formatDate(offer.agreementSentOn)}</span>}
+          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${state.style}`}>{state.label}</span>
+        </span>
       </div>
       <ul className="mt-2 space-y-0.5 text-[13px]">
         {offer.lines.map((line) => (
@@ -326,6 +330,9 @@ function OfferItem({ offer }: { offer: Offer }) {
             </span>
           ) : (
             <>
+              <Link href={`/offers/${offer.id}/agreement`} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-1.5 font-medium text-white">
+                {offer.agreementSentOn ? "The agreement" : "Draw up the agreement →"}
+              </Link>
               <button type="button" onClick={() => setExtending(dayKey(offer.validUntil))} className="text-brand-700 font-medium hover:underline">
                 Extend the hold
               </button>

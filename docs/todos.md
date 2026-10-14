@@ -257,6 +257,12 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
          Vercel can start the morning run in `vercel.json`
          (`/api/cron/daily`, 06:00 UTC).
       Until then the bell works and emails are only written to the server log.
+- [ ] **Each event's bank account for clients' payments** (`product-scope.md`
+      §4.11, the agreement — Brandon, 2026-10-14). The agreement has only the USD
+      account today, written into `src/lib/agreement.ts`. Each event should ask
+      for the details of the account its clients pay into, so an agreement in
+      any currency fills it in.
+
 - [ ] **Google Places, to find hotels near a venue automatically**
       (`product-scope.md` §3.10, the Properties overhaul). The plan: enter an
       event's venue and get the hotels around it as a list and on the map,

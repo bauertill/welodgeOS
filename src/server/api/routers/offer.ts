@@ -1,6 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import type { PrismaClient } from "generated/prisma";
+
+import { fillAgreement, type AgreementData } from "~/lib/agreement";
+import { DEFAULT_AGREEMENT_TEMPLATE } from "~/lib/agreement-template";
 import { addDays, dayKey, nightsBetween, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney } from "~/lib/format";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -55,6 +59,68 @@ const blank = (value: string) => (value.trim() ? value.trim() : null);
 /** An offer's total: every line's rooms × nights × rate. */
 export const offerTotal = (lines: { rooms: number; checkIn: Date; checkOut: Date; rateCents: number }[]) =>
   lines.reduce((sum, line) => sum + line.rooms * nightsBetween(line.checkIn, line.checkOut) * line.rateCents, 0);
+
+const TEMPLATE_ID = "framework";
+
+/** The framework agreement's wording: as the team last changed it, else the original. */
+async function frameworkText(db: PrismaClient) {
+  const saved = await db.agreementTemplate.findUnique({ where: { id: TEMPLATE_ID }, include: { updatedBy: { select: { name: true } } } });
+  return { text: saved?.text ?? DEFAULT_AGREEMENT_TEMPLATE, changed: saved ? { at: saved.updatedAt, by: saved.updatedBy?.name ?? null } : null };
+}
+
+/** The offer's agreement, filled from the framework, the client's contracting details, the offer and the event. */
+async function filledAgreement(db: PrismaClient, offerId: string) {
+  const offer = await db.offer.findUniqueOrThrow({
+    where: { id: offerId },
+    include: {
+      ...include,
+      salesRequest: {
+        select: {
+          id: true,
+          tradeName: true,
+          companyAddress: true,
+          signatory1Name: true,
+          signatory1Designation: true,
+          signatory2Name: true,
+          signatory2Designation: true,
+          client: { select: { name: true } },
+          event: { select: { name: true, startDate: true, endDate: true } },
+        },
+      },
+    },
+  });
+  const request = offer.salesRequest;
+  if (!request.event) throw new TRPCError({ code: "BAD_REQUEST", message: "The request has no event." });
+  const lines = (s: string | null | undefined) => (s ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
+  const data: AgreementData = {
+    client: {
+      name: request.tradeName,
+      address: request.companyAddress,
+      signatories: [
+        { name: request.signatory1Name ?? "", designation: request.signatory1Designation },
+        { name: request.signatory2Name ?? "", designation: request.signatory2Designation },
+      ],
+    },
+    currency: offer.currency,
+    event: request.event,
+    lines: offer.lines.map((line) => ({
+      property: line.category.property.name,
+      propertyAddress: line.category.property.address ?? line.category.property.city,
+      room: line.category.name,
+      rooms: line.rooms,
+      checkIn: line.checkIn,
+      checkOut: line.checkOut,
+      rateCents: line.rateCents,
+    })),
+    payments: offer.payments,
+    cancellations: offer.cancellations,
+    inclusions: lines(offer.inclusions),
+    conditions: lines(offer.conditions),
+    validUntil: offer.validUntil,
+  };
+  const framework = await frameworkText(db);
+  return { offer, request, filled: fillAgreement(framework.text, data) };
+}
 
 export const offerRouter = createTRPCRouter({
   /**
@@ -222,6 +288,67 @@ export const offerRouter = createTRPCRouter({
       { timeout: 60_000 },
     ),
   ),
+
+  /**
+   * The offer's agreement to review (doc §4.11): as changed for this client,
+   * or as the framework fills it — and that fresh filling, to go back to.
+   */
+  agreement: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const { offer, request, filled } = await filledAgreement(ctx.db, input.id);
+    return {
+      id: offer.id,
+      status: offer.status,
+      salesRequestId: request.id,
+      clientName: request.client.name,
+      eventName: request.event!.name,
+      validUntil: offer.validUntil,
+      sentOn: offer.agreementSentOn,
+      text: offer.agreementText ?? filled,
+      edited: offer.agreementText !== null,
+      filled,
+    };
+  }),
+
+  /** Change this client's agreement — or, with null, go back to the framework's filling. */
+  saveAgreement: protectedProcedure.input(z.object({ id: z.string(), text: z.string().max(200_000).nullable() })).mutation(async ({ ctx, input }) => {
+    const offer = await ctx.db.offer.update({ where: { id: input.id }, data: { agreementText: input.text?.trim() ? input.text : null } });
+    await logAudit(ctx.db, {
+      actorId: ctx.session.user.id,
+      entity: "SalesRequest",
+      entityId: offer.salesRequestId,
+      summary: input.text ? "Agreement wording changed for this client" : "Agreement back to the framework's wording",
+    });
+  }),
+
+  /** The agreement went to the client — by DocuSign, outside the system — on this day. */
+  markSent: protectedProcedure.input(z.object({ id: z.string(), sentOn: day.nullable() })).mutation(async ({ ctx, input }) => {
+    const offer = await ctx.db.offer.update({ where: { id: input.id }, data: { agreementSentOn: input.sentOn ? parseDay(input.sentOn) : null } });
+    await logAudit(ctx.db, {
+      actorId: ctx.session.user.id,
+      entity: "SalesRequest",
+      entityId: offer.salesRequestId,
+      summary: input.sentOn ? `Agreement sent to the client on ${formatDate(parseDay(input.sentOn))}` : "Agreement no longer marked as sent",
+    });
+  }),
+
+  /** The framework agreement's wording, for every client (doc §4.11). */
+  template: protectedProcedure.query(async ({ ctx }) => {
+    const framework = await frameworkText(ctx.db);
+    return { ...framework, original: DEFAULT_AGREEMENT_TEMPLATE };
+  }),
+
+  /** Change the framework's wording — or, with null, go back to the original. */
+  saveTemplate: protectedProcedure.input(z.object({ text: z.string().max(200_000).nullable() })).mutation(async ({ ctx, input }) => {
+    if (input.text === null || input.text.trim() === DEFAULT_AGREEMENT_TEMPLATE.trim()) {
+      await ctx.db.agreementTemplate.deleteMany({ where: { id: TEMPLATE_ID } });
+    } else {
+      await ctx.db.agreementTemplate.upsert({
+        where: { id: TEMPLATE_ID },
+        create: { id: TEMPLATE_ID, text: input.text, updatedById: ctx.session.user.id },
+        update: { text: input.text, updatedById: ctx.session.user.id },
+      });
+    }
+  }),
 
   /** Hold the rooms longer: the offer and its blocks run to the new date. */
   extend: protectedProcedure.input(z.object({ id: z.string(), validUntil: day })).mutation(({ ctx, input }) =>

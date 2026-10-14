@@ -2308,6 +2308,43 @@ follow-up and the signing come next and are not built yet (§12).
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
 
+#### The agreement (2026-10-14)
+
+Each offer's agreement is drawn up from **the framework agreement** — We Lodge's own, from
+the BBC agreement for SOL28 — filled in for the client. *Draw up the agreement →* on an open
+offer opens it as a document, as it will print.
+
+- **What is filled in, and from where.** The client's company name and registered address,
+  and who signs with their titles, from the request's contracting details; the currency, its
+  definition and the account to pay into; the payment schedule — "An amount equal to 20%
+  (Twenty per centum) … on or before the 15th of June 2027" — in clause 4.2 and Schedule 2;
+  the event and its dates (Schedule 1); the hotels and their addresses, what the rate
+  includes, the cancellation cut-offs, any special conditions and **"This offer is valid
+  until …. The rooms are held for the Client until then."** (Schedule 2, the owner's wording,
+  2026-10-14); and a table of every line — hotel, unit type, units, arrival, departure,
+  nights, rate, total — with the total (Schedule 2.1). Everything else is fixed wording.
+- **Neutral wording for the client's signatories** (the owner, 2026-10-14): "herein
+  represented by Jenny Hackett, Unit Manager, and Rachel Wright, Head of Production, both
+  being duly authorised thereto by the Client" — no *his* or *her*, since the contracting
+  details do not say. Our own signatory keeps the framework's wording.
+- **Only USD has a bank account** for now (the owner, 2026-10-14). An offer in another
+  currency leaves the account as a gap to fill. Each event is to ask for the account its
+  clients pay into (`docs/todos.md`).
+- **Nothing missing goes unseen**: whatever is not known yet — the address, who signs, the
+  payment schedule — is written *[missing: …]*, highlighted, and listed above the document.
+  Fill it in on the request or the offer, or type it in.
+- **Edit the wording for this client** opens the whole text in a popup; what is saved is
+  this client's agreement only. From then on, changes to the offer or the contracting
+  details are not filled in — the page says so, and *Back to the framework's wording, filled
+  afresh* refills it.
+- **Print or save as PDF**, then send it by DocuSign — outside the system — and **Mark as
+  sent** with the day it went. The offer on the request then shows *Agreement sent …*.
+- **The framework wording, for every client** (its own page, linked from every agreement):
+  the whole text, with what each {{field}} fills in and how lines are drawn (# a clause,
+  ## a schedule, numbers at the start of a line). A change reaches every agreement drawn up
+  from then on, not one already changed for its client; *Back to the original wording*
+  restores the BBC-based text.
+
 ---
 
 ## 5. Reporting and derived views
@@ -3103,7 +3140,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
-| §4.11 Agreement, follow-up, signing | **Not built** | Next: the framework agreement as a template filled from the offer and contracting details, reviewed, saved as PDF and sent by DocuSign outside; a follow-up task from the account manager's own mailbox; closed by the signed contract (Drive link) or Volki's trust guarantee — the client contract made, the rooms sold, the account manager told. Later: the PDF uploaded to Drive (Till), an AI check of the signed copy (Anthropic key) |
+| §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
+| §4.11 Follow-up and signing | **Not built** | Next: a follow-up task from the account manager's own mailbox; closed by the signed contract (Drive link) or Volki's trust guarantee — the client contract made, the rooms sold, the account manager told. Later: the PDF uploaded to Drive (Till), an AI check of the signed copy (Anthropic key) |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
