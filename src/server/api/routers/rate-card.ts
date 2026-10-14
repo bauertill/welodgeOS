@@ -12,6 +12,7 @@ import { clientContracting, clientContractingValues, moveStage, saveClientContra
 import { legsForMode } from "~/server/api/routers/travel";
 import { logAudit } from "~/server/audit";
 import { ensureGetMediaTask, GET_MEDIA, hasMedia, withMedia } from "~/server/get-media";
+import { ensureContractTask } from "~/server/contract-task";
 import { deliverImmediate, notify } from "~/server/notify";
 import { eventRates } from "~/server/event-rates";
 
@@ -530,6 +531,7 @@ export const rateCardRouter = createTRPCRouter({
           select: {
             id: true,
             name: true,
+            currency: true,
             createdById: true,
             salesRequest: { select: { id: true, ownerId: true, client: { select: { name: true } } } },
             properties: { select: { property: { select: { name: true } }, lines: { select: { id: true, name: true, sellingCents: true, available: true, minNights: true } } } },
@@ -597,6 +599,18 @@ export const rateCardRouter = createTRPCRouter({
           body: input.note.trim() || null,
           link: `/sales/${card.salesRequest.id}`,
         });
+        // Rooms chosen: the account manager's contract task, to put the offer together (doc §4.11).
+        if (items.length) {
+          await ensureContractTask(tx, {
+            salesRequestId: card.salesRequest.id,
+            cardMadeById: card.createdById,
+            currency: card.currency,
+            items: items.map((item) => {
+              const line = lines.get(item.lineId)!;
+              return { propertyName: line.propertyName, roomName: line.name, rooms: item.rooms, checkIn: day(item.checkIn), checkOut: day(item.checkOut), sellingCents: line.sellingCents };
+            }),
+          });
+        }
         return { id: response.id };
       });
       await deliverImmediate(ctx.db);

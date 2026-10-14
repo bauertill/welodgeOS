@@ -18,6 +18,7 @@
  *   anything else       a paragraph; **bold** is bold
  *
  * The fields, filled from the request, the offer and the event:
+ *   {{welodge.represented}} {{welodge.signature}} — who signs for us, by the event's country
  *   {{client.name}} {{client.address}} {{client.represented}} {{client.signatures}}
  *   {{currency}} {{currency.definition}} {{bank}} {{payments:4.2}}
  *   {{event.dates}} {{schedule2}} {{schedule2.1}}
@@ -31,7 +32,7 @@ Identification Number: CHE-253.332.625
 
 (hereinafter referred to as "We Lodge")
 
-herein represented by Raphael Angelo Dornier, in his capacity as President of the Board of Directors, he being duly authorised hereto by resolution of the directors of We Lodge
+{{welodge.represented}}
 
 and
 
@@ -198,7 +199,7 @@ Each of the provisions of this Agreement shall be considered as separate terms a
 # 23. WHOLE AGREEMENT
 This document, terms and conditions and documents incorporated and/or referred to herein read together with any Cost Analysis constitute the entire agreement between the Parties (and service providers referred to herein where applicable) and no variation or consensual cancellation of this Agreement shall be of any force or effect unless reduced to writing and signed by or on behalf of all the Parties.
 
-@sign For and on behalf of We Lodge AG by Raphael Angelo Dornier | in his capacity as President of the Board of Directors of We Lodge AG, he being duly authorised hereto.
+{{welodge.signature}}
 {{client.signatures}}
 
 ## SCHEDULE 1

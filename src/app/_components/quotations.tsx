@@ -368,6 +368,7 @@ function QuotationEditor({
     documentUrl: quotation?.documentUrl ?? "",
     notes: quotation?.notes ?? "",
   });
+  const [agreementOn, setAgreementOn] = useState<"HOTEL" | "WE_LODGE" | null>(quotation?.agreementOn ?? null);
   // Which client's request it was quoted for (doc §4.11) — for a new one, the request its open contact task is about.
   const requests = api.quotation.requestsFor.useQuery({ scoutingEntryId });
   // The hotel's room categories, as they are now — one can be added right here, from a line (doc §3.10).
@@ -476,6 +477,7 @@ function QuotationEditor({
             cleaning: cleaningIncluded && cleaning ? cleaning : null,
             totBasisPoints: tot === null ? null : Math.round(tot * 100),
             salesRequestId: forRequest,
+            agreementOn,
             lines: parsed,
             payments: paymentsOut,
             cancellations: cancellationsOut,
@@ -600,6 +602,14 @@ function QuotationEditor({
 
       <div className="space-y-4">
         <TermsEditor payments={payments} setPayments={setPayments} cancellations={cancellations} setCancellations={setCancellations} />
+        <label className="flex flex-wrap items-center gap-2 text-[13px]">
+          <span className="text-ink-700 font-medium">The contract will be on</span>
+          <Select value={agreementOn ?? ""} onChange={(e) => setAgreementOn((e.target.value || null) as "HOTEL" | "WE_LODGE" | null)} className="w-52" aria-label="Whose agreement">
+            <option value="">Not known yet — ask them</option>
+            <option value="HOTEL">Their agreement</option>
+            <option value="WE_LODGE">Our agreement</option>
+          </Select>
+        </label>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

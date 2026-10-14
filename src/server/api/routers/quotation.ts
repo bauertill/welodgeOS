@@ -75,6 +75,8 @@ const quotationInput = z.object({
   notes: z.string().max(5000),
   /** The client's request it was quoted for, if one (doc §4.11). */
   salesRequestId: z.string().nullable().default(null),
+  /** Whose agreement the contract will be on — the hotel's or ours; null while not known (doc §4.11). */
+  agreementOn: z.enum(["HOTEL", "WE_LODGE"]).nullable().default(null),
   payments: z.array(paymentInput).max(20).default([]),
   cancellations: z.array(cancellationInput).max(20).default([]),
   lines: z.array(lineInput).min(1, "Add at least one line — rooms of a category, for a period, at a rate.").max(200),
@@ -221,6 +223,7 @@ export const quotationRouter = createTRPCRouter({
           documentUrl: blank(fields.documentUrl),
           notes: blank(fields.notes),
           salesRequestId: fields.salesRequestId,
+          agreementOn: fields.agreementOn,
         };
         const before = input.id ? await tx.quotation.findUnique({ where: { id: input.id }, select: { scoutingEntryId: true, salesRequestId: true } }) : null;
         if (input.id && before?.scoutingEntryId !== input.scoutingEntryId) {
@@ -347,6 +350,19 @@ export const quotationRouter = createTRPCRouter({
    * terms carried over as notes until they are entered as payments and
    * cut-offs. The quotation is marked accepted and points at its contract.
    */
+  /** Whose agreement the hotel's contract will be on — theirs or ours; null while not known (doc §4.11). */
+  setAgreementOn: protectedProcedure
+    .input(z.object({ id: z.string(), agreementOn: z.enum(["HOTEL", "WE_LODGE"]).nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const quotation = await ctx.db.quotation.update({ where: { id: input.id }, data: { agreementOn: input.agreementOn }, select: { scoutingEntryId: true, name: true } });
+      await logAudit(ctx.db, {
+        actorId: ctx.session.user.id,
+        entity: "ScoutingEntry",
+        entityId: quotation.scoutingEntryId,
+        summary: `${quotation.name}: contract on ${input.agreementOn === "HOTEL" ? "the hotel's agreement" : input.agreementOn === "WE_LODGE" ? "our agreement" : "— not known yet"}`,
+      });
+    }),
+
   makeContract: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
     ctx.db.$transaction(async (tx) => {
       const quotation = withTotals(await tx.quotation.findUniqueOrThrow({ where: { id: input.id }, include }));
@@ -377,6 +393,8 @@ export const quotationRouter = createTRPCRouter({
           totalCents: quotation.totalCents,
           currency: quotation.currency,
           documentUrl: quotation.documentUrl,
+          // Tied to the client's request it was quoted for (doc §4.11): client and hotel contracts side by side.
+          salesRequestId: quotation.salesRequestId,
           notes: terms,
           ownerId: entry.accountManagerId ?? ctx.session.user.id,
         },

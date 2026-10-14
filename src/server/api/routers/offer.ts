@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import type { PrismaClient } from "generated/prisma";
+import type { Prisma, PrismaClient } from "generated/prisma";
 
 import { fillAgreement, type AgreementData } from "~/lib/agreement";
 import { DEFAULT_AGREEMENT_TEMPLATE } from "~/lib/agreement-template";
@@ -9,8 +9,13 @@ import { addDays, dayKey, nightsBetween, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney } from "~/lib/format";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { cancellationInput, paymentInput } from "~/server/api/routers/quotation";
-import { addRoomsTx, changeRoomsTx, moveStage } from "~/server/api/routers/sales";
+import { applyInventoryChange } from "~/server/api/routers/inventory";
+import { addRoomsTx, changeRoomsTx, moveStage, rectangles } from "~/server/api/routers/sales";
+import { canTrust } from "~/lib/offers";
+import { ensureAcquireTask } from "~/server/acquire";
+import { moveContractTask } from "~/server/contract-task";
 import { logAudit } from "~/server/audit";
+import { deliverImmediate, notify } from "~/server/notify";
 
 /**
  * Offers to a client (doc §4.11, 2026-10-14). After the client answers a rate
@@ -52,6 +57,8 @@ const include = {
   payments: { orderBy: { position: "asc" as const } },
   cancellations: { orderBy: { position: "asc" as const } },
   createdBy: { select: { name: true } },
+  closedBy: { select: { name: true } },
+  contract: { select: { id: true, name: true, signedOn: true, documentUrl: true, eventId: true } },
 };
 
 const blank = (value: string) => (value.trim() ? value.trim() : null);
@@ -84,7 +91,7 @@ async function filledAgreement(db: PrismaClient, offerId: string) {
           signatory2Name: true,
           signatory2Designation: true,
           client: { select: { name: true } },
-          event: { select: { name: true, startDate: true, endDate: true } },
+          event: { select: { name: true, startDate: true, endDate: true, country: true } },
         },
       },
     },
@@ -120,6 +127,124 @@ async function filledAgreement(db: PrismaClient, offerId: string) {
   };
   const framework = await frameworkText(db);
   return { offer, request, filled: fillAgreement(framework.text, data) };
+}
+
+/**
+ * The client has signed — or an admin vouched for them (doc §4.11): their
+ * contract is made from the offer, its rooms are sold under it, the request is
+ * contracted, the rooms go in progress with each hotel and each hotel gets an
+ * acquire task; the account manager is told.
+ */
+async function closeOffer(
+  tx: Prisma.TransactionClient,
+  actor: { id: string; name: string | null },
+  offerId: string,
+  how: { signed: true; signedOn: Date; documentUrl: string | null } | { signed: false },
+) {
+  const offer = await tx.offer.findUniqueOrThrow({
+    where: { id: offerId },
+    include: { ...include, salesRequest: { select: { id: true, clientId: true, eventId: true, ownerId: true, client: { select: { name: true } }, event: { select: { name: true } } } } },
+  });
+  if (offer.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: "This offer is not open any more." });
+  const request = offer.salesRequest;
+  if (!request.eventId || !request.event) throw new TRPCError({ code: "BAD_REQUEST", message: "The request has no event." });
+  const total = offerTotal(offer.lines);
+  const signedOn = how.signed ? how.signedOn : null;
+  const contract = await tx.contract.create({
+    data: {
+      party: "CLIENT",
+      name: `${request.client.name} — ${request.event.name} agreement`,
+      eventId: request.eventId,
+      clientId: request.clientId,
+      salesRequestId: request.id,
+      documentUrl: how.signed ? how.documentUrl : null,
+      signedOn,
+      totalCents: total,
+      currency: offer.currency,
+      ownerId: request.ownerId ?? actor.id,
+      notes: how.signed ? "Made from the offer when the client signed." : `Not signed yet — trust guarantee by ${actor.name ?? "an admin"} on ${formatDate(today())}.`,
+      noCancellationTerms: offer.cancellations.length === 0,
+      payments: {
+        create: offer.payments.map((payment, index) => ({
+          description: payment.onSignature ? "On signature" : `Payment ${index + 1}`,
+          // On signature falls due when signed — or today, when vouched for.
+          dueOn: payment.onSignature ? (signedOn ?? today()) : payment.dueOn!,
+          percentBasisPoints: payment.percentBasisPoints,
+        })),
+      },
+      cancellations: {
+        create: offer.cancellations.map((cut) => ({
+          kind: cut.kind,
+          cutoffOn: cut.cutoffOn,
+          percentBasisPoints: cut.percentBasisPoints,
+          feeBasisPoints: cut.feeBasisPoints,
+          remarks: cut.remarks,
+        })),
+      },
+    },
+  });
+  // The blocked rooms are sold under it.
+  for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) {
+    const held = await tx.roomNight.count({ where: { salesRequestId: request.id, salesState: "BLOCKED", slot: { categoryId } } });
+    if (!held) {
+      const line = offer.lines.find((one) => one.categoryId === categoryId)!;
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Nothing was changed. The ${line.category.name} rooms at ${line.category.property.name} are not blocked for this client any more — block them again from the request first.`,
+      });
+    }
+    await changeRoomsTx(tx, actor.id, { id: request.id, categoryId, state: "BLOCKED", action: "SELL", salesContractId: contract.id });
+  }
+  await tx.offer.update({ where: { id: offer.id }, data: { status: how.signed ? "SIGNED" : "TRUSTED", contractId: contract.id, closedById: actor.id, closedAt: new Date() } });
+  await tx.salesRequest.update({ where: { id: request.id }, data: { blockedUntil: null } });
+  await logAudit(tx, {
+    actorId: actor.id,
+    entity: "SalesRequest",
+    entityId: request.id,
+    summary: how.signed
+      ? `Agreement signed by the client on ${formatDate(how.signedOn)} — rooms sold`
+      : `Trust guarantee: ${actor.name ?? "an admin"} vouched for the client — rooms sold before the agreement is back`,
+  });
+  await logAudit(tx, { actorId: actor.id, entity: "Contract", entityId: contract.id, summary: "Contract made from the client's offer" });
+  await moveStage(tx, actor.id, request.id, "CONTRACTED");
+  await moveContractTask(tx, actor.id, request.id, "DONE", how.signed ? "the client signed" : "trust guarantee given");
+
+  // Each hotel: the sold rooms go in progress with it, and someone is to secure them.
+  const byProperty = new Map<string, typeof offer.lines>();
+  for (const line of offer.lines) byProperty.set(line.category.property.id, [...(byProperty.get(line.category.property.id) ?? []), line]);
+  for (const [propertyId, lines] of byProperty) {
+    const open = await tx.roomNight.findMany({
+      where: { salesRequestId: request.id, salesState: "SOLD", acquisitionState: { in: ["NONE", "RELEASED"] }, slot: { category: { propertyId } } },
+      select: { slotId: true, date: true },
+    });
+    for (const rect of rectangles(open)) {
+      await applyInventoryChange(tx, actor.id, {
+        eventId: request.eventId,
+        slotIds: rect.slotIds,
+        checkIn: rect.checkIn,
+        checkOut: rect.checkOut,
+        action: "START_NEGOTIATION",
+        reason: "The client signed — securing the rooms from the hotel",
+      });
+    }
+    await ensureAcquireTask(tx, {
+      salesRequestId: request.id,
+      propertyId,
+      eventId: request.eventId,
+      actorId: actor.id,
+      currency: offer.currency,
+      lines: lines.map((line) => ({ room: line.category.name, rooms: line.rooms, checkIn: line.checkIn, checkOut: line.checkOut, rateCents: line.rateCents })),
+    });
+  }
+  await notify(tx, {
+    to: [request.ownerId, offer.createdById],
+    actorId: actor.id,
+    kind: "OFFER_SIGNED",
+    title: how.signed ? `${request.client.name} signed the agreement — ${request.event.name}` : `${request.client.name}: trust guarantee given — ${request.event.name}`,
+    body: `${offer.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms sold, ${formatMoney(total, offer.currency)}. Acquire tasks are out to secure them from the hotels.`,
+    link: `/sales/${request.id}`,
+  });
+  return contract;
 }
 
 export const offerRouter = createTRPCRouter({
@@ -283,6 +408,7 @@ export const offerRouter = createTRPCRouter({
           summary: `Offer made: ${input.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms, ${formatMoney(total, input.currency)}, holding until ${formatDate(validUntil)}`,
         });
         if (["INITIAL_INTEREST", "SPECIFY", "PROPOSAL_SENT"].includes(request.stage)) await moveStage(tx, actorId, input.salesRequestId, "NEGOTIATION");
+        await moveContractTask(tx, actorId, input.salesRequestId, "IN_PROGRESS", "the offer is made");
         return { id: offer.id };
       },
       { timeout: 60_000 },
@@ -349,6 +475,94 @@ export const offerRouter = createTRPCRouter({
       });
     }
   }),
+
+  /** The client signed and sent the agreement back (doc §4.11). */
+  sign: protectedProcedure
+    .input(z.object({ id: z.string(), signedOn: day, documentUrl: z.string().trim().max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      const contract = await ctx.db.$transaction(
+        (tx) =>
+          closeOffer(tx, { id: ctx.session.user.id, name: ctx.session.user.name ?? null }, input.id, {
+            signed: true,
+            signedOn: parseDay(input.signedOn),
+            documentUrl: input.documentUrl || null,
+          }),
+        { timeout: 60_000 },
+      );
+      await deliverImmediate(ctx.db);
+      return { contractId: contract.id };
+    }),
+
+  /**
+   * The trust guarantee (doc §4.11): an admin — Volki — vouches that the client
+   * will sign, so their rooms are sold and the hotels secured now.
+   */
+  trust: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    if (!canTrust(ctx.session.user.email)) throw new TRPCError({ code: "FORBIDDEN", message: "Only Volki can give the trust guarantee." });
+    const contract = await ctx.db.$transaction((tx) => closeOffer(tx, { id: ctx.session.user.id, name: ctx.session.user.name ?? null }, input.id, { signed: false }), {
+      timeout: 60_000,
+    });
+    await deliverImmediate(ctx.db);
+    return { contractId: contract.id };
+  }),
+
+  /** For the contract task (doc §4.11): are the contracting details in, and the answer to make the offer from. */
+  contractTask: protectedProcedure.input(z.object({ salesRequestId: z.string() })).query(async ({ ctx, input }) => {
+    const [request, answer] = await Promise.all([
+      ctx.db.salesRequest.findUniqueOrThrow({ where: { id: input.salesRequestId }, select: { id: true, tradeName: true, signatory1Name: true } }),
+      ctx.db.rateCardResponse.findFirst({
+        where: { rateCard: { salesRequestId: input.salesRequestId }, items: { some: {} } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      }),
+    ]);
+    return { tradeName: request.tradeName, signatory: request.signatory1Name, responseId: answer?.id ?? null };
+  }),
+
+  /**
+   * The hotels behind a signed offer (doc §4.11): for each, its acquire task
+   * and its contract — pending, or signed and the rooms bought.
+   */
+  hotels: protectedProcedure.input(z.object({ salesRequestId: z.string() })).query(async ({ ctx, input }) => {
+    const lines = await ctx.db.offerLine.findMany({
+      where: { offer: { salesRequestId: input.salesRequestId, status: { in: ["SIGNED", "TRUSTED"] } } },
+      select: { category: { select: { property: { select: { id: true, name: true } } } } },
+    });
+    const properties = [...new Map(lines.map((line) => [line.category.property.id, line.category.property])).values()];
+    return Promise.all(
+      properties.map(async (property) => {
+        const [task, contracts] = await Promise.all([
+          ctx.db.task.findFirst({
+            where: { salesRequestId: input.salesRequestId, propertyId: property.id, type: { name: "Acquire" } },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, status: true, assignees: { select: { name: true } } },
+          }),
+          ctx.db.contract.findMany({
+            where: { party: "SUPPLIER", propertyId: property.id, salesRequestId: input.salesRequestId },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, name: true, signedOn: true, eventId: true },
+          }),
+        ]);
+        return { ...property, task, contract: contracts.find((contract) => contract.signedOn) ?? contracts[0] ?? null };
+      }),
+    );
+  }),
+
+  /** A client vouched for has now signed: their contract gets its date and the signed copy. */
+  signedAfterTrust: protectedProcedure
+    .input(z.object({ id: z.string(), signedOn: day, documentUrl: z.string().trim().max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      const offer = await ctx.db.offer.findUniqueOrThrow({ where: { id: input.id }, select: { status: true, contractId: true, salesRequestId: true } });
+      if (offer.status !== "TRUSTED" || !offer.contractId) throw new TRPCError({ code: "BAD_REQUEST", message: "Only a trusted offer waits for its signature." });
+      await ctx.db.contract.update({ where: { id: offer.contractId }, data: { signedOn: parseDay(input.signedOn), documentUrl: input.documentUrl || null } });
+      await ctx.db.offer.update({ where: { id: input.id }, data: { status: "SIGNED" } });
+      await logAudit(ctx.db, {
+        actorId: ctx.session.user.id,
+        entity: "SalesRequest",
+        entityId: offer.salesRequestId,
+        summary: `Agreement signed by the client on ${formatDate(parseDay(input.signedOn))}, after the trust guarantee`,
+      });
+    }),
 
   /** Hold the rooms longer: the offer and its blocks run to the new date. */
   extend: protectedProcedure.input(z.object({ id: z.string(), validUntil: day })).mutation(({ ctx, input }) =>

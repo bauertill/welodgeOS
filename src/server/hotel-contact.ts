@@ -25,6 +25,7 @@ export const hotelContactItems = [
   { key: "rate", label: "Rate — as a quotation" },
   { key: "included", label: "What is included in the rate" },
   { key: "extraCosts", label: "Extra costs" },
+  { key: "agreement", label: "Whose agreement the contract is on — theirs or ours" },
 ] as const;
 
 export async function ensureHotelContactTask(

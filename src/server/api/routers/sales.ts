@@ -342,7 +342,7 @@ async function roomsFor(
  * (doc §4.8). A request's rooms are usually one rectangle; where rooms arrive
  * or leave on different days, each run is its own.
  */
-function rectangles(nights: { slotId: string; date: Date }[]) {
+export function rectangles(nights: { slotId: string; date: Date }[]) {
   const bySlot = new Map<string, Date[]>();
   for (const night of nights) bySlot.set(night.slotId, [...(bySlot.get(night.slotId) ?? []), night.date]);
   const runs = new Map<string, { slotIds: string[]; checkIn: Date; checkOut: Date }>();

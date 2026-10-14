@@ -199,6 +199,7 @@ export const taskRouter = createTRPCRouter({
             cleaning: true,
             totBasisPoints: true,
             otherTaxes: true,
+            agreementOn: true,
             _count: { select: { lines: true, payments: true, cancellations: true } },
           },
         },
@@ -239,6 +240,11 @@ export const taskRouter = createTRPCRouter({
       },
       { key: "included", ok: has(entry?.ratesInclude) || includes, text: "" },
       { key: "extraCosts", ok: has(entry?.extraCosts) || extras, text: "" },
+      {
+        key: "agreement",
+        ok: quotes.some((quote) => quote.agreementOn),
+        text: quotes.find((quote) => quote.agreementOn)?.agreementOn === "HOTEL" ? "Their agreement" : quotes.some((quote) => quote.agreementOn) ? "Our agreement" : "Not known yet — on the quotation",
+      },
     ];
     return {
       entryId: entry?.id ?? null,

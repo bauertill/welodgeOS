@@ -1,3 +1,4 @@
+import { acquireRouter } from "~/server/api/routers/acquire";
 import { amenityRouter } from "~/server/api/routers/amenity";
 import { auditRouter } from "~/server/api/routers/audit";
 import { chatRouter } from "~/server/api/routers/chat";
@@ -39,6 +40,7 @@ export const appRouter = createTRPCRouter({
   sales: salesRouter,
   rateCard: rateCardRouter,
   offer: offerRouter,
+  acquire: acquireRouter,
   media: mediaRouter,
   mapLayer: mapLayerRouter,
   inventory: inventoryRouter,

@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { AcquirePanel } from "~/app/_components/acquire-task";
+import { ContractPanel } from "~/app/_components/offers";
 import { HistorySection } from "~/app/_components/activity-log";
 
 import { Combobox } from "~/app/_components/combobox";
@@ -846,6 +848,8 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
   const sourcing = t.salesRequest && t.type?.name === "Sourcing";
   const hotelContact = t.property && t.event && t.type?.name === "Hotel contact";
   const getMedia = t.property && t.type?.name === "Get media";
+  const acquire = t.property && t.salesRequest && t.event && t.type?.name === "Acquire";
+  const contract = t.salesRequest && t.type?.name === "Contract";
 
   return (
     <div className="grid items-start gap-5 lg:grid-cols-3">
@@ -889,6 +893,10 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
         )}
         {hotelContact && <TheirQuote propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} salesRequestId={t.salesRequest?.id ?? null} />}
         {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
+        {/* The contract task (doc §4.11): from the client's interest to their signed agreement. */}
+        {contract && <ContractPanel salesRequestId={t.salesRequest!.id} />}
+        {/* The acquire task (doc §4.11): from the hotel's quote to its signed contract. */}
+        {acquire && <AcquirePanel taskId={t.id} propertyId={t.property!.id} propertyName={t.property!.name} />}
         {/* The get media task (doc §4.11): straight to where the media goes. */}
         {getMedia && (
           <div className="border-ink-200/60 rounded-xl border bg-white p-5">

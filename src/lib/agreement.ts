@@ -8,10 +8,29 @@ import { formatMoney } from "~/lib/format";
  * [missing: …], highlighted on screen, so it is seen before the agreement goes.
  */
 
+const missing = (what: string) => `[missing: ${what}]`;
+
+/**
+ * Who signs for We Lodge (the owner, 2026-10-14): Volki for an event in the
+ * United States, Raphael Angelo Dornier for every other.
+ */
+const SIGNATORIES = {
+  world: {
+    represented:
+      "herein represented by Raphael Angelo Dornier, in his capacity as President of the Board of Directors, he being duly authorised hereto by resolution of the directors of We Lodge",
+    signature: "@sign For and on behalf of We Lodge AG by Raphael Angelo Dornier | in his capacity as President of the Board of Directors of We Lodge AG, he being duly authorised hereto.",
+  },
+  us: {
+    represented: `herein represented by ${missing("Volki's full name and title")}, being duly authorised hereto by resolution of the directors of We Lodge`,
+    signature: `@sign For and on behalf of We Lodge AG by ${missing("Volki's full name")} | ${missing("Volki's title")}, duly authorised hereto.`,
+  },
+};
+const inUnitedStates = (country: string | null) => /^(us|usa|u\.s\.a?\.?|united states( of america)?)$/i.test(country?.trim() ?? "");
+
 export type AgreementData = {
   client: { name: string | null; address: string | null; signatories: { name: string; designation: string | null }[] };
   currency: string;
-  event: { name: string; startDate: Date; endDate: Date };
+  event: { name: string; startDate: Date; endDate: Date; country: string | null };
   lines: { property: string; propertyAddress: string | null; room: string; rooms: number; checkIn: Date; checkOut: Date; rateCents: number }[];
   payments: { onSignature: boolean; dueOn: Date | null; percentBasisPoints: number }[];
   cancellations: { kind: string; cutoffOn: Date; percentBasisPoints: number | null; feeBasisPoints: number | null; remarks: string | null }[];
@@ -20,7 +39,6 @@ export type AgreementData = {
   validUntil: Date;
 };
 
-const missing = (what: string) => `[missing: ${what}]`;
 
 /** What a currency is, as the definitions put it. */
 const currencies: Record<string, string> = {
@@ -132,7 +150,10 @@ function signatures(data: AgreementData) {
 
 /** The template with its fields filled in. */
 export function fillAgreement(template: string, data: AgreementData) {
+  const signatory = inUnitedStates(data.event.country) ? SIGNATORIES.us : SIGNATORIES.world;
   const blocks: Record<string, () => string[]> = {
+    "{{welodge.represented}}": () => [signatory.represented],
+    "{{welodge.signature}}": () => [signatory.signature],
     "{{client.signatures}}": () => signatures(data),
     "{{bank}}": () => bankAccounts[data.currency] ?? [missing(`the bank account for payments in ${data.currency}`)],
     "{{schedule2}}": () => scheduleTwo(data),

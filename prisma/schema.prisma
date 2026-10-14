@@ -564,9 +564,12 @@ model Quotation {
   documentUrl       String?
   notes             String?
 
+  /// Whose agreement the contract will be on — the hotel's or ours; empty
+  /// while not known yet (doc §3.10, §4.11, 2026-10-14).
+  agreementOn AgreementParty?
   /// The supplier contract made from it, once accepted.
-  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
-  contractId String?
+  contract    Contract?       @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  contractId  String?
 
   lines         QuotationLine[]
   /// The payments and cancellation cut-offs as quoted, line by line (doc §3.10) — they become the contract's.
@@ -655,6 +658,14 @@ enum PaymentStatus {
 }
 
 /// What a cancellation deadline lets us — or the client — do by its cut-off.
+/// Whose paper a contract with a hotel is on (doc §4.11).
+enum AgreementParty {
+  /// The hotel's own agreement.
+  HOTEL
+  /// Our framework agreement for hotels.
+  WE_LODGE
+}
+
 enum CancellationKind {
   /// We may reduce the rooms or nights by an agreed share, without paying for them.
   ATTRITION
@@ -706,6 +717,8 @@ model Contract {
   cancellations     ContractCancellation[]
   /// The quotation it was made from, if any (doc §3.10).
   quotations        Quotation[]
+  /// The client offer this contract was made from, when it was (doc §4.11).
+  offer             Offer?                 @relation("OfferContract")
   acquisitionNights RoomNight[]            @relation("AcquisitionContract")
   salesNights       RoomNight[]            @relation("SalesContract")
 
@@ -864,6 +877,7 @@ model User {
   eventsLed          Event[]              @relation("EventProjectLead")
   eventsSourced      Event[]              @relation("EventAccommodationManagers")
   offersMade         Offer[]              @relation("OfferCreatedBy")
+  offersClosed       Offer[]              @relation("OfferClosedBy")
   agreementTemplates AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
 }
 
@@ -1679,6 +1693,8 @@ enum NotificationKind {
   SALES_CONTRACTING_SENT
   PROPERTY_CONTRACTING_SENT
   RATE_CARD_ANSWERED
+  /// The client signed the agreement, or an admin vouched for them (doc §4.11).
+  OFFER_SIGNED
   TASK_ASSIGNED
   TASK_COMMENT
   TASK_MENTION
@@ -1948,6 +1964,13 @@ model Offer {
   conditions      String?
   /// The agreement as changed for this client; empty means as the framework fills it.
   agreementText   String?
+  /// The client's contract made when it was signed, or trusted (doc §4.11).
+  contract        Contract?         @relation("OfferContract", fields: [contractId], references: [id], onDelete: SetNull)
+  contractId      String?           @unique
+  /// Who closed it — signed, trusted or withdrawn — and when.
+  closedBy        User?             @relation("OfferClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedById      String?
+  closedAt        DateTime?
   /// When the agreement went to the client — by DocuSign, outside the system.
   agreementSentOn DateTime?         @db.Date
   createdBy       User?             @relation("OfferCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
