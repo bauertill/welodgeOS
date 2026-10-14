@@ -2308,7 +2308,8 @@ follow-up and the signing come next and are not built yet (§12).
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
 - **The offer leads the request's page** (the owner, 2026-10-14): once one is made it sits
-  first under the stages, highlighted; the client's answer steps back below it, without its
+  first under the stages, highlighted, headed **The contract** (the owner's word for it on the
+  page, 2026-10-14); the client's answer steps back below it, without its
   highlight or its *Make an offer* button. Once the client's needs are in, *What they asked
   for* — their first enquiry — moves to the foot of the page as **Their first enquiry**.
 
