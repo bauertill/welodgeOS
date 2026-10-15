@@ -19,8 +19,8 @@ export default async function NewSalesRequestPage({
     <>
       <PageHeader
         back={{ href: "/sales", label: "Sales requests" }}
-        title="New sales request"
-        subtitle="Register it as soon as a client shares their first interest, so it is followed through to the end."
+        title="New enquiry"
+        subtitle="Register it as soon as a client shows interest, however vague — it becomes a sales request once the details are in."
       />
       <NewSalesRequestForm me={session.user.id} clientId={client} />
     </>

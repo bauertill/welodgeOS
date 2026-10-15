@@ -5,6 +5,12 @@
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
-const config = {};
+const config = {
+  images: {
+    // A property's photos are served from Dropbox (doc §3.10, Media) and made
+    // web-sized on the way — a phone photo is several megabytes.
+    remotePatterns: [{ protocol: "https", hostname: "dl.dropboxusercontent.com" }],
+  },
+};
 
 export default config;

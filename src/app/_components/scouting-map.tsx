@@ -5,15 +5,19 @@ import {
   APIProvider,
   Map as GoogleMap,
   useMap,
+  useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PlaceCategory, ScoutingStatus } from "generated/prisma";
+import type { PlaceCategory, PropertyType, ScoutingStatus } from "generated/prisma";
 
 import { env } from "~/env";
 import { formatDay } from "~/lib/format";
+import { placeIcon } from "~/lib/place-icons";
 import { placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
-import { placeColors, TravelTimes } from "~/app/_components/travel-times";
+import { AddPropertyForm } from "~/app/_components/add-property-on-map";
+import { LayersPanel } from "~/app/_components/map-layers";
+import { TravelTimes } from "~/app/_components/travel-times";
 import { api } from "~/trpc/react";
 
 export type MapPin = {
@@ -31,6 +35,8 @@ export type MapPin = {
    */
   status?: ScoutingStatus;
   stars?: number | null;
+  /** Hotel and aparthotel a bed, apartment a house (2026-10-13). */
+  type?: PropertyType;
   subtitle: string;
   href: string;
 };
@@ -50,7 +56,66 @@ export type MapPlace = {
   lines: string | null;
   latitude: number;
   longitude: number;
+  /** Its map layer (doc §3.7): which, its colour, and whether distances are measured to it. */
+  layerId?: string | null;
+  color?: string | null;
+  measured?: boolean;
+  /** For its icon: its layer's name and its notes, where the sport is often said. */
+  layerName?: string | null;
+  notes?: string | null;
 };
+
+/** A layer of the event's map (doc §3.7): its places shown or hidden together. */
+export type MapLayer = { id: string; name: string; color: string; measured: boolean };
+
+/** Google's own public transport — every metro, rail and bus line with its stations — on or off. */
+function TransitLayer({ on }: { on: boolean }) {
+  const map = useMap();
+  const maps = useMapsLibrary("maps");
+  useEffect(() => {
+    if (!map || !maps || !on) return;
+    const layer = new maps.TransitLayer();
+    layer.setMap(map);
+    return () => layer.setMap(null);
+  }, [map, maps, on]);
+  return null;
+}
+
+/**
+ * What shows on the map (doc §3.7), as in Google My Maps: each layer, our
+ * properties and public transport, ticked on or off — remembered per event in
+ * this browser. Public transport starts off.
+ */
+function useShown(eventId: string | undefined, layers: MapLayer[]) {
+  const key = `welodge:map-layers:${eventId ?? "none"}`;
+  const [hidden, setHidden] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw) setHidden(JSON.parse(raw) as string[]);
+    } catch {
+      // Storage off: everything shows.
+    }
+  }, [key]);
+  const save = (next: string[]) => {
+    setHidden(next);
+    try {
+      window.localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+      // As above.
+    }
+  };
+  const ids = [...layers.map((layer) => layer.id), "properties"];
+  return {
+    isShown: (id: string) => (id === "transit" ? hidden.includes("transit:on") : !hidden.includes(id)),
+    toggle: (id: string) =>
+      id === "transit"
+        ? save(hidden.includes("transit:on") ? hidden.filter((one) => one !== "transit:on") : [...hidden, "transit:on"])
+        : save(hidden.includes(id) ? hidden.filter((one) => one !== id) : [...hidden, id]),
+    showAll: () => save(["transit:on"]),
+    hideAll: () => save(ids),
+  };
+}
 
 /** What the map needs of §5.3's availability figures, per room category. */
 export type MapAvailability = {
@@ -76,6 +141,24 @@ const pinColors: Record<ScoutingStatus, string> = {
 
 /** What a pin with no status is drawn in. */
 const NEUTRAL_PIN = "#614fc9";
+
+/**
+ * A property's colour on the map (doc §3.7, 2026-10-13): apartments purple;
+ * hotels and aparthotels by their stars — five black, four blue, three green,
+ * two or fewer yellow, unknown grey.
+ */
+export const propertyColor = (pin: { type?: PropertyType; stars?: number | null }) =>
+  pin.type === "APARTMENT"
+    ? "#8f5bd6"
+    : !pin.stars
+      ? "#8a8a8a"
+      : pin.stars >= 5
+        ? "#1d1d1f"
+        : pin.stars === 4
+          ? "#1d5fa8"
+          : pin.stars === 3
+            ? "#0a7a47"
+            : "#e5a400";
 
 const pinColor = (status?: ScoutingStatus) =>
   status ? pinColors[status] : NEUTRAL_PIN;
@@ -263,6 +346,8 @@ function SidePanel({
             Open →
           </Link>
 
+          {eventId && <ContactTaskBox key={pin.propertyId} propertyId={pin.propertyId} eventId={eventId} />}
+
           <div className="mt-5">
             <PanelHeading>Rooms still available</PanelHeading>
             <RoomsAvailable
@@ -315,12 +400,52 @@ export function ScoutingMap({
   places = [],
   availability = [],
   eventId,
+  found = [],
+  renderFound,
+  searchPoint = null,
+  layers = [],
+  onlyPlaceId = null,
 }: {
   pins: MapPin[];
   places?: MapPlace[];
   availability?: MapAvailability[];
   eventId?: string;
+  /** Places to stay not in our system, from a search on the map — hollow purple dots (doc §3.9). */
+  found?: { key: string; name: string; latitude: number; longitude: number }[];
+  /** What a found place's panel says and offers. */
+  renderFound?: (key: string) => React.ReactNode;
+  /** The custom address being searched around — pinned while the search lasts. */
+  searchPoint?: { label: string; latitude: number; longitude: number } | null;
+  /** The event's map layers (doc §3.7) — with them, a Layers panel to show or hide each. */
+  layers?: MapLayer[];
+  /** A place chosen to search around: shown alone, the others hidden meanwhile. */
+  onlyPlaceId?: string | null;
 }) {
+  const shown = useShown(eventId, layers);
+  // A place on a hidden layer is not drawn; one on no layer always is.
+  const visiblePlaces = onlyPlaceId
+    ? places.filter((place) => place.id === onlyPlaceId)
+    : places.filter((place) => !place.layerId || shown.isShown(place.layerId));
+  const showProperties = shown.isShown("properties");
+  // A place being added from the Layers panel: its spot, and whether the next map click sets it.
+  const [draftPoint, setDraftPoint] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [picking, setPicking] = useState(false);
+  // A property added by pointing at the map: the form open, its spot, and whether the next click sets it.
+  const [addingProperty, setAddingProperty] = useState(false);
+  const [propertyPoint, setPropertyPoint] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [pickingProperty, setPickingProperty] = useState(false);
+  // Full screen takes the whole map — the Layers panel and a property's card with it — not Google's map alone.
+  const frame = useRef<HTMLDivElement>(null);
+  const [fullScreen, setFullScreen] = useState(false);
+  useEffect(() => {
+    const changed = () => setFullScreen(document.fullscreenElement === frame.current && frame.current !== null);
+    document.addEventListener("fullscreenchange", changed);
+    return () => document.removeEventListener("fullscreenchange", changed);
+  }, []);
+  const toggleFullScreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void frame.current?.requestFullscreen();
+  };
   const [openId, setOpenId] = useState<string | null>(null);
 
   /**
@@ -351,10 +476,13 @@ export function ScoutingMap({
 
   const points = useMemo<Point[]>(
     () => [
-      ...pins.map((pin) => ({ lat: pin.latitude, lng: pin.longitude })),
-      ...places.map((place) => ({ lat: place.latitude, lng: place.longitude })),
+      // Around a chosen place, the map frames it and what was found near it — not every property.
+      ...(onlyPlaceId ? [] : pins).map((pin) => ({ lat: pin.latitude, lng: pin.longitude })),
+      ...(onlyPlaceId ? places.filter((place) => place.id === onlyPlaceId) : places).map((place) => ({ lat: place.latitude, lng: place.longitude })),
+      ...found.map((place) => ({ lat: place.latitude, lng: place.longitude })),
+      ...(searchPoint ? [{ lat: searchPoint.latitude, lng: searchPoint.longitude }] : []),
     ],
-    [pins, places],
+    [pins, places, found, searchPoint, onlyPlaceId],
   );
 
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -377,8 +505,45 @@ export function ScoutingMap({
   const openPlace = places.find((place) => place.id === openId);
 
   return (
-    <div className="border-ink-200/60 flex flex-col overflow-hidden rounded-xl border md:flex-row">
-      <div className="min-w-0 flex-1">
+    <div ref={frame} className="border-ink-200/60 flex flex-col overflow-hidden rounded-xl border bg-white md:flex-row">
+      <div className="relative min-w-0 flex-1">
+        {eventId && !addingProperty && (
+          <button
+            type="button"
+            onClick={() => {
+              setOpenId(null);
+              setAddingProperty(true);
+              setPickingProperty(true);
+            }}
+            className="bg-brand-400 hover:bg-brand-500 absolute top-2.5 left-1/2 z-10 -translate-x-1/2 rounded-full px-4 py-2 text-[13px] font-medium text-white shadow-md"
+          >
+            ＋ Add to the map
+          </button>
+        )}
+        {pickingProperty && (
+          <p className="bg-ink-900 absolute top-14 left-1/2 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs text-white shadow-md">Click the spot on the map</p>
+        )}
+        <button
+          type="button"
+          onClick={toggleFullScreen}
+          title={fullScreen ? "Leave full screen" : "Full screen — with the layers"}
+          aria-label={fullScreen ? "Leave full screen" : "Full screen"}
+          className="text-ink-700 hover:text-ink-900 absolute top-2.5 right-2.5 z-10 flex h-10 w-10 items-center justify-center rounded-sm bg-white text-lg shadow-md"
+        >
+          {fullScreen ? "✕" : "⛶"}
+        </button>
+        {eventId && (
+          <LayersPanel
+            eventId={eventId}
+            layers={layers}
+            places={places}
+            shown={shown}
+            draftPoint={draftPoint}
+            setDraftPoint={setDraftPoint}
+            picking={picking}
+            setPicking={setPicking}
+          />
+        )}
         <APIProvider apiKey={apiKey}>
           <GoogleMap
             mapId={mapId}
@@ -386,15 +551,28 @@ export function ScoutingMap({
             defaultZoom={points.length ? 12 : 6}
             gestureHandling="greedy"
             clickableIcons={false}
-            onClick={() => {
+            onClick={(event) => {
+              if (pickingProperty && event.detail.latLng) {
+                setPropertyPoint({ latitude: event.detail.latLng.lat, longitude: event.detail.latLng.lng });
+                setPickingProperty(false);
+                return;
+              }
+              if (picking && event.detail.latLng) {
+                setDraftPoint({ latitude: event.detail.latLng.lat, longitude: event.detail.latLng.lng });
+                setPicking(false);
+                return;
+              }
               if (Date.now() - pinClickedAt.current < 300) return;
               setOpenId(null);
             }}
-            style={{ height: "32rem", width: "100%" }}
+            draggableCursor={picking || pickingProperty ? "crosshair" : undefined}
+            fullscreenControl={false}
+            style={{ height: fullScreen ? "100vh" : "32rem", width: "100%" }}
           >
             <FitBounds points={points} />
+            <TransitLayer on={shown.isShown("transit")} />
 
-            {places.map((place) => (
+            {visiblePlaces.map((place) => (
               <AdvancedMarker
                 key={place.id}
                 position={{ lat: place.latitude, lng: place.longitude }}
@@ -403,15 +581,22 @@ export function ScoutingMap({
                 clickable
                 onClick={() => openPin(place.id)}
               >
-                <Marker
-                  color={placeColors[place.category]}
-                  place
-                  selected={openId === place.id}
-                />
+                {/* An icon in its layer's colour — its sport where it has one — named on pointing at it (2026-10-13). */}
+                <span className="group relative block translate-y-1/2">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[14px] leading-none shadow-md transition-transform group-hover:scale-110 ${openId === place.id ? "ring-brand-300 scale-110 ring-4" : ""}`}
+                    style={{ background: place.color ?? "#9b1c31" }}
+                  >
+                    {placeIcon(place)}
+                  </span>
+                  <span className="bg-ink-900 pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg group-hover:block">
+                    {place.name}
+                  </span>
+                </span>
               </AdvancedMarker>
             ))}
 
-            {pins.map((pin) => (
+            {(showProperties ? pins : []).map((pin) => (
               <AdvancedMarker
                 key={pin.id}
                 position={{ lat: pin.latitude, lng: pin.longitude }}
@@ -421,15 +606,84 @@ export function ScoutingMap({
                 clickable
                 onClick={() => openPin(pin.id)}
               >
-                <Marker
-                  color={pinColor(pin.status)}
-                  selected={openId === pin.id}
+                {/* Our property (2026-10-13): a bed for a hotel, a house for an apartment, coloured by its stars. */}
+                <span className="group relative block translate-y-1/2">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-md border-2 border-white text-[14px] leading-none shadow-md transition-transform group-hover:scale-110 ${openId === pin.id ? "ring-brand-300 scale-110 ring-4" : ""}`}
+                    style={{ background: propertyColor(pin) }}
+                  >
+                    {pin.type === "APARTMENT" ? "🏠" : "🛏️"}
+                  </span>
+                  <span className="bg-ink-900 pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg group-hover:block">
+                    {pin.name}
+                    {pin.stars ? ` · ${pin.stars}★` : ""}
+                  </span>
+                </span>
+              </AdvancedMarker>
+            ))}
+            {found.map((place) => (
+              <AdvancedMarker
+                key={place.key}
+                position={{ lat: place.latitude, lng: place.longitude }}
+                title={`${place.name} — not in our system`}
+                zIndex={openId === place.key ? 1000 : 50}
+                clickable
+                onClick={() => openPin(place.key)}
+              >
+                <span
+                  className={`border-brand-500 block rounded-full border-2 bg-white shadow ${openId === place.key ? "h-4 w-4" : "h-3 w-3"}`}
                 />
               </AdvancedMarker>
             ))}
+            {propertyPoint && (
+              <AdvancedMarker position={{ lat: propertyPoint.latitude, lng: propertyPoint.longitude }} title="The new property" zIndex={960}>
+                <span className="block -translate-y-1/2 rounded-full bg-[#e5533d] px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">＋ New here</span>
+              </AdvancedMarker>
+            )}
+            {draftPoint && (
+              <AdvancedMarker position={{ lat: draftPoint.latitude, lng: draftPoint.longitude }} title="The new place" zIndex={950}>
+                <span className="block -translate-y-1/2 rounded-full bg-[#e5533d] px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">＋ New place here</span>
+              </AdvancedMarker>
+            )}
+            {searchPoint && (
+              <AdvancedMarker position={{ lat: searchPoint.latitude, lng: searchPoint.longitude }} title={searchPoint.label} zIndex={900}>
+                <span className="bg-brand-500 block max-w-64 truncate rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg">
+                  📍 {searchPoint.label}
+                </span>
+              </AdvancedMarker>
+            )}
           </GoogleMap>
         </APIProvider>
       </div>
+
+      {addingProperty && eventId && (
+        <aside className="border-ink-200/60 w-full shrink-0 overflow-y-auto border-t bg-white p-4 md:w-80 md:border-t-0 md:border-l">
+          <AddPropertyForm
+            eventId={eventId}
+            layers={layers}
+            point={propertyPoint}
+            setPoint={setPropertyPoint}
+            picking={pickingProperty}
+            setPicking={setPickingProperty}
+            onClose={() => {
+              setAddingProperty(false);
+              setPickingProperty(false);
+              setPropertyPoint(null);
+            }}
+          />
+        </aside>
+      )}
+
+      {openId && renderFound && found.some((place) => place.key === openId) && (
+        <aside className="border-ink-200/60 w-full shrink-0 border-t bg-white p-4 md:w-80 md:border-t-0 md:border-l">
+          <div className="mb-1 flex justify-end">
+            <button type="button" onClick={() => setOpenId(null)} aria-label="Close" className="text-ink-500 hover:text-ink-900 -mt-1 px-1 text-lg leading-none">
+              ×
+            </button>
+          </div>
+          {renderFound(openId)}
+        </aside>
+      )}
 
       {(openProperty ?? openPlace) && (
         <SidePanel
@@ -440,6 +694,80 @@ export function ScoutingMap({
           eventId={eventId}
           onClose={() => setOpenId(null)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Asking a colleague to contact a property, from the event's map (doc
+ * §4.11): who does it and a note make a hotel contact task — the same one
+ * sourcing makes, with its checklist. An open one is shown instead, with a link.
+ */
+function ContactTaskBox({ propertyId, eventId }: { propertyId: string; eventId: string }) {
+  const utils = api.useUtils();
+  const existing = api.task.hotelContactFor.useQuery({ propertyId, eventId });
+  const people = api.user.list.useQuery();
+  const me = api.user.me.useQuery();
+  const event = api.event.byId.useQuery({ id: eventId });
+  const [assigneeId, setAssigneeId] = useState("");
+  const [note, setNote] = useState("");
+  const create = api.task.createHotelContact.useMutation({
+    onSuccess: () => {
+      setNote("");
+      void utils.task.invalidate();
+    },
+  });
+  // Whoever sources the event's accommodation, by default; otherwise you.
+  const fallback = event.data?.accommodationManagers[0]?.id ?? me.data?.id ?? "";
+  const chosen = assigneeId || fallback;
+
+  if (existing.isLoading) return null;
+  const task = existing.data;
+  return (
+    <div className="border-ink-200/60 mt-5 rounded-lg border p-3">
+      <PanelHeading>Contact task</PanelHeading>
+      {task ? (
+        <p className="text-ink-700 text-[13px] font-light">
+          {task.assignees.length ? `With ${task.assignees.map((person) => person.name ?? person.email).join(", ")}` : "Nobody on it yet"}
+          {" · "}
+          <Link href={`/tasks/${task.id}`} className="text-brand-700 font-medium hover:underline">
+            Open the task →
+          </Link>
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <select
+            value={chosen}
+            onChange={(e) => setAssigneeId(e.target.value)}
+            aria-label="Who contacts it"
+            className="border-ink-200 w-full rounded-lg border bg-white px-2.5 py-1.5 text-[13px] font-light"
+          >
+            {(people.data ?? []).map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name ?? person.email}
+                {person.id === me.data?.id ? " (me)" : ""}
+              </option>
+            ))}
+          </select>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            placeholder="A note for them — what to ask, who to speak to"
+            aria-label="Note"
+            className="border-ink-200 focus:border-brand-400 w-full rounded-lg border bg-white px-2.5 py-1.5 text-[13px] font-light outline-none"
+          />
+          <button
+            type="button"
+            disabled={!chosen || create.isPending}
+            onClick={() => create.mutate({ propertyId, eventId, assigneeId: chosen, note })}
+            className="bg-brand-400 hover:bg-brand-500 w-full rounded-full px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-60"
+          >
+            {create.isPending ? "Creating…" : "Create contact task"}
+          </button>
+          {create.error && <p className="text-xs text-[#c03654]">{create.error.message}</p>}
+        </div>
       )}
     </div>
   );

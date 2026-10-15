@@ -240,6 +240,29 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       an upgrade request only for public apps.
       *2026-09-30:* Brandon has a key and it works locally; it still has to be
       added to the Vercel project (someone with Vercel access — Till).
+- [ ] **Resend for notification emails** (`product-scope.md` §2.9) — Till.
+      1. Create a Resend account (resend.com) for We Lodge, and add the domain
+         `welodge.net` under *Domains*; it gives three DNS records (SPF, DKIM,
+         and optionally DMARC) to add where welodge.net's DNS is managed, then
+         *Verify*.
+      2. Create an API key (sending access only).
+      3. On the Vercel project, **Production**: set `RESEND_API_KEY`,
+         `NOTIFICATIONS_FROM` = `We Lodge OS <notifications@welodge.net>`, and
+         `APP_URL` = `https://os.welodge.net`. **Preview (staging)** may have
+         the same key and `NOTIFICATIONS_FROM`, with `APP_URL` =
+         `https://staging.welodge.net`: since 2026-10-13 off the live site only
+         brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed
+         (`TEST_ADDRESSES` in `src/server/email.ts`), subjects marked [Test].
+      4. Set `CRON_SECRET` (any long random text) on the project, so only
+         Vercel can start the morning run in `vercel.json`
+         (`/api/cron/daily`, 06:00 UTC).
+      Until then the bell works and emails are only written to the server log.
+- [ ] **Each event's bank account for clients' payments** (`product-scope.md`
+      §4.11, the agreement — Brandon, 2026-10-14). The agreement has only the USD
+      account today, written into `src/lib/agreement.ts`. Each event should ask
+      for the details of the account its clients pay into, so an agreement in
+      any currency fills it in.
+
 - [ ] **Google Places, to find hotels near a venue automatically**
       (`product-scope.md` §3.10, the Properties overhaul). The plan: enter an
       event's venue and get the hotels around it as a list and on the map,
@@ -253,6 +276,13 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       project and added to the allowed APIs of `GOOGLE_MAPS_SERVER_KEY`**
       (today Google answers `API_KEY_SERVICE_BLOCKED`). The same switch serves
       the nearby-hotels search.
+      *2026-10-03:* built on the sourcing task (§4.11, *Properties not in the
+      system*). It uses OpenStreetMap until Google answers, and switches to
+      Google by itself once the API is on — nothing else to change. Text Search
+      is paid per call (up to three per client place per six hours), so the
+      budget alert matters.
+      *2026-10-05:* **done** — Till switched Places API (New) on and allowed it
+      on the server key; Google answers (checked from the app's own code).
 
 ## 3. Phase 3 — Operations
 
@@ -378,3 +408,20 @@ document.
       highest-value places to start.
 - [x] **Prisma migration history** — created 2026-09-25, see §1. Schema
       changes are now migrations, and the build applies them.
+
+- [ ] **Anthropic API key for the rate card's writing helper** (`product-scope.md`
+      §4.11, 2026-10-11). Set `ANTHROPIC_API_KEY` on Vercel (Production and Preview)
+      and in the local `.env`. The button (*✨ Write it for me*) was taken off the
+      screen on 2026-10-13 until then — put it back in the rate card popup with the key. Uses Claude Sonnet 5, a few hundred
+      tokens per description.
+
+- [x] **Dropbox app key, to pick property photos straight from Dropbox** — done 2026-10-13: Brandon made the app (We Lodge OS) and its key is in `src/lib/media.ts` (public by design, so no Vercel setting is needed). Originally:
+      (`product-scope.md` §3.10, Media, 2026-10-11). At dropbox.com/developers create an
+      app ("Scoped access", "Full Dropbox"), and under *Chooser / Saver / Embedder
+      domains* add `os.welodge.net`, `staging.welodge.net` and `localhost`. Put its
+      **App key** (not the secret — the Chooser needs the key only, and it is public by
+      nature) in `NEXT_PUBLIC_DROPBOX_APP_KEY` on Vercel (Production and Preview) and in
+      the local `.env`. Until then the Media tab takes pasted photo links instead.
+- [ ] **Later: storage for photos of our own** (Vercel Blob or Cloudflare R2), should
+      Dropbox links prove unreliable for clients. Decided 2026-10-11 to start with
+      Dropbox links; photos are shown web-sized through the site's image service.

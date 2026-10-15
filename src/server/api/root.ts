@@ -1,3 +1,4 @@
+import { acquireRouter } from "~/server/api/routers/acquire";
 import { amenityRouter } from "~/server/api/routers/amenity";
 import { auditRouter } from "~/server/api/routers/audit";
 import { chatRouter } from "~/server/api/routers/chat";
@@ -5,13 +6,19 @@ import { clientRouter } from "~/server/api/routers/client";
 import { eventRouter } from "~/server/api/routers/event";
 import { financeRouter } from "~/server/api/routers/finance";
 import { inventoryRouter } from "~/server/api/routers/inventory";
+import { mapLayerRouter } from "~/server/api/routers/map-layer";
+import { mediaRouter } from "~/server/api/routers/media";
 import { quotationRouter } from "~/server/api/routers/quotation";
+import { rateCardRouter } from "~/server/api/routers/rate-card";
 import { placeRouter } from "~/server/api/routers/place";
 import { propertyRouter } from "~/server/api/routers/property";
 import { providerRouter } from "~/server/api/routers/provider";
 import { reportingRouter } from "~/server/api/routers/reporting";
 import { salesRouter } from "~/server/api/routers/sales";
 import { scoutingRouter } from "~/server/api/routers/scouting";
+import { notificationRouter } from "~/server/api/routers/notification";
+import { offerRouter } from "~/server/api/routers/offer";
+import { taskRouter } from "~/server/api/routers/task";
 import { travelRouter } from "~/server/api/routers/travel";
 import { updateRouter } from "~/server/api/routers/update";
 import { userRouter } from "~/server/api/routers/user";
@@ -31,6 +38,11 @@ export const appRouter = createTRPCRouter({
   amenity: amenityRouter,
   clients: clientRouter,
   sales: salesRouter,
+  rateCard: rateCardRouter,
+  offer: offerRouter,
+  acquire: acquireRouter,
+  media: mediaRouter,
+  mapLayer: mapLayerRouter,
   inventory: inventoryRouter,
   finance: financeRouter,
   reporting: reportingRouter,
@@ -39,6 +51,8 @@ export const appRouter = createTRPCRouter({
   update: updateRouter,
   audit: auditRouter,
   chat: chatRouter,
+  task: taskRouter,
+  notification: notificationRouter,
 });
 
 export type AppRouter = typeof appRouter;

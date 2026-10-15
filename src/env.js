@@ -19,9 +19,24 @@ export const env = createEnv({
     AUTH_RESEND_KEY: z.string().optional(),
     EMAIL_FROM: z.string().optional(),
     DATABASE_URL: z.string().url(),
+    // Resend, for notification emails (doc §2.9) — separate from the sign-in
+    // key so setting it does not bring back email sign-in. Set on the live
+    // site, and on staging too: away from the live site only the team in
+    // src/server/email.ts is ever emailed (doc §2.9). Without it emails go to the log.
+    RESEND_API_KEY: z.string().optional(),
+    // Set by Vercel itself: "production" on the live site, "preview" on staging.
+    VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
+    // "We Lodge OS <notifications@welodge.net>" — a domain verified in Resend.
+    NOTIFICATIONS_FROM: z.string().optional(),
+    // The site's own address, for links in emails.
+    APP_URL: z.string().url().optional(),
+    // Vercel sends it with the daily run (doc §2.9), so nobody else can start it.
+    CRON_SECRET: z.string().optional(),
     // Google Routes API, for travel times (doc §3.8). Never sent to the
     // browser. Not used yet.
     GOOGLE_MAPS_SERVER_KEY: z.string().optional(),
+    /** Claude, for the rate card's writing helper (doc §4.11); without it the helper says so. */
+    ANTHROPIC_API_KEY: z.string().optional(),
     // GIPHY, for GIFs in chat (doc §2.7). Never sent to the browser; without
     // it the GIF picker says so instead of searching.
     GIPHY_API_KEY: z.string().optional(),
@@ -47,6 +62,10 @@ export const env = createEnv({
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().optional(),
     // Needed for the map's pins. Falls back to Google's demo ID when unset.
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: z.string().optional(),
+    // Dropbox's Chooser, to pick a property's photos from the team's Dropbox
+    // (doc §3.10, Media). Public by nature, restricted to our web addresses in
+    // the Dropbox app's settings. Without it, photo links are pasted instead.
+    NEXT_PUBLIC_DROPBOX_APP_KEY: z.string().optional(),
   },
 
   /**
@@ -60,10 +79,17 @@ export const env = createEnv({
     AUTH_RESEND_KEY: process.env.AUTH_RESEND_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
     DATABASE_URL: process.env.DATABASE_URL,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    NOTIFICATIONS_FROM: process.env.NOTIFICATIONS_FROM,
+    APP_URL: process.env.APP_URL,
+    CRON_SECRET: process.env.CRON_SECRET,
     GOOGLE_MAPS_SERVER_KEY: process.env.GOOGLE_MAPS_SERVER_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     GIPHY_API_KEY: process.env.GIPHY_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
+    NEXT_PUBLIC_DROPBOX_APP_KEY: process.env.NEXT_PUBLIC_DROPBOX_APP_KEY,
     DEV_USER_EMAIL: process.env.DEV_USER_EMAIL,
     DEV_USER_NAME: process.env.DEV_USER_NAME,
     NODE_ENV: process.env.NODE_ENV,

@@ -98,11 +98,12 @@ export const financeRouter = createTRPCRouter({
         eventId: z.string().optional(),
         party: z.nativeEnum(ContractParty).optional(),
         salesRequestId: z.string().optional(),
+        propertyId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const contracts = await ctx.db.contract.findMany({
-        where: { eventId: input.eventId, party: input.party, salesRequestId: input.salesRequestId },
+        where: { eventId: input.eventId, party: input.party, salesRequestId: input.salesRequestId, propertyId: input.propertyId },
         orderBy: [{ event: { startDate: "asc" } }, { name: "asc" }],
         include: contractInclude,
       });
@@ -190,7 +191,7 @@ export const financeRouter = createTRPCRouter({
         },
       });
       await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary: "Contract added" });
-      if (input.markRequestSigned) await moveStage(tx, ctx.session.user.id, input.salesRequestId!, "SIGNED");
+      if (input.markRequestSigned) await moveStage(tx, ctx.session.user.id, input.salesRequestId!, "CONTRACTED");
       return contract;
       });
     }),

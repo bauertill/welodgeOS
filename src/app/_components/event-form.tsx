@@ -52,7 +52,8 @@ export function EventForm({
 
   const onSaved = (event: { id: string }) => {
     onDone?.();
-    router.push(`/events/${event.id}/inventory`);
+    // Edited in a popup: stay where you are (doc §2.3); a new event opens on its inventory.
+    if (!(isEdit && onDone)) router.push(`/events/${event.id}/inventory`);
     router.refresh();
   };
 

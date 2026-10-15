@@ -7,6 +7,7 @@ import { useState } from "react";
 import { EventsPanel } from "~/app/_components/events-panel";
 import { FinancePanel } from "~/app/_components/finance-panel";
 import { SalesPanel } from "~/app/_components/sales-panel";
+import { api } from "~/trpc/react";
 
 // Properties has no standalone section — a property belongs to the event(s)
 // it is scouted for, so it is browsed and managed from inside an event's own
@@ -15,6 +16,8 @@ import { SalesPanel } from "~/app/_components/sales-panel";
 export const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/events", label: "Events" },
+  // The team's shared task board (doc §2.8).
+  { href: "/tasks", label: "Tasks" },
 ] as const;
 
 /**
@@ -28,7 +31,7 @@ const salesPaths = ["/sales", "/clients"];
  * contracting details (doc §4.11) — show none of our own menus or header.
  */
 export function isPublicPath(pathname: string) {
-  return pathname.startsWith("/contracting/");
+  return pathname.startsWith("/contracting/") || pathname.startsWith("/needs/") || pathname.startsWith("/property-details/") || pathname.startsWith("/rate-card/") || pathname.startsWith("/rate-cards/");
 }
 
 /** The team's own sidebar and header, left out on a public page. */
@@ -48,6 +51,9 @@ export function Nav() {
   const [eventsOpen, setEventsOpen] = useState(false);
   const [salesOpen, setSalesOpen] = useState(false);
   const [financeOpen, setFinanceOpen] = useState(false);
+  // Requests with a client's answer nobody has opened yet — the red count on Sales (doc §4.11).
+  const newAnswers = api.rateCard.newAnswers.useQuery(undefined, { refetchInterval: 30_000, enabled: !isPublicPath(pathname) && !pathname.startsWith("/signin") && !pathname.startsWith("/signout") });
+  const unseen = newAnswers.data?.requests ?? 0;
 
   if (pathname.startsWith("/signin") || pathname.startsWith("/signout"))
     return null;
@@ -104,9 +110,17 @@ export function Nav() {
           aria-current={salesPaths.some((path) => pathname.startsWith(path)) ? "page" : undefined}
           aria-haspopup="dialog"
           aria-expanded={salesOpen}
-          className={itemStyles(salesPaths.some((path) => pathname.startsWith(path)))}
+          className={`${itemStyles(salesPaths.some((path) => pathname.startsWith(path)))} flex items-center justify-between gap-2`}
         >
           Sales
+          {unseen > 0 && (
+            <span
+              title={`${unseen} ${unseen === 1 ? "request has" : "requests have"} a new answer from the client`}
+              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#e0234e] px-1.5 text-[11px] font-medium text-white"
+            >
+              {unseen}
+            </span>
+          )}
         </button>
         <button
           type="button"

@@ -22,6 +22,7 @@ import {
 import { LocationPreview } from "~/app/_components/location-preview";
 import { normalizePropertyName } from "~/lib/scouting";
 import { AddressSearch } from "~/app/_components/address-search";
+import { SimilarProperties, useSimilarProperties } from "~/app/_components/similar-properties";
 import { api } from "~/trpc/react";
 
 type CategoryDraft = {
@@ -91,7 +92,6 @@ const emptyCategory = (type: PropertyType): CategoryDraft => ({
   notes: "",
 });
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
 export const emptyProperty: PropertyFormValues = {
   name: "",
@@ -165,6 +165,11 @@ export function PropertyForm({
   const isDuplicateProperty =
     values.name.trim().length > 0 &&
     otherPropertyNames.has(normalizePropertyName(values.name));
+
+  // A new property that looks like one we have, typed another way (doc §3.1).
+  const similarFound = useSimilarProperties(values);
+  const similar = isEdit ? [] : similarFound;
+  const [different, setDifferent] = useState(false);
 
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const geocode = api.property.geocode.useMutation({
@@ -309,6 +314,10 @@ export function PropertyForm({
       );
       return;
     }
+    if (similar.length && !different) {
+      setError("This looks like a property we already have — use that one, or tick that it is a different property.");
+      return;
+    }
     if ((payload.latitude === undefined) !== (payload.longitude === undefined)) {
       setError(
         "Give both a latitude and a longitude, or neither — one on its own cannot be put on the map.",
@@ -317,7 +326,7 @@ export function PropertyForm({
     }
 
     if (initial.id) update.mutate({ ...payload, id: initial.id });
-    else create.mutate(payload);
+    else create.mutate({ ...payload, confirmedDifferent: different });
   };
 
   return (
@@ -363,6 +372,21 @@ export function PropertyForm({
               </p>
             )}
           </Field>
+
+          {!isDuplicateProperty && similar.length > 0 && (
+            <div className="sm:col-span-2">
+              <SimilarProperties
+                matches={similar}
+                event={addToEventId ? { id: addToEventId, name: "this event" } : null}
+                confirmed={different}
+                onConfirmedChange={setDifferent}
+                onUsed={() => {
+                  router.push(addToEventId ? `/events/${addToEventId}` : "/events");
+                  router.refresh();
+                }}
+              />
+            </div>
+          )}
 
           <Field label="Type">
             <Select
@@ -520,7 +544,7 @@ export function PropertyForm({
         title={hasBedConfiguration ? "Room categories" : "Unit types"}
         description={
           hasBedConfiguration
-            ? "One row per room type, with how many the hotel has and what a night indicatively costs."
+            ? "One row per room type, with how many the hotel has. Rates come from its quotations."
             : "One row per unit type, with its bedrooms and bathrooms."
         }
       >
@@ -599,45 +623,7 @@ export function PropertyForm({
                 </>
               )}
 
-              <Field label="Indicative price, from" hint="Not a negotiated rate — just what it looks like on Booking.com-style listings.">
-                <Input
-                  value={category.priceMin}
-                  onChange={(e) =>
-                    setCategory(index, { priceMin: e.target.value })
-                  }
-                  inputMode="decimal"
-                  placeholder="220"
-                />
-              </Field>
-
-              <Field label="Indicative price, to">
-                <Input
-                  value={category.priceMax}
-                  onChange={(e) =>
-                    setCategory(index, { priceMax: e.target.value })
-                  }
-                  inputMode="decimal"
-                  placeholder="280"
-                />
-              </Field>
-
-              <Field label="Currency">
-                <Select
-                  value={category.currency}
-                  onChange={(e) =>
-                    setCategory(index, { currency: e.target.value })
-                  }
-                >
-                  {(CURRENCIES.includes(category.currency)
-                    ? CURRENCIES
-                    : [category.currency, ...CURRENCIES]
-                  ).map((currency) => (
-                    <option key={currency} value={currency}>
-                      {currency}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+{/* No indicative price any more (doc §3.9): the event rate comes from the quotations. */}
 
               <Field label="Size">
                 <Input

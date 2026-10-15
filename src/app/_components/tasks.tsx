@@ -1,0 +1,2006 @@
+"use client";
+
+import { keepPreviousData } from "@tanstack/react-query";
+import type { ContactOutcome, Priority, TaskStatus } from "generated/prisma";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+import { AcquirePanel } from "~/app/_components/acquire-task";
+import { ContractPanel } from "~/app/_components/offers";
+import { HistorySection } from "~/app/_components/activity-log";
+
+import { Combobox } from "~/app/_components/combobox";
+import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
+import { MentionTextarea } from "~/app/_components/mention-textarea";
+import { Popup } from "~/app/_components/popup";
+import { WebsiteLink } from "~/app/_components/website-link";
+import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
+import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
+import { RateCardsBox, SourcingPanel } from "~/app/_components/sourcing-panel";
+import { AssigneePicker, PeopleSelect } from "~/app/_components/assignee-picker";
+import { peopleWords, wishes, wishesInWords } from "~/lib/needs";
+import { QuotationPopup, QuotesReceived } from "~/app/_components/quotations";
+import { Initials } from "~/app/_components/property-groups";
+import { EmptyState } from "~/app/_components/ui";
+import { daysUntil, dayKey, nightsBetween } from "~/lib/dates";
+import { priorityLabels, priorityOrder } from "~/lib/clients";
+import { formatDate, formatDay, formatMomentInWords, formatMoney, formatRange } from "~/lib/format";
+import {
+  contactOutcomeHints,
+  contactOutcomeLabels,
+  contactOutcomeOrder,
+  contactOutcomeStyle,
+  taskStatusHints,
+  taskStatusLabels,
+  taskStatusOrder,
+  taskStatusStyles,
+} from "~/lib/tasks";
+import { renderUpdateBody } from "~/lib/updates";
+import { api, type RouterOutputs } from "~/trpc/react";
+
+/**
+ * Tasks (doc §2.8): one board everyone sees, as a list or as Kanban columns
+ * by status, with filters; each person's own on their profile as My work.
+ */
+
+type Task = RouterOutputs["task"]["list"][number];
+type Person = { id: string; name: string | null; email: string | null; image?: string | null };
+
+const priorityStyles: Record<Priority, string> = {
+  HIGH: "bg-[#fde8ec] text-[#a3243d]",
+  MEDIUM: "bg-[#fff4e0] text-[#8a5a00]",
+  LOW: "bg-ink-50 text-ink-500",
+};
+const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
+const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
+const firstName = (person: Person) => (person.name ?? person.email ?? "").split(" ")[0];
+
+export function TaskStatusBadge({ status }: { status: TaskStatus }) {
+  return (
+    <span title={taskStatusHints[status]} className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${taskStatusStyles[status]}`}>
+      {taskStatusLabels[status]}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: Priority | null }) {
+  if (!priority) return null;
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${priorityStyles[priority]}`}>{priorityLabels[priority]}</span>;
+}
+
+/** "Due 12 Oct", in red once it has passed and the task is still open. */
+function Deadline({ task }: { task: Pick<Task, "deadline" | "status"> }) {
+  if (!task.deadline) return <span className="text-ink-400">—</span>;
+  const late = task.status !== "DONE" && daysUntil(task.deadline) < 0;
+  const soon = task.status !== "DONE" && !late && daysUntil(task.deadline) <= 2;
+  return (
+    <span className={`whitespace-nowrap ${late ? "font-medium text-[#c03654]" : soon ? "text-[#8a5a00]" : ""}`}>
+      {late ? "Overdue · " : ""}
+      {formatDate(task.deadline)}
+    </span>
+  );
+}
+
+/** What the task is about, as links. */
+function About({ task }: { task: Task }) {
+  const items = [
+    task.event && { href: `/events/${task.event.id}`, label: task.event.name },
+    task.property && { href: `/properties/${task.property.id}`, label: task.property.name },
+    task.salesRequest
+      ? { href: `/sales/${task.salesRequest.id}`, label: `${task.salesRequest.client.name} · request` }
+      : task.client && { href: `/clients/${task.client.id}`, label: task.client.shortName ?? task.client.name },
+  ].filter(Boolean) as { href: string; label: string }[];
+  if (items.length === 0) return null;
+  return (
+    <span className="text-ink-500 text-xs font-light">
+      {items.map((item, index) => (
+        <span key={item.href}>
+          {index > 0 && " · "}
+          <Link href={item.href} className="hover:text-brand-700 hover:underline" onClick={(e) => e.stopPropagation()}>
+            {item.label}
+          </Link>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function Assignees({ people }: { people: Person[] }) {
+  if (people.length === 0) return <span className="text-ink-400 text-xs">Nobody yet</span>;
+  return (
+    <span className="flex -space-x-1.5">
+      {people.slice(0, 4).map((person) => (
+        <Initials key={person.id} person={person} />
+      ))}
+      {people.length > 4 && <span className="text-ink-500 pl-2.5 text-xs">+{people.length - 4}</span>}
+    </span>
+  );
+}
+
+// --- The board ---------------------------------------------------------------
+
+type Filters = {
+  search: string;
+  assigneeId: string;
+  requestedById: string;
+  priority: Priority | "";
+  typeId: string;
+  eventId: string;
+  clientId: string;
+};
+const noFilters: Filters = { search: "", assigneeId: "", requestedById: "", priority: "", typeId: "", eventId: "", clientId: "" };
+
+const viewKey = "welodge.tasks.view";
+
+export function TaskBoard() {
+  const [view, setView] = useState<"board" | "list">("board");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(viewKey);
+      if (saved === "list" || saved === "board") setView(saved);
+    } catch {}
+  }, []);
+  const chooseView = (next: "board" | "list") => {
+    setView(next);
+    try {
+      localStorage.setItem(viewKey, next);
+    } catch {}
+  };
+
+  const me = api.user.me.useQuery();
+  // A task opens in a popup over the board, and a new one is added in one too.
+  const [openId, setOpenId] = useState<string | null>(null);
+  // The new-task popup, started in a column's status (To do from the button or the list).
+  const [adding, setAdding] = useState<TaskStatus | null>(null);
+  const [filters, setFilters] = useState<Filters>(noFilters);
+  const [status, setStatus] = useState<TaskStatus | "">("");
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setFilters((current) => ({ ...current, search })), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const set = <K extends keyof Filters>(key: K, value: Filters[K]) => setFilters((current) => ({ ...current, [key]: value }));
+
+  const tasks = api.task.list.useQuery(
+    {
+      search: filters.search || undefined,
+      assigneeId: filters.assigneeId || undefined,
+      requestedById: filters.requestedById || undefined,
+      priority: filters.priority || undefined,
+      typeId: filters.typeId || undefined,
+      eventId: filters.eventId || undefined,
+      clientId: filters.clientId || undefined,
+      status: view === "list" && status ? status : undefined,
+      // On the board, Done shows the last month; the list shows everything.
+      doneWithinDays: view === "board" ? 30 : undefined,
+    },
+    { placeholderData: keepPreviousData },
+  );
+  const people = api.user.list.useQuery();
+  const types = api.task.types.useQuery();
+  const events = api.event.list.useQuery();
+  const clients = api.clients.list.useQuery();
+
+  const rows = tasks.data ?? [];
+  const mine = me.data && filters.assigneeId === me.data.id;
+  const filtered = Object.entries(filters).some(([key, value]) => key !== "search" && value) || Boolean(filters.search) || (view === "list" && status);
+  const peopleOptions = (people.data ?? []).map((person) => ({ id: person.id, label: person.name ?? person.email ?? "" }));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="border-ink-200 flex rounded-full border bg-white p-1">
+          {(["board", "list"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => chooseView(option)}
+              aria-pressed={view === option}
+              className={`rounded-full px-4 py-1.5 text-[13px] font-light transition-colors ${view === option ? "bg-brand-400 text-white" : "text-ink-500 hover:text-ink-900"}`}
+            >
+              {option === "board" ? "Kanban" : "List"}
+            </button>
+          ))}
+        </div>
+        {me.data && (
+          <button
+            type="button"
+            onClick={() => set("assigneeId", mine ? "" : me.data!.id)}
+            aria-pressed={Boolean(mine)}
+            className={`rounded-full px-4 py-2 text-[13px] font-light transition-colors ${
+              mine ? "bg-brand-700 text-white" : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
+            }`}
+          >
+            My tasks
+          </button>
+        )}
+        <div className="w-56">
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks" aria-label="Search tasks" />
+        </div>
+        <button
+          type="button"
+          onClick={() => setAdding("TODO")}
+          className="bg-brand-400 hover:bg-brand-500 ml-auto rounded-full px-5 py-2.5 text-[13px] font-medium text-white"
+        >
+          + New task
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Combobox className="w-44" value={filters.assigneeId} onChange={(value) => set("assigneeId", value)} placeholder="Anyone to complete" options={peopleOptions} />
+        <Combobox className="w-44" value={filters.requestedById} onChange={(value) => set("requestedById", value)} placeholder="Requested by anyone" options={peopleOptions} />
+        <div className="w-36">
+        <Select value={filters.priority} onChange={(e) => set("priority", e.target.value as Priority | "")} aria-label="Priority">
+          <option value="">Any priority</option>
+          {priorityOrder.map((priority) => (
+            <option key={priority} value={priority}>
+              {priorityLabels[priority]}
+            </option>
+          ))}
+        </Select>
+        </div>
+        {(types.data ?? []).length > 0 && (
+          <div className="w-40">
+          <Select value={filters.typeId} onChange={(e) => set("typeId", e.target.value)} aria-label="Type">
+            <option value="">Every type</option>
+            {(types.data ?? []).map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
+          </Select>
+          </div>
+        )}
+        <Combobox
+          className="w-48"
+          value={filters.eventId}
+          onChange={(value) => set("eventId", value)}
+          placeholder="Every event"
+          options={(events.data ?? []).map((event) => ({ id: event.id, label: event.name }))}
+        />
+        <Combobox
+          className="w-48"
+          value={filters.clientId}
+          onChange={(value) => set("clientId", value)}
+          placeholder="Every client"
+          options={(clients.data ?? []).map((client) => ({ id: client.id, label: client.name, detail: client.shortName }))}
+        />
+        {view === "list" && (
+          <div className="w-36">
+          <Select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus | "")} aria-label="Status">
+            <option value="">Any status</option>
+            {taskStatusOrder.map((option) => (
+              <option key={option} value={option}>
+                {taskStatusLabels[option]}
+              </option>
+            ))}
+          </Select>
+          </div>
+        )}
+        {filtered && (
+          <button
+            type="button"
+            onClick={() => {
+              setFilters(noFilters);
+              setSearch("");
+              setStatus("");
+            }}
+            className="text-brand-700 text-[13px] font-light hover:underline"
+          >
+            Clear
+          </button>
+        )}
+        <span className="text-ink-500 ml-auto text-[13px] font-light">
+          {tasks.isLoading ? "Loading…" : `${rows.length} ${rows.length === 1 ? "task" : "tasks"}`}
+        </span>
+      </div>
+
+      {view === "board" ? (
+        <Kanban tasks={rows} onOpen={setOpenId} onAdd={setAdding} />
+      ) : rows.length === 0 && !tasks.isLoading && filtered ? (
+        <EmptyState title="No task matches" description="Nothing matches these filters." />
+      ) : (
+        <TaskTable tasks={rows} onOpen={setOpenId} onAdd={() => setAdding("TODO")} />
+      )}
+
+      {openId && <TaskPopup id={openId} onClose={() => setOpenId(null)} />}
+      {adding && (
+        <Popup title="New task" subtitle="What it is, who completes it, and by when." onClose={() => setAdding(null)}>
+          <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+            <TaskForm preset={{ status: adding, assigneeIds: mine ? [me.data!.id] : undefined }} onDone={() => setAdding(null)} />
+          </div>
+        </Popup>
+      )}
+    </div>
+  );
+}
+
+/** Four columns by status; a card is dragged from one to another to move it. */
+function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) => void; onAdd: (status: TaskStatus) => void }) {
+  const utils = api.useUtils();
+  const move = api.task.update.useMutation({
+    onSettled: () => {
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
+    },
+  });
+  const [over, setOver] = useState<TaskStatus | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  // Shown in its new column at once, while the move is saved.
+  const [moved, setMoved] = useState<Record<string, TaskStatus>>({});
+  useEffect(() => setMoved({}), [tasks]);
+  const statusOf = (task: Task) => moved[task.id] ?? task.status;
+  // A long column shows its first cards only; Done, its latest few (doc §2.8).
+  const [expanded, setExpanded] = useState<TaskStatus[]>([]);
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-4">
+      {taskStatusOrder.map((column) => {
+        const inColumn = tasks.filter((task) => statusOf(task) === column);
+        // Done: the most recently finished first.
+        if (column === "DONE") inColumn.sort((a, b) => (b.doneAt?.getTime() ?? 0) - (a.doneAt?.getTime() ?? 0));
+        return (
+          <div
+            key={column}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(column);
+            }}
+            onDragLeave={() => setOver((current) => (current === column ? null : current))}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOver(null);
+              const id = e.dataTransfer.getData("text/task");
+              const task = tasks.find((t) => t.id === id);
+              if (task && statusOf(task) !== column) {
+                setMoved((current) => ({ ...current, [id]: column }));
+                move.mutate({ id, status: column });
+              }
+            }}
+            className={`min-h-48 rounded-xl border p-2 transition-colors ${over === column ? "border-brand-400 bg-brand-50/60" : "border-ink-200/60 bg-ink-50/40"}`}
+          >
+            <div className="mb-2 flex items-center justify-between px-1.5 pt-1">
+              <TaskStatusBadge status={column} />
+              <span className="text-ink-500 text-xs font-light">{inColumn.length}</span>
+            </div>
+            <div className="space-y-1.5">
+              {inColumn.slice(0, expanded.includes(column) ? undefined : columnCap(column)).map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  faded={dragging === task.id}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/task", task.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    setDragging(task.id);
+                  }}
+                  onDragEnd={() => setDragging(null)}
+                  onOpen={() => onOpen(task.id)}
+                />
+              ))}
+              {inColumn.length > columnCap(column) && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((current) => (current.includes(column) ? current.filter((one) => one !== column) : [...current, column]))}
+                  className="text-brand-700 w-full rounded-lg px-2 py-1 text-left text-xs font-medium hover:underline"
+                >
+                  {expanded.includes(column) ? "Show fewer" : `Show ${inColumn.length - columnCap(column)} more`}
+                </button>
+              )}
+              <AddTaskButton onClick={() => onAdd(column)} />
+            </div>
+          </div>
+        );
+      })}
+      {move.error && (
+        <div className="lg:col-span-4">
+          <FormError message={friendlyError(move.error)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** How many cards a column shows before "Show more". */
+const columnCap = (column: TaskStatus) => (column === "DONE" ? 5 : 15);
+
+function TaskCard({
+  task,
+  faded,
+  onDragStart,
+  onDragEnd,
+  onOpen,
+}: {
+  task: Task;
+  faded: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onOpen: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+      title={[task.title, aboutText(task)].filter(Boolean).join("\n")}
+      className={`group border-ink-200/60 hover:border-brand-300 cursor-pointer rounded-lg border bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition ${faded ? "opacity-40" : ""}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-ink-900 line-clamp-2 text-[13px] leading-snug font-medium">{shortTitle(task)}</p>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <PriorityBadge priority={task.priority} />
+          <AssigneePicker taskId={task.id} assignees={task.assignees}>
+            <Assignees people={task.assignees} />
+          </AssigneePicker>
+        </span>
+      </div>
+      <div className="text-ink-500 mt-1 flex items-center gap-x-1.5 overflow-hidden text-[11px] font-light whitespace-nowrap">
+        {task.outcome && <span className={`rounded px-1 font-medium ${contactOutcomeStyle}`}>{contactOutcomeLabels[task.outcome]}</span>}
+        {task.type && <span className="bg-ink-50 text-ink-700 rounded px-1">{task.type.name}</span>}
+        {task.deadline && <Deadline task={task} />}
+        {task._count.comments > 0 && <span title={`${task._count.comments} comments`}>💬 {task._count.comments}</span>}
+        <span className="ml-auto">
+          <DeleteTask task={task} className="opacity-0 group-hover:opacity-100 focus:opacity-100" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The card's title, shortened: the event is left off the end, as the filters
+ * and the hover say which (doc §2.8) — "Contact The Georgian for Beyond Limits".
+ */
+function shortTitle(task: Task) {
+  const suffix = task.event ? ` — ${task.event.name}` : null;
+  return suffix && task.title.endsWith(suffix) ? task.title.slice(0, -suffix.length) : task.title;
+}
+
+/** What the task is about, in words — for the card's hover. */
+function aboutText(task: Task) {
+  return [task.event?.name, task.property?.name, task.salesRequest ? `${task.salesRequest.client.name} · request` : (task.client?.shortName ?? task.client?.name)]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Delete a task from the board, after asking — its comments go with it (doc §2.8). */
+function DeleteTask({ task, className = "" }: { task: { id: string; title: string }; className?: string }) {
+  const utils = api.useUtils();
+  const remove = api.task.remove.useMutation({
+    onSuccess: () => {
+      void utils.task.invalidate();
+      void utils.sales.invalidate();
+    },
+    onError: (error) => window.alert(friendlyError(error)),
+  });
+  return (
+    <button
+      type="button"
+      disabled={remove.isPending}
+      onClick={(e) => {
+        // On a card: delete, do not open it.
+        e.stopPropagation();
+        if (window.confirm(`Delete the task "${task.title}"? Its comments go with it. This cannot be undone.`)) remove.mutate({ id: task.id });
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+      aria-label={`Delete ${task.title}`}
+      className={`text-ink-500 text-xs font-light transition hover:text-[#c03654] ${className}`}
+    >
+      {remove.isPending ? "Deleting…" : "Delete"}
+    </button>
+  );
+}
+
+export function TaskTable({
+  tasks,
+  compact = false,
+  onOpen,
+  onAdd,
+}: {
+  tasks: Task[];
+  compact?: boolean;
+  /** Open a task in a popup; without it, the task's own page. */
+  onOpen?: (id: string) => void;
+  /** "+ Add task" at the top of the list. */
+  onAdd?: () => void;
+}) {
+  return (
+    <div className="border-ink-200/60 overflow-x-auto rounded-xl border bg-white">
+      <table className="w-full text-left">
+        <thead className="bg-ink-50/60">
+          <tr>
+            <th className={th}>Task</th>
+            <th className={th}>Status</th>
+            <th className={th}>Priority</th>
+            {!compact && <th className={th}>Type</th>}
+            <th className={th}>To complete</th>
+            {!compact && <th className={th}>Requested by</th>}
+            <th className={th}>Deadline</th>
+            {!compact && <th className={th}>{""}</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {onAdd && (
+            <tr>
+              <td colSpan={compact ? 4 : 7} className="border-ink-200/40 border-b px-2 py-1.5">
+                <AddTaskButton onClick={onAdd} />
+              </td>
+            </tr>
+          )}
+          {tasks.map((task) => (
+            <tr key={task.id} className={`hover:bg-ink-50/40 ${onOpen ? "cursor-pointer" : ""}`} onClick={onOpen ? () => onOpen(task.id) : undefined}>
+              <td className={`${td} text-ink-900`}>
+                {onOpen ? (
+                  <button type="button" onClick={() => onOpen(task.id)} className="hover:text-brand-700 text-left font-medium">
+                    {task.title}
+                  </button>
+                ) : (
+                  <Link href={`/tasks/${task.id}`} className="hover:text-brand-700 font-medium">
+                    {task.title}
+                  </Link>
+                )}
+                <span className="block">
+                  <About task={task} />
+                </span>
+              </td>
+              <td className={td}>
+                <TaskStatusBadge status={task.status} />
+                {task.outcome && (
+                  <span className={`mt-1 block w-fit rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${contactOutcomeStyle}`}>
+                    {contactOutcomeLabels[task.outcome]}
+                  </span>
+                )}
+              </td>
+              <td className={td}>{task.priority ? <PriorityBadge priority={task.priority} /> : <span className="text-ink-400">—</span>}</td>
+              {!compact && <td className={td}>{task.type?.name ?? <span className="text-ink-400">—</span>}</td>}
+              <td className={td}>
+                {task.assignees.length ? task.assignees.map(firstName).join(", ") : <span className="text-ink-400">Nobody yet</span>}
+              </td>
+              {!compact && <td className={td}>{task.requestedBy ? firstName(task.requestedBy) : <span className="text-ink-400">—</span>}</td>}
+              <td className={td}>
+                <Deadline task={task} />
+              </td>
+              {!compact && (
+                <td className={`${td} text-right`}>
+                  <DeleteTask task={task} />
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** "+ Add task" at the foot of a column or the top of the list: opens the new-task popup. */
+function AddTaskButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-ink-500 hover:text-brand-700 w-full rounded-lg px-2 py-1.5 text-left text-[13px] font-light hover:bg-white/70"
+    >
+      + Add task
+    </button>
+  );
+}
+
+/** One task in a popup over the board: the same as its own page, which is a click away. */
+function TaskPopup({ id, onClose }: { id: string; onClose: () => void }) {
+  const task = api.task.byId.useQuery({ id });
+  const t = task.data;
+  return (
+    <Popup
+      title={t?.title ?? (task.isLoading ? "…" : "Task")}
+      subtitle={t ? (t.type ? `${t.type.name} task` : "Task") : undefined}
+      aside={
+        <Link href={`/tasks/${id}`} className="text-brand-700 text-[13px] font-light hover:underline">
+          Open as a page
+        </Link>
+      }
+      onClose={onClose}
+    >
+      <TaskView id={id} onRemoved={onClose} />
+      {t && <HistorySection entity="Task" entityId={id} />}
+    </Popup>
+  );
+}
+
+// --- The form ----------------------------------------------------------------
+
+export type TaskPreset = {
+  eventId?: string;
+  propertyId?: string;
+  clientId?: string;
+  salesRequestId?: string;
+  status?: TaskStatus;
+  assigneeIds?: string[];
+};
+
+type Draft = {
+  title: string;
+  details: string;
+  status: TaskStatus;
+  priority: Priority | "";
+  deadline: string;
+  typeId: string;
+  assigneeIds: string[];
+  requestedById: string;
+  eventId: string;
+  propertyId: string;
+  clientId: string;
+  salesRequestId: string;
+};
+
+/** A task added or changed: what it is, who completes it, by when, and what it is about. */
+export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOutputs["task"]["byId"]>; preset?: TaskPreset; onDone?: () => void }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const me = api.user.me.useQuery();
+  const people = api.user.list.useQuery();
+  const events = api.event.list.useQuery();
+  const clients = api.clients.list.useQuery();
+  const properties = api.property.list.useQuery({});
+  const requests = api.sales.list.useQuery({ show: "all" });
+
+  const [draft, setDraft] = useState<Draft>({
+    title: task?.title ?? "",
+    details: task?.details ?? "",
+    status: task?.status ?? preset?.status ?? "TODO",
+    priority: task?.priority ?? "",
+    deadline: task?.deadline ? dayKey(task.deadline) : "",
+    typeId: task?.type?.id ?? "",
+    assigneeIds: task?.assignees.map((person) => person.id) ?? preset?.assigneeIds ?? [],
+    requestedById: task?.requestedBy?.id ?? "",
+    eventId: task?.event?.id ?? preset?.eventId ?? "",
+    propertyId: task?.property?.id ?? preset?.propertyId ?? "",
+    clientId: task?.client?.id ?? preset?.clientId ?? "",
+    salesRequestId: task?.salesRequest?.id ?? preset?.salesRequestId ?? "",
+  });
+  // Whoever adds a task asked for it, unless someone else is chosen.
+  useEffect(() => {
+    if (!task && me.data && !draft.requestedById) setDraft((current) => ({ ...current, requestedById: me.data!.id }));
+  }, [me.data, task, draft.requestedById]);
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
+
+
+  const done = (id: string) => {
+    void utils.task.invalidate();
+    void utils.audit.invalidate();
+    if (onDone) onDone();
+    else router.push(`/tasks/${id}`);
+  };
+  const create = api.task.create.useMutation({ onSuccess: (saved) => done(saved.id) });
+  const update = api.task.update.useMutation({ onSuccess: (saved) => done(saved.id) });
+  const error = create.error ?? update.error;
+  const pending = create.isPending || update.isPending;
+
+  const peopleList = people.data ?? [];
+  const requestOptions = useMemo(
+    () =>
+      (requests.data ?? []).map((request) => ({
+        id: request.id,
+        label: `${request.client.name}${request.event ? ` · ${request.event.name}` : ""}`,
+      })),
+    [requests.data],
+  );
+
+  return (
+    <form
+      className="space-y-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const input = {
+          title: draft.title,
+          details: draft.details,
+          status: draft.status,
+          priority: draft.priority || null,
+          deadline: draft.deadline,
+          typeId: draft.typeId || null,
+          assigneeIds: draft.assigneeIds,
+          requestedById: draft.requestedById || null,
+          eventId: draft.eventId || null,
+          propertyId: draft.propertyId || null,
+          clientId: draft.clientId || null,
+          salesRequestId: draft.salesRequestId || null,
+        };
+        if (task) update.mutate({ id: task.id, ...input });
+        else create.mutate(input);
+      }}
+    >
+      <Field label="Task">
+        <Input value={draft.title} onChange={(e) => set("title", e.target.value)} placeholder="Get photos and a video of Hotel Carmel" autoFocus={!task} />
+      </Field>
+      <Field label="Details">
+        <Textarea rows={3} value={draft.details} onChange={(e) => set("details", e.target.value)} placeholder="Anything the person completing it needs to know" />
+      </Field>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>To complete — who does it</Label>
+          <PeopleSelect people={peopleList} value={draft.assigneeIds} onChange={(ids) => set("assigneeIds", ids)} />
+        </div>
+        <Field label="Requested by">
+          <Select value={draft.requestedById} onChange={(e) => set("requestedById", e.target.value)}>
+            <option value="">Nobody said</option>
+            {peopleList.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name ?? person.email}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Deadline — optional">
+          <Input type="date" value={draft.deadline} onChange={(e) => set("deadline", e.target.value)} />
+        </Field>
+        <Field label="Status">
+          <Select value={draft.status} onChange={(e) => set("status", e.target.value as TaskStatus)}>
+            {taskStatusOrder.map((option) => (
+              <option key={option} value={option}>
+                {taskStatusLabels[option]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Priority">
+          <Select value={draft.priority} onChange={(e) => set("priority", e.target.value as Priority | "")}>
+            <option value="">None</option>
+            {priorityOrder.map((priority) => (
+              <option key={priority} value={priority}>
+                {priorityLabels[priority]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+
+      <div>
+        <Label>About — each optional</Label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Combobox value={draft.eventId} onChange={(value) => set("eventId", value)} placeholder="No event" options={(events.data ?? []).map((event) => ({ id: event.id, label: event.name }))} />
+          <Combobox
+            value={draft.propertyId}
+            onChange={(value) => set("propertyId", value)}
+            placeholder="No property"
+            options={(properties.data ?? []).map((property) => ({ id: property.id, label: property.name, detail: property.city }))}
+          />
+          <Combobox
+            value={draft.clientId}
+            onChange={(value) => set("clientId", value)}
+            placeholder="No client"
+            options={(clients.data ?? []).map((client) => ({ id: client.id, label: client.name, detail: client.shortName }))}
+          />
+          <Combobox value={draft.salesRequestId} onChange={(value) => set("salesRequestId", value)} placeholder="No sales request" options={requestOptions} />
+        </div>
+      </div>
+
+      <FormError message={error ? friendlyError(error) : null} />
+      <div className="flex gap-2">
+        <Button type="submit" disabled={pending || !draft.title.trim()}>
+          {pending ? "Saving…" : task ? "Save" : "Add task"}
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => (onDone ? onDone() : router.back())}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// --- One task ----------------------------------------------------------------
+
+export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const task = api.task.byId.useQuery({ id });
+  const [editing, setEditing] = useState(false);
+  const setStatus = api.task.update.useMutation({
+    onSuccess: () => {
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
+    },
+  });
+  const remove = api.task.remove.useMutation({
+    onSuccess: () => {
+      void utils.task.invalidate();
+      if (onRemoved) onRemoved();
+      else router.push("/tasks");
+    },
+  });
+  if (task.isLoading) return <p className="text-ink-500 text-sm font-light">Loading…</p>;
+  if (!task.data) return <EmptyState title="This task no longer exists" description="It may have been removed." />;
+  const t = task.data;
+
+  if (editing) {
+    return (
+      <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+        <TaskForm task={t} onDone={() => setEditing(false)} />
+      </div>
+    );
+  }
+
+  const rows: [string, React.ReactNode][] = [
+    [
+      "To complete",
+      <AssigneePicker key="to" taskId={t.id} assignees={t.assignees}>
+        <span className="text-ink-900 hover:text-brand-700">
+          {t.assignees.length ? t.assignees.map((person) => person.name ?? person.email).join(", ") : "Nobody yet"}
+          <span className="text-brand-700 ml-1.5 text-xs">Change</span>
+        </span>
+      </AssigneePicker>,
+    ],
+    ["Requested by", t.requestedBy ? (t.requestedBy.name ?? t.requestedBy.email) : "—"],
+    ["Deadline", <Deadline key="d" task={t} />],
+    ["Priority", t.priority ? <PriorityBadge key="p" priority={t.priority} /> : "—"],
+    ["Type", t.type?.name ?? "—"],
+    ["About", <About key="a" task={t as Task} />],
+    ["Added", `${formatDay(t.createdAt)}${t.createdBy ? ` by ${t.createdBy.name ?? t.createdBy.email}` : ""}`],
+  ];
+
+  const sourcing = t.salesRequest && t.type?.name === "Sourcing";
+  const hotelContact = t.property && t.event && t.type?.name === "Hotel contact";
+  const getMedia = t.property && t.type?.name === "Get media";
+  const acquire = t.property && t.salesRequest && t.event && t.type?.name === "Acquire";
+  const contract = t.salesRequest && t.type?.name === "Contract";
+
+  return (
+    <div className="grid items-start gap-5 lg:grid-cols-3">
+      {t.outcome && (
+        <div className="rounded-xl border border-[#f3c4cf] bg-[#fdf2f4] px-5 py-3 lg:col-span-3">
+          <p className="text-[14px] font-medium text-[#a3243d]">The hotel cannot help — {contactOutcomeLabels[t.outcome]}</p>
+          {t.outcomeNote && <p className="text-ink-700 mt-0.5 text-[13px] font-light">{t.outcomeNote}</p>}
+          <p className="text-ink-500 mt-0.5 text-xs font-light">
+            Closed{t.doneAt ? ` on ${formatDate(t.doneAt)}` : ""}. It stays on {t.event?.name ?? "the event"} for other requests — written on its Updates. Reopen the task if they come back.
+          </p>
+        </div>
+      )}
+      <div className="space-y-5 lg:col-span-2">
+        {sourcing && (
+          <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 className="text-ink-900 text-[15px] font-medium">Where to source</h2>
+              <Link href={`/sales/${t.salesRequest!.id}`} className="text-brand-700 text-[13px] font-light hover:underline">
+                The sales request →
+              </Link>
+            </div>
+            <SourcingPanel salesRequestId={t.salesRequest!.id} />
+          </div>
+        )}
+        {/* The hotel contact task, step by step (doc §4.11): call, email the request, gather. */}
+        {hotelContact && (
+          <PropertyContactDetails
+            propertyId={t.property!.id}
+            eventId={t.event!.id}
+            emailTo={<EmailToBox taskId={t.id} name={t.emailToName} email={t.emailToAddress} />}
+          />
+        )}
+        {hotelContact && (
+          <EmailTheHotel
+            taskId={t.id}
+            propertyId={t.property!.id}
+            salesRequestId={t.salesRequest?.id ?? null}
+            eventName={t.event!.name}
+            emailTo={t.emailToAddress ? { name: t.emailToName, email: t.emailToAddress } : null}
+          />
+        )}
+        {hotelContact && <TheirQuote propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} salesRequestId={t.salesRequest?.id ?? null} />}
+        {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
+        {/* The contract task (doc §4.11): from the client's interest to their signed agreement. */}
+        {contract && <ContractPanel salesRequestId={t.salesRequest!.id} />}
+        {/* The acquire task (doc §4.11): from the hotel's quote to its signed contract. */}
+        {acquire && <AcquirePanel taskId={t.id} propertyId={t.property!.id} propertyName={t.property!.name} />}
+        {/* The get media task (doc §4.11): straight to where the media goes. */}
+        {getMedia && (
+          <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+            <h2 className="text-ink-900 text-[15px] font-medium">Photos or a video of {t.property!.name}</h2>
+            <p className="text-ink-500 mt-1 mb-3 text-[13px] font-light">
+              {t.status === "DONE"
+                ? "In — the rate card can be shared."
+                : "Put the Dropbox folder and a few picked photos, or a YouTube link, on its Media tab. This task closes on its own once they are in."}
+            </p>
+            <Link
+              href={`/properties/${t.property!.id}#media`}
+              className="bg-brand-400 hover:bg-brand-500 inline-block rounded-full px-4 py-2 text-[13px] font-medium text-white"
+            >
+              Open its Media tab →
+            </Link>
+          </div>
+        )}
+        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Comments</h2>
+          <TaskComments taskId={t.id} />
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-ink-900 text-[15px] font-medium">Details</h2>
+            <button type="button" onClick={() => setEditing(true)} className="text-brand-700 text-[13px] font-light hover:underline">
+              Edit
+            </button>
+          </div>
+          {sourcing || (hotelContact && t.salesRequest) ? (
+            <ClientRequest salesRequestId={t.salesRequest!.id} />
+          ) : (
+            t.details &&
+            !hotelContact && (
+              <div className="bg-ink-50/60 mb-4 rounded-lg px-3 py-2.5">
+                <p className="text-ink-500 mb-1 text-[11px] font-medium tracking-wider uppercase">What to do</p>
+                <p className="text-ink-900 text-sm font-light whitespace-pre-line">{t.details}</p>
+              </div>
+            )
+          )}
+          {/* Right under the request, easy to find on the call (doc §4.11). */}
+          {hotelContact && t.status !== "DONE" && <CantHelp taskId={t.id} propertyName={t.property!.name} />}
+          <dl className="space-y-2 text-sm font-light">
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex gap-3">
+                <dt className="text-ink-500 w-28 shrink-0">{label}</dt>
+                <dd className="text-ink-900 min-w-0">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <button
+            type="button"
+            onClick={() => window.confirm(`Delete the task "${t.title}"? Its comments go with it. This cannot be undone.`) && remove.mutate({ id: t.id })}
+            className="mt-5 text-xs text-[#c03654] hover:underline"
+          >
+            Delete task
+          </button>
+        </div>
+
+        {sourcing && <QuotesReceived salesRequestId={t.salesRequest!.id} />}
+        {sourcing && <RateCardsBox salesRequestId={t.salesRequest!.id} />}
+        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+          <h2 className="text-ink-900 mb-4 text-[15px] font-medium">Status</h2>
+          <TaskStatusSteps status={t.status} pending={setStatus.isPending} onMove={(status) => setStatus.mutate({ id: t.id, status })} />
+          {setStatus.error && <FormError message={friendlyError(setStatus.error)} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ContactDraft = { name: string; role: string; email: string; phone: string };
+type QuickKey = "phone" | "generalEmail" | "website" | "address";
+
+/** One empty contact detail, typed in and saved on Enter or on leaving the box. */
+function QuickField({ propertyId, field, label, placeholder, onSaved }: { propertyId: string; field: QuickKey; label: string; placeholder: string; onSaved: () => void }) {
+  const [value, setValue] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const save = api.property.patch.useMutation({ onSuccess: onSaved, onError: (error) => setProblem(friendlyError(error)) });
+  const commit = () => {
+    const text = value.trim();
+    if (!text || save.isPending) return;
+    if (field === "generalEmail" && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(text)) {
+      setProblem("That email address does not look right.");
+      return;
+    }
+    setProblem(null);
+    save.mutate({ id: propertyId, [field]: text });
+  };
+  return (
+    <span className="block">
+      <input
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setProblem(null);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        disabled={save.isPending}
+        type={field === "generalEmail" ? "email" : "text"}
+        placeholder={save.isPending ? "Saving…" : placeholder}
+        aria-label={label}
+        className="border-ink-200/80 hover:border-ink-300 focus:border-brand-400 placeholder:text-ink-500/60 w-full max-w-sm rounded-md border border-dashed bg-transparent px-2 py-1 text-sm font-light outline-none focus:border-solid focus:bg-white"
+      />
+      {problem && <span className="mt-0.5 block text-xs text-[#c03654]">{problem}</span>}
+    </span>
+  );
+}
+
+/**
+ * How to reach the property, on its hotel contact task (doc §4.11): its
+ * phone, email, website and address, and the people there — changed right
+ * here, and kept on the property. With nothing known yet, a search for it.
+ */
+function PropertyContactDetails({ propertyId, eventId, emailTo }: { propertyId: string; eventId: string; /** Who to email, asked on the call — first. */ emailTo?: React.ReactNode }) {
+  const utils = api.useUtils();
+  const gathering = api.task.gathering.useQuery({ propertyId, eventId });
+  const r = gathering.data?.reach;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ phone: "", email: "", website: "" });
+  const [people, setPeople] = useState<ContactDraft[]>([]);
+  const patch = api.property.patch.useMutation();
+  const setContacts = api.property.setContacts.useMutation();
+  const find = api.property.findContacts.useMutation({ onSuccess: () => void utils.task.gathering.invalidate() });
+  const saving = patch.isPending || setContacts.isPending;
+  const error = patch.error ?? setContacts.error;
+
+  if (!r) return null;
+  const lookup = encodeURIComponent([r.name, r.city].filter(Boolean).join(" "));
+  const nothing = !r.phone && !r.email && !r.website && r.contacts.length === 0;
+
+  const startEditing = () => {
+    setDraft({ phone: r.phone ?? "", email: r.email ?? "", website: r.website ?? "" });
+    setPeople(r.contacts.map((contact) => ({ name: contact.name, role: contact.role ?? "", email: contact.email ?? "", phone: contact.phone ?? "" })));
+    setEditing(true);
+  };
+  const save = async () => {
+    await patch.mutateAsync({ id: propertyId, phone: draft.phone, generalEmail: draft.email, website: draft.website });
+    await setContacts.mutateAsync({ id: propertyId, contacts: people.filter((person) => person.name.trim()) });
+    void utils.task.gathering.invalidate();
+    void utils.property.invalidate();
+    setEditing(false);
+  };
+  // A detail not known yet is a box to type it straight into; once known, Edit changes it.
+  const row = (label: string, value: React.ReactNode, field: QuickKey, placeholder: string) => (
+    <div className="flex items-center gap-3">
+      <dt className="text-ink-500 w-20 shrink-0">{label}</dt>
+      <dd className="text-ink-900 min-w-0 flex-1 break-words">
+        {value || (
+          <QuickField
+            propertyId={propertyId}
+            field={field}
+            label={label}
+            placeholder={placeholder}
+            onSaved={() => {
+              void utils.task.gathering.invalidate();
+              void utils.property.invalidate();
+            }}
+          />
+        )}
+      </dd>
+    </div>
+  );
+
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <StepTitle step={1} hint="Their details, kept on the property">
+          Call the hotel
+        </StepTitle>
+        {!editing && (
+          <span className="flex items-center gap-4">
+            {(!r.phone || !r.email || !r.website) && (
+              <button
+                type="button"
+                disabled={find.isPending}
+                onClick={() => find.mutate({ id: propertyId })}
+                className="text-brand-700 text-[13px] font-light hover:underline disabled:opacity-60"
+              >
+                {find.isPending ? "Looking…" : "Find automatically"}
+              </button>
+            )}
+            <button type="button" onClick={startEditing} className="text-brand-700 text-[13px] font-light hover:underline">
+              Edit
+            </button>
+          </span>
+        )}
+      </div>
+      {emailTo && <div className="mb-4">{emailTo}</div>}
+      {editing ? (
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Phone">
+              <Input value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="+1 818 555 0100" />
+            </Field>
+            <Field label="Email">
+              <Input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="reservations@hotel.com" />
+            </Field>
+            <Field label="Website">
+              <Input value={draft.website} onChange={(e) => setDraft({ ...draft, website: e.target.value })} placeholder="hotel.com" />
+            </Field>
+          </div>
+          <div>
+            <Label>People there</Label>
+            <div className="space-y-2">
+              {people.map((person, index) => {
+                const change = (key: keyof ContactDraft, value: string) => setPeople(people.map((one, i) => (i === index ? { ...one, [key]: value } : one)));
+                return (
+                  <div key={index} className="grid items-center gap-2 sm:grid-cols-[1fr_1fr_1.3fr_1fr_auto]">
+                    <Input value={person.name} onChange={(e) => change("name", e.target.value)} placeholder="Name" aria-label="Name" />
+                    <Input value={person.role} onChange={(e) => change("role", e.target.value)} placeholder="Sales manager" aria-label="Role" />
+                    <Input type="email" value={person.email} onChange={(e) => change("email", e.target.value)} placeholder="name@hotel.com" aria-label="Email" />
+                    <Input value={person.phone} onChange={(e) => change("phone", e.target.value)} placeholder="Phone" aria-label="Phone" />
+                    <button type="button" onClick={() => setPeople(people.filter((_, i) => i !== index))} className="text-xs text-[#c03654] hover:underline">
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
+              <button type="button" onClick={() => setPeople([...people, { name: "", role: "", email: "", phone: "" }])} className="text-brand-700 text-xs font-light hover:underline">
+                + Add a person
+              </button>
+            </div>
+          </div>
+          <FormError message={error ? friendlyError(error) : null} />
+          <div className="flex gap-2">
+            <Button type="button" disabled={saving} onClick={() => void save()}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <dl className="space-y-1.5 text-sm font-light">
+            {row("Phone", r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">{r.phone}</a>, "phone", "Type the phone number")}
+            {row("Email", r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">{r.email}</a>, "generalEmail", "Type the email address")}
+            {row("Website", r.website && <WebsiteLink url={r.website} />, "website", "Paste the website")}
+            {row("Address", r.address, "address", "Type the address")}
+          </dl>
+          {r.contacts.length === 0 && (
+            <button type="button" onClick={startEditing} className="text-brand-700 mt-3 text-xs font-light hover:underline">
+              + Add a person at the property
+            </button>
+          )}
+          {r.contacts.length > 0 && (
+            <ul className="border-ink-200/60 mt-3 space-y-1 border-t pt-3 text-sm font-light">
+              {r.contacts.map((contact) => (
+                <li key={contact.id}>
+                  <span className="text-ink-900 font-medium">{contact.name}</span>
+                  {contact.role && <span className="text-ink-500"> · {contact.role}</span>}
+                  {contact.email && (
+                    <>
+                      {" · "}
+                      <a href={`mailto:${contact.email}`} className="text-brand-700 hover:underline">{contact.email}</a>
+                    </>
+                  )}
+                  {contact.phone && (
+                    <>
+                      {" · "}
+                      <a href={`tel:${contact.phone}`} className="text-brand-700 hover:underline">{contact.phone}</a>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {find.data && (
+            <p className={`mt-3 text-xs font-light ${find.data.found.length ? "text-[#0a7a47]" : "text-ink-500"}`}>
+              {find.data.found.length
+                ? `Found the ${find.data.found.join(" and ")} on ${find.data.from.map((source) => (source === "google" ? "Google Maps" : "its website")).join(" and ")}.`
+                : `Nothing new found${r.website ? " on its website" : " — no website is known for it"}${find.data.googleOn ? " or on Google Maps" : ", and Google Maps search is not switched on for us yet"}.`}
+            </p>
+          )}
+          {(nothing || !r.phone || !r.email) && (
+            <p className="text-ink-500 mt-3 text-xs font-light">
+              {nothing ? "Nothing known yet — look them up: " : "Missing some — look them up: "}
+              <a href={`https://www.google.com/search?q=${lookup}`} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                Google ↗
+              </a>
+              {" · "}
+              <a href={`https://www.google.com/maps/search/?api=1&query=${lookup}`} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                Google Maps ↗
+              </a>
+            </p>
+          )}
+
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Asked on the call (doc §4.11): who at the hotel the request should be
+ * emailed to — prominent, so it is not forgotten. Saved on the task for the
+ * email, and among the hotel's contacts.
+ */
+function EmailToBox({ taskId, name, email }: { taskId: string; name: string | null; email: string | null }) {
+  const utils = api.useUtils();
+  const [editing, setEditing] = useState(!email);
+  const [draft, setDraft] = useState({ name: name ?? "", email: email ?? "" });
+  const save = api.task.setEmailTo.useMutation({
+    onSuccess: () => {
+      setEditing(false);
+      void utils.task.invalidate();
+      void utils.property.invalidate();
+    },
+  });
+  if (!editing && email) {
+    return (
+      <div className="border-brand-200 bg-brand-50/60 flex flex-wrap items-baseline justify-between gap-2 rounded-lg border px-3 py-2.5 text-[13px]">
+        <span>
+          <span className="text-brand-800 mr-2 text-[11px] font-medium tracking-wider uppercase">Email the request to</span>
+          <span className="text-ink-900 font-medium">{name ?? email}</span>
+          {name && <span className="text-ink-700 font-light"> · {email}</span>}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft({ name: name ?? "", email });
+            setEditing(true);
+          }}
+          className="text-brand-700 text-xs font-light hover:underline"
+        >
+          Change
+        </button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="border-brand-300 bg-brand-50/60 rounded-lg border px-3 py-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate({ id: taskId, name: draft.name, email: draft.email });
+      }}
+    >
+      <p className="text-brand-800 text-[13px] font-medium">Ask them on the call: who should we email the request to?</p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
+        <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Their name — Maria Lopez" aria-label="Who to email" />
+        <Input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="Their email — maria@hotel.com" aria-label="Their email" />
+        <span className="flex gap-2">
+          <Button type="submit" disabled={!draft.email.trim() || save.isPending}>
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+          {email && (
+            <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          )}
+        </span>
+      </div>
+      {save.error && <p className="mt-1.5 text-xs text-[#c03654]">{friendlyError(save.error)}</p>}
+    </form>
+  );
+}
+
+/**
+ * Closing a hotel contact task because the hotel cannot help (doc §4.11):
+ * why — no availability, no groups, not interested — and a word if wanted.
+ */
+function CantHelp({ taskId, propertyName }: { taskId: string; propertyName: string }) {
+  const utils = api.useUtils();
+  const [open, setOpen] = useState(false);
+  const [outcome, setOutcome] = useState<ContactOutcome | null>(null);
+  const [note, setNote] = useState("");
+  const close = api.task.cantHelp.useMutation({
+    onSuccess: () => {
+      setOpen(false);
+      void utils.task.invalidate();
+      void utils.update.invalidate();
+      void utils.audit.invalidate();
+      void utils.sales.invalidate();
+    },
+  });
+  return (
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full rounded-full border border-[#f3c4cf] px-4 py-2 text-[13px] font-medium text-[#a3243d] transition-colors hover:bg-[#fdf2f4]"
+      >
+        They can&apos;t help us
+      </button>
+      {open && (
+        <Popup title={`${propertyName} can't help`} subtitle="The task closes with why. The hotel stays on the event for other requests." size="medium" onClose={() => setOpen(false)}>
+          <div className="space-y-2">
+            {contactOutcomeOrder.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setOutcome(option)}
+                aria-pressed={outcome === option}
+                className={`block w-full rounded-xl border px-4 py-3 text-left transition-colors ${
+                  outcome === option ? "border-[#a3243d] bg-[#fdf2f4]" : "border-ink-200 hover:border-ink-400 bg-white"
+                }`}
+              >
+                <span className="text-ink-900 block text-[14px] font-medium">{contactOutcomeLabels[option]}</span>
+                <span className="text-ink-500 block text-xs font-light">{contactOutcomeHints[option]}</span>
+              </button>
+            ))}
+            <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="A note, if useful — 'Full with a federation that week; try again for the Paralympics'" aria-label="Note" />
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            {close.error && <p className="text-xs text-[#c03654]">{friendlyError(close.error)}</p>}
+            <Button type="button" variant="ghost" className="ml-auto" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={!outcome || close.isPending} onClick={() => outcome && close.mutate({ id: taskId, outcome, note })}>
+              {close.isPending ? "Closing…" : "Close the task"}
+            </Button>
+          </div>
+        </Popup>
+      )}
+    </div>
+  );
+}
+
+/** A step's heading on the hotel contact task: its number, what to do, and a word on it. */
+function StepTitle({ step, hint, children }: { step: number; hint?: string; children: React.ReactNode }) {
+  return (
+    <h2 className="text-ink-900 flex items-baseline gap-2 text-[15px] font-medium">
+      <span className="bg-brand-400 inline-flex h-5 w-5 shrink-0 translate-y-[-1px] items-center justify-center self-center rounded-full text-[11px] font-semibold text-white">
+        {step}
+      </span>
+      {children}
+      {hint && <span className="text-ink-500 text-xs font-light">{hint}</span>}
+    </h2>
+  );
+}
+
+/**
+ * Step 2 of a hotel contact task (doc §4.11): after the call, the hotel
+ * usually asks for the request by email. This writes it — the units, dates
+ * and places asked for, never the client's name or budget — with the link to
+ * the hotel's own details form, and opens it in your own mailbox.
+ */
+function EmailTheHotel({
+  taskId,
+  propertyId,
+  salesRequestId,
+  eventName,
+  emailTo,
+}: {
+  taskId: string;
+  propertyId: string;
+  salesRequestId: string | null;
+  eventName: string;
+  /** Who the hotel said to send it to, on the call — they come first. */
+  emailTo: { name: string | null; email: string } | null;
+}) {
+  const utils = api.useUtils();
+  const property = api.property.byId.useQuery({ id: propertyId });
+  const request = api.sales.byId.useQuery({ id: salesRequestId ?? "" }, { enabled: Boolean(salesRequestId) });
+  const [origin, setOrigin] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [shown, setShown] = useState(false);
+  const [pasteHint, setPasteHint] = useState(false);
+  useEffect(() => setOrigin(window.location.origin), []);
+  const make = api.property.makeContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
+  const off = api.property.switchOffContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
+  // Sending it starts the task: it moves to In progress, the hotel to Pending quote.
+  const emailed = api.task.requestEmailed.useMutation({
+    onSuccess: (result) => {
+      if (!result.moved) return;
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
+      void utils.scouting.invalidate();
+    },
+  });
+  const p = property.data;
+  if (!p) {
+    return (
+      <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+        <StepTitle step={2}>Email them the request</StepTitle>
+        <p className="text-ink-500 mt-3 text-sm font-light">…</p>
+      </div>
+    );
+  }
+
+  const linkFor = (token: string | null | undefined) => (token ? `${origin}/property-details/${token}` : null);
+  const link = linkFor(p.contractingToken);
+  const to = emailTo?.email ?? [p.generalEmail, ...p.contacts.map((contact) => contact.email), p.contractEmail].find((email) => email?.trim()) ?? "";
+  const toName = emailTo ? emailTo.name : p.contacts[0]?.name;
+  const greeting = toName ? `Dear ${toName.split(" ")[0]},` : "Hello,";
+  const r = request.data;
+  const lines = (r?.lines ?? []).map(
+    (line) =>
+      `• ${line.rooms} × ${line.roomType ?? "units"}${line.people ? ` (${peopleWords(line.people)})` : ""}${
+        line.checkIn && line.checkOut
+          ? `, ${formatRange(line.checkIn, line.checkOut)} (${nightsBetween(line.checkIn, line.checkOut)} nights)`
+          : line.checkIn
+            ? `, from ${formatDate(line.checkIn)}`
+            : ""
+      }`,
+  );
+  const subject = `Accommodation request — ${eventName} — ${p.name}`;
+  // The email, line by line; LINK marks the sentence whose word "link" goes to the hotel's form.
+  const LINK = "\u0000link";
+  const linkSentence = { before: "If you could please complete your property's information on this ", word: "link", after: ", it will help us prepare." };
+  const emailLines = [
+    greeting,
+    "",
+    `Thank you for your time. As discussed, here is our accommodation request for ${eventName}:`,
+    "",
+    ...(lines.length ? lines : ["• (the rooms and dates we spoke about)"]),
+    "",
+    // What the guests would like with the rooms (doc §4.11) — the hotel prices it in.
+    ...(r && wishesInWords(r).length ? ["Guest preferences:", ...wishesInWords(r).map((wish) => `• ${wish}`), ""] : []),
+    "Could you let us know your availability and rates for these dates?",
+    "",
+    LINK,
+    "",
+    // No name or company: the sender's own email signature follows.
+    "Thank you, and kind regards,",
+  ];
+  const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  /** As formatted text: the word "link" is a hyperlink — what is pasted into the email. */
+  const emailHtml = (target: string) =>
+    emailLines
+      .map((line) =>
+        line === LINK
+          ? `${escapeHtml(linkSentence.before)}<a href="${escapeHtml(target)}">${linkSentence.word}</a>${escapeHtml(linkSentence.after)}`
+          : escapeHtml(line),
+      )
+      .join("<br>");
+  /** As plain text, where nothing can be a hyperlink: the address after the word. */
+  const emailText = (target: string) =>
+    emailLines.map((line) => (line === LINK ? `${linkSentence.before}${linkSentence.word} (${target})${linkSentence.after}` : line)).join("\n");
+
+  // The link is made the first time it is needed, so the email always carries one.
+  const ensureLink = () =>
+    link ? Promise.resolve(link) : make.mutateAsync({ id: propertyId }).then((made) => linkFor(made.contractingToken)!);
+  /** Copies the email as formatted text (plain text alongside, for where formatting is not taken). */
+  const copyEmail = async () => {
+    const target = ensureLink();
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": target.then((t) => new Blob([emailHtml(t)], { type: "text/html" })),
+          "text/plain": target.then((t) => new Blob([emailText(t)], { type: "text/plain" })),
+        }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(emailText(await target));
+    }
+    return target;
+  };
+
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      {/* Folded by default: the heading carries the send button; the email itself opens on request. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <StepTitle step={2} hint={p.contractingSubmittedAt ? "The hotel sent its details back" : link ? "Their details form is out" : undefined}>
+          Email them the request
+        </StepTitle>
+        <span className="flex items-center gap-4 text-[13px]">
+          <button type="button" onClick={() => setShown(!shown)} aria-expanded={shown} className="text-brand-700 font-light hover:underline">
+            {shown ? "Hide the email ▴" : "Show the email ▾"}
+          </button>
+          <button
+            type="button"
+            disabled={make.isPending}
+            onClick={() => {
+              // Copied as formatted text, so "link" is a hyperlink; the mailbox opens addressed, to paste it into.
+              copyEmail()
+                .then(() => {
+                  setPasteHint(true);
+                  setTimeout(() => setPasteHint(false), 15000);
+                  window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}`;
+                })
+                .catch(() =>
+                  // No clipboard (an old browser): the email as plain text, the address in full.
+                  ensureLink().then((target) => {
+                    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailText(target))}`;
+                  }),
+                )
+                .finally(() => emailed.mutate({ id: taskId }));
+            }}
+            className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-1.5 font-medium text-white disabled:opacity-60"
+          >
+            {make.isPending ? "Preparing…" : "Email the request"}
+          </button>
+        </span>
+      </div>
+      {pasteHint && (
+        <p className="bg-brand-50 text-brand-800 mt-3 rounded-lg px-3 py-2 text-[13px]">
+          The email is copied — paste it into the message (⌘V, or Ctrl+V), then send. The word &ldquo;link&rdquo; goes to their details form.
+        </p>
+      )}
+      {shown && (
+        <>
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            Subject: <span className="text-ink-700">{subject}</span>
+          </p>
+          <div className="bg-ink-50/60 text-ink-700 mt-1 max-h-72 overflow-y-auto rounded-lg px-3 py-2.5 text-[13px] font-light whitespace-pre-wrap">
+            {emailLines.map((line, index) => (
+              <span key={index} className="block min-h-[1.25em]">
+                {line === LINK ? (
+                  <>
+                    {linkSentence.before}
+                    <a href={link ?? undefined} target="_blank" rel="noreferrer" className="text-brand-700 underline" title={link ?? "Made when the email is sent"}>
+                      {linkSentence.word}
+                    </a>
+                    {linkSentence.after}
+                  </>
+                ) : (
+                  line
+                )}
+              </span>
+            ))}
+          </div>
+          {!to && <p className="text-ink-500 mt-2 text-xs font-light">No email is known for the hotel — add one in step 1, or copy the email.</p>}
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            <button
+              type="button"
+              onClick={() =>
+                void copyEmail().then(() => {
+                  emailed.mutate({ id: taskId });
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                })
+              }
+              className="text-brand-700 mr-3 text-[13px] hover:underline"
+            >
+              {copied ? "Copied" : "Copy the email"}
+            </button>
+            {p.contractingSubmittedAt
+              ? `The hotel sent its details through the form on ${formatDate(p.contractingSubmittedAt)}. `
+              : link
+                ? "The hotel's details form is out, not sent back yet. "
+                : "The email carries a link to a form where the hotel checks and completes its details — not rates. "}
+            {link && (
+              <>
+                <a href={link} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                  See what the hotel sees ↗
+                </a>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => window.confirm("Switch the link off? It will open nothing any more; what the hotel sent stays.") && off.mutate({ id: propertyId })}
+                  className="text-[#c03654] hover:underline"
+                >
+                  Switch the link off
+                </button>
+              </>
+            )}
+          </p>
+        </>
+      )}
+      {make.error && <FormError message={friendlyError(make.error)} />}
+    </div>
+  );
+}
+
+/**
+ * All of a hotel's details in a popup over its contact task (doc §4.11), so
+ * nobody leaves the task to fill them in: the same form the hotel gets by its
+ * link — contracting details too — saved on the property in one go.
+ */
+function HotelDetailsPopup({ propertyId, propertyName, onClose }: { propertyId: string; propertyName: string; onClose: () => void }) {
+  return (
+    <Popup
+      title={propertyName}
+      subtitle="Its details — everything but rates. Saved on the property."
+      aside={
+        <Link href={`/properties/${propertyId}`} className="text-brand-700 text-[13px] font-light hover:underline">
+          Open the property
+        </Link>
+      }
+      onClose={onClose}
+    >
+      <HotelDetailsForm propertyId={propertyId} onSaved={onClose} />
+    </Popup>
+  );
+}
+
+/**
+ * Step 3 of a hotel contact task (doc §4.11): the hotel answers the email
+ * with a quote, registered here in a popup — the task stays open — and saved
+ * on the property's Quotations tab, tied to the task's sales request.
+ */
+function TheirQuote({ propertyId, propertyName, eventId, salesRequestId }: { propertyId: string; propertyName: string; eventId: string; salesRequestId: string | null }) {
+  const gathering = api.task.gathering.useQuery({ propertyId, eventId });
+  const entryId = gathering.data?.entryId ?? null;
+  const quotes = api.quotation.forEntry.useQuery({ scoutingEntryId: entryId ?? "" }, { enabled: Boolean(entryId) });
+  const [open, setOpen] = useState(false);
+  const list = quotes.data ?? [];
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <StepTitle step={3} hint={list.length ? `${list.length} in` : "When they reply"}>
+          Register their quote
+        </StepTitle>
+        {entryId && (
+          <button type="button" onClick={() => setOpen(true)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
+            {list.length ? "+ Another quote" : "+ Register their quote"}
+          </button>
+        )}
+      </div>
+      {list.length === 0 ? (
+        <p className="text-ink-500 mt-2 text-xs font-light">
+          {entryId
+            ? `Once ${propertyName} replies with rooms and rates, put the quote in here — it goes on the property's Quotations tab${salesRequestId ? ", for this request" : ""}.`
+            : `${propertyName} is not on the event's list, so a quote cannot be registered for it yet.`}
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-1.5">
+          {list.map((quote) => (
+            <li key={quote.id} className="bg-brand-50/60 flex flex-wrap items-baseline justify-between gap-x-3 rounded-lg px-3 py-2 text-[13px]">
+              <span className="min-w-0">
+                <span className="text-ink-900 font-medium">{quote.name}</span>
+                {quote.salesRequest && <span className="text-brand-700 ml-2 text-xs">For {quote.salesRequest.client.name}</span>}
+                <span className="text-ink-500 block text-xs font-light">
+                  {[quote.from && quote.to ? formatRange(quote.from, quote.to) : null, `${quote.roomNights} room-nights`, quote.rooms ? `${quote.rooms} rooms` : null]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </span>
+              <span className="text-ink-900 font-semibold whitespace-nowrap">{formatMoney(quote.totalCents, quote.currency)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {list.length > 0 && (
+        <Link href={`/properties/${propertyId}?back=${encodeURIComponent(`/events/${eventId}`)}#quotations`} className="text-brand-700 mt-2 inline-block text-xs hover:underline">
+          Open them on the Quotations tab →
+        </Link>
+      )}
+      {open && entryId && (
+        <QuotationPopup
+          scoutingEntryId={entryId}
+          forRequestId={salesRequestId}
+          onClose={() => {
+            setOpen(false);
+            void quotes.refetch();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A hotel contact task (doc §4.11): how to reach the property, and what is to
+ * be found out — each ticked once it is on the property, its terms for the
+ * event or a quotation, where the team fills it in.
+ */
+function HotelContactChecklist({ propertyId, propertyName, eventId, eventName }: { propertyId: string; propertyName: string; eventId: string; eventName: string }) {
+  const utils = api.useUtils();
+  const gathering = api.task.gathering.useQuery({ propertyId, eventId });
+  const [terms, setTerms] = useState(false);
+  const [details, setDetails] = useState(false);
+  const g = gathering.data;
+  const done = g ? g.items.filter((item) => item.ok).length : 0;
+  const back = encodeURIComponent(`/events/${eventId}`);
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <div className="mb-1 flex items-baseline justify-between gap-3">
+        <StepTitle step={4}>What to find out</StepTitle>
+        {g && (
+          <span className="text-ink-500 text-xs font-light">
+            {done} of {g.items.length} in
+          </span>
+        )}
+      </div>
+      <p className="text-ink-500 mb-3 text-xs font-light">
+        Reach out to {propertyName}. Each item is ticked once it is on the property — rooms and amenities on its page, terms for {eventName} in its terms, the
+        rate as a quotation.
+      </p>
+      {!g ? (
+        <p className="text-ink-500 text-sm font-light">{gathering.isLoading ? "…" : "The property is no longer there."}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {g.items.map((item) => (
+            <li key={item.key} className="flex items-baseline gap-2.5 text-[13px]">
+              <span
+                className={`inline-flex h-4 w-4 shrink-0 translate-y-0.5 items-center justify-center rounded-full text-[10px] ${item.ok ? "bg-[#0a7a47] text-white" : "border-ink-200 border"}`}
+                aria-label={item.ok ? "In" : "Not yet"}
+              >
+                {item.ok ? "✓" : ""}
+              </span>
+              <span className={item.ok ? "text-ink-900" : "text-ink-700"}>{item.label}</span>
+              <span className={`ml-auto text-xs font-light whitespace-nowrap ${item.ok ? "text-[#0a7a47]" : "text-ink-500"}`}>{item.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {g && done === g.items.length && <p className="mt-3 text-[13px] font-medium text-[#0a7a47]">Everything is in — mark the task done when you are happy with it.</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" onClick={() => setDetails(true)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
+          Hotel details
+        </button>
+        <Link
+          href={`/properties/${propertyId}?back=${back}#quotations`}
+          className="border-ink-200 text-ink-700 hover:border-brand-400 rounded-full border bg-white px-4 py-2 text-[13px] font-light"
+        >
+          Quotations →
+        </Link>
+        {g?.entryId && (
+          <button
+            type="button"
+            onClick={() => setTerms(true)}
+            className="border-ink-200 text-ink-700 hover:border-brand-400 rounded-full border bg-white px-4 py-2 text-[13px] font-light"
+          >
+            Terms for {eventName}
+          </button>
+        )}
+      </div>
+      {details && (
+        <HotelDetailsPopup
+          propertyId={propertyId}
+          propertyName={propertyName}
+          onClose={() => {
+            setDetails(false);
+            void utils.task.gathering.invalidate();
+          }}
+        />
+      )}
+      {terms && g?.entryId && (
+        <PropertyEntryPanel
+          entryId={g.entryId}
+          onClose={() => {
+            setTerms(false);
+            void utils.task.gathering.invalidate();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * What the client asked, on a sourcing task (doc §4.11) — read from the
+ * sales request itself, so it is always the latest: each line large, its
+ * dates beneath; then the budget, the places and the client's words.
+ */
+function ClientRequest({ salesRequestId }: { salesRequestId: string }) {
+  const request = api.sales.byId.useQuery({ id: salesRequestId });
+  const r = request.data;
+  if (!r) return <p className="text-ink-500 mb-4 text-sm font-light">{request.isLoading ? "…" : "The sales request is no longer there."}</p>;
+  const places = [...r.closeTo.map((place) => place.name), ...r.closeToPoints.map((point) => point.label), r.closeToOther].filter(Boolean) as string[];
+  return (
+    <div className="border-brand-200 bg-brand-50/50 mb-4 rounded-lg border px-4 py-3">
+      <p className="text-brand-800 mb-2 text-[11px] font-medium tracking-wider uppercase">What the client asked</p>
+      {r.lines.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">No units given yet.</p>
+      ) : (
+        <ul className="space-y-2.5">
+          {r.lines.map((line) => (
+            <li key={line.id}>
+              <span className="text-ink-900 block text-[15px] font-semibold">
+                {line.rooms} × {line.roomType ?? "units"}
+              </span>
+              <span className="text-ink-500 block text-xs font-light">
+                {[
+                  line.checkIn && line.checkOut
+                    ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
+                    : line.checkIn
+                      ? `From ${formatDate(line.checkIn)}`
+                      : "Dates not given",
+                  peopleWords(line.people),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(r.budgetCents !== null || places.length > 0 || r.clientComments || wishes(r).length > 0) && (
+        <div className="border-brand-200/70 mt-3 space-y-2 border-t pt-3 text-sm font-light">
+          {r.budgetCents !== null && r.budgetCurrency && (
+            <p>
+              <span className="text-ink-500">Budget </span>
+              <span className="text-ink-900 font-medium">{formatMoney(r.budgetCents, r.budgetCurrency)}</span>
+              {r.budgetBasis && <span className="text-ink-500"> {budgetBasisWords[r.budgetBasis]}</span>}
+            </p>
+          )}
+          {places.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-ink-500">Close to</span>
+              {places.map((place) => (
+                <span key={place} className="bg-ink-900 rounded-full px-2.5 py-0.5 text-xs text-white">
+                  {place}
+                </span>
+              ))}
+            </div>
+          )}
+          {wishes(r).map((wish) => (
+            <p key={wish.label}>
+              <span className="text-ink-500">{wish.label} </span>
+              <span className="text-ink-900 font-medium">{wish.value}</span>
+            </p>
+          ))}
+          {r.clientComments && <p className="text-ink-700 italic">“{r.clientComments}”</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const budgetBasisWords = { PER_ROOM_NIGHT: "per room per night", PER_PERSON_NIGHT: "per person per night", TOTAL: "in total" } as const;
+
+const nextMove: Record<TaskStatus, { to: TaskStatus; label: string } | null> = {
+  BACKLOG: { to: "TODO", label: "Move to To do" },
+  TODO: { to: "IN_PROGRESS", label: "Start it" },
+  IN_PROGRESS: { to: "DONE", label: "Mark done" },
+  DONE: null,
+};
+
+/**
+ * Where a task stands (doc §2.8), as steps — passed ones ticked, the current
+ * one marked, each a click away — with the next move as one button.
+ */
+function TaskStatusSteps({ status, pending, onMove }: { status: TaskStatus; pending: boolean; onMove: (status: TaskStatus) => void }) {
+  const at = taskStatusOrder.indexOf(status);
+  const done = status === "DONE";
+  const next = nextMove[status];
+  return (
+    <div>
+      <ol className="flex items-start">
+        {taskStatusOrder.map((step, index) => {
+          const passed = index < at || done;
+          const current = index === at;
+          const last = index === taskStatusOrder.length - 1;
+          return (
+            <li key={step} className={`flex items-start ${last ? "" : "flex-1"}`}>
+              <button
+                type="button"
+                onClick={() => !current && onMove(step)}
+                disabled={pending}
+                title={taskStatusHints[step]}
+                aria-current={current ? "step" : undefined}
+                className="group flex w-16 shrink-0 flex-col items-center gap-1.5 text-center"
+              >
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[12px] font-semibold transition-colors ${
+                    done
+                      ? "border-[#0a7a47] bg-[#0a7a47] text-white"
+                      : current
+                        ? "border-brand-400 bg-brand-400 text-white"
+                        : passed
+                          ? "border-brand-400 text-brand-700 bg-white"
+                          : "border-ink-200 group-hover:border-brand-300 text-ink-400 bg-white"
+                  }`}
+                >
+                  {passed && !current ? "✓" : done ? "✓" : index + 1}
+                </span>
+                <span className={`text-[11px] leading-tight ${current ? "text-ink-900 font-medium" : passed ? "text-ink-700" : "text-ink-400 group-hover:text-ink-700"}`}>
+                  {taskStatusLabels[step]}
+                </span>
+              </button>
+              {!last && (
+                <span
+                  aria-hidden
+                  className={`mt-3.5 h-0.5 min-w-2 flex-1 rounded ${index < at || done ? (done ? "bg-[#0a7a47]" : "bg-brand-400") : "bg-ink-200"}`}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-ink-500 text-xs font-light">{taskStatusHints[status]}</p>
+        {next ? (
+          <Button type="button" disabled={pending} onClick={() => onMove(next.to)} className="shrink-0 whitespace-nowrap">
+            {next.label} →
+          </Button>
+        ) : (
+          <Button type="button" variant="secondary" disabled={pending} onClick={() => onMove("IN_PROGRESS")} className="shrink-0">
+            Reopen
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TaskComments({ taskId }: { taskId: string }) {
+  const utils = api.useUtils();
+  const comments = api.task.comments.useQuery({ taskId });
+  const people = api.user.list.useQuery();
+  const me = api.user.me.useQuery();
+  const [body, setBody] = useState("");
+  const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
+  const refresh = () => {
+    void utils.task.comments.invalidate({ taskId });
+    void utils.task.list.invalidate();
+  };
+  const post = api.task.comment.useMutation({
+    onSuccess: () => {
+      setBody("");
+      refresh();
+    },
+  });
+  const edit = api.task.editComment.useMutation({
+    onSuccess: () => {
+      setEditing(null);
+      refresh();
+    },
+  });
+  return (
+    <div className="space-y-4">
+      <div>
+        <MentionTextarea value={body} onChange={setBody} people={people.data ?? []} placeholder="Write a comment — @ to mention a colleague" rows={body ? 3 : 1} />
+        {(body || post.error) && (
+          <div className="mt-2 flex items-center justify-end gap-3">
+            {post.error && <p className="mr-auto text-xs text-[#c03654]">{post.error.message}</p>}
+            <Button type="button" disabled={!body.trim() || post.isPending} onClick={() => post.mutate({ taskId, body })}>
+              {post.isPending ? "Posting…" : "Post comment"}
+            </Button>
+          </div>
+        )}
+      </div>
+      {(comments.data ?? []).length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">No comments yet.</p>
+      ) : (
+        <ul className="space-y-3">
+          {(comments.data ?? []).map((comment) => (
+            <li key={comment.id} className="border-ink-200/60 rounded-lg border p-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-ink-900 text-[13px] font-medium">{comment.author?.name ?? comment.author?.email ?? "—"}</span>
+                <span className="text-ink-500 flex items-baseline gap-3 text-xs font-light whitespace-nowrap">
+                  {comment.author?.id === me.data?.id && editing?.id !== comment.id && (
+                    <button type="button" onClick={() => setEditing({ id: comment.id, body: comment.body })} className="hover:text-brand-700">
+                      Edit
+                    </button>
+                  )}
+                  {formatMomentInWords(comment.createdAt)}
+                </span>
+              </div>
+              {editing?.id === comment.id ? (
+                <div className="mt-2">
+                  <MentionTextarea value={editing.body} onChange={(value) => setEditing({ id: comment.id, body: value })} people={people.data ?? []} rows={3} />
+                  <div className="mt-2 flex justify-end gap-2">
+                    <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
+                    <Button type="button" disabled={!editing.body.trim() || edit.isPending} onClick={() => edit.mutate(editing)}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-ink-700 mt-1 text-sm font-light whitespace-pre-line">{renderUpdateBody(comment.body)}</p>
+                  {comment.editedAt && <p className="text-ink-500 mt-1 text-[11px] font-light italic">Edited {formatMomentInWords(comment.editedAt)}</p>}
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// --- My work -----------------------------------------------------------------
+
+/** On your profile: what is yours to complete, and what you asked others for. */
+export function MyWork() {
+  const me = api.user.me.useQuery();
+  const id = me.data?.id;
+  const mine = api.task.list.useQuery({ assigneeId: id, doneWithinDays: 7 }, { enabled: Boolean(id) });
+  const asked = api.task.list.useQuery({ requestedById: id, doneWithinDays: 7 }, { enabled: Boolean(id) });
+  const open = (mine.data ?? []).filter((task) => task.status !== "DONE");
+  const askedOpen = (asked.data ?? []).filter((task) => task.status !== "DONE" && !task.assignees.some((person) => person.id === id));
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="text-ink-900 text-[15px] font-medium">
+            My work{open.length > 0 && <span className="text-ink-500 ml-1.5 text-xs font-light">{open.length} open</span>}
+          </h2>
+          <Link href="/tasks" className="text-brand-700 text-[13px] font-light hover:underline">
+            The task board →
+          </Link>
+        </div>
+        {open.length === 0 ? (
+          <p className="text-ink-500 text-sm font-light">{mine.isLoading ? "…" : "Nothing for you to complete right now."}</p>
+        ) : (
+          <TaskTable tasks={open} compact />
+        )}
+      </div>
+      {askedOpen.length > 0 && (
+        <div>
+          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
+            Asked of others<span className="text-ink-500 ml-1.5 text-xs font-light">{askedOpen.length} open</span>
+          </h2>
+          <TaskTable tasks={askedOpen} compact />
+        </div>
+      )}
+    </div>
+  );
+}

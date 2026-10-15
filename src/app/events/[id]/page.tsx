@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AddToList } from "~/app/_components/add-to-list";
@@ -21,10 +20,7 @@ export default async function EventPropertiesPage({
   if (!session?.user) redirect("/signin");
 
   const { id } = await params;
-  const [event, amenities] = await Promise.all([
-    api.event.byId({ id }),
-    api.amenity.list(),
-  ]);
+  const event = await api.event.byId({ id });
 
   if (!event) notFound();
 
@@ -35,6 +31,11 @@ export default async function EventPropertiesPage({
     name: place.name,
     category: place.category,
     lines: place.lines,
+    layerId: place.layerId,
+    color: place.layer?.color ?? null,
+    layerName: place.layer?.name ?? null,
+    notes: place.notes,
+    measured: place.layer ? place.layer.measured : place.category === "VENUE",
     latitude: place.latitude,
     longitude: place.longitude,
   }));
@@ -49,35 +50,14 @@ export default async function EventPropertiesPage({
         }`}
         action={
           <div className="flex items-start gap-2">
-            <Link
-              href={`/events/${event.id}/edit`}
-              className="border-ink-200 text-ink-700 hover:bg-ink-50 inline-flex rounded-full border bg-white px-5 py-2.5 text-[13px] font-light transition-colors"
-            >
-              Edit
-            </Link>
-            <AddToList eventId={event.id} />
+            <AddToList eventId={event.id} eventName={event.name} />
           </div>
         }
       />
 
       <EventTabs eventId={event.id} />
 
-      <p className="text-ink-500 mb-4 text-[13px] font-light">
-        {places.length === 0 ? (
-          <>No places of interest yet, so distances and travel times cannot be measured. </>
-        ) : (
-          <>
-            Distances are measured to:{" "}
-            <span className="text-ink-700">{places.map((place) => place.name).join(", ")}</span>
-            {" · "}
-          </>
-        )}
-        <Link href={`/events/${event.id}/edit#places`} className="text-brand-700 hover:underline">
-          {places.length === 0 ? "Add places of interest" : "Change places of interest"}
-        </Link>
-      </p>
-
-      <ScoutingList eventId={event.id} places={places} amenities={amenities} />
+      <ScoutingList eventId={event.id} places={places} layers={event.mapLayers} />
 
       <Card className="mt-8">
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">

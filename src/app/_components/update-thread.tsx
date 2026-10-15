@@ -1,33 +1,62 @@
 "use client";
 
+import type { UpdateKind } from "generated/prisma";
 import { useState } from "react";
 
-import { Button } from "~/app/_components/form";
+import { Button, Input } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
-import { formatDay, formatMomentInWords } from "~/lib/format";
-import { renderUpdateBody } from "~/lib/updates";
+import { Popup } from "~/app/_components/popup";
+import { dayKey, today } from "~/lib/dates";
+import { formatDate, formatDay, formatMomentInWords } from "~/lib/format";
+import { composeBody, isHeading, updateKindOrder, updateKinds } from "~/lib/update-kinds";
+import { MENTION_PATTERN, renderUpdateBody } from "~/lib/updates";
 import { api } from "~/trpc/react";
 
 type Scope = { propertyId: string; clientId?: undefined } | { clientId: string; propertyId?: undefined };
 
 /**
- * The Feedback feed (doc §2.6; called Updates until 2026-10-01): a running history of meeting notes and
+ * The Updates feed (doc §2.6; called Feedback from 2026-10-01 to 2026-10-06): a running history of meeting notes and
  * feedback on a property or a client, with @mentions of colleagues. Newest
- * first, same convention as the inventory ledger; only the latest shows
- * until "View more" opens the rest. An author can edit their
+ * first, same convention as the inventory ledger; each update one line —
+ * its kind, who, when and how it begins — opened on its own with Read more. An author can edit their
  * own post, which then says it was edited, and when.
  */
+/** A body's mentions as a reader sees them: "@[Ami Rossi]" → "@Ami Rossi". */
+const plainMentions = (text: string) => text.replace(MENTION_PATTERN, "@$1");
+
 export function UpdateThread(scope: Scope) {
   const utils = api.useUtils();
   const updates = api.update.list.useQuery(scope);
   const people = api.user.list.useQuery();
   const me = api.user.me.useQuery();
   const [body, setBody] = useState("");
+  // The box is a note; the other kinds open their template in a popup (doc §2.6).
+  const [form, setForm] = useState<UpdateKind | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [happenedOn, setHappenedOn] = useState(dayKey(today()));
+  const kinds = updateKindOrder.filter((option) => !updateKinds[option].propertyOnly || scope.propertyId);
+  const template = form ? updateKinds[form] : null;
+  const composed = form ? composeBody(form, answers) : "";
+  const closeForm = () => {
+    if (composed.trim() && !window.confirm("Close without posting? What you wrote is lost.")) return;
+    setForm(null);
+    setAnswers({});
+    post.reset();
+  };
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   // Only the latest shows until asked: the feed only grows.
-  const [showAll, setShowAll] = useState(false);
-  const shown = showAll ? updates.data : updates.data?.slice(0, 1);
-  const earlier = (updates.data?.length ?? 0) - 1;
+  // Every update as one line — its kind, who, when and how it begins — each opened on its own.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(10);
+  const shown = updates.data?.slice(0, limit);
+  const more = (updates.data?.length ?? 0) - limit;
+  const toggle = (id: string) =>
+    setOpen((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const edit = api.update.edit.useMutation({
     onSuccess: () => {
@@ -39,6 +68,8 @@ export function UpdateThread(scope: Scope) {
   const post = api.update.post.useMutation({
     onSuccess: () => {
       setBody("");
+      setAnswers({});
+      setForm(null);
       void utils.update.list.invalidate(scope);
     },
   });
@@ -50,36 +81,111 @@ export function UpdateThread(scope: Scope) {
           value={body}
           onChange={setBody}
           people={people.data ?? []}
-          placeholder="Write feedback — @ to mention a colleague"
+          placeholder="Write an update — @ to mention a colleague"
           // One line until something is typed, so an empty box takes no room.
           rows={body ? 3 : 1}
         />
-        {(body || post.error) && (
-        <div className="mt-2 flex items-center justify-between gap-3">
-          {post.error && (
-            <p className="text-xs text-[#c03654]">{post.error.message}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          {/* The other kinds, each a form in a popup; all land in the one feed below. */}
+          <span className="flex flex-wrap items-center gap-1.5">
+            {kinds
+              .filter((option) => option !== "NOTE")
+              .map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => {
+                    post.reset();
+                    setHappenedOn(dayKey(today()));
+                    setForm(option);
+                  }}
+                  className="border-ink-200 text-ink-700 hover:border-brand-400 hover:text-brand-700 rounded-full border bg-white px-3 py-1 text-xs transition-colors"
+                >
+                  + {updateKinds[option].label}
+                </button>
+              ))}
+          </span>
+          {!form && post.error && <p className="text-xs text-[#c03654]">{post.error.message}</p>}
+          {body.trim() && (
+            <Button type="button" className="ml-auto" disabled={post.isPending} onClick={() => post.mutate({ ...scope, body, kind: "NOTE" })}>
+              {post.isPending ? "Posting…" : "Post update"}
+            </Button>
           )}
-          <Button
-            type="button"
-            className="ml-auto"
-            disabled={!body.trim() || post.isPending}
-            onClick={() => post.mutate({ ...scope, body })}
-          >
-            {post.isPending ? "Posting…" : "Post feedback"}
-          </Button>
         </div>
-        )}
       </div>
 
+      {form && template && (
+        <Popup title={template.label} subtitle="Shows in the updates with the rest." size="medium" onClose={closeForm}>
+          <div className="border-ink-200/60 space-y-3 rounded-xl border bg-white p-5">
+            <label className="flex items-center gap-2 text-[13px]">
+              <span className="text-ink-700 font-medium">{template.short} on</span>
+              <span className="w-40">
+                <Input type="date" value={happenedOn} onChange={(e) => setHappenedOn(e.target.value)} aria-label="When it took place" />
+              </span>
+            </label>
+            {template.sections.map((section, index) => (
+              <div key={section.heading}>
+                <span className="text-ink-700 mb-1 block text-[13px] font-medium">{section.heading}</span>
+                <MentionTextarea
+                  value={answers[section.heading] ?? ""}
+                  onChange={(value) => setAnswers((current) => ({ ...current, [section.heading]: value }))}
+                  people={people.data ?? []}
+                  placeholder={section.placeholder}
+                  rows={2}
+                  autoFocus={index === 0}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            {post.error && <p className="text-xs text-[#c03654]">{post.error.message}</p>}
+            <Button type="button" variant="ghost" className="ml-auto" onClick={closeForm}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!composed.trim() || post.isPending}
+              onClick={() => post.mutate({ ...scope, body: composed, kind: form, happenedOn: happenedOn || undefined })}
+            >
+              {post.isPending ? "Posting…" : `Post ${template.label.toLowerCase()}`}
+            </Button>
+          </div>
+        </Popup>
+      )}
+
       {updates.data && updates.data.length > 0 ? (
-        <ul className="space-y-3">
-          {shown!.map((entry) => (
-            <li key={entry.id} className="border-ink-200/60 rounded-lg border p-3">
+        <ul className="space-y-1.5">
+          {shown!.map((entry) => {
+            const isOpen = open.has(entry.id) || editing?.id === entry.id;
+            const lines = entry.body.split("\n").filter((line) => line.trim() && !isHeading(entry.kind, line));
+            const preview = plainMentions(lines[0] ?? "");
+            const longer = lines.length > 1 || preview.length > 90;
+            return (
+            <li key={entry.id} className="border-ink-200/60 rounded-lg border px-3 py-2.5">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-ink-900 text-[13px] font-medium">
-                  {entry.author?.name ?? entry.author?.email ?? "—"}
+                <span className="flex min-w-0 flex-1 items-baseline gap-x-2">
+                  {entry.kind !== "NOTE" && (
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${updateKinds[entry.kind].badge}`}>{updateKinds[entry.kind].label}</span>
+                  )}
+                  <span className="text-ink-900 text-[13px] font-medium">{entry.author?.name ?? entry.author?.email ?? "—"}</span>
+                  {entry.happenedOn && (
+                    <span className="text-ink-500 shrink-0 text-xs font-light whitespace-nowrap">
+                      {updateKinds[entry.kind].short} on {formatDate(entry.happenedOn)}
+                    </span>
+                  )}
+                  {!isOpen && (
+                    <span className="text-ink-700 min-w-0 truncate text-[13px] font-light" title={preview}>
+                      {entry.kind !== "NOTE" || entry.happenedOn ? "— " : ""}
+                      {preview}
+                    </span>
+                  )}
                 </span>
-                <span className="text-ink-500 flex items-baseline gap-3 text-xs font-light whitespace-nowrap">
+                <span className="text-ink-500 flex shrink-0 items-baseline gap-3 text-xs font-light whitespace-nowrap">
+                  {(longer || isOpen) && editing?.id !== entry.id && (
+                    <button type="button" onClick={() => toggle(entry.id)} className="text-brand-700 hover:underline">
+                      {isOpen ? "Show less" : "Read more"}
+                    </button>
+                  )}
                   {entry.author?.id === me.data?.id && editing?.id !== entry.id && (
                     <button
                       type="button"
@@ -121,10 +227,26 @@ export function UpdateThread(scope: Scope) {
                   </div>
                 </div>
               ) : (
+                isOpen && (
                 <>
-                  <p className="text-ink-700 mt-1 text-sm font-light whitespace-pre-line">
-                    {renderUpdateBody(entry.body)}
-                  </p>
+                  {entry.kind === "NOTE" ? (
+                    <p className="text-ink-700 mt-1 text-sm font-light whitespace-pre-line">{renderUpdateBody(entry.body)}</p>
+                  ) : (
+                    // A template: each heading shown as one, its answer beneath.
+                    <div className="mt-1.5 space-y-0.5 text-sm font-light">
+                      {entry.body.split("\n").map((line, index) =>
+                        isHeading(entry.kind, line) ? (
+                          <p key={index} className="text-ink-900 pt-1.5 text-[12px] font-medium first:pt-0">
+                            {line}
+                          </p>
+                        ) : (
+                          <p key={index} className="text-ink-700 min-h-[0.5rem] whitespace-pre-line">
+                            {renderUpdateBody(line)}
+                          </p>
+                        ),
+                      )}
+                    </div>
+                  )}
                   {entry.editedAt && (
                     <p
                       className="text-ink-500 mt-1 text-[11px] font-light italic"
@@ -134,23 +256,21 @@ export function UpdateThread(scope: Scope) {
                     </p>
                   )}
                 </>
+                )
               )}
             </li>
-          ))}
-          {earlier > 0 && (
+            );
+          })}
+          {more > 0 && (
             <li>
-              <button
-                type="button"
-                onClick={() => setShowAll((current) => !current)}
-                className="text-brand-700 text-[13px] font-light hover:underline"
-              >
-                {showAll ? "Show only the latest" : `View more — ${earlier} earlier`}
+              <button type="button" onClick={() => setLimit((current) => current + 10)} className="text-brand-700 text-[13px] font-light hover:underline">
+                Show {Math.min(10, more)} older
               </button>
             </li>
           )}
         </ul>
       ) : (
-        <p className="text-ink-500 text-sm font-light">No feedback yet.</p>
+        <p className="text-ink-500 text-sm font-light">No updates yet.</p>
       )}
     </div>
   );

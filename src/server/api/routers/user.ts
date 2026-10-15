@@ -39,6 +39,7 @@ const profileSelect = {
   customStatusEmoji: true,
   customStatusText: true,
   customStatusUntil: true,
+  eventStartTab: true,
   phones: {
     orderBy: { position: "asc" },
     select: { id: true, number: true, kind: true },
@@ -71,6 +72,14 @@ export const userRouter = createTRPCRouter({
     });
     return withStatus(me);
   }),
+
+  /** The tab events open on for them (doc §3.10): Properties ("") or another. */
+  setEventStartTab: protectedProcedure
+    .input(z.object({ tab: z.enum(["", "inventory", "deadlines", "position", "details"]) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.user.update({ where: { id: ctx.session.user.id }, data: { eventStartTab: input.tab || null } });
+      return { ok: true };
+    }),
 
   /** "I am still here" — sent by an open tab while its person is using it. */
   heartbeat: protectedProcedure.mutation(async ({ ctx }) => {

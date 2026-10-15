@@ -2,9 +2,11 @@
 
 import type { PropertyType } from "generated/prisma";
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
-import { Button, Field, FormError, friendlyError, Input, Select } from "~/app/_components/form";
+import { Button, Field, FormError, friendlyError, Input } from "~/app/_components/form";
+import { InfoTip } from "~/app/_components/info-tip";
+import { WebsiteLink } from "~/app/_components/website-link";
 import { LocationPreview } from "~/app/_components/location-preview";
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { ProviderPicker } from "~/app/_components/property-form";
@@ -15,7 +17,7 @@ import {
   propertyServiceFields,
   type Contracting,
 } from "~/lib/contracting";
-import { formatMoneyRange } from "~/lib/format";
+import { formatDate, formatMoneyRange, formatRange } from "~/lib/format";
 import { api } from "~/trpc/react";
 
 /**
@@ -58,6 +60,19 @@ export type PropertyForCards = Contracting &
     contacts: Contact[];
     amenities: { id: string; label: string }[];
     categories: Category[];
+    name?: string;
+    /** The hotel's own contracting-details form, by link (doc §3.9). */
+    contractingToken?: string | null;
+    contractingLinkMadeAt?: Date | null;
+    contractingSubmittedAt?: Date | null;
+    /** Each event it is on, with each category's event rate (doc §3.9). */
+    eventRates?: {
+      eventId: string;
+      eventName: string;
+      startDate: Date;
+      endDate: Date;
+      byCategory: Record<string, { minCents: number; maxCents: number; currency: string; from: "agreed" | "quotation"; label: string; wholeEvent: boolean }>;
+    }[];
   };
 
 /**
@@ -290,7 +305,7 @@ function filledOf(property: object, keys: string[]) {
   return filled ? `${filled} of ${keys.length} filled` : null;
 }
 
-function Row({ label, value }: { label: string; value?: string | null }) {
+function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
     <div className="flex gap-3" data-empty={value == null || value === "" ? "" : undefined}>
       <dt className="text-ink-500 w-28 shrink-0">{label}</dt>
@@ -349,7 +364,7 @@ export function WhereItIsCard({ property, totalLabel }: { property: PropertyForC
         />
         <Row label="Total" value={totalLabel} />
         <Row label="Phone" value={property.phone} />
-        <Row label="Website" value={property.website} />
+        <Row label="Website" value={property.website ? <WebsiteLink url={property.website} /> : null} />
       </dl>
     </EditableCard>
   );
@@ -390,10 +405,11 @@ export function MoreAboutCard({ property, backTo }: { property: PropertyForCards
 }
 
 export function ContractingCard({ property }: { property: PropertyForCards }) {
+  const filled = filledOf(property, contractingFields.map((field) => field.key));
   return (
     <EditableCard
       title="Contracting details"
-      summary={filledOf(property, contractingFields.map((field) => field.key)) ?? (property.provider ? `from ${property.provider.name}` : "none recorded")}
+      summary={filled ?? (property.provider ? `from ${property.provider.name}` : "none recorded")}
       editor={(done) => (
         <>
           <p className="text-ink-500 mb-3 text-xs font-light">
@@ -414,6 +430,104 @@ export function ContractingCard({ property }: { property: PropertyForCards }) {
     >
       <ContractingDetails property={property} />
     </EditableCard>
+  );
+}
+
+/**
+ * Sending the hotel its own details form (doc §3.9): a private link, emailed
+ * from your own mailbox, that the hotel fills in without signing in —
+ * everything about the property but rates; its answers land on the property.
+ * A new link replaces the old one.
+ */
+export function HotelDetailsLink({ property, bare = false }: { property: PropertyForCards; /** Without its own heading. */ bare?: boolean }) {
+  const saved = useSaved();
+  const me = api.user.me.useQuery();
+  const [origin, setOrigin] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => setOrigin(window.location.origin), []);
+  const make = api.property.makeContractingLink.useMutation({ onSuccess: saved });
+  const off = api.property.switchOffContractingLink.useMutation({ onSuccess: saved });
+  const url = (token: string | null | undefined) => (token ? `${origin}/property-details/${token}` : null);
+  const link = url(property.contractingToken);
+  const record = property as unknown as Record<string, string | null>;
+  const to = [record.contractEmail, record.generalEmail, ...property.contacts.map((contact) => contact.email)].find((email) => email?.trim()) ?? "";
+  const name = property.name ?? "your property";
+
+  const email = (target: string) => {
+    const subject = `${name}: your property's details — We Lodge`;
+    const body = [
+      "Hello,",
+      "",
+      `To prepare our work together, could you please check and complete ${name}'s details on this page — your room categories and sizes, amenities, services and who we should talk to:`,
+      "",
+      target,
+      "",
+      "It takes a few minutes, and no account is needed.",
+      "",
+      "Thank you,",
+      me.data?.name ?? "",
+      "We Lodge",
+    ].join("\n");
+    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  return (
+    <div>
+      {!bare && <p className="text-ink-900 text-[13px] font-medium">Ask the hotel to fill in its details</p>}
+      <p className="text-ink-500 mb-2 text-xs font-light">
+        {property.contractingSubmittedAt
+          ? `The hotel sent its details on ${formatDate(property.contractingSubmittedAt)}. `
+          : link
+            ? "The hotel has a link to its form and has not sent it yet. "
+            : "A private link to a form where the hotel checks and completes its details — rooms, sizes, amenities, services and contacts; not rates or contracting details. No account needed; what it sends lands here. "}
+        {!to && "No email is known for the hotel — add one under Contacts, or copy the link."}
+      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
+        <button
+          type="button"
+          disabled={make.isPending}
+          onClick={() => {
+            if (link) email(link);
+            else make.mutate({ id: property.id }, { onSuccess: (made) => email(url(made.contractingToken)!) });
+          }}
+          className="bg-brand-400 hover:bg-brand-500 rounded-full px-3.5 py-1.5 font-medium text-white disabled:opacity-60"
+        >
+          {make.isPending ? "Making the link…" : "Email it to the hotel"}
+        </button>
+        {link ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(link).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+              }}
+              className="text-brand-700 font-light hover:underline"
+            >
+              {copied ? "Copied" : "Copy link"}
+            </button>
+            <a href={link} target="_blank" rel="noreferrer" className="text-brand-700 font-light hover:underline">
+              See what the hotel sees ↗
+            </a>
+            <button
+              type="button"
+              disabled={off.isPending}
+              onClick={() => window.confirm("Switch the link off? It will open nothing any more; what the hotel sent stays.") && off.mutate({ id: property.id })}
+              className="font-light text-[#c03654] hover:underline"
+            >
+              Switch off
+            </button>
+          </>
+        ) : (
+          <button type="button" disabled={make.isPending} onClick={() => make.mutate({ id: property.id })} className="text-brand-700 font-light hover:underline">
+            {property.contractingLinkMadeAt ? "Make a new link" : "Just make the link"}
+          </button>
+        )}
+      </div>
+      <FormError message={friendlyError(make.error) ?? friendlyError(off.error)} />
+    </div>
   );
 }
 
@@ -564,7 +678,6 @@ function ContactsEditor({ property, onDone }: { property: PropertyForCards; onDo
 
 // --- Room categories ---------------------------------------------------------------
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
 export function RoomCategoriesCard({ property, bare = false }: { property: PropertyForCards; /** In a tab: no card, no title. */ bare?: boolean }) {
   const hotel = property.type === "HOTEL";
@@ -594,7 +707,16 @@ export function RoomCategoriesCard({ property, bare = false }: { property: Prope
               <Th>Sleeps</Th>
               <Th>{hotel ? "Beds" : "Bed / bath"}</Th>
               <Th>Size</Th>
-              <Th>Indicative price</Th>
+              <Th>
+                Event rate
+                {(property.eventRates?.length ?? 0) > 0 && (
+                  <InfoTip
+                    text={`What a night costs us during ${property
+                      .eventRates!.map((event) => `${event.eventName} (${formatRange(event.startDate, event.endDate)})`)
+                      .join(" and ")} — the rate agreed for the event, or else the quotations for those dates.`}
+                  />
+                )}
+              </Th>
               <Th>{""}</Th>
             </tr>
           </thead>
@@ -622,9 +744,29 @@ export function RoomCategoriesCard({ property, bare = false }: { property: Prope
                   </Td>
                   <Td>{category.size ?? "—"}</Td>
                   <Td>
-                    {formatMoneyRange(category.indicativePriceMinCents, category.indicativePriceMaxCents, category.currency)}
-                    {(category.indicativePriceMinCents !== null || category.indicativePriceMaxCents !== null) && (
-                      <span className="text-ink-500 block text-xs font-light">Indicative</span>
+                    {(property.eventRates ?? []).length === 0 ? (
+                      <span className="text-ink-500/70 text-xs font-light">Not on an event</span>
+                    ) : (
+                      property.eventRates!.map((event) => {
+                        const rate = event.byCategory[category.id];
+                        const several = property.eventRates!.length > 1;
+                        return (
+                          <span key={event.eventId} className="block">
+                            {several && <span className="text-ink-500 text-xs font-light">{event.eventName}: </span>}
+                            {rate ? (
+                              <>
+                                <span className="whitespace-nowrap">{formatMoneyRange(rate.minCents, rate.maxCents, rate.currency)}</span>
+                                <span className="text-ink-500 block text-xs font-light">
+                                  {rate.from === "agreed" ? "Agreed" : `Quoted · ${rate.label}`}
+                                  {!rate.wholeEvent && " · part of the event"}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-ink-500/70 text-xs font-light">No quote for the event dates</span>
+                            )}
+                          </span>
+                        );
+                      })
                     )}
                   </Td>
                   <Td>
@@ -670,8 +812,6 @@ function CategoryEditor({
     bedConfiguration: category?.bedConfiguration ?? "",
     bedrooms: text(category?.bedrooms),
     bathrooms: text(category?.bathrooms),
-    priceMin: text(category?.indicativePriceMinCents, 100),
-    priceMax: text(category?.indicativePriceMaxCents, 100),
     currency: category?.currency ?? "USD",
     size: category?.size ?? "",
     notes: category?.notes ?? "",
@@ -689,9 +829,9 @@ function CategoryEditor({
       setProblem("Give the category a name.");
       return;
     }
-    const numbers = [draft.unitCount, draft.capacity, draft.bedrooms, draft.bathrooms, draft.priceMin, draft.priceMax];
+    const numbers = [draft.unitCount, draft.capacity, draft.bedrooms, draft.bathrooms];
     if (numbers.some((value) => value.trim() && !Number.isFinite(Number(value.replace(",", "."))))) {
-      setProblem("Rooms, sleeps, bedrooms, bathrooms and prices should be numbers.");
+      setProblem("Rooms, sleeps, bedrooms and bathrooms should be numbers.");
       return;
     }
     save.mutate({
@@ -704,9 +844,7 @@ function CategoryEditor({
         bedConfiguration: hotel ? draft.bedConfiguration.trim() || undefined : undefined,
         bedrooms: hotel ? undefined : num(draft.bedrooms),
         bathrooms: hotel ? undefined : num(draft.bathrooms),
-        // Typed in whole currency units, stored in minor units (§4.5).
-        indicativePriceMinCents: draft.priceMin.trim() ? Math.round((num(draft.priceMin) ?? 0) * 100) : undefined,
-        indicativePriceMaxCents: draft.priceMax.trim() ? Math.round((num(draft.priceMax) ?? 0) * 100) : undefined,
+        // No indicative price any more (doc §3.9): the event rate comes from the quotations.
         currency: draft.currency,
         size: draft.size,
         notes: draft.notes,
@@ -743,19 +881,6 @@ function CategoryEditor({
           )}
           <Field label="Size">
             <Input value={draft.size} onChange={(e) => set("size", e.target.value)} placeholder="28 m²" />
-          </Field>
-          <Field label="Currency">
-            <Select value={draft.currency} onChange={(e) => set("currency", e.target.value)}>
-              {(CURRENCIES.includes(draft.currency) ? CURRENCIES : [draft.currency, ...CURRENCIES]).map((currency) => (
-                <option key={currency}>{currency}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Indicative price, from">
-            <Input inputMode="decimal" value={draft.priceMin} onChange={(e) => set("priceMin", e.target.value)} placeholder="220" />
-          </Field>
-          <Field label="Indicative price, to">
-            <Input inputMode="decimal" value={draft.priceMax} onChange={(e) => set("priceMax", e.target.value)} placeholder="280" />
           </Field>
           <Field label="Notes" className="sm:col-span-4">
             <Input value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="King suite with separate living room" />

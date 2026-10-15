@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { NewEventPanel } from "~/app/_components/event-form";
 import { formatRange } from "~/lib/format";
 import { getLastEventPath } from "~/lib/last-event";
+import { OpenEventLink } from "~/app/_components/open-event-link";
 import { api } from "~/trpc/react";
 
 const statusLabels = {
@@ -113,11 +114,7 @@ export function EventsPanel({ onClose }: { onClose: () => void }) {
             <ul className="space-y-1">
               {rows.map((event) => (
                 <li key={event.id}>
-                  <Link
-                    href={`/events/${event.id}/inventory`}
-                    onClick={onClose}
-                    className="hover:bg-ink-50 block rounded-lg px-3 py-2.5 transition-colors"
-                  >
+                  <OpenEventLink eventId={event.id} onClick={onClose} className="hover:bg-ink-50 block rounded-lg px-3 py-2.5 transition-colors">
                     <span className="text-ink-900 block text-sm font-medium">
                       {event.name}
                     </span>
@@ -126,7 +123,7 @@ export function EventsPanel({ onClose }: { onClose: () => void }) {
                       {event.city ? ` · ${event.city}` : ""} ·{" "}
                       {statusLabels[event.status]}
                     </span>
-                  </Link>
+                  </OpenEventLink>
                 </li>
               ))}
             </ul>

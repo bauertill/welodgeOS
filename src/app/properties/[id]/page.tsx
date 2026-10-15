@@ -8,12 +8,15 @@ import {
   AmenitiesCard,
   ContactsCard,
   ContractingCard,
+  HotelDetailsLink,
   DetailsPanel,
   MoreAboutCard,
   PanelSection,
   RoomCategoriesCard,
   WhereItIsCard,
 } from "~/app/_components/property-cards";
+import { PropertyContracts } from "~/app/_components/finance";
+import { PropertyMedia } from "~/app/_components/property-media";
 import { PropertyTabs } from "~/app/_components/property-tabs";
 import { PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
@@ -102,6 +105,19 @@ export default async function PropertyPage({
         <div className="min-w-0 lg:col-span-2">
           <PropertyTabs
             tabs={[
+              { key: "updates", label: "Updates", content: <UpdateThread propertyId={property.id} /> },
+              {
+                key: "rooms",
+                label: property.type === "HOTEL" ? "Room categories" : "Unit types",
+                count: property.categories.length,
+                content: <RoomCategoriesCard property={property} bare />,
+              },
+              {
+                key: "media",
+                label: "Media",
+                count: property._count.photos,
+                content: <PropertyMedia propertyId={property.id} />,
+              },
               {
                 key: "quotations",
                 label: "Quotations",
@@ -110,12 +126,11 @@ export default async function PropertyPage({
                 content: <PropertyQuotations entries={entries} categories={property.categories} />,
               },
               {
-                key: "rooms",
-                label: property.type === "HOTEL" ? "Room categories" : "Unit types",
-                count: property.categories.length,
-                content: <RoomCategoriesCard property={property} bare />,
+                key: "contracts",
+                label: "Contracts",
+                count: property._count.contracts,
+                content: <PropertyContracts propertyId={property.id} events={entries.map((entry) => entry.event)} />,
               },
-              { key: "feedback", label: "Feedback", content: <UpdateThread propertyId={property.id} /> },
               // Kept for the record, rarely read: a tab of its own, out of the way.
               { key: "log", label: "Log", content: <ActivityLog entity="Property" entityId={property.id} /> },
             ]}
@@ -129,6 +144,13 @@ export default async function PropertyPage({
                 <p className="text-ink-700 text-sm font-light whitespace-pre-line">{property.notes}</p>
               </PanelSection>
             )}
+            <PanelSection
+              title="The hotel's own form"
+              summary={property.contractingSubmittedAt ? "details sent" : property.contractingToken ? "link out" : "not sent"}
+              defaultOpen={Boolean(property.contractingToken && !property.contractingSubmittedAt)}
+            >
+              <HotelDetailsLink property={property} bare />
+            </PanelSection>
             <WhereItIsCard property={property} totalLabel={units ? `${units} rooms` : null} />
             <ContactsCard property={property} />
             <AmenitiesCard property={property} amenities={amenities} />

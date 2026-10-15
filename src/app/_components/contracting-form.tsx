@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Card } from "~/app/_components/ui";
@@ -38,18 +38,7 @@ const emptyPerson: ContractContact = { name: "", jobTitle: "", email: "" };
  */
 export function ContractingForm({ token }: { token: string }) {
   const form = api.sales.contractingForm.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
-  const [values, setValues] = useState<Values | null>(null);
-  const [people, setPeople] = useState<ContractContact[]>([emptyPerson]);
   const [sent, setSent] = useState(false);
-
-  useEffect(() => {
-    if (!form.data || values) return;
-    const { contractContacts, ...rest } = form.data.values;
-    setValues(rest);
-    const known = splitContractContacts(contractContacts);
-    setPeople(known.length ? known : [emptyPerson]);
-  }, [form.data, values]);
-
   const submit = api.sales.submitContracting.useMutation({
     onSuccess: () => {
       setSent(true);
@@ -68,20 +57,9 @@ export function ContractingForm({ token }: { token: string }) {
       </Card>
     );
   }
-  if (!values) return null;
-
-  const set = (key: keyof Values) => (value: string) => setValues({ ...values, [key]: value });
-  const setPerson = (index: number, key: keyof ContractContact, value: string) =>
-    setPeople(people.map((person, i) => (i === index ? { ...person, [key]: value } : person)));
 
   return (
-    <form
-      className="space-y-5"
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit.mutate({ token, values: { ...values, contractContacts: joinContractContacts(people) } });
-      }}
-    >
+    <div className="space-y-5">
       <div>
         <h1 className="text-ink-900 text-2xl font-semibold">Contracting details</h1>
         <p className="text-ink-500 mt-1 text-sm font-light">
@@ -102,6 +80,58 @@ export function ContractingForm({ token }: { token: string }) {
         </p>
       )}
 
+      <ContractingFields
+        values={form.data.values}
+        pending={submit.isPending}
+        error={submit.error ? friendlyError(submit.error) : null}
+        onSubmit={(values) => submit.mutate({ token, values })}
+        submitLabel="Send to We Lodge"
+      />
+    </div>
+  );
+}
+
+/**
+ * The contracting details themselves — the company, who signs, the contact
+ * persons — for the client's contracting link and their rate card (doc §4.11).
+ */
+export function ContractingFields({
+  values: initial,
+  pending,
+  error,
+  onSubmit,
+  submitLabel,
+  after,
+}: {
+  values: Record<ClientContractingKey, string>;
+  pending: boolean;
+  error: string | null;
+  onSubmit: (values: Record<ClientContractingKey, string>) => void;
+  submitLabel: string;
+  /** Beside the send button — "I'll do this later". */
+  after?: React.ReactNode;
+}) {
+  const [values, setValues] = useState<Values>(() => {
+    const { contractContacts: _contacts, ...rest } = initial;
+    return rest;
+  });
+  const [people, setPeople] = useState<ContractContact[]>(() => {
+    const known = splitContractContacts(initial.contractContacts);
+    return known.length ? known : [emptyPerson];
+  });
+
+  const set = (key: keyof Values) => (value: string) => setValues({ ...values, [key]: value });
+  const setPerson = (index: number, key: keyof ContractContact, value: string) =>
+    setPeople(people.map((person, i) => (i === index ? { ...person, [key]: value } : person)));
+
+  return (
+    <form
+      className="space-y-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit({ ...values, contractContacts: joinContractContacts(people) });
+      }}
+    >
       <Card>
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Company details</h2>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -167,10 +197,13 @@ export function ContractingForm({ token }: { token: string }) {
       </Card>
 
       <div className="space-y-2">
-        <FormError message={submit.error ? friendlyError(submit.error) : null} />
-        <Button type="submit" disabled={submit.isPending}>
-          {submit.isPending ? "Sending…" : "Send to We Lodge"}
-        </Button>
+        <FormError message={error} />
+        <div className="flex flex-wrap items-center gap-4">
+          <Button type="submit" disabled={pending}>
+            {pending ? "Sending…" : submitLabel}
+          </Button>
+          {after}
+        </div>
       </div>
     </form>
   );

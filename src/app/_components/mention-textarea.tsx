@@ -21,12 +21,14 @@ export function MentionTextarea({
   people,
   placeholder,
   rows = 3,
+  autoFocus,
 }: {
   value: string;
   onChange: (value: string) => void;
   people: Person[];
   placeholder?: string;
   rows?: number;
+  autoFocus?: boolean;
 }) {
   const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null);
   const [highlighted, setHighlighted] = useState(0);
@@ -73,6 +75,7 @@ export function MentionTextarea({
     <div className="relative">
       <Textarea
         ref={textareaRef}
+        autoFocus={autoFocus}
         rows={rows}
         value={value}
         placeholder={placeholder}

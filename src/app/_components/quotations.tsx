@@ -5,8 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
+import { Popup } from "~/app/_components/popup";
 import { RateIncludesPicker } from "~/app/_components/room-categories";
+import { checkTerms, TermsEditor, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
 import { dayKey } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import { contractHref, percent } from "~/lib/finance";
@@ -29,10 +32,6 @@ export function PropertyQuotations({
     <div>
       {entries.length === 0 ? (
         <p className="text-ink-500 text-sm font-light">Put the property on an event&apos;s list to record what it quotes for that event.</p>
-      ) : categories.length === 0 ? (
-        <p className="text-ink-500 text-sm font-light">
-          Add the property&apos;s room categories first — each line of a quotation is rooms of one of them.
-        </p>
       ) : (
         <div className="space-y-6">
           {entries.map((entry) => (
@@ -172,7 +171,21 @@ function QuotationCard({
   });
   const error = setStatus.error ?? remove.error ?? makeContract.error;
   const terms = [
+    [
+      "Payments",
+      quotation.payments.map((payment) => `${percent(payment.percentBasisPoints)} ${payment.onSignature ? "on signature" : `on ${formatDate(payment.dueOn!)}`}`).join(" · ") || null,
+    ],
     ["Payment terms", quotation.paymentTerms],
+    [
+      "Cancellation",
+      quotation.cancellations
+        .map((cut) =>
+          cut.feeBasisPoints !== null
+            ? `${percent(cut.feeBasisPoints)} charged from ${formatDate(cut.cutoffOn)}`
+            : `${cut.kind === "ATTRITION" ? "attrition" : cut.kind === "RELEASE" ? "release" : "other"}${cut.percentBasisPoints !== null ? ` ${percent(cut.percentBasisPoints)}` : ""} until ${formatDate(cut.cutoffOn)}`,
+        )
+        .join(" · ") || null,
+    ],
     ["Cancellation terms", quotation.cancellationTerms],
     ["Rates include", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
     ["TOT", percent(quotation.totBasisPoints)],
@@ -202,6 +215,7 @@ function QuotationCard({
             <span className={`ml-2 rounded-full px-2 py-0.5 align-middle text-[11px] font-medium ${statusStyles[quotation.status]}`}>
               {quotationStatusLabels[quotation.status]}
             </span>
+            {quotation.salesRequest && <span className="text-brand-700 ml-2 text-xs font-medium">For {quotation.salesRequest.client.name}</span>}
           </p>
           <p className="text-ink-500 mt-0.5 text-xs font-light">
             {[
@@ -322,18 +336,20 @@ function QuotationCard({
 }
 
 type LineDraft = { categoryId: string; checkIn: string; checkOut: string; rooms: string; rate: string; occupancy: string };
-
 function QuotationEditor({
   scoutingEntryId,
   categories,
   stay,
   quotation,
+  forRequestId,
   onDone,
 }: {
   scoutingEntryId: string;
   categories: Category[];
   stay: { checkIn: string; checkOut: string };
   quotation?: Quotation;
+  /** A new quotation's sales request, when it is made from that request's task. */
+  forRequestId?: string | null;
   onDone: () => void;
 }) {
   const utils = api.useUtils();
@@ -352,12 +368,22 @@ function QuotationEditor({
     documentUrl: quotation?.documentUrl ?? "",
     notes: quotation?.notes ?? "",
   });
+  const [agreementOn, setAgreementOn] = useState<"HOTEL" | "WE_LODGE" | null>(quotation?.agreementOn ?? null);
+  // Which client's request it was quoted for (doc §4.11) — for a new one, the request its open contact task is about.
+  const requests = api.quotation.requestsFor.useQuery({ scoutingEntryId });
+  // The hotel's room categories, as they are now — one can be added right here, from a line (doc §3.10).
+  const context = api.quotation.formContext.useQuery({ scoutingEntryId });
+  const cats = context.data?.property.categories ?? categories;
+  const [addingFor, setAddingFor] = useState<number | null>(categories.length === 0 ? 0 : null);
+  const [salesRequestId, setSalesRequestId] = useState<string | null>(quotation ? quotation.salesRequestId : (forRequestId ?? null));
+  const [requestTouched, setRequestTouched] = useState(Boolean(quotation) || Boolean(forRequestId));
+  const forRequest = requestTouched ? salesRequestId : (requests.data?.likely ?? null);
   // What the rates include, the same choice as on a room category (§3.9).
   const [includes, setIncludes] = useState<RateInclusion[]>(quotation?.rateIncludes ?? []);
   const [cleaningIncluded, setCleaningIncluded] = useState(quotation?.cleaning != null);
   const [cleaning, setCleaning] = useState<Cleaning | "">(quotation?.cleaning ?? "");
   const blankLine = (from?: LineDraft): LineDraft => ({
-    categoryId: from?.categoryId ?? categories[0]?.id ?? "",
+    categoryId: from?.categoryId ?? cats[0]?.id ?? "",
     checkIn: from?.checkOut ?? stay.checkIn,
     checkOut: stay.checkOut,
     rooms: from?.rooms ?? "",
@@ -375,6 +401,22 @@ function QuotationEditor({
     })) ?? [blankLine()],
   );
   const [problem, setProblem] = useState<string | null>(null);
+  // Payments and cancellation cut-offs, line by line (doc §3.10) — one to start, more when quoted.
+  const [payments, setPayments] = useState<PaymentDraft[]>(
+    quotation?.payments.length
+      ? quotation.payments.map((payment) => ({ onSignature: payment.onSignature, dueOn: payment.dueOn ? dayKey(payment.dueOn) : "", percent: toPercent(payment.percentBasisPoints) }))
+      : [{ onSignature: true, dueOn: "", percent: "" }],
+  );
+  const [cancellations, setCancellations] = useState<CancellationDraft[]>(
+    quotation?.cancellations.length
+      ? quotation.cancellations.map((cut) => ({
+          kind: cut.feeBasisPoints !== null ? "FEE" : cut.kind === "ATTRITION" || cut.kind === "RELEASE" ? cut.kind : "OTHER",
+          cutoffOn: dayKey(cut.cutoffOn),
+          percent: toPercent(cut.feeBasisPoints ?? cut.percentBasisPoints),
+          remarks: cut.remarks ?? "",
+        }))
+      : [{ kind: "FEE", cutoffOn: "", percent: "", remarks: "" }],
+  );
   const set = (key: keyof typeof draft) => (value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const setLine = (index: number, key: keyof LineDraft, value: string) =>
     setLines((current) => current.map((line, i) => (i === index ? { ...line, [key]: value } : line)));
@@ -382,6 +424,10 @@ function QuotationEditor({
     onSuccess: () => {
       void utils.quotation.invalidate();
       void utils.scouting.listForEvent.invalidate();
+      void utils.sales.sourcing.invalidate();
+      // Its contact task may have moved to In progress (doc §4.11).
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
       onDone();
     },
   });
@@ -417,6 +463,9 @@ function QuotationEditor({
         if (cleaningIncluded && !cleaning) return setProblem("Say how often the rooms are cleaned, or untick cleaning.");
         const tot = draft.tot.trim() ? Number(draft.tot.replace(",", ".").replace("%", "")) : null;
         if (tot !== null && (!Number.isFinite(tot) || tot < 0 || tot > 100)) return setProblem("TOT should be a percentage, like 15.");
+        const terms = checkTerms(payments, cancellations, "OTHER");
+        if (typeof terms === "string") return setProblem(terms);
+        const { payments: paymentsOut, cancellations: cancellationsOut } = terms;
         const { tot: _tot, ...fields } = draft;
         save.mutate({
           scoutingEntryId,
@@ -427,11 +476,31 @@ function QuotationEditor({
             rateIncludes: includes,
             cleaning: cleaningIncluded && cleaning ? cleaning : null,
             totBasisPoints: tot === null ? null : Math.round(tot * 100),
+            salesRequestId: forRequest,
+            agreementOn,
             lines: parsed,
+            payments: paymentsOut,
+            cancellations: cancellationsOut,
           },
         });
       }}
     >
+      <Field label="For which sales request — search by client, or leave it general">
+        <Combobox
+          value={forRequest ?? ""}
+          onChange={(value) => {
+            setRequestTouched(true);
+            setSalesRequestId(value || null);
+          }}
+          placeholder="None — a general quote for the event"
+          options={[
+            ...(requests.data?.requests ?? []).map((request) => ({ id: request.id, label: request.name, detail: request.description?.slice(0, 60) ?? null })),
+            ...(quotation?.salesRequest && !requests.data?.requests.some((request) => request.id === quotation.salesRequest!.id)
+              ? [{ id: quotation.salesRequest.id, label: quotation.salesRequest.client.name }]
+              : []),
+          ]}
+        />
+      </Field>
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9.5rem_9.5rem_5.5rem]">
         <Field label="Name — the group or scenario">
           <Input value={draft.name} onChange={(e) => set("name")(e.target.value)} placeholder="Austria House staff" autoFocus />
@@ -463,12 +532,18 @@ function QuotationEditor({
             <div key={index} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_8.75rem_8.75rem_4.5rem_5.5rem_4.5rem_auto] sm:items-end">
               <label className="col-span-2 min-w-0 sm:col-span-1">
                 <span className="text-ink-500 mb-1 block text-[11px]">Room category</span>
-                <Select value={line.categoryId} onChange={(e) => setLine(index, "categoryId", e.target.value)} aria-label={`Line ${index + 1} category`}>
-                  {categories.map((category) => (
+                <Select
+                  value={line.categoryId}
+                  onChange={(e) => (e.target.value === NEW_CATEGORY ? setAddingFor(index) : setLine(index, "categoryId", e.target.value))}
+                  aria-label={`Line ${index + 1} category`}
+                >
+                  {!line.categoryId && <option value="">Add a room category →</option>}
+                  {cats.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
                     </option>
                   ))}
+                  <option value={NEW_CATEGORY}>+ New room category…</option>
                 </Select>
               </label>
               <label className="min-w-0">
@@ -501,6 +576,20 @@ function QuotationEditor({
             </div>
           ))}
         </div>
+        {addingFor !== null && context.data && (
+          <NewCategory
+            propertyId={context.data.property.id}
+            propertyName={context.data.property.name}
+            first={cats.length === 0}
+            onCancel={cats.length ? () => setAddingFor(null) : undefined}
+            onAdded={(id) => {
+              const index = addingFor;
+              setAddingFor(null);
+              void context.refetch();
+              setLines((current) => current.map((line, i) => (i === index || !line.categoryId ? { ...line, categoryId: id } : line)));
+            }}
+          />
+        )}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
           <button type="button" onClick={() => setLines((current) => [...current, blankLine(current.at(-1))])} className="text-brand-700 font-medium hover:underline">
             + Add a line — another room category, or a pre or post period
@@ -511,12 +600,24 @@ function QuotationEditor({
         </div>
       </div>
 
+      <div className="space-y-4">
+        <TermsEditor payments={payments} setPayments={setPayments} cancellations={cancellations} setCancellations={setCancellations} />
+        <label className="flex flex-wrap items-center gap-2 text-[13px]">
+          <span className="text-ink-700 font-medium">The contract will be on</span>
+          <Select value={agreementOn ?? ""} onChange={(e) => setAgreementOn((e.target.value || null) as "HOTEL" | "WE_LODGE" | null)} className="w-52" aria-label="Whose agreement">
+            <option value="">Not known yet — ask them</option>
+            <option value="HOTEL">Their agreement</option>
+            <option value="WE_LODGE">Our agreement</option>
+          </Select>
+        </label>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Payment terms, as quoted">
-          <Textarea rows={2} value={draft.paymentTerms} onChange={(e) => set("paymentTerms")(e.target.value)} placeholder="20% on signature, 20% on 1 Dec 2026…" />
+        <Field label="Other payment terms, in words — optional">
+          <Textarea rows={2} value={draft.paymentTerms} onChange={(e) => set("paymentTerms")(e.target.value)} placeholder="Deposit by bank transfer only…" />
         </Field>
-        <Field label="Cancellation terms, as quoted">
-          <Textarea rows={2} value={draft.cancellationTerms} onChange={(e) => set("cancellationTerms")(e.target.value)} placeholder="10% attrition until 10 May 2028…" />
+        <Field label="Other cancellation terms, in words — optional">
+          <Textarea rows={2} value={draft.cancellationTerms} onChange={(e) => set("cancellationTerms")(e.target.value)} placeholder="Name changes free until 14 days before arrival…" />
         </Field>
         {/* Not a Field: a label around the list would tick the first item
             on any click inside it. */}
@@ -559,5 +660,172 @@ function QuotationEditor({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Register a hotel's quotation from elsewhere — its contact task (doc §4.11) —
+ * in a popup, so the task stays where it is. It is saved on the property's
+ * Quotations tab for the event, like one added there.
+ */
+export function QuotationPopup({ scoutingEntryId, forRequestId, onClose }: { scoutingEntryId: string; forRequestId: string | null; onClose: () => void }) {
+  const context = api.quotation.formContext.useQuery({ scoutingEntryId });
+  const c = context.data;
+  return (
+    <Popup title={c ? `Their quote — ${c.property.name}` : "Their quote"} subtitle={c ? `For ${c.event.name}. Saved on the property's Quotations tab.` : undefined} size="large" onClose={onClose}>
+      {!c ? (
+        <p className="text-ink-500 text-sm font-light">Loading…</p>
+      ) : (
+        <QuotationEditor
+          scoutingEntryId={scoutingEntryId}
+          categories={c.property.categories}
+          stay={{ checkIn: dayKey(c.event.startDate), checkOut: dayKey(c.event.endDate) }}
+          forRequestId={forRequestId}
+          onDone={onClose}
+        />
+      )}
+    </Popup>
+  );
+}
+
+const NEW_CATEGORY = "__new__";
+
+/**
+ * A room category added from the quotation form (doc §3.10): a hotel's quote
+ * often comes before its room categories are on the property. Name, how many
+ * rooms, how many they sleep — the rest on the property's page later.
+ */
+function NewCategory({
+  propertyId,
+  propertyName,
+  first,
+  onAdded,
+  onCancel,
+}: {
+  propertyId: string;
+  propertyName: string;
+  first: boolean;
+  onAdded: (id: string) => void;
+  onCancel?: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [rooms, setRooms] = useState("");
+  const [sleeps, setSleeps] = useState("2");
+  const save = api.property.saveCategory.useMutation({ onSuccess: (category) => onAdded(category.id) });
+  const add = () => {
+    if (!name.trim()) return;
+    save.mutate({ propertyId, category: { name: name.trim(), unitCount: Math.max(0, Math.round(Number(rooms) || 0)), capacity: Math.max(1, Math.round(Number(sleeps) || 2)) } });
+  };
+  return (
+    <div className="bg-brand-50/60 border-brand-200 mt-2 rounded-lg border p-3">
+      <p className="text-ink-900 text-[13px] font-medium">{first ? `${propertyName} has no room categories yet — add the one quoted` : "New room category"}</p>
+      <p className="text-ink-500 mb-2 text-xs font-light">Saved on the property, where its beds, size and the rest can be filled in later.</p>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_6rem_auto] sm:items-end">
+        <Field label="Name">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Standard King" autoFocus onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())} />
+        </Field>
+        <Field label="Rooms it has">
+          <Input value={rooms} onChange={(e) => setRooms(e.target.value)} inputMode="numeric" placeholder="40" />
+        </Field>
+        <Field label="Sleeps">
+          <Input value={sleeps} onChange={(e) => setSleeps(e.target.value)} inputMode="numeric" />
+        </Field>
+        <span className="flex items-center gap-3 pb-1">
+          <Button type="button" disabled={save.isPending || !name.trim()} onClick={add}>
+            {save.isPending ? "Adding…" : "Add"}
+          </Button>
+          {onCancel && (
+            <button type="button" onClick={onCancel} className="text-ink-500 text-xs hover:underline">
+              Cancel
+            </button>
+          )}
+        </span>
+      </div>
+      {save.error && <p className="mt-1 text-xs text-[#c03654]">{friendlyError(save.error)}</p>}
+    </div>
+  );
+}
+
+/**
+ * The quotations hotels sent for a client's request (doc §4.11) — a card on
+ * its sourcing task and on its page: which hotel, for what, at what rate,
+ * each opening on the hotel's Quotations tab.
+ */
+export function QuotesReceived({ salesRequestId }: { salesRequestId: string }) {
+  const quotes = api.quotation.forRequest.useQuery({ salesRequestId });
+  const list = quotes.data ?? [];
+  const [open, setOpen] = useState<string | null>(null);
+  const opened = list.find((quote) => quote.id === open) ?? null;
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+      <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Quotes received{list.length ? ` (${list.length})` : ""}</h2>
+      {list.length === 0 ? (
+        <p className="text-ink-500 text-[13px] font-light">{quotes.isLoading ? "…" : "None yet. A hotel's quote registered for this request shows here."}</p>
+      ) : (
+        <ul className="space-y-2">
+          {list.map((quote) => (
+            <li key={quote.id}>
+              <button
+                type="button"
+                onClick={() => setOpen(quote.id)}
+                className={`border-brand-200 bg-brand-50/50 hover:border-brand-400 block w-full rounded-lg border px-3 py-2.5 text-left text-[13px] transition-colors ${quote.status === "DECLINED" ? "opacity-60" : ""}`}
+              >
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-ink-900 min-w-0 truncate font-medium">{quote.property.name}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusStyles[quote.status]}`}>{quotationStatusLabels[quote.status]}</span>
+                </span>
+                <span className="text-ink-500 block truncate text-xs font-light">{quote.name}</span>
+                <span className="text-ink-700 mt-1 block text-xs">
+                  {[
+                    quote.from && quote.to ? formatRange(quote.from, quote.to) : null,
+                    quote.rooms ? `${quote.rooms} rooms` : `${quote.roomNights} room-nights`,
+                    quote.lowestRateCents !== null ? `from ${formatMoney(quote.lowestRateCents, quote.currency)} a night` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                <span className="text-ink-900 mt-0.5 block text-[13px] font-semibold">{formatMoney(quote.totalCents, quote.currency)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {opened && <QuotePopup quote={opened} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+/** One quotation in full, over the page (doc §4.11): its lines and terms, changed or accepted right there. */
+function QuotePopup({ quote, onClose }: { quote: RouterOutputs["quotation"]["forRequest"][number]; onClose: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const context = api.quotation.formContext.useQuery({ scoutingEntryId: quote.scoutingEntryId });
+  const c = context.data;
+  return (
+    <Popup
+      title={`${quote.property.name} — ${quote.name}`}
+      subtitle={
+        <Link href={`/properties/${quote.property.id}?back=${encodeURIComponent(`/events/${quote.eventId}`)}#quotations`} className="text-brand-700 hover:underline">
+          Open the hotel&apos;s page →
+        </Link>
+      }
+      size="large"
+      onClose={onClose}
+    >
+      {editing ? (
+        c ? (
+          <QuotationEditor
+            scoutingEntryId={quote.scoutingEntryId}
+            categories={c.property.categories}
+            stay={{ checkIn: dayKey(c.event.startDate), checkOut: dayKey(c.event.endDate) }}
+            quotation={quote}
+            onDone={() => setEditing(false)}
+          />
+        ) : (
+          <p className="text-ink-500 text-sm font-light">Loading…</p>
+        )
+      ) : (
+        <QuotationCard quotation={quote} eventId={quote.eventId} startOpen onEdit={() => setEditing(true)} />
+      )}
+    </Popup>
   );
 }

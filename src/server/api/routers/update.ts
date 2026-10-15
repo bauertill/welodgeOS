@@ -1,6 +1,9 @@
+import { UpdateKind } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { parseDay } from "~/lib/dates";
+import { updateKinds } from "~/lib/update-kinds";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 
 /**
@@ -34,7 +37,16 @@ export const updateRouter = createTRPCRouter({
   ),
 
   post: protectedProcedure
-    .input(scope.and(z.object({ body: z.string().min(1) })))
+    .input(
+      scope.and(
+        z.object({
+          body: z.string().min(1),
+          kind: z.nativeEnum(UpdateKind).default("NOTE"),
+          /** The day it took place, as YYYY-MM-DD; empty for a note. */
+          happenedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        }),
+      ),
+    )
     .mutation(({ ctx, input }) => {
       const body = input.body.trim();
       if (!body) {
@@ -43,9 +55,14 @@ export const updateRouter = createTRPCRouter({
           message: "An update needs some text.",
         });
       }
+      if (updateKinds[input.kind].propertyOnly && !input.propertyId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `${updateKinds[input.kind].label} is for a property.` });
+      }
       return ctx.db.update.create({
         data: {
           body,
+          kind: input.kind,
+          happenedOn: input.happenedOn ? parseDay(input.happenedOn) : null,
           propertyId: input.propertyId,
           clientId: input.clientId,
           authorId: ctx.session.user.id,

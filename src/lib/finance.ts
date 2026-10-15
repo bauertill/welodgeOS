@@ -97,6 +97,24 @@ export function missingTerms(contract: {
   return missing;
 }
 
-/** Where a contract lives: under its event, on the event's Contracts tab (doc §7.1). */
+/**
+ * Where a contract lives: its page is under its event (doc §7.1). Shown from
+ * the hotel's page or the client's sales request while the event's Contracts
+ * tab is hidden.
+ */
 export const contractHref = (eventId: string, contractId: string) => `/events/${eventId}/contracts/${contractId}`;
 export const newContractHref = (eventId: string, query = "") => `/events/${eventId}/contracts/new${query}`;
+
+/** Where a contract's page goes back to: the hotel's page, the sales request, or the event. */
+export function contractBack(contract: {
+  event: { id: string; name: string };
+  property: { id: string; name: string } | null;
+  salesRequest: { id: string } | null;
+  client: { name: string } | null;
+}) {
+  if (contract.property) {
+    return { href: `/properties/${contract.property.id}?back=${encodeURIComponent(`/events/${contract.event.id}`)}#contracts`, label: contract.property.name };
+  }
+  if (contract.salesRequest) return { href: `/sales/${contract.salesRequest.id}`, label: `${contract.client?.name ?? "The"} sales request` };
+  return { href: `/events/${contract.event.id}`, label: contract.event.name };
+}

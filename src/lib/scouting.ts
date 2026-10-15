@@ -228,3 +228,12 @@ export const groupColours: Record<GroupColour, { label: string; hex: string }> =
 };
 
 export const groupColourOrder = Object.keys(groupColours) as GroupColour[];
+
+/**
+ * The places distances are measured to (doc §3.7): those on a layer that says
+ * so — or, for a place on no layer, a venue — and, with none such, every place.
+ */
+export function measuredPlaces<T extends { category?: string; layer?: { measured: boolean } | null; measured?: boolean }>(places: T[]): T[] {
+  const counted = places.filter((place) => place.measured ?? (place.layer ? place.layer.measured : place.category === "VENUE"));
+  return counted.length ? counted : places;
+}

@@ -7,7 +7,7 @@ import type { CategoryContractStatus, PropertyType } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
 import { Button, Select } from "~/app/_components/form";
-import type { MapPin, MapPlace } from "~/app/_components/scouting-map";
+import type { MapLayer, MapPin, MapPlace } from "~/app/_components/scouting-map";
 import {
   EmptyState,
   Pill,
@@ -25,18 +25,19 @@ import {
   scoutingStatusLabels,
   scoutingStatusOrder,
   totalUnits,
-  groupColours,
   type SelectableScoutingStatus,
+  measuredPlaces,
 } from "~/lib/scouting";
 import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RoomCategoryTable } from "~/app/_components/room-categories";
-import { GroupHeader, Initials, NewGroup } from "~/app/_components/property-groups";
+import { Initials } from "~/app/_components/property-groups";
+import { stageInfo, stageOrder } from "~/lib/stages";
 import { api } from "~/trpc/react";
 
 // Google Maps only exists in the browser, so the map never renders on the server.
-const ScoutingMap = dynamic(
-  () => import("~/app/_components/scouting-map").then((m) => m.ScoutingMap),
+const NearbySearch = dynamic(
+  () => import("~/app/_components/nearby-search").then((m) => m.NearbySearch),
   {
     ssr: false,
     loading: () => (
@@ -50,12 +51,13 @@ const ScoutingMap = dynamic(
 export function ScoutingList({
   eventId,
   places,
-  amenities,
+  layers = [],
 }: {
   eventId: string;
   /** The event's places of interest (doc §3.7) — venues, airports, stations. */
   places: MapPlace[];
-  amenities: { id: string; label: string }[];
+  /** Its map layers, to show or hide on the map (doc §3.7). */
+  layers?: MapLayer[];
 }) {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("list");
@@ -63,7 +65,6 @@ export function ScoutingList({
   const [type, setType] = useState<PropertyType | "">("");
   const [providerId, setProviderId] = useState("");
   const providers = api.provider.list.useQuery();
-  const [amenityIds, setAmenityIds] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [hasQuotations, setHasQuotations] = useState(false);
 
@@ -71,7 +72,7 @@ export function ScoutingList({
     eventId,
     status: status || undefined,
     type: type || undefined,
-    amenityIds,
+    amenityIds: [],
     providerId: providerId || undefined,
     hasQuotations,
   });
@@ -99,27 +100,17 @@ export function ScoutingList({
 
   const rows = entries.data ?? [];
 
-  // Groups on the Properties tab (doc §3.9): the event's own, top first, with
-  // "No group" at the bottom for anything not sorted yet.
-  const groups = api.scouting.groups.useQuery({ eventId });
-  const setGroupMutation = api.scouting.setGroup.useMutation({
-    onSuccess: () => void entries.refetch(),
-  });
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["stage-COULDNT_HELP", "stage-RULED_OUT"]));
+  const toggleGroup = (key: string) =>
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const [openEntry, setOpenEntry] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState<Set<string>>(new Set());
-  const sections = [
-    ...(groups.data ?? []).map((group) => ({
-      group,
-      entries: rows.filter((entry) => entry.groupId === group.id),
-    })),
-    {
-      group: null,
-      entries: rows.filter(
-        (entry) => !entry.groupId || !(groups.data ?? []).some((group) => group.id === entry.groupId),
-      ),
-    },
-  ].filter((section) => section.group || section.entries.length > 0);
+
 
   // The sales team's at-a-glance position, per room category: whole rooms
   // genuinely free — bought and not blocked or sold — across the whole
@@ -141,7 +132,7 @@ export function ScoutingList({
   // An event can have several venues, so "to venue" means the nearest one and
   // has to name it (doc §3.7).
   const venues = useMemo(
-    () => places.filter((place) => place.category === "VENUE"),
+    () => measuredPlaces(places),
     [places],
   );
 
@@ -161,6 +152,7 @@ export function ScoutingList({
           longitude: entry.property.longitude!,
           status: entry.status,
           stars: entry.property.stars,
+          type: entry.property.type,
           subtitle: [
             propertyTypeLabels[entry.property.type],
             entry.property.city,
@@ -173,6 +165,28 @@ export function ScoutingList({
   );
 
   const withoutCoordinates = rows.length - pins.length;
+
+  // One section's table, the same whichever way the board is grouped.
+  const renderTable = (sectionRows: typeof rows, colour: string) => (
+    <div className="border-l-4 pl-0" style={{ borderColor: colour }}>
+      <Table>
+        <thead>
+          <tr>
+            <Th>Property</Th>
+            <Th>Account manager</Th>
+            <Th>Location</Th>
+            <Th>Rooms</Th>
+            {venues.length > 0 && <Th>To venue</Th>}
+            <Th>Amenities</Th>
+            <Th>Video</Th>
+            <Th>Status</Th>
+            <Th>{""}</Th>
+          </tr>
+        </thead>
+        <tbody>{sectionRows.map((entry) => renderEntry(entry))}</tbody>
+      </Table>
+    </div>
+  );
 
   const renderEntry = (entry: (typeof rows)[number]) => {
               const property = entry.property;
@@ -370,21 +384,6 @@ export function ScoutingList({
                     </Select>
                   </Td>
                   <Td>
-                    <Select
-                      value={entry.groupId ?? ""}
-                      aria-label="Group"
-                      onChange={(e) => setGroupMutation.mutate({ id: entry.id, groupId: e.target.value || null })}
-                      className="w-40 min-w-40 py-1.5 text-[13px]"
-                    >
-                      <option value="">No group</option>
-                      {(groups.data ?? []).map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Td>
-                  <Td>
                     <Button
                       type="button"
                       variant="ghost"
@@ -528,46 +527,6 @@ export function ScoutingList({
         </span>
       </div>
 
-      {amenities.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-ink-500 text-[11px] font-medium tracking-wider uppercase">
-            Must have
-          </span>
-          {amenities.map((amenity) => {
-            const active = amenityIds.includes(amenity.id);
-            return (
-              <button
-                key={amenity.id}
-                type="button"
-                onClick={() =>
-                  setAmenityIds((current) =>
-                    active
-                      ? current.filter((id) => id !== amenity.id)
-                      : [...current, amenity.id],
-                  )
-                }
-                className={`rounded-full px-3 py-1 text-[11px] font-light transition-colors ${
-                  active
-                    ? "bg-brand-700 text-white"
-                    : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
-                }`}
-              >
-                {amenity.label}
-              </button>
-            );
-          })}
-          {amenityIds.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setAmenityIds([])}
-              className="text-brand-700 text-[11px] font-light underline"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      )}
-
       {rows.length === 0 && !entries.isLoading ? (
         hasQuotations ? (
           <EmptyState
@@ -582,11 +541,16 @@ export function ScoutingList({
         )
       ) : view === "map" ? (
         <>
-          <ScoutingMap
+          <NearbySearch
+            eventId={eventId}
             pins={pins}
             places={places}
+            layers={layers}
             availability={availability.data ?? []}
-            eventId={eventId}
+            onAdded={() => {
+              void entries.refetch();
+              router.refresh();
+            }}
           />
           {withoutCoordinates > 0 && (
             <p className="text-ink-500 text-xs font-light">
@@ -598,59 +562,39 @@ export function ScoutingList({
         </>
       ) : (
         <div className="space-y-6">
-          {sections.map(({ group, entries: sectionRows }) => {
-            const key = group?.id ?? "none";
-            const collapsed = collapsedGroups.has(key);
-            return (
-              <section key={key}>
-                <GroupHeader
-                  group={group}
-                  entries={sectionRows}
-                  collapsed={collapsed}
-                  onToggle={() =>
-                    setCollapsedGroups((current) => {
-                      const next = new Set(current);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    })
-                  }
-                  isFirst={group ? groups.data?.[0]?.id === group.id : false}
-                  isLast={group ? groups.data?.at(-1)?.id === group.id : false}
-                />
-                {!collapsed && sectionRows.length > 0 && (
-                  <div
-                    className="border-l-4 pl-0"
-                    style={{ borderColor: group ? groupColours[group.colour].hex : "#d0d0d0" }}
-                  >
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Property</Th>
-                  <Th>Account manager</Th>
-                  <Th>Location</Th>
-                  <Th>Rooms</Th>
-                  {venues.length > 0 && <Th>To venue</Th>}
-                  <Th>Amenities</Th>
-                  <Th>Video</Th>
-                  <Th>Status</Th>
-                  <Th>Group</Th>
-                  <Th>{""}</Th>
-                </tr>
-              </thead>
-                      <tbody>{sectionRows.map(renderEntry)}</tbody>
-                    </Table>
+          {stageOrder
+            .map((stage) => ({ stage, entries: rows.filter((entry) => entry.stage === stage) }))
+            .filter((section) => section.entries.length > 0)
+            .map(({ stage, entries: sectionRows }) => {
+              const key = `stage-${stage}`;
+              const collapsed = collapsedGroups.has(key);
+              const info = stageInfo[stage];
+              return (
+                <section key={key}>
+                  <div className="mb-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                    <button type="button" onClick={() => toggleGroup(key)} aria-expanded={!collapsed} className="flex min-w-0 items-center gap-2 text-left">
+                      <svg
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        aria-hidden="true"
+                        className={`h-4 w-4 shrink-0 self-center transition-transform ${collapsed ? "" : "rotate-90"}`}
+                        style={{ color: info.colour }}
+                      >
+                        <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="truncate text-[17px] font-semibold" style={{ color: info.colour }}>
+                        {info.label}
+                      </span>
+                    </button>
+                    <span className="text-ink-500 text-[13px] font-light">
+                      {sectionRows.length} {sectionRows.length === 1 ? "property" : "properties"}
+                    </span>
+                    <span className="text-ink-500 text-xs font-light">{info.hint}</span>
                   </div>
-                )}
-                {!collapsed && sectionRows.length === 0 && (
-                  <p className="text-ink-500 ml-5 text-xs font-light">
-                    Nothing in this group yet — choose it in a property&apos;s Group column.
-                  </p>
-                )}
-              </section>
-            );
-          })}
-          <NewGroup eventId={eventId} />
+                  {!collapsed && renderTable(sectionRows, info.colour)}
+                </section>
+              );
+            })}
         </div>
       )}
 

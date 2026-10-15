@@ -1,21 +1,33 @@
-import { SalesRequestStage, type Prisma } from "generated/prisma";
+import { BudgetBasis, LostReason, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 
-import { addDays, nightsBetween, parseDay, today } from "~/lib/dates";
+import { addDays, dayKey, nightsBetween, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import {
   clientContractingKeys,
   contractingFields,
+  currencyForCountry,
   interestFields,
   isClosed,
   openStages,
+  lostReasonLabels,
   salesStageLabels,
 } from "~/lib/sales";
+import { peopleWords, wishesInWords } from "~/lib/needs";
+import { measuredPlaces } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
+import { deliverImmediate, notify } from "~/server/notify";
+import { geocode, placeDetails, searchPlaces } from "~/server/places";
+import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
+import { HOTEL_CONTACT } from "~/server/hotel-contact";
+import { ensureSourcingTask } from "~/server/sourcing";
+import { fit } from "~/lib/sourcing-fit";
+import { findNearby, knownAlready, type Source } from "~/server/discover";
+import { eventRates } from "~/server/event-rates";
 import { snapshotNight } from "~/server/inventory";
 
 /**
@@ -80,9 +92,123 @@ const person = { select: { id: true, name: true, email: true, image: true } } as
 const include = {
   client: { select: { id: true, name: true, shortName: true } },
   contact: { select: { id: true, name: true, title: true, email: true } },
-  event: { select: { id: true, name: true } },
-  owner: person,
+  event: { select: { id: true, name: true, country: true, startDate: true, endDate: true } },
+  owner: { select: { id: true, name: true, email: true, image: true, bookingLink: true } },
+  closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+  lines: { orderBy: [{ position: "asc" }] },
+  closeToPoints: { orderBy: [{ position: "asc" }] },
 } satisfies Prisma.SalesRequestInclude;
+
+async function needsLinkInUse(db: Prisma.TransactionClient, token: string) {
+  const found = await db.salesRequest.count({ where: { needsToken: token } });
+  if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+}
+
+export const budgetBasisLabels: Record<BudgetBasis, string> = {
+  PER_ROOM_NIGHT: "per room per night",
+  PER_PERSON_NIGHT: "per person per night",
+  TOTAL: "in total",
+};
+
+/** The request in detail (doc §4.11), as given after a call or by the client through their link. */
+const lineInput = z.object({
+  rooms: z.number().int().min(1, "Say how many units on each line, like 20").max(10_000),
+  roomType: z.string().max(200),
+  /** How many share each unit. */
+  people: z.number().int().min(1).max(50).nullable().default(null),
+  checkIn: day,
+  checkOut: day,
+});
+
+const detailsInput = z.object({
+  lines: z.array(lineInput).max(50),
+  budgetCents: z.number().int().min(0).nullable(),
+  budgetCurrency: z.string().length(3).nullable(),
+  budgetBasis: z.nativeEnum(BudgetBasis).nullable(),
+  closeToIds: z.array(z.string()).max(50),
+  /** Their own places, found by address or picked on a map. */
+  points: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1, "Give each place a name, like Our office").max(200),
+        address: z.string().max(500),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+      }),
+    )
+    .max(20),
+  closeToOther: z.string().max(2000),
+  /** Room types and occupancy, in words. */
+  clientComments: z.string().max(10_000),
+  // What they want with the rooms (doc §4.11) — left out, nothing said.
+  breakfast: z.boolean().nullable().default(null),
+  parking: z.boolean().nullable().default(null),
+  parkingSpaces: z.number().int().min(1).max(10_000).nullable().default(null),
+});
+
+/**
+ * Save a request's details; the first time makes the enquiry a sales request.
+ * Places to be close to must be the request's own event's.
+ */
+async function saveDetails(
+  tx: Prisma.TransactionClient,
+  id: string,
+  details: z.infer<typeof detailsInput>,
+  actor: { id: string | null; summary: string },
+) {
+  const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
+  for (const [index, line] of details.lines.entries()) {
+    if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Line ${index + 1}: the departure must be after the arrival.` });
+    }
+  }
+  const places = details.closeToIds.length
+    ? await tx.placeOfInterest.findMany({ where: { id: { in: details.closeToIds }, eventId: before.eventId ?? "" }, select: { id: true } })
+    : [];
+  const after = await tx.salesRequest.update({
+    where: { id },
+    data: {
+      // The lines are the request's own rows: replaced as a whole.
+      lines: {
+        deleteMany: {},
+        create: details.lines.map((line, position) => ({
+          rooms: line.rooms,
+          roomType: blank(line.roomType),
+          people: line.people,
+          checkIn: line.checkIn ? parseDay(line.checkIn) : null,
+          checkOut: line.checkOut ? parseDay(line.checkOut) : null,
+          position,
+        })),
+      },
+      budgetCents: details.budgetCents,
+      budgetCurrency: details.budgetCents === null ? null : (details.budgetCurrency ?? "EUR"),
+      budgetBasis: details.budgetCents === null ? null : (details.budgetBasis ?? "PER_ROOM_NIGHT"),
+      closeTo: { set: places },
+      closeToPoints: {
+        deleteMany: {},
+        create: details.points.map((point, position) => ({ ...point, address: blank(point.address), position })),
+      },
+      closeToOther: blank(details.closeToOther),
+      clientComments: blank(details.clientComments),
+      breakfast: details.breakfast,
+      parking: details.parking,
+      parkingSpaces: details.parking ? details.parkingSpaces : null,
+      detailedAt: before.detailedAt ?? new Date(),
+    },
+    include,
+  });
+  await logAudit(tx, {
+    actorId: actor.id,
+    entity: "SalesRequest",
+    entityId: id,
+    summary: before.detailedAt ? actor.summary : `${actor.summary} — now a sales request`,
+    changes: diffFields(readable(before), readable(after), historyFields),
+  });
+  // Now a sales request: its sourcing task goes on the board, and it moves to Specify (doc §4.11).
+  await ensureSourcingTask(tx, id, actor.id);
+  if (after.stage === "INITIAL_INTEREST") await moveStage(tx, actor.id, id, "SPECIFY");
+  return { before, after };
+}
 
 type Loaded = Prisma.SalesRequestGetPayload<{ include: typeof include }>;
 
@@ -99,6 +225,26 @@ function readable(request: Loaded) {
     proposalSentOn: date(request.proposalSentOn),
     blockedUntil: date(request.blockedUntil),
     closedOn: date(request.closedOn),
+    asked:
+      request.lines
+        .map((line) =>
+          [
+            `${line.rooms} × ${line.roomType ?? "units"}`,
+            peopleWords(line.people),
+            line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : null,
+          ]
+            .filter(Boolean)
+            .join(", "),
+        )
+        .join("\n") || null,
+    budgetAmount:
+      request.budgetCents !== null && request.budgetCurrency
+        ? `${formatMoney(request.budgetCents, request.budgetCurrency)}${request.budgetBasis ? ` ${budgetBasisLabels[request.budgetBasis]}` : ""}`
+        : null,
+    closeToNames:
+      [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther].filter(Boolean).join(", ") ||
+      null,
+    wishes: wishesInWords(request).join("\n") || null,
     value:
       request.valueCents !== null && request.valueCurrency
         ? formatMoney(request.valueCents, request.valueCurrency)
@@ -116,6 +262,11 @@ const historyFields = [
   { key: "proposalSentOn", label: "Proposal sent on" },
   { key: "blockedUntil", label: "Deadline" },
   { key: "value", label: "Value" },
+  { key: "asked", label: "Rooms and periods" },
+  { key: "budgetAmount", label: "Budget" },
+  { key: "closeToNames", label: "Close to" },
+  { key: "clientComments", label: "Client's comments" },
+  { key: "wishes", label: "Preferences" },
   ...interestFields.map(({ key, label }) => ({ key, label })),
   ...contractingFields.map(({ key, label }) => ({ key, label })),
 ] as { key: keyof ReturnType<typeof readable>; label: string }[];
@@ -191,7 +342,7 @@ async function roomsFor(
  * (doc §4.8). A request's rooms are usually one rectangle; where rooms arrive
  * or leave on different days, each run is its own.
  */
-function rectangles(nights: { slotId: string; date: Date }[]) {
+export function rectangles(nights: { slotId: string; date: Date }[]) {
   const bySlot = new Map<string, Date[]>();
   for (const night of nights) bySlot.set(night.slotId, [...(bySlot.get(night.slotId) ?? []), night.date]);
   const runs = new Map<string, { slotIds: string[]; checkIn: Date; checkOut: Date }>();
@@ -219,21 +370,281 @@ function rectangles(nights: { slotId: string; date: Date }[]) {
   return [...runs.values()];
 }
 
+const addRoomsInput = z.object({
+  id: z.string(),
+  categoryId: z.string(),
+  rooms: z.number().int().min(1).max(500),
+  checkIn: dayRequired,
+  checkOut: dayRequired,
+  action: z.enum(["REQUEST", "BLOCK", "SELL"]),
+  blockExpiry: day,
+  sellPriceCents: z.number().int().min(0).nullable().optional(),
+  sellCurrency: z.string().length(3).optional(),
+  clientRef: z.string().max(200).optional(),
+  /** The client contract a sale is made under (doc §7.1). */
+  salesContractId: z.string().optional(),
+  /** Different rates for different dates — pre, event, post (doc §4.8). */
+  periods: z
+    .array(z.object({ checkIn: dayRequired, checkOut: dayRequired, priceCents: z.number().int().min(0), currency: z.string().length(3) }))
+    .max(20)
+    .optional(),
+});
+
+/** Request, block or sell rooms for a request — addRooms, and an offer's block (doc §4.11). */
+export async function addRoomsTx(tx: Prisma.TransactionClient, actorId: string, input: z.infer<typeof addRoomsInput>) {
+  const request = await tx.salesRequest.findUniqueOrThrow({
+    where: { id: input.id },
+    select: { clientId: true, eventId: true, ownerId: true },
+  });
+  if (!request.eventId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — rooms belong to an event." });
+  }
+  const checkIn = parseDay(input.checkIn);
+  const checkOut = parseDay(input.checkOut);
+  if (checkOut <= checkIn) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Check-out must be after check-in; check-out day is never a night." });
+  }
+  const rooms = await roomsFor(tx, { eventId: request.eventId, categoryId: input.categoryId, clientId: request.clientId, checkIn, checkOut });
+  const free = rooms
+    .filter((room) => room.free)
+    .sort((a, b) => Number(b.bought) - Number(a.bought) || a.slotNumber - b.slotNumber);
+  if (free.length < input.rooms) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Nothing was changed. Only ${free.length} of these rooms ${free.length === 1 ? "is" : "are"} free for every night of the stay. Ask for fewer, or split the dates.`,
+    });
+  }
+  const chosen = free.slice(0, input.rooms);
+  const periods = input.periods?.map((period) => ({ ...period, checkIn: parseDay(period.checkIn), checkOut: parseDay(period.checkOut) }));
+  if (periods?.length) checkPeriods(periods, checkIn, checkOut);
+  const apply = (change: Parameters<typeof applyInventoryChange>[2]) =>
+    periods?.length ? applyByPeriod(tx, actorId, change, periods) : applyInventoryChange(tx, actorId, change);
+  const outcome = await apply({
+    eventId: request.eventId,
+    slotIds: chosen.map((room) => room.slotId),
+    checkIn,
+    checkOut,
+    action: input.action,
+    clientId: request.clientId,
+    salesRequestId: input.id,
+    blockExpiry: input.blockExpiry ? parseDay(input.blockExpiry) : undefined,
+    sellPriceCents: input.sellPriceCents ?? undefined,
+    sellCurrency: input.sellPriceCents != null ? input.sellCurrency : undefined,
+    clientRef: input.clientRef,
+    salesOwnerId: request.ownerId ?? undefined,
+    ...(input.action === "SELL" && input.salesContractId && { salesContractId: input.salesContractId }),
+  });
+  const category = await tx.roomCategory.findUniqueOrThrow({
+    where: { id: input.categoryId },
+    select: { name: true, property: { select: { name: true } } },
+  });
+  await logAudit(tx, {
+    actorId: actorId,
+    entity: "SalesRequest",
+    entityId: input.id,
+    summary: `${roomVerbs[input.action]}: ${input.rooms} × ${category.name}, ${category.property.name}, ${formatRange(checkIn, checkOut)}`,
+    changes: `Rooms #${chosen.map((room) => room.slotNumber).sort((a, b) => a - b).join(", #")} · ${outcome.nights} room-nights`,
+  });
+  return { ...outcome, slotNumbers: chosen.map((room) => room.slotNumber).sort((a, b) => a - b) };
+}
+
+const changeRoomsInput = z.object({
+  id: z.string(),
+  categoryId: z.string(),
+  state: z.enum(["REQUESTED", "BLOCKED", "SOLD"]),
+  action: z.enum(["BLOCK", "SELL", "WITHDRAW_REQUEST", "EXTEND_BLOCK", "RELEASE_HOLD", "CANCEL_SALE"]),
+  blockExpiry: day,
+  sellPriceCents: z.number().int().min(0).nullable().optional(),
+  sellCurrency: z.string().length(3).optional(),
+  salesContractId: z.string().optional(),
+});
+
+/** Move a request's rooms of one category on — changeRooms, and an offer closing or withdrawn (doc §4.11). */
+export async function changeRoomsTx(tx: Prisma.TransactionClient, actorId: string, input: z.infer<typeof changeRoomsInput>) {
+  const allowed = {
+    REQUESTED: ["BLOCK", "SELL", "WITHDRAW_REQUEST"],
+    BLOCKED: ["SELL", "EXTEND_BLOCK", "RELEASE_HOLD"],
+    SOLD: ["CANCEL_SALE"],
+  } as const;
+  if (!(allowed[input.state] as readonly string[]).includes(input.action)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That cannot be done to these rooms." });
+  }
+  const request = await tx.salesRequest.findUniqueOrThrow({
+    where: { id: input.id },
+    select: { clientId: true, eventId: true, ownerId: true },
+  });
+  if (!request.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "This request has no event." });
+  const eventId = request.eventId;
+
+  // The nights in question, with what a sale would otherwise wipe.
+  const nights =
+    input.state === "REQUESTED"
+      ? (
+          await tx.roomNightRequest.findMany({
+            where: { salesRequestId: input.id, roomNight: { slot: { categoryId: input.categoryId } } },
+            select: {
+              clientRef: true,
+              sellPriceCents: true,
+              sellCurrency: true,
+              notes: true,
+              roomNight: { select: { slotId: true, date: true } },
+            },
+          })
+        ).map((claim) => ({
+          slotId: claim.roomNight.slotId,
+          date: claim.roomNight.date,
+          clientRef: claim.clientRef,
+          sellPriceCents: claim.sellPriceCents,
+          sellCurrency: claim.sellCurrency,
+          salesNotes: claim.notes,
+          dueDate: null as Date | null,
+          salesOwnerId: request.ownerId,
+        }))
+      : await tx.roomNight.findMany({
+          where: { salesRequestId: input.id, salesState: input.state, slot: { categoryId: input.categoryId } },
+          select: {
+            slotId: true,
+            date: true,
+            clientRef: true,
+            sellPriceCents: true,
+            sellCurrency: true,
+            salesNotes: true,
+            dueDate: true,
+            salesOwnerId: true,
+          },
+        });
+  if (nights.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "There are no such rooms on this request any more." });
+
+  let applied = 0;
+  for (const rect of rectangles(nights)) {
+    const these = nights.filter((night) => rect.slotIds.includes(night.slotId) && night.date >= rect.checkIn && night.date < rect.checkOut);
+    const same = <K extends keyof (typeof these)[number]>(key: K) => {
+      const values = new Set(these.map((night) => String(night[key] instanceof Date ? (night[key] as Date).toISOString() : night[key])));
+      return values.size === 1 ? these[0]![key] : undefined;
+    };
+    const priceGiven = input.sellPriceCents !== undefined;
+    const outcome = await applyInventoryChange(tx, actorId, {
+      eventId,
+      slotIds: rect.slotIds,
+      checkIn: rect.checkIn,
+      checkOut: rect.checkOut,
+      action: input.action,
+      clientId: request.clientId,
+      ...((input.action === "BLOCK" || input.action === "SELL") && { salesRequestId: input.id }),
+      ...(input.action === "SELL" && input.salesContractId && { salesContractId: input.salesContractId }),
+      blockExpiry: input.blockExpiry ? parseDay(input.blockExpiry) : undefined,
+      // A sale keeps what the block said unless told otherwise; a mix
+      // across nights is not guessed at.
+      sellPriceCents: priceGiven ? (input.sellPriceCents ?? undefined) : ((same("sellPriceCents") as number | null) ?? undefined),
+      sellCurrency: priceGiven ? input.sellCurrency : ((same("sellCurrency") as string | null) ?? undefined),
+      clientRef: (same("clientRef") as string | null) ?? undefined,
+      salesNotes: (same("salesNotes") as string | null) ?? undefined,
+      dueDate: (same("dueDate") as Date | null) ?? undefined,
+      salesOwnerId: (same("salesOwnerId") as string | null) ?? request.ownerId ?? undefined,
+    });
+    applied += outcome.nights;
+    // A request that became a block or a sale is not also still a request.
+    if (input.state === "REQUESTED" && input.action !== "WITHDRAW_REQUEST") {
+      await applyInventoryChange(tx, actorId, {
+        eventId,
+        slotIds: rect.slotIds,
+        checkIn: rect.checkIn,
+        checkOut: rect.checkOut,
+        action: "WITHDRAW_REQUEST",
+        clientId: request.clientId,
+        reason: "Became a block or a sale on the sales request",
+      });
+    }
+  }
+  const category = await tx.roomCategory.findUniqueOrThrow({
+    where: { id: input.categoryId },
+    select: { name: true, property: { select: { name: true } } },
+  });
+  await logAudit(tx, {
+    actorId: actorId,
+    entity: "SalesRequest",
+    entityId: input.id,
+    summary: `${changeVerbs[input.action]}: ${category.name}, ${category.property.name} — ${applied} room-nights`,
+  });
+  return { nights: applied };
+}
+
+export const clientContractingValues = z.object(Object.fromEntries(clientContractingKeys.map((key) => [key, z.string().max(5000)])) as Record<
+  (typeof clientContractingKeys)[number],
+  z.ZodString
+>);
+
+/** The client's contracting details for a request, as they are now — for their link and their rate card. */
+export async function clientContracting(db: Prisma.TransactionClient | PrismaClient, requestId: string) {
+  const request = await db.salesRequest.findUniqueOrThrow({
+    where: { id: requestId },
+    select: { ...Object.fromEntries(clientContractingKeys.map((key) => [key, true])), contractingSubmittedAt: true } as const,
+  });
+  return {
+    submittedAt: request.contractingSubmittedAt as Date | null,
+    values: Object.fromEntries(clientContractingKeys.map((key) => [key, (request as Record<string, unknown>)[key] ?? ""])) as Record<
+      (typeof clientContractingKeys)[number],
+      string
+    >,
+  };
+}
+
+/**
+ * The client sends their contracting details — through the contracting link,
+ * or from their rate card (doc §4.11): they land on the request, the history
+ * says so, and the account manager is told. Call deliverImmediate after.
+ */
+export async function saveClientContracting(
+  tx: Prisma.TransactionClient,
+  requestId: string,
+  values: z.infer<typeof clientContractingValues>,
+  via: "through the link" | "from the rate card",
+) {
+  if (!values.tradeName.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Please give your company's trade name." });
+  const before = await tx.salesRequest.findUniqueOrThrow({ where: { id: requestId }, include });
+  const data = Object.fromEntries(clientContractingKeys.map((key) => [key, blank(values[key])]));
+  const after = await tx.salesRequest.update({ where: { id: requestId }, data: { ...data, contractingSubmittedAt: new Date() }, include });
+  await logAudit(tx, {
+    actorId: null,
+    entity: "SalesRequest",
+    entityId: requestId,
+    summary: `Contracting details sent by the client, ${via}`,
+    changes: diffFields(readable(before), readable(after), historyFields),
+  });
+  await notify(tx, {
+    to: [before.ownerId],
+    actorId: null,
+    kind: "SALES_CONTRACTING_SENT",
+    title: `${before.client.name} sent their contracting details`,
+    link: `/sales/${requestId}`,
+  });
+}
+
 /**
  * Move a request to another stage — the one way a stage changes. A request is
  * marked Signed only once the client's contract is registered against it
  * (doc §4.11): signed means there is a contract to collect payments under.
  */
-export async function moveStage(tx: Prisma.TransactionClient, actorId: string, id: string, stage: SalesRequestStage) {
+export async function moveStage(tx: Prisma.TransactionClient, actorId: string | null, id: string, stage: SalesRequestStage, lostReason?: LostReason) {
   const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
-  if (before.stage === stage) return before;
-  if (stage === "SIGNED") {
+  if (before.stage === stage && (stage !== "LOST" || !lostReason || lostReason === before.lostReason)) return before;
+  // A proposal is a rate card: from Initial interest or Specify, Proposal sent needs one sent (doc §4.11).
+  if (stage === "PROPOSAL_SENT" && (before.stage === "INITIAL_INTEREST" || before.stage === "SPECIFY")) {
+    const sent = await tx.rateCard.count({ where: { salesRequestId: id, shareToken: { not: null } } });
+    if (!sent) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Send the client a rate card first — making a rate card's link moves the request to Proposal sent on its own.",
+      });
+    }
+  }
+  if (stage === "CONTRACTED") {
     if (!before.eventId) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — a signed request needs the client's contract, and a contract is for an event." });
     }
     const contracts = await tx.contract.count({ where: { salesRequestId: id, party: "CLIENT" } });
     if (contracts === 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Register the client's contract before marking the request signed." });
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Register the client's contract before marking the request contracted." });
     }
   }
   const closing = isClosed(stage);
@@ -243,6 +654,7 @@ export async function moveStage(tx: Prisma.TransactionClient, actorId: string, i
       stage,
       closedOn: closing ? (before.closedOn && isClosed(before.stage) ? before.closedOn : today()) : null,
       ...(stage === "PROPOSAL_SENT" && !before.proposalSentOn && { proposalSentOn: today() }),
+      lostReason: stage === "LOST" ? (lostReason ?? before.lostReason ?? "DECLINED") : null,
     },
     include,
   });
@@ -250,7 +662,7 @@ export async function moveStage(tx: Prisma.TransactionClient, actorId: string, i
     actorId,
     entity: "SalesRequest",
     entityId: id,
-    summary: `Stage: ${salesStageLabels[before.stage]} → ${salesStageLabels[stage]}`,
+    summary: `Stage: ${salesStageLabels[before.stage]} → ${salesStageLabels[stage]}${stage === "LOST" ? ` (${lostReasonLabels[lostReason ?? before.lostReason ?? "DECLINED"]})` : ""}`,
   });
   return after;
 }
@@ -270,6 +682,41 @@ async function tieContract(tx: Prisma.TransactionClient, actorId: string, reques
   }
   await tx.contract.update({ where: { id: contractId }, data: { salesRequestId: requestId } });
   await logAudit(tx, { actorId, entity: "SalesRequest", entityId: requestId, summary: `Contract tied to the request: ${contract.name}` });
+}
+
+/** What sourcing a request starts from (doc §4.11): the places to be close to, and what is wanted. */
+async function sourcingContext(db: PrismaClient, id: string) {
+  const request = await db.salesRequest.findUniqueOrThrow({
+    where: { id },
+    include: {
+      lines: true,
+      closeTo: { select: { name: true, latitude: true, longitude: true } },
+      closeToPoints: { select: { label: true, latitude: true, longitude: true } },
+      event: {
+        select: {
+          id: true,
+          name: true,
+          placesOfInterest: { select: { name: true, category: true, latitude: true, longitude: true, layer: { select: { measured: true } } } },
+        },
+      },
+    },
+  });
+  const chosen = [
+    ...request.closeTo.map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude })),
+    ...request.closeToPoints,
+  ];
+  const targets = chosen.length
+    ? chosen
+    : measuredPlaces(request.event?.placesOfInterest ?? []).map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude }));
+  const wanted = {
+    units: Math.max(0, ...request.lines.map((line) => line.rooms)),
+    apartments: request.lines.some((line) => /apartment|studio/i.test(line.roomType ?? "")),
+    hotelRooms: request.lines.some((line) => line.roomType && !/apartment|studio/i.test(line.roomType)),
+    budgetCents: request.budgetCents,
+    budgetCurrency: request.budgetCurrency,
+    budgetPerNight: request.budgetBasis === "PER_ROOM_NIGHT",
+  };
+  return { request, chosen, targets, wanted };
 }
 
 export const salesRouter = createTRPCRouter({
@@ -321,8 +768,16 @@ export const salesRouter = createTRPCRouter({
         : [];
       const count = (id: string, state: "BLOCKED" | "SOLD") =>
         counts.find((row) => row.salesRequestId === id && row.salesState === state)?._count._all ?? 0;
+      // Answers from the client on a rate card nobody in the team has opened yet (doc §4.11).
+      const unseen = requests.length
+        ? await ctx.db.rateCardResponse.findMany({
+            where: { seenAt: null, rateCard: { salesRequestId: { in: requests.map((request) => request.id) } } },
+            select: { rateCard: { select: { salesRequestId: true } } },
+          })
+        : [];
       return requests.map((request) => ({
         ...request,
+        newAnswers: unseen.filter((response) => response.rateCard.salesRequestId === request.id).length,
         nightsBlocked: count(request.id, "BLOCKED"),
         nightsSold: count(request.id, "SOLD"),
       }));
@@ -509,88 +964,8 @@ export const salesRouter = createTRPCRouter({
    * change goes through the same rules, ledger and undo as the stock sheet.
    */
   addRooms: protectedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        categoryId: z.string(),
-        rooms: z.number().int().min(1).max(500),
-        checkIn: dayRequired,
-        checkOut: dayRequired,
-        action: z.enum(["REQUEST", "BLOCK", "SELL"]),
-        blockExpiry: day,
-        sellPriceCents: z.number().int().min(0).nullable().optional(),
-        sellCurrency: z.string().length(3).optional(),
-        clientRef: z.string().max(200).optional(),
-        /** The client contract a sale is made under (doc §7.1). */
-        salesContractId: z.string().optional(),
-        /** Different rates for different dates — pre, event, post (doc §4.8). */
-        periods: z
-          .array(z.object({ checkIn: dayRequired, checkOut: dayRequired, priceCents: z.number().int().min(0), currency: z.string().length(3) }))
-          .max(20)
-          .optional(),
-      }),
-    )
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(
-        async (tx) => {
-          const request = await tx.salesRequest.findUniqueOrThrow({
-            where: { id: input.id },
-            select: { clientId: true, eventId: true, ownerId: true },
-          });
-          if (!request.eventId) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — rooms belong to an event." });
-          }
-          const checkIn = parseDay(input.checkIn);
-          const checkOut = parseDay(input.checkOut);
-          if (checkOut <= checkIn) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Check-out must be after check-in; check-out day is never a night." });
-          }
-          const rooms = await roomsFor(tx, { eventId: request.eventId, categoryId: input.categoryId, clientId: request.clientId, checkIn, checkOut });
-          const free = rooms
-            .filter((room) => room.free)
-            .sort((a, b) => Number(b.bought) - Number(a.bought) || a.slotNumber - b.slotNumber);
-          if (free.length < input.rooms) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `Nothing was changed. Only ${free.length} of these rooms ${free.length === 1 ? "is" : "are"} free for every night of the stay. Ask for fewer, or split the dates.`,
-            });
-          }
-          const chosen = free.slice(0, input.rooms);
-          const periods = input.periods?.map((period) => ({ ...period, checkIn: parseDay(period.checkIn), checkOut: parseDay(period.checkOut) }));
-          if (periods?.length) checkPeriods(periods, checkIn, checkOut);
-          const apply = (change: Parameters<typeof applyInventoryChange>[2]) =>
-            periods?.length ? applyByPeriod(tx, ctx.session.user.id, change, periods) : applyInventoryChange(tx, ctx.session.user.id, change);
-          const outcome = await apply({
-            eventId: request.eventId,
-            slotIds: chosen.map((room) => room.slotId),
-            checkIn,
-            checkOut,
-            action: input.action,
-            clientId: request.clientId,
-            salesRequestId: input.id,
-            blockExpiry: input.blockExpiry ? parseDay(input.blockExpiry) : undefined,
-            sellPriceCents: input.sellPriceCents ?? undefined,
-            sellCurrency: input.sellPriceCents != null ? input.sellCurrency : undefined,
-            clientRef: input.clientRef,
-            salesOwnerId: request.ownerId ?? undefined,
-            ...(input.action === "SELL" && input.salesContractId && { salesContractId: input.salesContractId }),
-          });
-          const category = await tx.roomCategory.findUniqueOrThrow({
-            where: { id: input.categoryId },
-            select: { name: true, property: { select: { name: true } } },
-          });
-          await logAudit(tx, {
-            actorId: ctx.session.user.id,
-            entity: "SalesRequest",
-            entityId: input.id,
-            summary: `${roomVerbs[input.action]}: ${input.rooms} × ${category.name}, ${category.property.name}, ${formatRange(checkIn, checkOut)}`,
-            changes: `Rooms #${chosen.map((room) => room.slotNumber).sort((a, b) => a - b).join(", #")} · ${outcome.nights} room-nights`,
-          });
-          return { ...outcome, slotNumbers: chosen.map((room) => room.slotNumber).sort((a, b) => a - b) };
-        },
-        { timeout: 30_000 },
-      ),
-    ),
+    .input(addRoomsInput)
+    .mutation(({ ctx, input }) => ctx.db.$transaction((tx) => addRoomsTx(tx, ctx.session.user.id, input), { timeout: 30_000 })),
 
   /**
    * Move a request's rooms on, a room category at a time (doc §4.11): a
@@ -599,131 +974,8 @@ export const salesRouter = createTRPCRouter({
    * one ledger entry per run of dates.
    */
   changeRooms: protectedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        categoryId: z.string(),
-        state: z.enum(["REQUESTED", "BLOCKED", "SOLD"]),
-        action: z.enum(["BLOCK", "SELL", "WITHDRAW_REQUEST", "EXTEND_BLOCK", "RELEASE_HOLD", "CANCEL_SALE"]),
-        blockExpiry: day,
-        sellPriceCents: z.number().int().min(0).nullable().optional(),
-        sellCurrency: z.string().length(3).optional(),
-        salesContractId: z.string().optional(),
-      }),
-    )
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(
-        async (tx) => {
-          const allowed = {
-            REQUESTED: ["BLOCK", "SELL", "WITHDRAW_REQUEST"],
-            BLOCKED: ["SELL", "EXTEND_BLOCK", "RELEASE_HOLD"],
-            SOLD: ["CANCEL_SALE"],
-          } as const;
-          if (!(allowed[input.state] as readonly string[]).includes(input.action)) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "That cannot be done to these rooms." });
-          }
-          const request = await tx.salesRequest.findUniqueOrThrow({
-            where: { id: input.id },
-            select: { clientId: true, eventId: true, ownerId: true },
-          });
-          if (!request.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "This request has no event." });
-          const eventId = request.eventId;
-
-          // The nights in question, with what a sale would otherwise wipe.
-          const nights =
-            input.state === "REQUESTED"
-              ? (
-                  await tx.roomNightRequest.findMany({
-                    where: { salesRequestId: input.id, roomNight: { slot: { categoryId: input.categoryId } } },
-                    select: {
-                      clientRef: true,
-                      sellPriceCents: true,
-                      sellCurrency: true,
-                      notes: true,
-                      roomNight: { select: { slotId: true, date: true } },
-                    },
-                  })
-                ).map((claim) => ({
-                  slotId: claim.roomNight.slotId,
-                  date: claim.roomNight.date,
-                  clientRef: claim.clientRef,
-                  sellPriceCents: claim.sellPriceCents,
-                  sellCurrency: claim.sellCurrency,
-                  salesNotes: claim.notes,
-                  dueDate: null as Date | null,
-                  salesOwnerId: request.ownerId,
-                }))
-              : await tx.roomNight.findMany({
-                  where: { salesRequestId: input.id, salesState: input.state, slot: { categoryId: input.categoryId } },
-                  select: {
-                    slotId: true,
-                    date: true,
-                    clientRef: true,
-                    sellPriceCents: true,
-                    sellCurrency: true,
-                    salesNotes: true,
-                    dueDate: true,
-                    salesOwnerId: true,
-                  },
-                });
-          if (nights.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "There are no such rooms on this request any more." });
-
-          let applied = 0;
-          for (const rect of rectangles(nights)) {
-            const these = nights.filter((night) => rect.slotIds.includes(night.slotId) && night.date >= rect.checkIn && night.date < rect.checkOut);
-            const same = <K extends keyof (typeof these)[number]>(key: K) => {
-              const values = new Set(these.map((night) => String(night[key] instanceof Date ? (night[key] as Date).toISOString() : night[key])));
-              return values.size === 1 ? these[0]![key] : undefined;
-            };
-            const priceGiven = input.sellPriceCents !== undefined;
-            const outcome = await applyInventoryChange(tx, ctx.session.user.id, {
-              eventId,
-              slotIds: rect.slotIds,
-              checkIn: rect.checkIn,
-              checkOut: rect.checkOut,
-              action: input.action,
-              clientId: request.clientId,
-              ...((input.action === "BLOCK" || input.action === "SELL") && { salesRequestId: input.id }),
-              ...(input.action === "SELL" && input.salesContractId && { salesContractId: input.salesContractId }),
-              blockExpiry: input.blockExpiry ? parseDay(input.blockExpiry) : undefined,
-              // A sale keeps what the block said unless told otherwise; a mix
-              // across nights is not guessed at.
-              sellPriceCents: priceGiven ? (input.sellPriceCents ?? undefined) : ((same("sellPriceCents") as number | null) ?? undefined),
-              sellCurrency: priceGiven ? input.sellCurrency : ((same("sellCurrency") as string | null) ?? undefined),
-              clientRef: (same("clientRef") as string | null) ?? undefined,
-              salesNotes: (same("salesNotes") as string | null) ?? undefined,
-              dueDate: (same("dueDate") as Date | null) ?? undefined,
-              salesOwnerId: (same("salesOwnerId") as string | null) ?? request.ownerId ?? undefined,
-            });
-            applied += outcome.nights;
-            // A request that became a block or a sale is not also still a request.
-            if (input.state === "REQUESTED" && input.action !== "WITHDRAW_REQUEST") {
-              await applyInventoryChange(tx, ctx.session.user.id, {
-                eventId,
-                slotIds: rect.slotIds,
-                checkIn: rect.checkIn,
-                checkOut: rect.checkOut,
-                action: "WITHDRAW_REQUEST",
-                clientId: request.clientId,
-                reason: "Became a block or a sale on the sales request",
-              });
-            }
-          }
-          const category = await tx.roomCategory.findUniqueOrThrow({
-            where: { id: input.categoryId },
-            select: { name: true, property: { select: { name: true } } },
-          });
-          await logAudit(tx, {
-            actorId: ctx.session.user.id,
-            entity: "SalesRequest",
-            entityId: input.id,
-            summary: `${changeVerbs[input.action]}: ${category.name}, ${category.property.name} — ${applied} room-nights`,
-          });
-          return { nights: applied };
-        },
-        { timeout: 60_000 },
-      ),
-    ),
+    .input(changeRoomsInput)
+    .mutation(({ ctx, input }) => ctx.db.$transaction((tx) => changeRoomsTx(tx, ctx.session.user.id, input), { timeout: 60_000 })),
 
   /**
    * Tie the client's holds and requests on the event that belong to no request
@@ -790,6 +1042,19 @@ export const salesRouter = createTRPCRouter({
         include: {
           ...include,
           client: { select: { id: true, name: true, shortName: true, contacts: { orderBy: { name: "asc" }, select: { id: true, name: true, title: true } } } },
+          // Its tasks — the sourcing task, and the hotel contact tasks it led to (doc §4.11).
+          tasks: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              outcome: true,
+              type: { select: { name: true } },
+              property: { select: { name: true } },
+              assignees: { select: { id: true, name: true, email: true } },
+            },
+          },
         },
       }),
     ),
@@ -846,8 +1111,8 @@ export const salesRouter = createTRPCRouter({
   /** Change any part of a request; the history records what changed. */
   update: protectedProcedure
     .input(requestInput.extend({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
+    .mutation(async ({ ctx, input }) => {
+      const updated = await ctx.db.$transaction(async (tx) => {
         const { id, ...fields } = input;
         const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
         await checkContact(tx, fields.contactId, before.clientId);
@@ -856,9 +1121,13 @@ export const salesRouter = createTRPCRouter({
         if (changes) {
           await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: id, summary: "Updated", changes });
         }
+        // A sales request given its event only now gets its sourcing task now (doc §4.11).
+        if (after.eventId && after.eventId !== before.eventId) await ensureSourcingTask(tx, id, ctx.session.user.id);
         return after;
-      }),
-    ),
+      });
+      await deliverImmediate(ctx.db);
+      return updated;
+    }),
 
   /**
    * Move a request to another stage. Moving to *Proposal sent* dates the
@@ -870,6 +1139,8 @@ export const salesRouter = createTRPCRouter({
       z.object({
         id: z.string(),
         stage: z.nativeEnum(SalesRequestStage),
+        /** Why, when closing it as Lost/Declined. */
+        lostReason: z.nativeEnum(LostReason).optional(),
         /** Signing under one of the client's contracts for the event not yet tied to a request: it is tied to this one. */
         contractId: z.string().optional(),
       }),
@@ -877,7 +1148,7 @@ export const salesRouter = createTRPCRouter({
     .mutation(({ ctx, input }) =>
       ctx.db.$transaction(async (tx) => {
         if (input.contractId) await tieContract(tx, ctx.session.user.id, input.id, input.contractId);
-        return moveStage(tx, ctx.session.user.id, input.id, input.stage);
+        return moveStage(tx, ctx.session.user.id, input.id, input.stage, input.lostReason);
       }),
     ),
 
@@ -941,33 +1212,378 @@ export const salesRouter = createTRPCRouter({
     .input(
       z.object({
         token: z.string().min(20).max(100),
-        values: z.object(Object.fromEntries(clientContractingKeys.map((key) => [key, z.string().max(5000)])) as Record<
-          (typeof clientContractingKeys)[number],
-          z.ZodString
-        >),
+        values: clientContractingValues,
       }),
     )
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
-        const before = await tx.salesRequest.findUnique({ where: { contractingToken: input.token }, include });
-        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-        if (!input.values.tradeName.trim()) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Please give your company's trade name." });
-        }
-        const data = Object.fromEntries(clientContractingKeys.map((key) => [key, blank(input.values[key])]));
-        const after = await tx.salesRequest.update({
-          where: { id: before.id },
-          data: { ...data, contractingSubmittedAt: new Date() },
-          include,
+    .mutation(async ({ ctx, input }) => {
+      const request = await ctx.db.salesRequest.findUnique({ where: { contractingToken: input.token }, select: { id: true } });
+      if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+      await ctx.db.$transaction((tx) => saveClientContracting(tx, request.id, input.values, "through the link"));
+      await deliverImmediate(ctx.db);
+      return { ok: true };
+    }),
+
+  /**
+   * Delete a request that went nowhere (doc §4.11) — an enquiry made by
+   * mistake, or twice. One with rooms in inventory or a contract is refused:
+   * those are closed (Lost, Released…) so what happened stays on record. Its
+   * tasks stay, no longer tied to it; what it notified about is cleared.
+   */
+  remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(async (tx) => {
+      const request = await tx.salesRequest.findUniqueOrThrow({
+        where: { id: input.id },
+        select: {
+          id: true,
+          clientId: true,
+          client: { select: { name: true } },
+          event: { select: { name: true } },
+          _count: { select: { nights: true, nightRequests: true, contracts: true } },
+        },
+      });
+      if (request._count.nights || request._count.nightRequests) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This request has rooms in inventory — withdraw, release or cancel them first, or close the request as Lost or Released instead.",
         });
-        await logAudit(tx, {
+      }
+      if (request._count.contracts) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This request has a contract, so it cannot be deleted — close it instead." });
+      }
+      await tx.notification.deleteMany({ where: { link: `/sales/${request.id}` } });
+      // Its sourcing task and the hotel contact tasks it led to go with it, unless already done (doc §4.11).
+      const sourcing = await tx.task.findMany({
+        where: { salesRequestId: request.id, type: { name: { in: ["Sourcing", HOTEL_CONTACT] } }, status: { not: "DONE" } },
+        select: { id: true, title: true },
+      });
+      await tx.task.deleteMany({ where: { id: { in: sourcing.map((task) => task.id) } } });
+      for (const task of sourcing) {
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Task", entityId: task.id, summary: `Task removed with its sales request: ${task.title}` });
+      }
+      await tx.salesRequest.delete({ where: { id: request.id } });
+      await logAudit(tx, {
+        actorId: ctx.session.user.id,
+        entity: "Client",
+        entityId: request.clientId,
+        summary: `Sales request deleted${request.event ? ` (${request.event.name})` : ""}`,
+      });
+      return { ok: true };
+    }),
+  ),
+
+  // --- The request in detail (doc §4.11) ----------------------------------------
+
+  /** Fill in or change the details — after a call, say. The first time, the enquiry becomes a sales request. */
+  saveDetails: protectedProcedure
+    .input(detailsInput.extend({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const after = await ctx.db.$transaction(async (tx) => {
+        const { id, ...details } = input;
+        return (await saveDetails(tx, id, details, { id: ctx.session.user.id, summary: "Details updated" })).after;
+      });
+      await deliverImmediate(ctx.db);
+      return after;
+    }),
+
+  /** A link for the client to tell us their needs. A new one replaces the old. */
+  makeNeedsLink: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const updated = await ctx.db.salesRequest.update({
+      where: { id: input.id },
+      data: { needsToken: randomBytes(24).toString("base64url"), needsLinkMadeAt: new Date() },
+      select: { needsToken: true },
+    });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.id, summary: "Needs link made" });
+    return updated;
+  }),
+
+  switchOffNeedsLink: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.salesRequest.update({ where: { id: input.id }, data: { needsToken: null } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.id, summary: "Needs link switched off" });
+  }),
+
+  /** What the client's needs page shows, by the link alone: their name, the event and its places — nothing else of ours. */
+  needsForm: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
+    const request = await ctx.db.salesRequest.findUnique({
+      where: { needsToken: input.token },
+      include: {
+        ...include,
+        event: {
+          select: {
+            id: true,
+            name: true,
+            country: true,
+            startDate: true,
+            endDate: true,
+            placesOfInterest: {
+              select: { id: true, name: true, category: true, latitude: true, longitude: true, layer: { select: { measured: true } } },
+              orderBy: { name: "asc" },
+            },
+          },
+        },
+      },
+    });
+    if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+    return {
+      clientName: request.client.name,
+      eventName: request.event?.name ?? null,
+      // What they can choose to be close to: the places distances are measured to (doc §3.7).
+      places: measuredPlaces(request.event?.placesOfInterest ?? []).map(({ id, name, latitude, longitude }) => ({ id, name, latitude, longitude })),
+      currency: currencyForCountry(request.event?.country),
+      /** Where a first line's dates start: the event's own. */
+      stay: request.event ? { checkIn: dayKey(request.event.startDate), checkOut: dayKey(request.event.endDate) } : null,
+      submittedAt: request.needsSubmittedAt,
+      values: {
+        lines: request.lines.map((line) => ({
+          rooms: line.rooms,
+          roomType: line.roomType ?? "",
+          people: line.people,
+          checkIn: line.checkIn ? dayKey(line.checkIn) : "",
+          checkOut: line.checkOut ? dayKey(line.checkOut) : "",
+        })),
+        budgetCents: request.budgetCents,
+        budgetCurrency: request.budgetCurrency,
+        budgetBasis: request.budgetBasis,
+        closeToIds: request.closeTo.map((place) => place.id),
+        points: request.closeToPoints.map(({ label, address, latitude, longitude }) => ({ label, address: address ?? "", latitude, longitude })),
+        closeToOther: request.closeToOther ?? "",
+        clientComments: request.clientComments ?? "",
+        breakfast: request.breakfast,
+        parking: request.parking,
+        parkingSpaces: request.parkingSpaces,
+      },
+    };
+  }),
+
+  /**
+   * Sourcing a request (doc §4.11): the client's places on a map, and the
+   * properties we already have near them, each judged against the request.
+   * With no places chosen, the event's own places stand in, and it says so.
+   */
+  sourcing: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const { request, chosen, targets, wanted } = await sourcingContext(ctx.db, input.id);
+    const onList = new Set(
+      request.eventId
+        ? (await ctx.db.scoutingEntry.findMany({ where: { eventId: request.eventId }, select: { propertyId: true } })).map((entry) => entry.propertyId)
+        : [],
+    );
+    // Those still to be contacted: an open hotel contact task on this event (doc §4.11).
+    const contactTasks = new Map(
+      request.eventId
+        ? (
+            await ctx.db.task.findMany({
+              where: { eventId: request.eventId, status: { not: "DONE" }, type: { name: HOTEL_CONTACT }, propertyId: { not: null } },
+              select: { id: true, propertyId: true },
+            })
+          ).map((task) => [task.propertyId!, task.id])
+        : [],
+    );
+    // Those that could not help with this very request — closed with why (doc §4.11).
+    const declined = new Map(
+      (
+        await ctx.db.task.findMany({
+          where: { salesRequestId: request.id, outcome: { not: null }, propertyId: { not: null } },
+          select: { propertyId: true, outcome: true },
+        })
+      ).map((task) => [task.propertyId!, task.outcome!]),
+    );
+    // Quoted for this very request (doc §4.11): judged on the quotation, no longer "to be contacted".
+    const quotes = new Map<string, { id: string; name: string; rooms: number | null; currency: string; lines: { checkIn: Date; checkOut: Date; rooms: number; rateCents: number }[] }>();
+    for (const quote of await ctx.db.quotation.findMany({
+      where: { salesRequestId: request.id, status: { not: "DECLINED" } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, rooms: true, currency: true, scoutingEntry: { select: { propertyId: true } }, lines: { select: { checkIn: true, checkOut: true, rooms: true, rateCents: true } } },
+    })) {
+      if (!quotes.has(quote.scoutingEntry.propertyId)) quotes.set(quote.scoutingEntry.propertyId, quote);
+    }
+    const properties = await ctx.db.property.findMany({
+      where: { latitude: { not: null }, longitude: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        stars: true,
+        city: true,
+        latitude: true,
+        longitude: true,
+        totalRooms: true,
+        categories: { select: { id: true, unitCount: true, bedrooms: true, indicativePriceMinCents: true, currency: true } },
+      },
+    });
+    // Each category's event rate on the request's event (doc §3.9); the old indicative price only where there is none.
+    const rates = request.eventId ? (await eventRates(ctx.db, { propertyIds: properties.map((property) => property.id), eventId: request.eventId })).get(request.eventId) : undefined;
+    const priced = (categories: (typeof properties)[number]["categories"]) =>
+      categories.map((category) => {
+        const rate = rates?.get(category.id);
+        return rate
+          ? { unitCount: category.unitCount, bedrooms: category.bedrooms, priceCents: rate.minCents, currency: rate.currency }
+          : { unitCount: category.unitCount, bedrooms: category.bedrooms, priceCents: category.indicativePriceMinCents, currency: category.currency, indicative: true };
+      });
+    const suggestions = properties
+      .map((property) => {
+        const quote = quotes.get(property.id);
+        const judged = fit(
+          quote
+            ? { type: property.type, latitude: property.latitude!, longitude: property.longitude!, categories: quotedAs(quote), stated: null, quoted: true }
+            : { type: property.type, latitude: property.latitude!, longitude: property.longitude!, categories: priced(property.categories), stated: property.totalRooms },
+          targets,
+          wanted,
+        );
+        return {
+          id: property.id,
+          name: property.name,
+          type: property.type,
+          stars: property.stars,
+          city: property.city,
+          latitude: property.latitude!,
+          longitude: property.longitude!,
+          onEvent: onList.has(property.id),
+          contactTaskId: quote ? null : (contactTasks.get(property.id) ?? null),
+          /** Its open contact task, even once quoted — still there to finish. */
+          openContactTaskId: contactTasks.get(property.id) ?? null,
+          declined: quote ? null : (declined.get(property.id) ?? null),
+          quote: quote ? { id: quote.id, name: quote.name } : null,
+          ...judged,
+        };
+      })
+      // Near enough to matter: within reach of one of the places, or already on the event.
+      .filter((property) => property.quote !== null || property.onEvent || property.km === null || property.km <= 15)
+      .sort((a, b) => {
+        const order = { good: 0, unclear: 1, partly: 2, poor: 3 } as const;
+        return order[a.verdict] - order[b.verdict] || (a.km ?? 99) - (b.km ?? 99);
+      })
+      // Every one still to be contacted, then the best of the rest.
+      .filter(
+        (property, index, all) =>
+          property.quote !== null ||
+          property.contactTaskId !== null ||
+          property.declined !== null ||
+          all.slice(0, index).filter((other) => other.contactTaskId === null && other.declined === null).length < 25,
+      );
+    return {
+      eventId: request.eventId,
+      eventName: request.event?.name ?? null,
+      targets,
+      fromEventPlaces: !chosen.length && targets.length > 0,
+      wanted,
+      suggestions,
+    };
+  }),
+
+  /**
+   * Places to stay near the client's places that we do not have yet (doc
+   * §4.11), from Google Maps — or OpenStreetMap while Google is not switched
+   * on — each judged against the request as far as the map can tell.
+   */
+  sourcingDiscover: protectedProcedure
+    // 5 km to start with; wider when asked.
+    .input(z.object({ id: z.string(), radiusKm: z.number().min(1).max(30).default(5) }))
+    .query(async ({ ctx, input }) => {
+    const { targets, wanted } = await sourcingContext(ctx.db, input.id);
+    if (targets.length === 0) return { source: null as Source | null, found: [] };
+    const kinds = { hotels: wanted.hotelRooms || !wanted.apartments, apartments: wanted.apartments };
+    const answered = await Promise.all(targets.slice(0, 4).map((target) => findNearby(target, input.radiusKm, kinds)));
+    const results = answered.filter((result) => result !== null);
+    if (results.length === 0) {
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "The map search did not answer — its server is busy. Try again in a minute." });
+    }
+    const source: Source | null = results.some((result) => result.source === "google") ? "google" : "osm";
+    const ours = await ctx.db.property.findMany({ select: { id: true, name: true, address: true, latitude: true, longitude: true } });
+    const seen = new Set<string>();
+    const found = results
+      .flatMap((result) => result.found)
+      .filter((place) => !seen.has(place.key) && seen.add(place.key))
+      // Not one we have: not the same name or address, and not on the very same spot.
+      .filter((place) => !knownAlready(place, ours))
+      .map((place) => ({ ...place, ...fit({ type: place.type, latitude: place.latitude, longitude: place.longitude, categories: [], stated: place.rooms }, targets, wanted) }))
+      .filter((place) => place.km !== null && place.km <= input.radiusKm)
+      .sort((a, b) => (a.km ?? 99) - (b.km ?? 99) || (b.rating ?? 0) - (a.rating ?? 0))
+      .slice(0, 100);
+    return { source, found };
+  }),
+
+  /** A place found on the map, added to our properties — and to the request's event, when it has one. */
+  addFound: protectedProcedure
+    .input(z.object({ salesRequestId: z.string(), place: foundPlaceInput }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.db.$transaction(async (tx) => {
+        const request = await tx.salesRequest.findUniqueOrThrow({
+          where: { id: input.salesRequestId },
+          select: { eventId: true, event: { select: { name: true } }, client: { select: { name: true } } },
+        });
+        const made = await createFoundProperty(tx, {
+          place: input.place,
+          eventId: request.eventId,
+          salesRequestId: input.salesRequestId,
+          foundWhile: `while sourcing for ${request.client.name}`,
+          actorId: ctx.session.user.id,
+        });
+        return { ...made, eventName: request.event?.name ?? null };
+      });
+      await deliverImmediate(ctx.db);
+      return result;
+    }),
+
+  /** Searching an address, for a client on their needs link only — no link, no search. */
+  needsPlaceSearch: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), query: z.string().trim().min(3).max(200), sessionToken: z.string().max(100) }))
+    .query(async ({ ctx, input }) => {
+      await needsLinkInUse(ctx.db, input.token);
+      return searchPlaces(input.query, input.sessionToken);
+    }),
+
+  needsPlaceDetails: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), placeId: z.string().min(1).max(300), sessionToken: z.string().max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      await needsLinkInUse(ctx.db, input.token);
+      return placeDetails(input.placeId, input.sessionToken);
+    }),
+
+  needsGeocode: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), address: z.string().trim().min(3).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      await needsLinkInUse(ctx.db, input.token);
+      return geocode([input.address]);
+    }),
+
+  /** The client sends their needs: they land on the request, which becomes a sales request, and its owner is told. */
+  submitNeeds: publicProcedure
+    .input(detailsInput.extend({ token: z.string().min(20).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const { token, ...details } = input;
+      await ctx.db.$transaction(async (tx) => {
+        const request = await tx.salesRequest.findUnique({ where: { needsToken: token }, select: { id: true, ownerId: true, client: { select: { name: true } } } });
+        if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
+        if (details.lines.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Please say how many rooms you need." });
+        await saveDetails(tx, request.id, details, { id: null, summary: "Needs sent by the client, through the link" });
+        await tx.salesRequest.update({ where: { id: request.id }, data: { needsSubmittedAt: new Date() } });
+        await notify(tx, {
+          to: [request.ownerId],
           actorId: null,
-          entity: "SalesRequest",
-          entityId: before.id,
-          summary: "Contracting details sent by the client, through the link",
-          changes: diffFields(readable(before), readable(after), historyFields),
+          kind: "SALES_NEEDS_SENT",
+          title: `${request.client.name} told us their needs`,
+          body: details.lines
+            .map((line) => [`${line.rooms} ${line.roomType || "rooms"}`, line.checkIn && line.checkOut ? `${line.checkIn} – ${line.checkOut}` : null].filter(Boolean).join(" · "))
+            .join("\n"),
+          link: `/sales/${request.id}`,
         });
-        return { ok: true };
-      }),
-    ),
+      });
+      await deliverImmediate(ctx.db);
+      return { ok: true };
+    }),
 });
+
+/**
+ * A quotation as a candidate's rooms and price (doc §4.11): the rooms it is
+ * for — as the hotel put it, else the most quoted for any one stay — at its
+ * lowest rate.
+ */
+function quotedAs(quote: { rooms: number | null; currency: string; lines: { checkIn: Date; checkOut: Date; rooms: number; rateCents: number }[] }) {
+  const perStay = new Map<string, number>();
+  for (const line of quote.lines) {
+    const key = `${line.checkIn.getTime()}-${line.checkOut.getTime()}`;
+    perStay.set(key, (perStay.get(key) ?? 0) + line.rooms);
+  }
+  const rooms = quote.rooms ?? Math.max(0, ...perStay.values());
+  const lowest = quote.lines.length ? Math.min(...quote.lines.map((line) => line.rateCents)) : null;
+  return [{ unitCount: rooms, bedrooms: null, priceCents: lowest, currency: quote.currency }];
+}

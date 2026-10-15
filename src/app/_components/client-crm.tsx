@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Manager } from "~/app/_components/client-list";
+import { WebsiteLink } from "~/app/_components/website-link";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Card } from "~/app/_components/ui";
 import {
@@ -86,7 +87,7 @@ export function ClientDetailsCard({ client }: { client: Client }) {
             label="General email"
             value={client.email ? linkish(`mailto:${client.email}`, client.email) : null}
           />
-          <Row label="Website" value={website ? linkish(website, client.website!) : null} />
+          <Row label="Website" value={website ? <WebsiteLink url={client.website!} /> : null} />
           <Row label="Notes" value={client.notes} />
         </dl>
       )}

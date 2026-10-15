@@ -25,7 +25,13 @@ export default async function NewContractPage({
   return (
     <>
       <PageHeader
-        back={request ? { href: `/sales/${request.id}`, label: "The sales request" } : { href: `/events/${event.id}/contracts`, label: `${event.name} · Contracts` }}
+        back={
+          request
+            ? { href: `/sales/${request.id}`, label: "The sales request" }
+            : property
+              ? { href: `/properties/${property}?back=${encodeURIComponent(`/events/${event.id}`)}#contracts`, label: "The property" }
+              : { href: `/events/${event.id}`, label: event.name }
+        }
         title="New contract"
         subtitle={
           request && sign

@@ -86,6 +86,24 @@ first-class and alertable.
 `Event → Property → Category → Slot → Room-night`. A property is scouted once and can be
 reused across events; its *inventory* always belongs to exactly one event.
 
+**An event's team** (2026-10-03), set in its settings under *Team* and shown on its page:
+its **project lead**, and its **accommodation managers** — one or more. The accommodation
+managers are given each new sales request's sourcing task, and the project lead is told
+of it (§4.11). Changes to the team are in the event's log.
+
+
+**An event's tabs** (reordered 2026-10-13): **Properties**, Inventory, Deadlines, Position,
+and **Event details** last. **Opening an event** — from the Events menu, the events list or
+the dashboard — starts on **Properties**, unless the person chose another start tab. The
+system notices, in each browser, when someone opens an event and goes straight to the same
+other tab three times running, and asks in a bar above the tabs: "You usually go straight
+to Inventory. Open events on Inventory from now on?" — *Yes* saves it as their start tab
+(on their profile, so on any computer), *No, thanks* is not asked again for that tab.
+*Pick up where you left off* still returns to the tab last worked in. *Event details* shows the event — name, dates and nights, city,
+country, status — with *Edit*; its **team** — the project lead and the accommodation
+managers — with *Change the team*; its **places of interest**, with *Change places of
+interest*; and its Log, the latest change shown. Each change opens **in a popup** over the
+tab. Opening an event still lands on its Properties tab.
 ### 2.4 Deadlines alert, they never auto-change state
 
 An expired option or block is **flagged**, never silently downgraded or released. The
@@ -153,10 +171,10 @@ Magic-link sign-in by email is built and deliberately switched off: at launch no
 outside the Workspace needs an account. It becomes available again by configuring an email
 sender, without any code change. See `docs/todos.md` §2.
 
-### 2.6 Feedback — a running history per property and client
+### 2.6 Updates — a running history per property and client
 
-Called **Feedback** on screen (it was *Updates* until 2026-10-01); a single post is still
-referred to below as an update.
+Called **Updates** on screen (it was *Feedback* from 2026-10-01 to 2026-10-06, at the owner's
+request each time); a single post is an update.
 
 A property or a client keeps a running, append-only feed of free-text posts — a meeting
 note, a call summary, feedback from the field — the same way `LedgerEntry` keeps a
@@ -183,9 +201,36 @@ is replaced, so nothing that was said is lost, and the "Edited" note means a rea
 knows the text is not what was first posted. The earlier wordings are not shown anywhere yet
 — there is no "see previous versions" — but they are there if they are ever needed.
 
-**Only the latest update shows.** The feed only grows, so the rest sit behind *View more*,
-which says how many earlier ones there are and opens them all, newest first. This holds on
-a property's page and on a client's.
+**Every update shows, as one line** (2026-10-06; until then only the latest showed, the
+rest behind *View more*). Newest first, each update is a single line — its kind, who wrote
+it, the day it took place and how it begins — so all the activity can be seen at a glance;
+**Read more** opens that one in full, and *Show less* folds it again. A short note that fits
+on its line has nothing more to open. Ten show at first; *Show 10 older* adds more. This
+holds on a property's page and on a client's.
+
+**Kinds of update, each with its template** (2026-10-06), as the team had them on
+monday.com, **all in the one feed**, newest first. The box is a **note**, as before; beneath it,
+**+ Meeting feedback**, **+ Call summary** and, on a property only, **+ Site inspection
+feedback** each open their template **in a popup**: the day it took place (today unless
+changed) and a box per heading, each with an example, @mentions working in all of them.
+Closing it with something written asks first. Posted, it lands in the feed with the rest:
+
+| Kind | Headings |
+| --- | --- |
+| Meeting feedback | Who was there · What was discussed · What was agreed · Next steps |
+| Call summary | Who we spoke to · Summary · Next steps |
+| Site inspection feedback | Who visited · First impression · Rooms · Common areas and amenities · Location and surroundings · Fit for our clients · Photos and video · Next steps |
+| *Couldn't help* | Written by the system, never chosen — when a hotel contact task closes because the hotel cannot help (§4.11) |
+
+*These headings are a first draft; the team's monday.com templates replace them when the
+owner sends them.* Headings left empty are left out. A posted template is kept as the
+update's text, each answer under its heading, so it is edited like any update; in the feed
+it carries its kind as a coloured label and "Meeting on 3 Oct", with the headings in bold.
+
+**Not built yet: emails in the feed.** The plan is for the emails exchanged with a
+property's or a client's contacts to appear in the same feed, as on monday.com. It needs the
+Gmail link (Gmail API with read access, set up by Till — `docs/todos.md`), which is not in
+place yet.
 
 ### 2.7 The team — profiles and internal chat
 
@@ -336,12 +381,146 @@ stored.
 
 ---
 
+### 2.8 Tasks — the team's shared board
+
+Like Feedback and the team pages, this sits outside the three phases: it is the work the
+team asks of each other. **Tasks** in the menu opens **one board that everyone sees**.
+
+**A task has:**
+
+| Field | Meaning |
+| --- | --- |
+| Task | What it is, in a line — *Get photos and a video of Hotel Carmel*. Required |
+| Details | Anything the person doing it needs to know |
+| To complete | The team member or members who do it, from a dropdown of the team to search and tick (2026-10-11). Can be left empty for now |
+| Requested by | Who asked for it — whoever adds it, unless someone else is chosen |
+| Deadline | Optional, a calendar day. Shown in red as *Overdue* once passed and not done |
+| Status | *Backlog* (noted for later), *To do*, *In progress*, *Done*. A new task is *To do* unless chosen otherwise |
+| Priority | High, Medium, Low, or none |
+| Type | Set by the system on the tasks it makes — *Sourcing*, *Hotel contact*, *Get media* — each with its own steps on the task. **Not chosen on the form** (the owner's call, 2026-10-11): a task added by hand has none, and editing a task keeps the type it has. The board can still be filtered by type |
+| About | Optional: an event, a property, a client and a sales request — each a link. Choosing a sales request also fills in its client and event when they were left empty |
+| Comments | A running thread under the task, with `@Name` mentions as in Feedback (§2.6). The author can edit their own comment, which then says *Edited* |
+
+**Two views of the same board**, switched at the top and remembered in the browser:
+
+- **Kanban** — four columns, Backlog, To do, In progress and Done. Dragging a card to
+  another column moves the task there. **Cards are kept small** (2026-10-11), as the board
+  will hold many: the title on at most two lines, the event left off its end ("Contact The
+  Georgian for Beyond Limits"); who completes it and its priority beside it; one line under
+  it with any outcome, the type, the deadline and the number of comments. What it is about
+  — event, property, client — shows on hovering, and in full once opened. A column shows
+  its first 15 cards and *Show n more*; *Done* shows its 5 most recently finished, the rest
+  under *Show n more*, and holds what was finished in the last 30 days.
+- **Reassigning in one click** (2026-10-11): the people on a card, and *To complete* on a
+  task's page (*Change*), open a list of the team — search it, click a name to put them on
+  or take them off. It saves at once, without opening the task, and whoever is newly put
+  on is told (§2.9).
+- **List** — every task in a table: status, priority, type, who completes it, who asked,
+  deadline, soonest deadline first. It can also be filtered by status, and shows every
+  finished task.
+
+**Filters**, on both views: *My tasks* (the ones you complete), search, who completes it,
+who asked, priority, type, event and client.
+
+**On the board, a task opens in a popup** (2026-10-03) — the same as its own page below,
+with *Open as a page* for a link to keep or share; closed with ×, Escape or a click beside
+it. *+ New task* opens the full form in a popup too, and so does **+ Add task** at the
+foot of each Kanban column — the task then starts in that column — and at the top of the
+List (into *To do*). With *My tasks* on, the new task is already yours to complete. Notifications and *My work*
+still link to the task's own page.
+
+**A task's own page** (laid out 2026-10-03): on the left, for a sourcing task, *Where to
+source* first (§4.11), then the comments; on the right, its **details** — on a sourcing
+task, **what the client asked**, read from the sales request so it is always the latest:
+each line large ("20 × Single room") with its dates and nights beneath, then the budget,
+the places as labels and the client's words; on another task, what to do — then who
+completes it, who asked, deadline, priority, type and what it is about; and under them its
+**status as steps** — *Backlog → To do → In progress → Done*, passed ones ticked, each a
+click away, with the next move as one button (*Move to To do*, *Start it*, *Mark done*;
+*Reopen* once done). Below, its *Log* — every change, who made it
+and when; only the latest shows, with *Show all* for the rest. It can be edited or deleted.
+
+**Deleting a task** (2026-10-07): *Delete task* at the foot of its details, and on the board —
+*Delete* on a Kanban card (it shows when the pointer is on the card) and at the end of each
+row of the List. It always asks first; the task's comments go with it, and it cannot be
+undone. Anyone can delete any task, as anyone can edit one.
+
+**My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
+you asked of others, each with a link to the board.
+
+Not built yet: each type's own workflow; tasks shown on the property, client and
+sales-request pages they are about. Who is told what about tasks is §2.9.
+
+### 2.9 Notifications — the bell, and email
+
+**What people are told, about tasks** (the owner's choice, 2026-10-03). Nobody is told
+about what they did themselves.
+
+| When | Who is told |
+| --- | --- |
+| A task is given to someone — on adding it, or later | The people newly put on it |
+| Someone is `@mentioned` in a task's comment | Each person mentioned |
+| A task is commented on | Whoever asked for it and whoever completes it, apart from those mentioned (told above) |
+| A task moves to another status | Whoever asked for it and whoever completes it |
+| A task is due tomorrow | Whoever completes it — or, with nobody on it, whoever asked. Once |
+| A task becomes overdue | The same people. Once |
+| A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card |
+
+**The bell** in the header shows how many are unread and the latest thirty, newest first;
+opening one marks it read and goes to the task; *Mark all read* clears the count. It checks
+for new ones every half minute.
+
+**By email, as each person chooses** on *My profile*: **At once** (an email for each, as it
+happens), **Daily summary** (one email each morning with everything since the last — the
+default, so nobody is flooded), or **No email** (the bell only). The bell shows everything
+whichever is chosen. Emails link straight to the task.
+
+**The morning run.** Each day at 06:00 UTC (08:00 in Switzerland in summer) the system
+writes the *due tomorrow* and *overdue* notifications, then sends each person who chose the
+daily summary their email. Run twice, it sends nothing twice.
+
+**Emails are sent through Resend**, from a We Lodge address. **Off the live site — staging,
+or a computer — only these are ever emailed** (the owner, 2026-10-13): brandon@, ami@,
+till@ and volki@welodge.net, and britz.brandon@gmail.com, their subjects starting *[Test]*. Staging runs on a
+copy of the live data, every real address included, so anyone else is skipped there (the
+email goes to the server log). The live site is told apart by Vercel itself, not by a
+setting someone could forget. Until Resend is set up (Till, `docs/todos.md`), nothing is
+emailed and the bell works on its own.
+
 ## 3. Phase 1 — Scouting
 
 A scouting list is the long list of properties that *could* be contracted for an event.
 It is research, not inventory: nothing here implies a commercial position.
 
 ### 3.1 Property
+
+**The same property twice is refused, as far as it can be told.** While a property is
+scouted — on the quick screen and on the full form — it is compared with every property
+already in the system, and anything that looks like it is shown, with why: **a very
+similar name** (the same distinctive words, so *Residence Inn Burbank Downtown* and
+*Residence Inn by Marriott Los Angeles Burbank/Downtown* match, while words every chain
+uses, like *Inn* or *Marriott*, are not enough on their own), **the same street address**,
+or **within 150 m on the map**. Each can be opened, or added to the event instead in one
+click — or it says it is on the event already. Saving it anyway takes ticking *It is a
+different property*; without that the system refuses it, on the server too. An exactly
+equal name is always refused.
+
+**Scouting a property is quick by default** (2026-10-03, on trial). *Scout a new property* on
+an event opens it as a **pop-up over the Properties tab**, so the list stays where it was;
+saving closes it and the property is on the list at once, *Save and scout another* keeps it
+open for the next one, and closing it with something typed asks first. (Reached without an
+event, it is a page of its own.) It is
+one short screen with only what is known on a first look: the name (warned at once if the
+library already has it), the type and stars as one-click buttons, the address — searched on
+Google Maps where that is switched on — with city and country, website and phone; the room
+types as quick rows of name, number of rooms and how many each sleeps, with one-click
+names (*+ King*, *+ Twin*, *+ Studio*…); the amenities as chips; one contact; and notes. The
+position on the map is found from the address as it is typed and shown beside the form,
+where the pin can be dragged. *Save and add to [event]* saves and goes back to the event;
+*Save and scout another* saves and clears the screen for the next one. Bed set-ups, sizes,
+indicative prices, services, the provider and contracting details are added afterwards on
+the property's page, each part editing in place (§3.9). *Use the full form* still opens the
+complete form, with every field at once.
 
 Common to every type:
 
@@ -408,7 +587,7 @@ A hotel has one or more **room categories**:
 | `roomCount` | Total rooms in that category at the property |
 | `capacity` | Standard occupancy (pax) |
 | `bedConfiguration` | e.g. 1×King, 2×Twin — drives Operations checks (§6.4) |
-| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | A price *range* per night at scouting time — indicative only, not a contracted rate. Either bound may be entered alone |
+| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | **No longer entered** (2026-10-06). It was a price *range* per night at scouting time; what was entered is kept, and still read where nothing better exists (see *Event rate* below, and §5.2), but the forms no longer ask for it |
 
 `Property.totalRooms` = Σ `roomCount` across categories, and must be recorded even where
 categories are not yet broken out.
@@ -423,7 +602,7 @@ An apartment is modelled as a category whose units are whole flats:
 | `bathrooms` | Required; allow halves (`1.5`) |
 | `unitCount` | How many identical units |
 | `capacity` | Sleeps N |
-| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | Same indicative range as §3.2 |
+| `indicativePriceMinCents`, `indicativePriceMaxCents` + `currency` | No longer entered, as §3.2 |
 
 **Simplification:** an apartment unit behaves exactly like a hotel room slot — an
 indivisible, sellable, occupiable thing. Bedrooms/bathrooms are attributes of the unit, not
@@ -508,7 +687,13 @@ recorded against it (§3.10).
 a property on the event's Properties list is on the Inventory tab's stock sheet from the
 moment the category is there with its number of rooms — numbered #1 to that count, blank
 until something is recorded on it. Rooms of a property marked *Rejected* are left off; a
-category with no number of rooms has no rows. Whether a room category is marked
+category with no number of rooms has no rows. **Empty hotels are hidden by default** (2026-10-11): a hotel on the list whose rooms are
+all empty in the dates shown, or with no room categories yet, is left off the sheet until
+**Show empty** is on — its label counts the hotels ("Show empty (6 hotels)"). Shown,
+a hotel with no room categories says *No room categories yet — add them on its page*, and
+one whose rooms are all empty lists them. The hotels with rooms on the sheet come first,
+then those whose rooms are all empty, then those with no rooms yet, by name within each.
+Whether a room category is marked
 *Contracted* (§3.5) is information for the team; it no longer decides what can be put on
 the sheet.
 
@@ -538,10 +723,60 @@ places the way there is for properties (§3.5), so each event keeps its own list
 
 **Where they are managed.** Places of interest are part of setting the event up, so they are
 added, edited and removed in the **event's settings** (its Edit page), beside its name, dates
-and city — not on the Properties tab, which only measures to them. The Properties tab keeps
-one line naming them ("Distances are measured to: Crypto.com Arena, IBC"), with a link
-straight to them in the settings, or a prompt to add some if there are none. They still
+and city — not on the Properties tab, which only measures to them. Since 2026-10-11 they are
+shown on the event's first tab, **Event details** (below), with *Change places of interest*
+opening them **in a popup** — the Properties tab no longer carries a line about them. **As a
+rule, changing or adding something opens in a popup over the page rather than another page**
+(the owner's, 2026-10-11). They still
 appear as pins on the Properties tab's map.
+
+**Map layers** (2026-10-13), as in Google My Maps. An event's places sit in **layers** — the
+sports venues, the nation houses, the universities — each with a name, a colour and a switch,
+**Measure distances to these places — and let clients choose them as "close to"**. Only the
+places on such layers are measured to (the Properties tab's distances, a sourcing task's
+default places, a rate card's "from the nearest venue") and offered to a client under *close
+to*; with none, every place is. **They are run on the map itself** (the owner's call,
+2026-10-13), from its **Layers** panel (below) — not on the Event details tab: *+ New layer*;
+on a layer's **⋯**, its name, colour and distance switch, *Remove* (the layer with its places,
+after asking) and **+ Add a place** — a name, then its address searched or *Pick it on the
+map* and a click on the spot, a red "＋ New place here" pin showing where it goes before it is
+saved; and **Import from Google My Maps**: in My Maps, *Export
+to KML/KMZ* with *Export as KML instead of KMZ* ticked (and *Keep data up to date with network
+link KML* not), then upload it; each My Maps layer becomes one
+of ours (or adds to ours of the same name), with its colour, each point a place with its
+description as notes; lines and shapes are counted and left out, and a place whose name the
+event already has is skipped. When places were first put into layers, each went into one of
+its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *Other places*
+(not measured until switched on). A place's form has its **Map layer**.
+
+**Adding anything from the map** (2026-10-13): **＋ Add to the map** at the top of the map, then
+a click on the spot, or **📍 Use where I am** from a phone in front of it; a red "＋ New here"
+pin shows the spot (*Move it* to click again). Beside the map, it is **a property** or **a
+place**. **A place** — a nation house, a fan zone, a meeting point, a metro station — has a
+name, the layer it goes on (or *+ A new layer…* named there and then), its address and a note,
+and *Add to the map* puts it there. (Metro stations fetched from Google or OpenStreetMap were
+tried and dropped the same day — added by hand instead.) **A property**, for what is seen on
+the ground — under development, not on Google — has its name (a working one will do),
+Hotel / Apartments / Aparthotel, stars for a hotel, *Under development*, the address — looked
+up from the spot, to change if need be — and a note. **Add to properties board** does what
+adding a found place does: the property, on the event's board, with a hotel contact task;
+its notes say it was spotted on the ground and added from the map, with what was noted.
+
+On the **Properties tab's map**, the **Layers** panel ticks each layer on or off (measured
+ones starred), with **Our
+properties** and **Google public transport** (every metro, rail and bus line with its
+stations — off to start), and *Show all* / *Hide all* — there in full screen too (the map's
+own full-screen button, top right, takes the panel with it); the choice is remembered per event in
+the browser. **Places show as small round icons in their layer's colour** (2026-10-13; names on
+the map overwhelmed it) — the name appears on pointing at one, its details on clicking. The
+icon is the place's **sport**, read from its name or notes, the first sport mentioned (a squash
+centre a racket 🎾, Dodger Stadium ⚾, the Coliseum's ceremonies 🎆); with none, its kind
+(📺 IBC or broadcast, ✈️ airport, 🚉 station, 🏘️ village, 🎓 university, 🏠 nation house,
+🏟️ stadium or arena). Venues are **deep red** to start. **Our properties** show as small rounded
+squares (2026-10-13): a 🛏️ bed for a hotel or aparthotel, coloured by its stars — five black,
+four blue, three green, two or fewer yellow, grey when the stars are not known — and a 🏠 house
+in purple for an apartment; name and stars on pointing, the panel on clicking (its status
+there, no longer in its colour).
 
 | Field | Notes |
 | --- | --- |
@@ -672,7 +907,8 @@ details* — has an
 **Edit** button in its corner that turns it into a small form of just that card's fields,
 saved on their own; the full Edit page still changes everything at once. *Room categories*
 has **Add room category** and an Edit on each row, for the name, rooms, sleeps, beds (or
-bedrooms and bathrooms), size, notes and indicative price, and Remove. The rules are the
+bedrooms and bathrooms), size and notes, and Remove — no price: its rate is the event rate, read from the quotations
+(§3.9). The rules are the
 full form's: a room category with inventory booked against it cannot be removed, and its
 room count cannot drop below the highest room number already in use; a number that is not a
 number is refused with the reason.
@@ -705,7 +941,51 @@ counts. The Properties tab becomes that board, but built on what the system alre
 so a hotel's details are entered once and reused on every event, and the stock sheet
 (§5.4), the map (§3.8) and availability (§5.3) read the same facts.
 
-#### Groups
+#### Stages — the board grouped by where each property stands (2026-10-11)
+
+By default the Properties tab groups its list by **stage**, which is worked out, never set
+by hand — so a property **moves between the groups on its own** as the work is done:
+
+| Stage | When |
+| --- | --- |
+| **Contracted** | Any of its room categories is *Contracted* for this event, or there is a supplier contract with it for this event (§7.1) — the highest stage |
+| **Quote received** | It has a quotation for this event that is not declined (§3.10) |
+| **Pending quote** | Contacted and waiting for a quotation: its contact task is in progress — emailing the request moves a task not yet started to *In progress*, and a *Prospect* to *Reached out* — or it is marked *Reached out* |
+| **To be contacted** | A hotel contact task (§4.11) is open on it and not started — it lands here as soon as the task is made, from sourcing or from the map |
+| **Prospects** | On the list, nothing started |
+| **Couldn't help** | Its last contact task closed because it could not help (§4.11) — folded by default |
+| **Ruled out** | Marked *Rejected* — folded by default |
+
+In that order — **Contracted at the top** (the owner's call, 2026-10-11), then the work in hand furthest along first — each with how many properties it holds and what it means. The
+status column (*Prospect*, *Reached out*, *Shortlisted*, *Rejected*) stays as it was, set by
+hand.
+
+**Finding hotels from the map** (2026-10-11). The Map view has a bar above the map: **Find
+hotels not on our list near** one of the event's places of interest (its first venue by
+default) — or **a custom address**, found with the same Google Maps address box as a
+property's, and pinned on the map once chosen ("📍 Santa Monica Pier", 2026-10-13) until
+*Clear search ×*. The place is **searched for by name** (its layer shown beside it) and the
+address box sits **next to it**, whichever was set last being searched around; a place
+chosen by hand shows **alone on the map**, zoomed to, the others hidden until *Clear search ×*
+or the place is cleared (2026-10-13) — **within 5, 10 or 20 km**, and *Search*. The event's places of interest
+are named on the map as dark labels, venues with a star ("★ IBC"), as on a sourcing task. Google Maps (Places API) is searched for
+hotels, serviced apartments and aparthotels around it; those already in our system (the same
+name or address, or the very same spot) are left out, and so are holiday lets listed through
+booking sites (Airbnb, Booking.com, Vrbo, Expedia, bluepillow and the like) — somebody's
+flat, not a place we contract. What is left shows as hollow purple dots on the map — a click
+opens its card — and as a list beneath, nearest first: name, kind, Google's rating, its
+distance, its website and a link to it on Google Maps. **Add to properties board** creates
+the property from what Google knows, puts it on this event and makes a **hotel contact task**
+for it (§4.11) — a general one, with no client's request behind it — so it lands under *To
+be contacted*; its phone and email are then looked up on their own. Should Google not answer,
+OpenStreetMap is used instead, and the list says so.
+
+**The tab, tidied** (2026-10-11): the board is grouped by stage only — the team's own groups
+(below) are no longer shown or chosen, and their Group column is gone; the groups already
+made are kept, unused. The *Must have* amenity filter is gone too. Above the list there are
+only List · Map, status, type and *With quotations*.
+
+#### Groups (no longer shown since 2026-10-11 — kept for the record)
 
 - **Groups belong to an event.** Each event has its own, created, named, recoloured,
   reordered and deleted by the team as they like — "We Lodge Accommodation – Contracted",
@@ -766,6 +1046,38 @@ contract is sent for signature, which need not be the general email or any conta
 every colleague**. That was put to the business and accepted for now; if it changes, it is
 part of deciding on roles (§9, question 5).
 
+**The hotel fills in its own details, by link** (2026-10-06 for its contracting details;
+since 2026-10-08 its property details instead — everything but rates and contracting
+details). A section of a property's page, **The
+hotel's own form** — and the hotel contact task's *Contact details* card — has **Email it to
+the hotel**: it makes a private link, if there is none yet, and opens an email from your own
+mailbox, addressed to the email for contracts, else the general email, else the first
+contact with an email, with the link and a short request in it; *Copy link*, *Open* and
+*Switch off* sit beside it, and *Just make the link* (or *Make a new link*, which replaces the
+old one) makes it without the email. The hotel opens the link (`/property-details/…`) without
+signing in and sees a form for its property alone, filled with whatever we already have:
+
+- **The property** — address, city, country, neighbourhood, phone, general email, website,
+  check-in and check-out times, year built;
+- **Room categories** (or unit types) — name, rooms, sleeps, beds (or bedrooms and
+  bathrooms), size, notes; it can change those we have and add new ones, **never remove
+  one** (it is asked to tell us instead), and cannot take a category below the rooms already
+  in our inventory;
+- **Amenities**, ticked from our list; **services** — breakfast, cleaning, laundry, gym,
+  public transport; **who we talk to** — name, role, email, phone.
+
+**No rates, no terms for an event and no contracting details** — rates and terms are agreed
+separately, by quotation, and the contracting details are taken down by the team on the
+property's page (the owner's call, 2026-10-08). What it
+sends replaces what it covers on the property and is recorded in the property's Log as *sent
+by the hotel, through its form*, field by field and room category by room category; whoever
+made the link is told (§2.9), and the hotel contact task's checklist ticks what came in. It
+can be corrected and sent again while the link is on; the section says when it was sent.
+Switching the link off makes it open nothing; what was sent stays. A link sent before
+2026-10-08 (`/contracting/hotel/…`) opens the new form. *See what the hotel sees* opens the
+hotel's page for a look; the team fills the same form in from the hotel contact task
+(§4.11).
+
 **Providers — the chain or group.** A **provider** is the hotel chain or group a property
 belongs to — Marriott, Accor, a local apartment operator. It is its own record, entered once:
 **one provider has many properties, and a property has at most one provider** (an independent
@@ -805,6 +1117,7 @@ on the property's entry in the event's list (§3.5), beside its status:
 | Deposit | Deposit — *new* | Free text |
 | Block Expiration Date | Block expiry — *new* | A date: when the hotel's hold on our rooms runs out. Distinct from a client's block on a night (§4.2) |
 | Cancellation Terms, Payment Terms | Two text fields — *new* | |
+| — | Extra costs — *new*, 2026-10-03 | Free text: what comes on top of the rate — resort fee, parking, city tax. Asked for by the hotel contact task (§4.11) |
 | Deadline for RL | Rooming list deadline — *new* | A date, ahead of Phase 3 (§6) |
 | Minimum stay | Minimum stay — *new* | A number of nights, e.g. 3 |
 | Comments | Notes on the entry (§3.5) | Already event-specific |
@@ -852,10 +1165,17 @@ order. A category's **notes**
 on the property's own page.
 
 The per-event ones live with the category's contract status for that event (§3.5), so an
-LA28 rate never overwrites an EXPO 2030 rate for the same room type. The indicative,
-Booking-style price range from scouting (§3.2) is kept, but **shown only on the property's
-own page**, labelled indicative: on the Properties tab a rate always means the buying rate,
-so the tab's old *From* column, which showed the indicative price, is gone.
+LA28 rate never overwrites an EXPO 2030 rate for the same room type. **The event rate** (2026-10-06) replaced the indicative price range on the property's page.
+For each room category and each event the property is on, it is what a night costs us
+during **the event's period — its dates on the event's setup page** — read, never typed:
+the buying rate agreed for the event when there is one (*Agreed*); otherwise the rates of
+the event's quotations (§3.10) whose periods fall in those dates (*Quoted*, with the
+quotation's name), accepted quotations before those only received, declined ones never.
+Several periods at different rates show as a range ("US$ 295 – US$ 325"); quoted periods
+that leave some of the event's nights uncovered say *part of the event*. With nothing
+agreed or quoted it says *No quote for the event dates*. What the column means — with the
+event's name and dates — is an ⓘ on its heading, not a line on the page. The indicative range is no longer
+entered (§3.2); on the Properties tab a rate always means the buying rate, as before.
 
 #### What is deliberately not in the first version
 
@@ -881,13 +1201,61 @@ first. They are not shown under the property's row on the Properties tab, where 
 them would make the board too long; the row says how many there are and links straight
 to the tab.
 
+**Payments and cancellation cut-offs, line by line** (2026-10-12), so they can be followed
+on a deadline board later. **Payments**: each *On signature* or *On a date*, and its
+percentage of the total; one line to start, *+ Add a payment* for more, and the form says
+what they add up to (green at 100%). **Cancellation cut-offs**: each a kind — *Cancellation
+fee* (the share charged from the date), *Attrition* (the share that may be reduced, free,
+until the date), *Release* (the share that may be handed back until the date) or *Other* —
+its date and its percentage; *+ Add a cut-off* for more. A line left empty is ignored. The
+quote shows them as "30% on signature · 70% on 1 Dec 2027" and "100% charged from 1 May
+2028 · attrition 10% until 1 Mar 2028". The old free-text boxes stay underneath as *Other
+payment / cancellation terms, in words*, so quotes typed before keep what they say. **Accept
+and make the contract** carries the lines over as the contract's own payments (one on
+signature falling due the day it is made) and cancellation deadlines (§7.1).
+
+**A quote before the room categories** (2026-10-11). A hotel often quotes before its rooms
+are on the property, so a quotation can be started anyway: each line's *Room category* has
+*+ New room category…* (and, with none yet, the form opens on it) — a name, how many rooms
+it has and how many it sleeps — which adds the category to the property at once, its beds,
+size and the rest to fill in later on the property's page, and puts it on the line.
+
+**For which sales request** (2026-10-11). A quotation can be for one client's request —
+the hotel quoted for that group — found at the top of the form by typing the client's
+name (the event's open requests are searched, however many), or left general; a new one starts with the request the property's open hotel contact task is
+about, else *None — a general quote for the event*. A quotation tied to a request says
+*For {client}*, is written on the request's history, and moves the property on that
+request's sourcing task (§4.11). It is also listed in **Quotes received** (2026-10-12), a card on the
+request's sourcing task and on the request's page: each hotel, the quotation's name, its
+period, rooms, lowest rate a night, total and status. Clicking one opens it in full in a
+popup over the page — its lines, payments, cut-offs and terms, with *Edit*, *Accept and make
+the contract* and *Decline* right there, and *Open the hotel's page →* for the rest. General quotes for the event are not listed there.
+
 **The property's page** is laid out so that it fits on a screen rather than being a long
 stack of cards:
 
 - Under the name, the events the property is on, each with its status, as links.
-- On the left, one card of tabs: **Quotations**, **Room categories** (or *Unit types*),
-  **Feedback** and **Log**. The address remembers the tab, so a link can open one.
-  The Feedback box is one line until something is typed into it.
+- On the left, one card of tabs (in this order since 2026-10-06): **Updates** (§2.6),
+  **Room categories** (or *Unit types*, with their event rates), **Media** (2026-10-11,
+  below), **Quotations**, **Contracts** (§7.1) and **Log**. The address remembers the tab,
+  so a link can open one. The Updates box is one line until something is typed into it.
+- **Media** (2026-10-11) — what clients see of the property on a rate card (§4.11).
+  Nothing is uploaded to us: photos stay in the team's Dropbox, videos on YouTube.
+  - **Video**: the YouTube link (the same *Video* field as before), played on the tab.
+  - **Photos folder**: the Dropbox link to the property's folder, with its room-category
+    subfolders — *Open in Dropbox*.
+  - **Photos & videos for clients**: the best few, picked from that folder — up to 60. **Videos
+    count too** (2026-10-13; often all there is): picked from Dropbox or pasted the same way,
+    told by their file name (.mp4, .mov…), shown with their first frame and a ▶, and on a
+    rate card playing full size when opened — the cover too, if a video is first. **Choose
+    from Dropbox** opens Dropbox's own picker, to tick photos across the folder and its
+    subfolders (We Lodge's Dropbox app, set up 2026-10-13); **Paste photo links** also
+    takes Dropbox *Copy link* links, one per line. A folder's link is
+    refused there, and a photo already in is not added twice. Each photo has a caption
+    and a room category (or *Whole property*), so it shows beside that room on a rate
+    card; the first is the **Cover**, *Make cover* and ← → change the order; *Remove*
+    takes it off here and off any rate card showing it, never out of Dropbox. Photos are
+    shown web-sized, however large the file.
 - On the right, one **Details** panel instead of a card per subject: Notes, Where it is,
   Contacts, Amenities, More about the property and Contracting details, each a section
   that folds shut. The last two start shut, saying how many of their fields are filled.
@@ -914,7 +1282,7 @@ form shows the total while it is typed.
 
 A quotation is **Received**, **Accepted** or **Declined**. Declining one keeps it, greyed,
 and it can be put back to received. **Accept and make the contract** marks it accepted and
-creates the hotel's supplier contract on the event's Contracts tab (§7.1): for this hotel
+creates the hotel's supplier contract, listed on the property's *Contracts* tab (§7.1): for this hotel
 and event, named after the hotel and the quotation, worth the quotation's total, in its
 currency, with its link, owned by the property's account manager, and with the quoted
 payment and cancellation terms, what the rates include and the taxes copied into the
@@ -1279,6 +1647,10 @@ that actually changed, old value to new. Like the ledger, it is append-only: not
 ever edited or deleted once written, including by the thing it describes being deleted
 itself (removing a property or a scouting entry does not take its history down with it).
 
+**On screen it is always folded** (the owner, 2026-10-14): at the foot of a sales request,
+task, client, event or contract — page or popup — a single quiet line, **▸ History (16)**,
+opens it on a click. Every page made from now on shows its history the same way.
+
 Two things this deliberately does not do, both because they are more than today needs:
 
 - **No field-level diff of nested structures.** A property's room categories or contacts
@@ -1436,28 +1808,46 @@ to this request**; that is written to the ledger too. The list of requests shows
 nights sold and blocked, counted from the nights themselves: nothing about the rooms is
 stored on the request, so it cannot disagree with the stock sheet.
 
-**Where a request stands** — its *stage*:
+**Where a request stands** — its *stage* (the owner's set, 2026-10-11, replacing Rate card
+sent, Blocked, Signed, Released and No reply):
 
-| Stage | Meaning |
+| Stage | Means |
 | --- | --- |
-| *Initial interest* | The client has asked. We are looking for units and preparing a proposal. Monday: *Discovery* |
-| *Proposal sent* | We have sent a proposal and are waiting for the answer |
-| *Blocked* | The client is holding rooms while they decide |
-| *Signed* | Closed: the client has signed — and their contract is registered against the request (below) |
-| *Released* | Closed: the client let their block go |
-| *No reply* | Closed: the client never came back to us |
-| *Lost* | Closed: the client went elsewhere or dropped the plan |
+| *Initial interest* | The client has asked; we are finding out exactly what they need. Monday: *Discovery* |
+| *Specify* | The details are in; we are sourcing properties and preparing a rate card. Reached on its own when the details are given |
+| *Proposal sent* | The client has a rate card and we are waiting for their answer. Reached on its own when a rate card's link is made — and, from *Initial interest* or *Specify*, only once one has been |
+| *Negotiation* | The client is interested and terms are being agreed — rooms may be held for them |
+| *Contracted* | Closed: the client has signed — and their contract is registered against the request (below) |
+| *Lost/Declined* | Closed, with the reason: **Declined** (went elsewhere or dropped the plan), **No reply** (never came back to us) or **Released** (let their block go) |
 
-The stage is changed by hand, with one click, in any direction: a released request can be
-reopened. Moving to *Proposal sent* dates the proposal today, unless a date is already
-there. Moving to a closing stage records the day it closed; reopening clears that. Nothing
-moves a request on its own — a block that has passed its date is not released by the
-system (§2.4).
+When the stages changed, every request was carried over: *Initial interest* with its
+details in → *Specify*; *Rate card sent* → *Proposal sent*; *Blocked* → *Negotiation*;
+*Signed* → *Contracted*; *Lost*, *No reply* and *Released* → *Lost/Declined*, the old stage
+kept as its reason (*Lost* as *Declined*).
 
-**Signed needs the client's contract.** A request can be marked *Signed* only once a client
+**On a request's page the stage is a progress bar** (2026-10-03): *Initial interest →
+Specify → Proposal sent → Negotiation → Contracted*, the steps passed ticked and the current
+one marked, each a click away. The next move is a button — *Mark specify*, then *Mark
+proposal sent*, then *Mark negotiation* or *Mark contracted*, then *Mark contracted*. *Close
+as…* asks why it was lost or declined. A request closed that way shows as such — "No reply —
+closed on 3 Oct" — with *Reopen*, which takes it back to *Proposal sent* if one was sent,
+else *Specify* if its details are in, else *Initial interest*. A contracted one shows every
+step done.
+
+The stage is changed by hand, with one click, in any direction — except that *Proposal
+sent* is reached from *Initial interest* or *Specify* only once a rate card has been sent:
+the button says so otherwise. Moving to *Proposal sent* dates the proposal today, unless a
+date is already there. Moving to a closing stage records the day it closed; reopening clears
+that. Two moves are made for us: **giving the request's details** takes it from *Initial
+interest* to *Specify*, and **making a rate card's link** takes it from *Initial interest*
+or *Specify* to *Proposal sent* (the rate card below). Nothing else moves a request on its
+own — a block that has passed its date is not released by the system (§2.4). After blocking
+rooms the request offers *Negotiation*, after selling them *Contracted*.
+
+**Contracted needs the client's contract.** A request can be marked *Contracted* only once a client
 contract (§7.1) is registered against it — the client's, for the request's event — so
 there is always a contract whose payments and cancellation deadlines are followed. Clicking
-*Signed*, or *Mark the request Signed* after a sale, marks it at once when there is one.
+*Contracted*, or *Mark the request Contracted* after a sale, marks it at once when there is one.
 When there is not, it asks for one instead:
 
 - **Sign under a contract already registered** — any of the client's contracts for the
@@ -1471,18 +1861,373 @@ A request with no event cannot be signed until its event is chosen, as a contrac
 event. Requests marked signed before this rule (2026-10-02) keep their stage; their
 *Contract* card says, in red, that no contract is registered, with a link to register it.
 
+**From enquiry to sales request** (the owner's description, 2026-10-03). A request runs the
+whole way: a client's first, vague interest ("about this many rooms, near this place, for
+these dates"); the sales manager getting the details, by a call or by email; properties
+proposed; and, at contracting, the client's legal details sent to our lawyers to draw up
+the contract.
+
+- **An enquiry** is registered with just the client, what they asked for in their own
+  words, an account manager, and a date to follow up. On that date the account manager is
+  reminded (§2.9) — once for each date set — until the request closes.
+- **Getting the details.** On the request, **Email the client** opens the account manager's
+  own email with a message already written — to the contact's address when there is one —
+  with their **link to book a call** (each person keeps theirs on *My profile*: a Google
+  Calendar appointment page, Calendly or similar) and/or a **form to tell us their needs**:
+  a private link, like the contracting one, which the client opens without signing in.
+  They check it and send it from their own mailbox. The link can also be made on its own,
+  copied, or switched off.
+- **The details** are fields of their own: **the units and periods, as lines** — each
+  line a number of **units**, a type chosen from **hotel rooms** (single, double, twin,
+  triple, suite) or **apartments** (studio, 1 to 4 bedrooms) — or *something else*, in
+  words — and an arrival and departure, picked on a small calendar that opens on **the
+  event's month** (a later line's on where the line before ends; a departure's on its
+  arrival) rather than on today's — the dates themselves start empty, so nothing is
+  assumed. **A unit is one hotel room or one whole
+  apartment**: a 3-bedroom apartment is 1 unit, and the form says so beside the word
+  (2026-10-03; "rooms" misled). How many people each was asked at first and dropped the
+  same day as unclear; *+ Add another period or room type* adds a line, starting where
+  the last one ended, so a pre period or a second room type is simply another line (the
+  owner's call, 2026-10-03) — the **budget** (an amount and currency, per room per night, per person per
+  night, or in total — the currency starts as the event's country's: dollars for Los
+  Angeles, francs for Switzerland, euros where it is not known), **close to** (the event's
+  places of interest, chosen; and **places of the client's own** — their office, a team
+  hotel — found by typing the address, or by clicking the spot on a map, each kept with
+  its position so it can be measured from), and the **client's comments**. Requests that had one number of rooms and
+  one arrival and departure kept them as their first line. They are
+  filled in by us after a call (*Fill in after a call*), or by the client on their needs
+  form — which lands on the request, says so, and tells the account manager.
+- **The sourcing task.** When a request for one of our events becomes a sales request, a
+  task goes on the task board on its own (§2.8): *Source accommodation for [client] —
+  [event]*, of type *Sourcing*, given to the **event's accommodation managers** and asked by
+  its **project lead** (both set in the event's settings, *Team*), tied to the event, the
+  client and the request, with the units and periods, budget, places to be close to and
+  the client's comments written into it as they were then — the request itself always has
+  the latest. The accommodation managers are told they have a task, and the project lead
+  that a new sales request has come in (§2.9); with no accommodation manager set, the task
+  waits unassigned and the project lead is told to give it to someone. One task per request:
+  sending the details again makes no second one, and a request whose event is only chosen
+  later gets its task then. A request not for one of our events gets none. **The request's
+  page links to it** (2026-10-07): a *Tasks* card at the top of its right-hand column shows
+  the sourcing task — its status, who has it, *Open the sourcing task* — and under it the
+  hotel contact tasks that came out of it, each a link with its status.
+- **Where to source**, on the sourcing task: a map with the places the client wants to be
+  close to (or, if they chose none, the event's own, said so), and **the properties we
+  already have** around them — within 15 km, or on the event already — as pins and a list,
+  each judged against the request in four plain checks, said in words: **how far** from
+  the nearest of their places (within 8 km counts), **the kind** (hotel rooms, apartments,
+  or an aparthotel for either), **the units** (all its room categories together, against
+  the most units on any one line), and **the price** (its lowest event rate on the request's
+  event — agreed or quoted, §3.9 — or, for a property scouted before the event rate, its old
+  indicative price, said so; against a
+  budget per room per night in the same currency). *Fits* when every check passes; *Not
+  enough known* when none fails but some could not be made (no price, no unit count); *Fits
+  in part* when one fails; *Does not fit* otherwise. Only the ones that *fit* are shown at
+  first, on the map and in the list; those that *fit in part* wait behind their tab, with
+  how many there are, and so do those **To be contacted** — on the event with their hotel
+  contact task still open (below), shown there whatever they would be judged, with a link
+  to the task; adding a place with *Add to properties board* opens that tab. Once the task
+  is done the property is judged like any other. **A quotation for this request** (2026-10-11)
+  takes it out of *To be contacted* at once, task open or not: it is judged on the
+  quotation — the rooms quoted (as the hotel put it, else the most for any one stay) against
+  the rooms wanted, its lowest rate against the budget — marked **Quoted**, linking to the
+  quotation, and always shown, under *Fits* or *Fits in part*, however far. Its contact
+  task, if still open, keeps its link. *Does not fit* is not shown at all (the owner's call, 2026-10-03).
+  *Not enough known* — no check failed, but some could not be made, as for a hotel with no
+  unit count or price yet — is shown under *Fits in part* (2026-10-12; it had been hidden,
+  which made a hotel vanish once its contact task was gone), the missing checks in grey. **Far away**
+  (2026-10-12) has a tab of its own: anything more than 10 km from the client's nearest
+  place, however else it fits — a quoted hotel included — is there, never under *Fits* or
+  *Fits in part*. Each can be opened, or added to the event in one click.
+- **Properties not in the system**, under them (2026-10-03): places to stay within **5 km**
+  of the client's places that are not among our properties — widened to 10 or 20 km with
+  *Search within* — found on the map when the task is opened — hotels, and serviced apartments or aparthotels when apartments are asked for —
+  as hollow purple dots on the map and a list, nearest first (the panel has no explanatory
+  line above the map since 2026-10-11 — only a note when the places shown are the event's own,
+  the client having chosen none). Pointing at a dot opens a card
+  over it — the name, kind, rating and distance, its links and **Add to properties board**
+  (a dot for one of ours shows its verdict, *Open* and *Add to* the event); the card stays
+  while the pointer moves onto it, and closes when it leaves. In the list: the name, the kind, Google's
+  guest rating and price level ($–$$$$), how far and from which place, the rooms when the
+  map knows them, a link to it on the map and to its website. A place is left out when we
+  already have one with the same name or address, or on the very same spot. The **Add to
+  properties board** button creates the property from what the map knows (name, kind, address, city,
+  country, coordinates, website, phone, stars, rooms) and puts it on the request's event,
+  noted as found while sourcing for that client (a website from Google is kept without its
+  tracking tags); it then shows among the properties we
+  have, to be filled in on its page. The search uses **Google Maps** (Places API, New) —
+  and, until that is switched on for our key (Till; today Google refuses), **OpenStreetMap**,
+  whose list is patchier: the section says which. Flats without a website are left out of
+  OpenStreetMap's, as homes rather than places we can contract. An answer is kept for six
+  hours, so opening the task again does not search again (each Google search is paid).
+  OpenStreetMap's free server is often busy: it is asked twice, and if it still turns the
+  search away the section says so, with *Try again* — a failed search is never kept as
+  "nothing found".
+- **The hotel contact task** (2026-10-03). Adding a place with *Add to properties board*
+  also puts a **Hotel contact** task on the board: *Contact {property} for {client} —
+  {event}* (the client in the name since 2026-10-11, tasks made before renamed; one made
+  from the event's map, with no request, is *Contact {property} — {event}*), to the
+  event's accommodation managers (or, with none set, to whoever added it), asked by whoever
+  added it, linked to the property, the event, the client and the sales request; the
+  managers are told (§2.9). One open task per property and event. Its point is to reach
+  out to the property and gather what we need. **Its page follows the work** (2026-10-10):
+  on the right, beside its details, **what the client asked** — read from the sales request,
+  as on the sourcing task — so whoever calls the hotel knows what for; on the left, three
+  numbered steps:
+
+  1. **Call the hotel** — its contact details, below; and first, prominent, **who to email
+     the request to** (2026-10-11): "Ask them on the call: who should we email the request
+     to?" — a name and an email, saved on the task and added to the hotel's contacts when
+     new; once saved it reads *Email the request to Maria Lopez · maria@hotel.com*, with
+     *Change*.
+  2. **Email them the request** — after the call the hotel usually asks for it in writing.
+     Folded to one line by default (2026-10-11): the step's heading with **Email the
+     request**, and *Show the email ▾* to open it. Opened, the email is shown as it will go: a greeting (the first contact's first name, if
+     known), the request for the event — each line's units, type, dates and nights (not
+     where the client wants to be, since 2026-10-11) — asking for availability and rates,
+     and "If you could please complete your property's information on this *link*, it will
+     help us prepare.", closing "Thank you, and kind regards," — no name or company, which the
+     sender's own email signature adds — the word *link* a hyperlink to the hotel's own details form (§3.9),
+     made the first time it is needed. **The client's name and budget are never in it.**
+     Since a word can be a hyperlink only in formatted text, **Email the request** copies the
+     email as formatted text and opens your own mailbox addressed to the person the hotel
+     named on the call (else the hotel's general email, else its first contact's, else its
+     email for contracts), with the subject filled in — the email is then pasted into the
+     message (⌘V), which the task says; *Copy the email* copies it the same way. Where
+     formatting is not taken, the plain text carries the form's address after the word. Beneath, whether
+     the hotel's form is out or came back, *See what the hotel sees* and *Switch the link off*.
+  3. **Register their quote** (2026-10-11) — when the hotel replies with rooms and rates,
+     *+ Register their quote* opens the quotation form (§3.10) in a popup over the task, so
+     the task stays where it is, tied to the task's sales request to start. Saved, it is on
+     the property's Quotations tab for the event like any other, listed here (name, for
+     which client, period, room-nights, total), ticks *Rate* below and moves the property on
+     the request's sourcing task. A hotel with no room categories yet can still be quoted:
+     they are added from the quote's lines (§3.10). A new quote — from here or from the
+     hotel's page — also moves the hotel's contact task, if not yet started, to **In progress**
+     (2026-10-12), noted on its log, and tells whoever asked for it and whoever completes it.
+  4. **What to find out** — the checklist below, with *Hotel details*, *Quotations* and the
+     terms.
+
+  A contact task made from the event's map has no request, so its email asks for
+  availability for the event without listing rooms and dates.
+
+  **When the hotel cannot help** (2026-10-11): *They can't help us*, right under the client's
+  request in the task's details (above who completes it),
+  asks why — **No availability** (full, or not enough rooms for these dates), **No groups**
+  (no group bookings) or **Not interested** (does not want to work with us) — and for a
+  note, then closes the task (Done) with that reason. The reason is the task's label: a
+  red tag on its Kanban card and in the List, on the request's *Tasks* card, and a banner
+  on the task. **It does not rule the hotel out**: it stays on the event and in every
+  search; for this request only, the sourcing task shows it under its own tab, **Couldn't
+  help**. **The property keeps the record**: an update is written to its Updates (§2.6) —
+  *Couldn't help*, by whoever closed it, dated that day — saying why, for which client and
+  event, with the units and dates asked for and the note, so the property's feed shows every
+  request it could not take. Whoever asked for the task is told. Reopening the task clears
+  the reason (the update stays, as history). Its page starts with the property's
+  **contact details** — phone, email, website, address and the people there — always shown,
+  with links to look it up on Google and Google Maps while something is missing. **A
+  detail not known yet is a box to type it straight into** (2026-10-04) — saved on Enter or
+  on leaving the box, an email checked first; once known it is shown as a link, and *Edit*
+  changes it. People at the property are added with *+ Add a person at the property*, or
+  under *Edit*. All of it is kept on the property, as if changed on its page. **They are also found on their own** (2026-10-04):
+  as soon as a place is added with *Add to properties board*, and again with *Find
+  automatically* on the task, its phone and website are asked of **Google Maps** (once
+  Places API is switched on for our key — until then Google refuses and this step is
+  skipped), then its phone and email are read from **its own website**: the details
+  hotels publish for search engines, its phone and email links, and its contact page
+  when the home page links to one. An email on the hotel's own domain, and a reservations
+  or sales one, is preferred. Only what is empty is filled in — nothing the team typed is
+  replaced — and what was found is recorded in the property's Log. Big chains' websites
+  often turn such reading away; Google covers those once it is on. The task says what was
+  found, or why nothing was (no website known, Google not on yet). Below them, **what to find out**, each item ticked
+  on its own once the information is where it belongs — never ticked by hand:
+
+  | To find out | Ticked when | Kept on |
+  | --- | --- | --- |
+  | Room categories and availability | It has categories, each with its number of units | The property (§3.2) |
+  | Details per category | Every category has its beds (bedrooms, for apartments) | The property |
+  | Amenities in general | At least one is recorded | The property |
+  | Payment terms | Said in its terms for the event, or on a quotation | Terms for the event (§3.9), or the quotation |
+  | Cancellation terms | The same | The same |
+  | Rate | A quotation with rates, or a buying rate on a category | A quotation (§3.10) |
+  | What is included in the rate | *Rates include* in its terms, or on a quotation or rate | The same |
+  | Extra costs | *Extra costs* in its terms, or taxes on a quotation or rate | The same |
+
+  **It can also be asked for by hand, from the event's map** (2026-10-06): clicking a
+  property on the Properties tab's map opens its panel, which has **Contact task** — who
+  contacts it (the event's first accommodation manager by default, else you; any colleague
+  can be chosen) and a note for them — and **Create contact task** makes the same task, to
+  that person, with the note as its first comment and in the notification they get. While
+  one is open, the panel shows who has it and links to it instead.
+  **Hotel details** opens, in a popup over the task, **the same form the hotel gets by its
+  link** (§3.9) — the property, room categories, amenities, services and contacts — with the
+  contracting details added for the team, filled with what we have; *Save the details*
+  saves it all on the property at once, every change in its Log, so nobody leaves the task;
+  *Quotations* opens the property's page at its quotations; *Terms for {event}* opens its
+  terms panel right there. Its *Contact details* card also holds the hotel's own form (§3.9). When all eight are in, the task says so — it is still marked
+  done by hand. Adding an existing property to the event from the sourcing task makes no
+  hotel contact task (not asked for).
+- **Once the details are in, the enquiry is a sales request** — the same request, its
+  history kept. The list marks the ones still enquiries. Requests that had already moved
+  past *Initial interest*, or had their rooms, period or budget written down, counted as
+  sales requests when this came in (2026-10-03).
+- **For the lawyers**, *Summary for the lawyers* on the request is one page to print or
+  save as a PDF: the client and who signs (their contracting details, §below), what they
+  asked for, the rooms blocked and sold for them with stays and prices, and our terms.
+
+**Deleting a request** — from its row in the list, or at the foot of its page — is for one
+that went nowhere: an enquiry made by mistake, or twice. It asks first. One with rooms in
+the event's inventory (requested, blocked, sold or cancelled for it) or a contract is
+refused, with the reason: those are closed instead (*Lost*, *Released*…), so what happened
+stays on record. Its sourcing task, and the hotel contact tasks that came out of it, are
+deleted with it, unless already done (the confirmation says so; 2026-10-11 for the contact
+tasks) — the hotels themselves stay on the properties board. Its other tasks, and done ones,
+stay, no longer tied to it. The deletion is recorded on the client's history.
+
+#### The rate card (2026-10-11)
+
+What the sourcing leads to: **a rate card for the client** — the properties we offer, each
+room category at the rate we sell it for.
+
+- **Made from the sourcing task.** Each property under *Properties we already have nearby*
+  has a tick box; **Create rate card (n)** makes a card from those ticked and opens it. A
+  request can have several. On the sourcing task they sit in a **Rate cards** box on the
+  right: a dropdown of the cards, newest first, and below it a glance at the chosen one — its
+  properties, rooms and rates, whether the client has the link, how many answers — with
+  *Open* for the popup. The request's page lists them too (*Rate cards*).
+- **Edited in a popup**, for us: its name; a word to the client at the top, if wanted; and
+  per property a **short description**, written by hand. *(A writing helper — Claude
+  writing or polishing it from what we know of the property — was built 2026-10-11 and
+  taken off the screen 2026-10-13 by the owner until the AI key is set up; the server part
+  is kept, so bringing it back is putting the button back.)*
+  Each room category shows **our cost per night** — its event rate (§3.9) when the card was
+  made, in the card's currency (the request's budget currency, else the rates') — and **what
+  the client pays per night**, typed in; the margin beside it, red when below cost. A
+  **markup** (15% to start) is applied to every room with a cost by *Apply to all*, then any
+  rate changed by hand. A property can be taken off the card. A room left without a selling
+  rate is not offered. **Every room offered must say how many units are available and the
+  minimum stay in nights** (2026-10-11): missing ones are outlined in red and the card
+  cannot be saved, nor its link made, until they are given.
+- **What the client sees** — the preview, the printout (*Print or save as PDF*) and the
+  client's link are one design: our logo, *Rate card*, the event, "Prepared for {client}" and
+  the event's dates, the request ("20 × Single room · 10–31 Jul 2028 · 21 nights"), the word
+  to the client, then each property — name and stars, kind and area, how far from the nearest
+  venue, its description and its rooms — sleeps, units available, minimum stay — with the
+  rate per night — and a line that rates are
+  per room per night, in the currency, subject to availability. **Never our buying rates or
+  margins**: the client's copy is made without them. Properties with no rate offered are
+  left out of it.
+- **Photos and video on the card** (2026-10-11). A new card starts with each property's
+  first six photos (its Media tab, §3.10). In our popup each property shows all its
+  photos for clients as thumbnails: those on this card numbered in the order the client
+  sees them, click one to put it on or take it off. A property with none ticked on the
+  card — say the card was made before its media came in — shows its first six instead
+  (2026-10-13), so media added later reaches the client without anyone re-ticking.
+- **Every property on a card must have media** (the owner's rule, 2026-10-11): clients have
+  to see what it looks like. *Media* is a YouTube video, a Dropbox photos folder or a photo
+  picked for clients (its Media tab, §3.10). A property with none can still be put on a
+  card, but then:
+  - **a Get media task is made** for it — for the request's account manager (or, with
+    none, whoever made the card), asked by whoever made it, tied to the property, the event
+    and the request, and they are told (§2.9). One open task per property, however many
+    cards it is on. The task says what to get and has *Open its Media tab →*;
+  - **the card cannot be shared**: in our popup the property shows in red, "No photos or
+    video yet", with its task, and *Make a link for the client* stays off, naming the
+    properties holding it back;
+  - **once the media is in** — a video or folder link saved, or a photo added — the task
+    closes on its own ("Done — the property has its media now"), and the link can be made. The client
+  sees the cover large with up to four more beside it ("+3 more"), each opening full size
+  to page through with its room and caption; the YouTube video playing in the card;
+  *See all photos & videos (n)* opening every photo and video picked for clients over the
+  card, videos playing there with their controls — **the client never leaves the card**
+  (2026-10-13; it used to open the Dropbox folder in a new tab); and beside a room,
+  "2 photos" of that room. The printout keeps the photos and gives the video's and folder's links instead.
+- **On the map, for the client** (2026-10-13): under the card on the client's link, a map
+  with the suggested properties as purple squares numbered as on the card (each property's
+  name on the card carries its number), the event's venues as their sport icons, and *Show the
+  metro and public transport* (Google's). **Getting there**: from one of the properties to a
+  venue searched for by name — or one of the five nearest, offered as buttons — the distance
+  as the crow flies and, from Google, the time **on foot, by car and by public transport**
+  (an ordinary weekday morning), each with *Directions ↗* opening the route in Google Maps.
+  Asked when the client asks, never stored; only through a live link. Not on the printout.
+- **The client's link** (`/rate-card/…`): made on the card, opened without signing in;
+  *Copy link*, *Open*, *Switch off*. It shows what is saved.
+- **The client answers from the link** (2026-10-11). Beside each room, **I'm interested**;
+  pressed, it opens how many rooms, arrival and departure (the request's dates to start, else
+  the event's) and a note, with what that comes to at the rate shown. **+ Add another
+  period** adds more dates for the same room — each period its own number of rooms, dates
+  and note, and any can be removed. More rooms than are available, or a stay shorter than
+  the minimum, is marked in red and cannot be sent. **Send to We Lodge →** sits right
+  under the rooms they chose (2026-10-13, so nobody has to scroll to find it), and again
+  under the map in **Your answer**, which sums up the rooms chosen with the total. Either
+  opens a popup over the card: their choice and its total, **"This is a request, not a
+  confirmed booking — a We Lodge agent will come back to you to confirm the rooms with an
+  agreement"** (the owner's wording, 2026-10-13; also under *Your answer* and in the thank
+  you), their name and email, a note to us, and *Send request*.
+- **Then their contracting details** (2026-10-14, the owner: "this is most important"):
+  once the request is sent, the popup does not close — it becomes *One more thing — your
+  company details*, with "✓ Your request has been sent" at the top and the same form as the
+  contracting link (below): the company, who signs, the contact persons. *Send my details*,
+  or **I'll do this later** — the details are **asked for, not required**, so no request is
+  lost to a missing VAT number. Until they are in, the card shows **Complete your
+  contracting details** with *Add company details* at the top; details already given — by
+  the link, or before — come filled in, to check. They land on the request exactly as the
+  link's do, recorded as sent "from the rate card", and the account manager is told.
+- **New dates are their own small button** (2026-10-13): *My dates have changed* under
+  *Your answer*, and *tell us if your dates have changed* at the top of the card, open a
+  separate popup — new arrival and departure, what changed, name, email, a note — and
+  *Send new dates*. It sends no rooms: "a We Lodge sales member will come back to you with
+  rates and availability". (It used to be a tick box beside the rooms being sent, which
+  made no sense once the client had already filled in their dates per room.) They can come back and send
+  again: the link shows their last answer filled in. Each answer is kept as sent — the rooms,
+  the rate at that moment and the notes — and a later one does not rewrite it.
+- **Making the link is sending the proposal** (2026-10-11): a request at *Initial interest*
+  or *Specify* moves to **Proposal sent** the moment a rate card's link is made, on its
+  history. A request further along is left where it is.
+- **What we see of it**: the account manager and whoever made the card are told (§2.9); the
+  answer is written on the request's history; the card in our popup lists **The client's
+  answers**, newest first, a change of dates in orange; the request's *Rate cards* shows how
+  many answers each card has. An answer reserves nothing — the rooms are still ours to
+  confirm.
+- **The answer leads the request's page** (2026-10-11): right under the stage, across the
+  page, a box "{client} answered the rate card" — when, who, which card, *Open the rate
+  card* — then what they are interested in, room by room and period by period (property,
+  room, rooms, dates and nights, rate, what it comes to, a total), their notes, and a change
+  of dates in orange. The latest answer shows; earlier ones fold under *Earlier answers*.
+- **A new answer is flagged in red until it is read**: on the sales board, beside the
+  client's name ("1 new answer"); on *Sales* in the menu, the number of requests with one
+  (checked every half minute); on the request's *Rate cards* and the sourcing task's box; and
+  *New* on the answer itself. Opening the request's page or the card — by anyone in the
+  team — counts as reading it, and the red goes for everyone.
+
+Not built yet: suggesting properties to the client before a rate card; a rate card's history
+of versions.
+
 **What a request holds:**
 
-- **Who** — the client (an existing one, or a new one named on the spot, since enquiries
-  often come from companies we have never dealt with), the contact who asked (one of the
+- **Who** — the client (an existing one, or a new one added on the spot, since enquiries
+  often come from companies we have never dealt with: *+ A client we have not dealt with
+  yet* opens a popup with the company in full — name, short name, category, general phone,
+  email and website, account manager (the request's, unless changed), notes — and,
+  optionally, the person asking — name, title, email, mobile, phone. Both are saved
+  together and chosen on the request. A name we already have is caught, with *Choose them
+  instead*), the contact who asked (one of the
   client's contacts, §4.10), the event (or none — not every enquiry is for one of our
   events) and the account manager, who is whoever registers it unless they choose someone
   else.
-- **The initial interest, as the client put it** — what they need, location and/or property,
-  number of rooms / room category / occupancy, period, budget or proposed rate, pre and
-  post, what the rate should include, and extra services. All free text: requests arrive in
-  every shape, from "30 rooms" to two pages of requirements, and forcing them into numbers
-  would lose what the client said.
+- **What they want with the rooms** (2026-10-12), asked on the client's needs form and in
+  ours, so the hotels get as much as possible: **people per unit** on each line;
+  **Breakfast** and **Parking** — Yes or No, or left unsaid (click again to clear) — and
+  for parking, how many cars — each on a line of its own, its choices beside it. They show on the request and the sourcing task,
+  are written on its history, and go into the email to a hotel under "Guest preferences".
+  On the form the section is *Your preferences* (ours: *Their preferences*).
+- **What they asked for**, in their words — however vague — and **the details** above,
+  shown on the request's page in a tinted box so they stand out (2026-10-12): each line large
+  ("20 × Single room") with its dates and nights beneath, then the budget, the places as
+  tags and the client's own words.
+  Requests registered before 2026-10-03 also kept their earlier free-text boxes (location,
+  period, budget, pre and post, what the rate should include, extra services), shown under
+  *More detail* where they have any.
 - **The follow-up** — the date to get back to the client, and the next step in words ("Look
   for units near the Expo, then send a proposal").
 - **Dates and value** — when the proposal was sent, until when the client is blocked, and
@@ -1499,8 +2244,8 @@ event. Requests marked signed before this rule (2026-10-02) keep their stage; th
 Every change is recorded in the request's history, and registering one is also recorded on
 the client's.
 
-**The Sales requests page** lists open requests grouped by stage — *Initial interest*, then
-*Proposal sent*, then *Blocked* — each row showing the client and contact, the event, what
+**The Sales requests page** lists open requests grouped by stage — *Initial interest*, *Specify*,
+*Proposal sent*, then *Negotiation* — each row showing the client and contact, the event, what
 they need, the period, the follow-up date and next step, the account manager and how many
 days the request has been open. Within a stage, the most pressing follow-up comes first.
 A follow-up due today or overdue shows in red, and a note above the list counts them, with
@@ -1529,6 +2274,156 @@ services), not our notes, not our prices. The page is told nothing else about th
 so none of it can leak through it. Anyone with the link can open it, so it is sent only to
 the client. **Switch off** stops it working at once — the details already sent stay —
 and **Make a new link** gives a fresh address, so an old one never comes back to life.
+
+#### The offer (2026-10-14)
+
+Once the client has answered a rate card, the next step is a **binding offer**: these rooms,
+at these rates, on these terms, held for them until a date. It is the first part of the
+offer-and-agreement stage the owner set out on 2026-10-14; the agreement document, the
+follow-up and the signing come next and are not built yet (§12).
+
+- **Make an offer →** sits beside *Open the rate card* on the client's answer, and opens a
+  popup **filled from that answer**: each room they chose as a line — room type, rooms,
+  arrival, departure and our rate per night — with what it comes to and the total. Any of it
+  can be changed, lines added or removed. A rate card line with no room type behind it asks
+  for one: rooms can only be blocked in a room type.
+- **Whether the agreement can be drawn up**: the popup opens with *✓ Contracting details are
+  in — the company, signed by …* in green, or, in yellow, that the company or the signatory
+  is still missing, and where it comes from (their rate card asks; the contracting link).
+- **How long it holds**: *The offer holds until* starts **seven days from today**, in the rate
+  card's currency.
+- **Its terms**: the payments due (a share on signature, or by a date) and the cancellation
+  cut-offs, in the same editor as a hotel's quotation (§3.10); what the rate includes and any
+  special conditions, one per line. They start as the **last offer made on the same event**,
+  since an event's terms rarely change from one client to the next.
+- **Making it blocks the rooms** for the client until the offer runs out — **Blocked** on the
+  inventory with that expiry and the offered rate, so no one else is offered them — through
+  the same rules, ledger and undo as the stock sheet (§4.8), picking rooms the way *Add rooms*
+  does (§4.11, Selling from the request). **All or nothing**: if a line's rooms are not free
+  for every night, nothing is made and the popup says how many are. The request moves to
+  **Negotiation** (from *Initial interest*, *Specify* or *Proposal sent*), its *Blocked until*
+  becomes the offer's date and its value the offer's total.
+- **Offers** on the request lists each one: rooms, total, who made it and when, its lines and
+  terms, and where it stands — *Open — rooms held until …*; *Ran out on … — extend or
+  withdraw*, in red; *Withdrawn — rooms released*. **An offer that runs out is only flagged**
+  (the owner, 2026-10-14): the rooms stay blocked until a person decides. **Extend the hold**
+  moves the offer and its blocks to a new date; **Withdraw** releases its rooms for others.
+  Both act on the request's blocked rooms of the offer's room types.
+- *+ Make another offer* makes one without an answer to start from — the client told us by
+  phone, say.
+- **Who signs for We Lodge** (the owner, 2026-10-14): **Volkhard Bauer, CEO, for an event
+  in the United States; Raphael Angelo Dornier, President of the Board, for every other** —
+  decided by the event's country, for the client's agreement and, once it is in the
+  system, the hotels'.
+- **The offer leads the request's page** (the owner, 2026-10-14): once one is made it sits
+  first under the stages, highlighted, headed **The contract** (the owner's word for it on the
+  page, 2026-10-14); the client's answer steps back below it, without its
+  highlight or its *Make an offer* button. Once the client's needs are in, *What they asked
+  for* — their first enquiry — moves to the foot of the page as **Their first enquiry**.
+
+#### The contract task (2026-10-14)
+
+The owner's name for the client side of contracting: **when the client sends the rooms they
+are interested in from a rate card, a Contract task goes to the request's account manager**
+(or, with none, whoever made the card) — *Contract [client] — [event]* — listing what they
+chose and the steps: check the contracting details are in, make the offer, draw up and send
+the agreement, register it signed or ask Volki for the trust guarantee. One open contract
+task per request: a later answer is added to it as a comment. Its page shows **1. Their
+contracting details** (in, or what is missing) and **2. The offer** — *Make an offer →*,
+then the offer itself with everything that can be done to it, the same as on the request.
+It goes **In progress** once the offer is made and **Done** once the client has signed or
+been vouched for.
+
+#### The agreement (2026-10-14)
+
+Each offer's agreement is drawn up from **the framework agreement** — We Lodge's own, from
+the BBC agreement for SOL28 — filled in for the client. *Draw up the agreement →* on an open
+offer opens it as a document, as it will print.
+
+- **What is filled in, and from where.** The client's company name and registered address,
+  and who signs with their titles, from the request's contracting details; the currency, its
+  definition and the account to pay into; the payment schedule — "An amount equal to 20%
+  (Twenty per centum) … on or before the 15th of June 2027" — in clause 4.2 and Schedule 2;
+  the event and its dates (Schedule 1); the hotels and their addresses, what the rate
+  includes, the cancellation cut-offs, any special conditions and **"This offer is valid
+  until …. The rooms are held for the Client until then."** (Schedule 2, the owner's wording,
+  2026-10-14); and a table of every line — hotel, unit type, units, arrival, departure,
+  nights, rate, total — with the total (Schedule 2.1). Everything else is fixed wording.
+- **Neutral wording for the client's signatories** (the owner, 2026-10-14): "herein
+  represented by Jenny Hackett, Unit Manager, and Rachel Wright, Head of Production, both
+  being duly authorised thereto by the Client" — no *his* or *her*, since the contracting
+  details do not say. Our own signatory keeps the framework's wording.
+- **Only USD has a bank account** for now (the owner, 2026-10-14). An offer in another
+  currency leaves the account as a gap to fill. Each event is to ask for the account its
+  clients pay into (`docs/todos.md`).
+- **Nothing missing goes unseen**: whatever is not known yet — the address, who signs, the
+  payment schedule — is written *[missing: …]*, highlighted, and listed above the document.
+  Fill it in on the request or the offer, or type it in.
+- **Edit the wording for this client** opens the whole text in a popup; what is saved is
+  this client's agreement only. From then on, changes to the offer or the contracting
+  details are not filled in — the page says so, and *Back to the framework's wording, filled
+  afresh* refills it.
+- **Print or save as PDF**, then send it by DocuSign — outside the system — and **Mark as
+  sent** with the day it went. The offer on the request then shows *Agreement sent …*.
+- **The framework wording, for every client** (its own page, linked from every agreement):
+  the whole text, with what each {{field}} fills in and how lines are drawn (# a clause,
+  ## a schedule, numbers at the start of a line). A change reaches every agreement drawn up
+  from then on, not one already changed for its client; *Back to the original wording*
+  restores the BBC-based text.
+
+
+#### Signed — and securing the rooms from the hotels (2026-10-14)
+
+- **✓ Client signed** on an open offer: the day it was signed and the signed agreement — a
+  Google Drive link for now (uploading the file itself waits on Till). Or **Trust
+  guarantee**: **only Volki** (the owner, 2026-10-14; greyed out for everyone else) can
+  vouch that the client will sign, so the rooms are sold before the signed copy is back;
+  who and when is recorded, and *Add the signed agreement* completes it later.
+- Either way, at once: **the client's contract is made from the offer** — its total,
+  payments (one on signature falls due that day) and cancellation cut-offs, so Finances
+  tracks them (§7.1); **the blocked rooms are sold** under it; the request moves to
+  **Contracted**; the contract task is done; the account manager and whoever made the
+  offer are told. A room type whose rooms are no longer blocked stops it, with nothing
+  changed.
+- **Each hotel gets an Acquire task** (one per hotel, the owner, 2026-10-14) — *Acquire
+  [hotel] for [client] — [event]* — for **whoever handled that hotel's contact task**, else
+  the event's accommodation managers, asked by the account manager, tied to the request,
+  the hotel and the event. The sold rooms there go **In progress** with the hotel on the
+  inventory (§4.1) — *Sold, still negotiating with the supplier*.
+- **The acquire task** shows what was sold at the hotel and at what rate; **1. Their quote,
+  and whose agreement** — each quote with *Contract on: their agreement / our agreement /
+  not known yet* and *Make the hotel's contract from this quote* (its payments and
+  cut-offs become the contract's, §7.1, and the contract is tied to the client's request);
+  **2. The hotel's contract** — *✓ The hotel signed*, with the day and a Drive link, which
+  marks it signed, **buys the rooms** under it at the quote's rate per room type, and closes
+  the task.
+- **Our agreement with a hotel — US events only** (the owner, 2026-10-14: the agreement
+  agreed with Aimbridge for the Fairfield Inn & Suites El Segundo, "exclusive for the US and
+  LA project"). When a quote's contract is on *our agreement* and the event is in the United
+  States, *Draw up our agreement →* sits beside the hotel's contract on the acquire task. It
+  is filled like the client's: **We Lodge Corp.** (Delaware) and the hotel's company — from
+  the hotel's contracting details: trade name, registration number, who signs and their
+  title, the email contracts go to, its group for a copy of notices — the date it is drawn
+  up, the event, the contract's **total** as the Remuneration and Total Guestroom Revenue,
+  the **payment schedule** in dollars and per cent (the last with the taxes on top), the
+  **cancellation fees** as date ranges ("Date of Agreement to July 15, 2027: $15,000.00
+  (25%)", the last running to the arrival date), what the quote's rate includes, and the
+  quote's rooms as Schedule 2.1; Volkhard Bauer, CEO, signs for us. What the system does not
+  know — the company's state and type, the parking — is left highlighted to fill in, and the
+  attrition policy and the rest of the Aimbridge terms are fixed wording to check for each
+  hotel. Reviewed, changed for one hotel, printed, marked as sent and its wording changed for
+  every hotel exactly as the client's agreement is. For an event outside the US it says our
+  hotel agreement is not in the system for that yet. (Two words were made neutral where the
+  draft had "his/her" and "her" for a company — "its".)
+- **Whose agreement** is asked in the quoting phase too: the quotation has *The contract will
+  be on*, and the hotel contact task's checklist has *Whose agreement the contract is on —
+  theirs or ours*.
+- **On the request**, under the signed offer: *Client — ✓ Signed …* (or the trust
+  guarantee, waiting for the signed copy) with the signed copy and the contract in
+  Finances; then each hotel — *Contract pending* with its acquire task and who has it, or
+  *✓ Signed … — rooms bought* — and, once all have signed, **✓ All clear — the client and
+  every hotel have signed**. The inventory says the same night by night: *Sold* with the
+  hotel *In progress*, or *Bought and sold*.
 
 ---
 
@@ -1963,7 +2858,9 @@ Derived:
   never added to realised margin.
 - **Cost at risk** = Σ estimated `buyPrice` over `SOLD`-not-`BOUGHT` nights, using the
   category's indicative price where no negotiated price exists. This is the number that
-  makes short exposure concrete.
+  makes short exposure concrete. *Since the indicative price is no longer entered
+  (2026-10-06), a category scouted after that adds nothing here until its nights carry a
+  buying price — not yet changed to use the event rate (§3.9); to decide.*
 - **Idle cost** = Σ `buyPrice` over `BOUGHT` nights with no hard hold.
 
 Aggregations must be available by event, property, category, client, party and date range.
@@ -2032,13 +2929,19 @@ requesting need no contract — nothing has been signed yet. A sales request sho
 contracts and adds one already filled in with the client, the event and the request's value
 as its total.
 
-**Contracts live with their event.** Every contract — supplier and client side alike — is
-for one event, always, so each event has a **Contracts** tab, second after Properties and
-before Inventory, Deadlines and Position. It shows the event's contracts, its payments and its cancellation
-deadlines, three views of one tab; *+ New contract* there adds one for that event, which
-is set and cannot be changed. A contract's own page sits under its event, and its back link
-returns to the tab. A contract added from a sales request, or on the stock sheet while
-buying or selling, belongs to that event in the same way. (2026-10-01.)
+**Contracts live with their event — shown with the hotel or the client.** Every contract —
+supplier and client side alike — is for one event, always, and its page sits under that
+event. **The event's Contracts tab is hidden for now** (the owner's decision, 2026-10-02; it
+is kept, to be worked on later, and its page still exists). Meanwhile:
+
+- **A hotel's contracts are on the property's page**, on its *Contracts* tab next to
+  *Quotations*: one list per event the hotel is on, each with its total, whether its terms
+  are complete, its PDF, and *+ New contract* for that event. Accepting a quotation adds one
+  there too (§3.10).
+- **A client's contracts are on their sales request** (§4.11), as before.
+- A contract's page goes back to the hotel's page, or to the sales request, or else to the
+  event. A contract added on the stock sheet while buying or selling belongs to its event
+  in the same way.
 
 **The Finances section** — *Finances* in the menu, a panel like *Events* and *Sales* — is
 the view **across every event**, for whoever pays and chases invoices without opening each
@@ -2052,7 +2955,7 @@ event in turn:
   first, ticked off as they are dealt with.
 Each row names its event and opens the contract. The panel says how many payments are due
 within a week or overdue, how many cut-offs fall within 30 days, and how many contracts are
-missing terms — those are found on each event's Contracts tab. Every change to a contract, its
+missing terms — each found on its hotel's page or its sales request. Every change to a contract, its
 payments and its deadlines is in the contract's history.
 
 ---
@@ -2268,7 +3171,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
-| §2.6 Feedback (was Updates) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Only the latest shows, the rest behind *View more*. No deleting. No notification is sent — see §9 |
+| §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9 |
+| §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
 | §2.7 Presence | **Built** | Automatic Active/Away from activity; Do not disturb and Set as away chosen by hand, each until changed. Refreshes every half minute or so |
@@ -2279,22 +3183,27 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
+| §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
+| §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
+| §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
-| §3.1 Address search on Google Maps | **Built, needs a key change** | On the property form (new and edit). Waits on *Places API (New)* being enabled and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till) — today Google refuses, so the box is a plain one with a note |
-| §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, indicative price range |
+| §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |
+| §3.1 Quick scouting screen | **Built, on trial** | A pop-up over the event's Properties tab; the default *Scout a property* screen: essentials only, map found from the address, quick room-type rows and amenity chips, *Save and scout another*; *Use the full form* for everything |
+| §3.1 Duplicate properties | **Built** | Compared by distinctive name words, street address and 150 m on the map, on the quick screen, the full form and the server; shown with why, to open or add instead; saving anyway needs *It is a different property* |
+| §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, size, notes; the event rate per event read from the agreed rate or the quotations (§3.9) — the indicative price range is no longer entered (2026-10-06) |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
-| §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status, type and amenity; per-category contract status (`CategoryContract`), independent of the property's own status |
+| §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status and type (the amenity filter removed 2026-10-11), grouped by stage; per-category contract status (`CategoryContract`), independent of the property's own status |
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
-| Booking.com-style price auto-fetch | **Not built** | The indicative price range is entered by hand; open question, see §9 |
+| Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
-| §3.10 Quotations | **Built** | On the property's page, first of its tabs (Quotations, Room categories, Feedback, Log), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Feedback showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 Quotations | **Built** | On the property's page, third of its tabs (Updates, Room categories, Quotations, Contracts, Log — since 2026-10-06), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
@@ -2305,9 +3214,14 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates, which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
-| §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link |
+| §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
+| §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
+| §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
+| §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
+| §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Our agreement with hotels for US events, filled from the quote and contract. Not yet: follow-up task before an offer runs out, our hotel agreement outside the US, uploading PDFs (Till), AI check of the signed copy |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
@@ -2323,7 +3237,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
-| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs, kept on each event's Contracts tab; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
+| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |

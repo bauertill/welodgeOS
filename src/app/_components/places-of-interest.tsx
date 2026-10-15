@@ -32,9 +32,11 @@ type Draft = {
   latitude: string;
   longitude: string;
   notes: string;
+  layerId: string;
 };
 
 const emptyDraft: Draft = {
+  layerId: "",
   name: "",
   category: "VENUE",
   lines: "",
@@ -55,11 +57,15 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const places = api.place.listForEvent.useQuery({ eventId });
+  // Places are grouped and coloured by their map layer (doc §3.7).
+  const layers = api.mapLayer.listForEvent.useQuery({ eventId });
+  const layerList = layers.data ?? [];
 
   const done = () => {
     setDraft(null);
     setError(null);
     void places.refetch();
+    void layers.refetch();
     // The scouting list measures distance to the nearest venue, so it has to
     // be told when the venues change.
     router.refresh();
@@ -110,6 +116,7 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
       latitude,
       longitude,
       notes: draft.notes,
+      layerId: draft.layerId || undefined,
     };
 
     if (draft.id) update.mutate({ ...payload, id: draft.id });
@@ -122,7 +129,7 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
       description="Where guests need to get to — venues such as the stadium or the IBC, airports, stations. Properties are judged on how well they connect to these."
       action={
         draft === null && (
-          <Button type="button" onClick={() => setDraft(emptyDraft)}>
+          <Button type="button" onClick={() => setDraft({ ...emptyDraft, layerId: layerList[0]?.id ?? "" })}>
             Add a place
           </Button>
         )
@@ -130,7 +137,8 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
     >
       {draft === null && <FormError message={error} />}
 
-      {rows.length === 0 && draft === null && (
+      {places.isLoading && <p className="text-ink-500 text-sm font-light">Loading…</p>}
+      {!places.isLoading && rows.length === 0 && draft === null && (
         <p className="text-ink-500 text-sm font-light">
           Nothing recorded yet. Add the venue first — the scouting list measures
           every property against the nearest one.
@@ -139,16 +147,15 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
 
       {rows.length > 0 && (
         <div className="space-y-5">
-          {placeCategoryOrder.map((category) => {
-            const inCategory = rows.filter(
-              (place) => place.category === category,
-            );
+          {[...layerList.map((layer) => ({ id: layer.id, name: layer.name, color: layer.color })), { id: null, name: "On no layer", color: "#9a9a9a" }].map((group) => {
+            const inCategory = rows.filter((place) => (place.layerId ?? null) === group.id);
             if (inCategory.length === 0) return null;
 
             return (
-              <div key={category}>
-                <p className="text-ink-500 mb-2 text-[11px] font-medium tracking-wider uppercase">
-                  {placeCategoryPlurals[category]}
+              <div key={group.id ?? "none"}>
+                <p className="text-ink-500 mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wider uppercase">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: group.color }} />
+                  {group.name}
                 </p>
                 <ul className="divide-ink-200/60 divide-y">
                   {inCategory.map((place) => (
@@ -189,6 +196,7 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
                               latitude: String(place.latitude),
                               longitude: String(place.longitude),
                               notes: place.notes ?? "",
+                              layerId: place.layerId ?? "",
                             });
                           }}
                         >
@@ -215,7 +223,7 @@ export function PlacesOfInterest({ eventId }: { eventId: string }) {
 
       {draft !== null && (
         <form onSubmit={submit} className="border-ink-200/60 mt-5 border-t pt-5">
-          <PlaceFields draft={draft} setDraft={setDraft} error={error} />
+          <PlaceFields draft={draft} setDraft={setDraft} error={error} layers={layerList} />
 
           <div className="mt-4 flex gap-3">
             <Button type="submit" disabled={saving}>
@@ -244,9 +252,11 @@ function PlaceFields({
   draft,
   setDraft,
   error,
+  layers,
 }: {
   draft: Draft;
   setDraft: (draft: Draft) => void;
+  layers: { id: string; name: string }[];
   error: string | null;
 }) {
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -288,6 +298,17 @@ function PlaceFields({
           placeholder="e.g. SoFi Stadium"
           required
         />
+      </Field>
+
+      <Field label="Map layer" hint="Which layer of the map it shows on — Venues, Nation houses…">
+        <Select value={draft.layerId} onChange={(e) => set("layerId", e.target.value)}>
+          {layers.length === 0 && <option value="">Its kind&apos;s own layer</option>}
+          {layers.map((layer) => (
+            <option key={layer.id} value={layer.id}>
+              {layer.name}
+            </option>
+          ))}
+        </Select>
       </Field>
 
       <Field label="Kind of place" hint={placeCategoryHints[draft.category]}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData } from "@tanstack/react-query";
-import type { SalesRequestStage } from "generated/prisma";
+import type { LostReason, SalesRequestStage } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -11,14 +11,24 @@ import { contractHref, newContractHref } from "~/lib/finance";
 import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
+import { NewClientPopup } from "~/app/_components/new-client-popup";
+import { OfferPopup, RequestOffers } from "~/app/_components/offers";
+import { QuotesReceived } from "~/app/_components/quotations";
+import { RateCardEditor } from "~/app/_components/rate-card-editor";
+import { TaskStatusBadge } from "~/app/_components/tasks";
+import { contactOutcomeLabels, contactOutcomeStyle } from "~/lib/tasks";
+import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
-import { addDays, daysUntil, dayKey, today } from "~/lib/dates";
-import { formatDate, formatMoney, formatRange } from "~/lib/format";
+import { addDays, daysUntil, dayKey, nightsBetween, today } from "~/lib/dates";
+import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
 import {
   closedStages,
   contractingFields,
+  earlierInterestFields,
   interestFields,
   isClosed,
+  lostReasonHints,
+  lostReasonLabels,
   openStages,
   salesStageHints,
   salesStageLabels,
@@ -155,6 +165,50 @@ export function SalesRequestList() {
   );
 }
 
+/**
+ * Delete a request that went nowhere (doc §4.11) — asked first, and refused
+ * by the server, with the reason, when it has rooms in inventory or a contract.
+ */
+export function DeleteRequest({ request, subtle = false, onDeleted }: { request: { id: string; client: { name: string } }; subtle?: boolean; onDeleted?: () => void }) {
+  const utils = api.useUtils();
+  const remove = api.sales.remove.useMutation({
+    onSuccess: () => {
+      void utils.sales.invalidate();
+      onDeleted?.();
+    },
+    onError: (error) => window.alert(friendlyError(error)),
+  });
+  return (
+    <button
+      type="button"
+      disabled={remove.isPending}
+      onClick={() =>
+        window.confirm(`Delete ${request.client.name}'s sales request? Its sourcing task and contact tasks go too, unless done; the hotels stay on the properties board. This cannot be undone. A request that went somewhere is better closed as Lost or No reply.`) &&
+        remove.mutate({ id: request.id })
+      }
+      className={
+        subtle
+          ? "text-ink-300 text-xs font-light group-hover:text-[#c03654] hover:underline"
+          : "text-xs font-light text-[#c03654] hover:underline"
+      }
+    >
+      {remove.isPending ? "Deleting…" : subtle ? "Delete" : "Delete this request"}
+    </button>
+  );
+}
+
+/** The red count of client answers nobody has opened yet (doc §4.11). */
+export function NewAnswers({ count }: { count: number }) {
+  return (
+    <span
+      title={`The client answered a rate card — ${count === 1 ? "1 answer" : `${count} answers`} not opened yet`}
+      className="ml-1 inline-flex items-center gap-1 rounded-full bg-[#e0234e] px-2 py-0.5 align-middle text-[11px] font-medium whitespace-nowrap text-white"
+    >
+      {count} new {count === 1 ? "answer" : "answers"}
+    </span>
+  );
+}
+
 function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: Request[] }) {
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
@@ -176,15 +230,20 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
               <th className={th}>Follow up</th>
               <th className={th}>Account manager</th>
               <th className={th}>Days open</th>
+              <th className={th}>
+                <span className="sr-only">Delete</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {requests.map((request) => (
-              <tr key={request.id} className="hover:bg-ink-50/40">
+              <tr key={request.id} className="group hover:bg-ink-50/40">
                 <td className={`${td} min-w-44`}>
                   <Link href={`/sales/${request.id}`} className="text-ink-900 hover:text-brand-700 font-medium">
                     {request.client.name}
-                  </Link>
+                  </Link>{" "}
+                  {!request.detailedAt && <RequestKind request={request} />}
+                  {request.newAnswers > 0 && <NewAnswers count={request.newAnswers} />}
                   {request.contact && <span className="text-ink-500 block text-xs">{request.contact.name}</span>}
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{request.event?.name ?? "—"}</td>
@@ -192,7 +251,19 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   <span className="line-clamp-2">{request.description ?? request.rooms ?? "—"}</span>
                 </td>
                 <td className={`${td} max-w-44`}>
-                  <span className="line-clamp-2">{request.period ?? "—"}</span>
+                  {request.lines[0] ? (
+                    <>
+                      <span className="line-clamp-2">
+                        {request.lines[0].checkIn && request.lines[0].checkOut ? formatRange(request.lines[0].checkIn, request.lines[0].checkOut) : "—"}
+                      </span>
+                      <span className="text-ink-500 block text-xs">
+                        {request.lines[0].rooms} {request.lines[0].roomType ?? "rooms"}
+                        {request.lines.length > 1 ? ` · +${request.lines.length - 1} more` : ""}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="line-clamp-2">{request.period ?? "—"}</span>
+                  )}
                 </td>
                 <td className={`${td} whitespace-nowrap`}>
                   {request.nightsSold || request.nightsBlocked ? (
@@ -214,6 +285,9 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   <Manager person={request.owner} />
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{daysOpen(request)}</td>
+                <td className={`${td} text-right`}>
+                  <DeleteRequest request={request} subtle />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -233,7 +307,7 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
   const events = api.event.list.useQuery();
   const people = api.user.list.useQuery();
   const [clientId, setClientId] = useState(presetClientId ?? "");
-  const [newClient, setNewClient] = useState<string | null>(null);
+  const [addingClient, setAddingClient] = useState(false);
   const [contactId, setContactId] = useState("");
   const [eventId, setEventId] = useState("");
   const [ownerId, setOwnerId] = useState(me);
@@ -255,13 +329,13 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
 
   const submit = () => {
     setProblem(null);
-    if (!clientId && !newClient?.trim()) {
+    if (!clientId) {
       setProblem("Choose the client, or add a new one.");
       return;
     }
     create.mutate({
-      ...(newClient !== null ? { newClientName: newClient } : { clientId }),
-      contactId: newClient !== null ? null : contactId || null,
+      clientId,
+      contactId: contactId || null,
       eventId: eventId || null,
       ownerId: ownerId || null,
       followUpOn,
@@ -277,32 +351,37 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-2">
             <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">Client</span>
-            {newClient === null ? (
-              <>
-                <Combobox
-                  value={clientId}
-                  onChange={(id) => {
-                    setClientId(id);
-                    setContactId("");
-                  }}
-                  placeholder="Choose a client"
-                  options={(clients.data ?? []).map((c) => ({ id: c.id, label: c.name, detail: c.shortName }))}
-                />
-                <button type="button" onClick={() => setNewClient("")} className="text-brand-700 mt-1 text-xs font-light hover:underline">
-                  + A client we have not dealt with yet
-                </button>
-              </>
-            ) : (
-              <>
-                <Input value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="The company's name" aria-label="New client" autoFocus />
-                <button type="button" onClick={() => setNewClient(null)} className="text-brand-700 mt-1 text-xs font-light hover:underline">
-                  Choose an existing client instead
-                </button>
-              </>
+            <Combobox
+              value={clientId}
+              onChange={(id) => {
+                setClientId(id);
+                setContactId("");
+              }}
+              placeholder="Choose a client"
+              options={(clients.data ?? []).map((c) => ({ id: c.id, label: c.name, detail: c.shortName }))}
+            />
+            <button type="button" onClick={() => setAddingClient(true)} className="text-brand-700 mt-1 text-xs font-light hover:underline">
+              + A client we have not dealt with yet
+            </button>
+            {addingClient && (
+              <NewClientPopup
+                accountManagerId={ownerId}
+                onClose={() => setAddingClient(false)}
+                onCreated={(created) => {
+                  setClientId(created.id);
+                  setContactId(created.contactId ?? "");
+                  setAddingClient(false);
+                }}
+                onChooseExisting={(id) => {
+                  setClientId(id);
+                  setContactId("");
+                  setAddingClient(false);
+                }}
+              />
             )}
           </div>
-          <Field label="Contact" hint={newClient !== null ? "Add their people on the client's page once it exists." : undefined}>
-            <Select value={contactId} onChange={(e) => setContactId(e.target.value)} disabled={newClient !== null || !clientId}>
+          <Field label="Contact">
+            <Select value={contactId} onChange={(e) => setContactId(e.target.value)} disabled={!clientId}>
               <option value="">{clientId && (client.data?.contacts.length ?? 0) === 0 ? "No contacts recorded" : "Not chosen"}</option>
               {(client.data?.contacts ?? []).map((contact) => (
                 <option key={contact.id} value={contact.id}>
@@ -336,15 +415,24 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
       </Card>
 
       <Card>
-        <h2 className="text-ink-900 mb-1 text-[15px] font-medium">Their initial interest</h2>
-        <p className="text-ink-500 mb-3 text-xs font-light">As the client put it — fill in what you know; the rest can come later.</p>
-        <InterestFields values={interest} onChange={(key, value) => setInterest((current) => ({ ...current, [key]: value }))} />
+        <h2 className="text-ink-900 mb-1 text-[15px] font-medium">What they asked for</h2>
+        <p className="text-ink-500 mb-3 text-xs font-light">
+          As the client put it, however vague. It is an enquiry until the details are in — rooms, dates, budget, where to be — after a call, or
+          from the client through a form you send them from the request.
+        </p>
+        <Textarea
+          rows={5}
+          value={interest.description}
+          onChange={(e) => setInterest((current) => ({ ...current, description: e.target.value }))}
+          placeholder={interestFields[0].placeholder}
+          aria-label="What they asked for"
+        />
       </Card>
 
       <Card>
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Follow up</h2>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Follow up on">
+          <Field label="Remind me on" hint="The account manager is reminded that morning.">
             <Input type="date" value={followUpOn} onChange={(e) => setFollowUpOn(e.target.value)} />
           </Field>
           <Field label="Next step" className="sm:col-span-2">
@@ -357,30 +445,13 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
         <FormError message={problem ?? (create.error ? friendlyError(create.error) : null)} />
         <div className="flex gap-2">
           <Button type="button" onClick={submit} disabled={create.isPending}>
-            {create.isPending ? "Registering…" : "Register sales request"}
+            {create.isPending ? "Registering…" : "Register the enquiry"}
           </Button>
           <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancel
           </Button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function InterestFields({ values, onChange }: { values: Record<InterestKey, string>; onChange: (key: InterestKey, value: string) => void }) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {interestFields.map((field) => (
-        <Field key={field.key} label={field.label} className={field.key === "description" ? "sm:col-span-2" : ""}>
-          <Textarea
-            rows={field.key === "description" ? 4 : 2}
-            value={values[field.key]}
-            onChange={(e) => onChange(field.key, e.target.value)}
-            placeholder={field.placeholder}
-          />
-        </Field>
-      ))}
     </div>
   );
 }
@@ -483,6 +554,9 @@ function TextSection<K extends InterestKey | ContractingKey>({
     >
       {filled.length === 0 ? (
         <p className="text-ink-500 text-sm font-light">{empty}</p>
+      ) : fields.length === 1 ? (
+        // One field: the card's title already says what it is.
+        <p className="text-ink-900 text-sm font-light whitespace-pre-line">{request[fields[0]!.key]}</p>
       ) : (
         <dl className="space-y-2 text-sm font-light">
           {filled.map((field) => (
@@ -631,7 +705,7 @@ function useSign(request: FullRequest, onSigned: () => void) {
   });
   const start = () => {
     setStage.reset();
-    if ((linked.data ?? []).some((contract) => contract.party === "CLIENT")) setStage.mutate({ id: request.id, stage: "SIGNED" });
+    if ((linked.data ?? []).some((contract) => contract.party === "CLIENT")) setStage.mutate({ id: request.id, stage: "CONTRACTED" });
     else setAsking(true);
   };
   const panel = asking ? (
@@ -639,7 +713,7 @@ function useSign(request: FullRequest, onSigned: () => void) {
       request={request}
       pending={setStage.isPending}
       error={setStage.error ? friendlyError(setStage.error) : null}
-      onUse={(contractId) => setStage.mutate({ id: request.id, stage: "SIGNED", contractId })}
+      onUse={(contractId) => setStage.mutate({ id: request.id, stage: "CONTRACTED", contractId })}
       onCancel={() => setAsking(false)}
     />
   ) : setStage.error ? (
@@ -665,13 +739,13 @@ function SignNeedsContract({
   const free = (contracts.data ?? []).filter((contract) => contract.clientId === request.client.id && !contract.salesRequestId);
   return (
     <div className="border-brand-200 bg-brand-50/60 mt-3 rounded-lg border p-3 text-[13px] font-light">
-      <p className="text-ink-900 font-medium">To mark it signed, register the client&apos;s contract</p>
+      <p className="text-ink-900 font-medium">To mark it contracted, register the client&apos;s contract</p>
       {!request.event ? (
         <p className="text-ink-700 mt-1">Choose the event under Details first — a contract is for an event.</p>
       ) : (
         <>
           <p className="text-ink-700 mt-1">
-            A signed request needs {request.client.name}&apos;s contract for {request.event.name}, so its payments and cancellation
+            A contracted request needs {request.client.name}&apos;s contract for {request.event.name}, so its payments and cancellation
             terms are followed.
           </p>
           {free.length > 0 && (
@@ -709,38 +783,143 @@ function SignNeedsContract({
   );
 }
 
-/** The stage, as buttons: open stages in order, then the ways it can close. */
+/** The way a request goes when it goes well (doc §4.11) — Blocked is a step some skip. */
+const pipeline: SalesRequestStage[] = ["INITIAL_INTEREST", "SPECIFY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACTED"];
+/** Why it ended without being contracted — chosen under Close as…. */
+const lostReasons: LostReason[] = ["DECLINED", "NO_REPLY", "RELEASED"];
+const moveOnLabels: Partial<Record<SalesRequestStage, string>> = {
+  SPECIFY: "Mark specify",
+  PROPOSAL_SENT: "Mark proposal sent",
+  NEGOTIATION: "Mark negotiation",
+  CONTRACTED: "Mark contracted",
+};
+
+/**
+ * Where a request stands (doc §4.11), as the steps of the pipeline — done,
+ * current, still to come — each a click away, with the next one offered as a
+ * button; the other ways it can end are under Close as…, and a closed one says
+ * so, with Reopen.
+ */
 function StagePicker({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const setStage = api.sales.setStage.useMutation({ onSuccess: saved });
   const sign = useSign(request, saved);
-  const button = (stage: SalesRequestStage) => {
-    const current = request.stage === stage;
-    return (
-      <button
-        key={stage}
-        type="button"
-        title={salesStageHints[stage]}
-        disabled={setStage.isPending}
-        onClick={() => !current && (stage === "SIGNED" ? sign.start() : setStage.mutate({ id: request.id, stage }))}
-        aria-pressed={current}
-        className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
-          current ? `${salesStageStyles[stage]} border-transparent font-medium` : "border-ink-200 text-ink-500 hover:text-ink-900 bg-white font-light"
-        }`}
-      >
-        {salesStageLabels[stage]}
-      </button>
-    );
+  const [closing, setClosing] = useState(false);
+  const move = (stage: SalesRequestStage, lostReason?: LostReason) => {
+    setClosing(false);
+    if (stage === request.stage && stage !== "LOST") return;
+    if (stage === "CONTRACTED") sign.start();
+    else setStage.mutate({ id: request.id, stage, lostReason });
   };
+  const closedOtherwise = request.stage === "LOST";
+  const at = pipeline.indexOf(request.stage);
+  // Specify → Proposal sent happens when a rate card's link is made; by hand only once one has been sent (doc §4.11).
+  const nextSteps = at === 0 ? ["SPECIFY"] : at === 1 ? ["PROPOSAL_SENT"] : at === 2 ? ["NEGOTIATION", "CONTRACTED"] : at === 3 ? ["CONTRACTED"] : [];
+
   return (
     <Card>
-      <div className="flex flex-wrap items-center gap-2">
-        {openStages.map(button)}
-        <span className="text-ink-300 px-1">|</span>
-        <span className="text-ink-500 text-xs font-light">Closed as</span>
-        {closedStages.map(button)}
-      </div>
-      <p className="text-ink-500 mt-2 text-xs font-light">{salesStageHints[request.stage]}</p>
+      {closedOtherwise ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <StageBadge stage={request.stage} />
+            <span className="text-ink-700 text-sm font-light">
+              {request.lostReason ? `${lostReasonLabels[request.lostReason]} — ` : ""}closed{request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""}.{" "}
+              {request.lostReason ? lostReasonHints[request.lostReason] : ""}
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={setStage.isPending}
+            onClick={() => move(request.proposalSentOn ? "PROPOSAL_SENT" : request.detailedAt ? "SPECIFY" : "INITIAL_INTEREST")}
+          >
+            Reopen
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <ol className="flex min-w-0 flex-1 items-start">
+              {pipeline.map((stage, index) => {
+                const done = index < at || request.stage === "CONTRACTED";
+                const current = index === at;
+                const last = index === pipeline.length - 1;
+                return (
+                  <li key={stage} className={`flex items-start ${last ? "" : "flex-1"}`}>
+                    <button
+                      type="button"
+                      onClick={() => move(stage)}
+                      disabled={setStage.isPending}
+                      title={salesStageHints[stage]}
+                      aria-current={current ? "step" : undefined}
+                      className="group flex w-24 shrink-0 flex-col items-center gap-1.5 text-center"
+                    >
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-[13px] font-semibold transition-colors ${
+                          request.stage === "CONTRACTED"
+                            ? "border-[#0a7a47] bg-[#0a7a47] text-white"
+                            : current
+                              ? "border-brand-400 bg-brand-400 text-white"
+                              : done
+                                ? "border-brand-400 bg-white text-brand-700"
+                                : "border-ink-200 group-hover:border-brand-300 bg-white text-ink-400"
+                        }`}
+                      >
+                        {done && !current ? "✓" : index + 1}
+                      </span>
+                      <span className={`text-[12px] leading-tight ${current ? "text-ink-900 font-medium" : done ? "text-ink-700" : "text-ink-400 group-hover:text-ink-700"}`}>
+                        {salesStageLabels[stage]}
+                      </span>
+                    </button>
+                    {!last && (
+                      <span
+                        aria-hidden
+                        className={`mt-4 h-0.5 min-w-4 flex-1 rounded ${index < at || request.stage === "CONTRACTED" ? (request.stage === "CONTRACTED" ? "bg-[#0a7a47]" : "bg-brand-400") : "bg-ink-200"}`}
+                      />
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {nextSteps.map((stage, index) => (
+                <Button key={stage} type="button" variant={index === 0 ? "primary" : "secondary"} disabled={setStage.isPending} onClick={() => move(stage as SalesRequestStage)}>
+                  {moveOnLabels[stage as SalesRequestStage]} {index === 0 ? "→" : ""}
+                </Button>
+              ))}
+              {request.stage !== "CONTRACTED" && (
+                <div className="relative">
+                  <Button type="button" variant="ghost" onClick={() => setClosing(!closing)} aria-expanded={closing}>
+                    Close as… ▾
+                  </Button>
+                  {closing && (
+                    <div className="border-ink-200 absolute right-0 z-20 mt-1 w-72 overflow-hidden rounded-xl border bg-white shadow-lg">
+                      <span className="text-ink-500 block px-4 pt-2.5 pb-1 text-[11px] font-medium tracking-wider uppercase">Lost/Declined — why?</span>
+                      {lostReasons.map((reason) => (
+                        <button
+                          key={reason}
+                          type="button"
+                          onClick={() => move("LOST", reason)}
+                          className="hover:bg-ink-50 block w-full px-4 py-2.5 text-left"
+                        >
+                          <span className="text-ink-900 block text-[13px] font-medium">{lostReasonLabels[reason]}</span>
+                          <span className="text-ink-500 block text-xs font-light">{lostReasonHints[reason]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            {request.stage === "CONTRACTED"
+              ? `Contracted${request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""}. Click a step to move it back.`
+              : salesStageHints[request.stage]}
+          </p>
+        </>
+      )}
       {sign.panel}
       {setStage.error && <FormError message={friendlyError(setStage.error)} />}
     </Card>
@@ -964,28 +1143,326 @@ function DetailsEditor({
 }
 
 export function SalesRequestView({ request }: { request: FullRequest }) {
+  const router = useRouter();
+  // Once their needs are in, the first enquiry is history: it goes to the foot (doc §4.11, 2026-10-14).
+  const detailed = Boolean(request.detailedAt);
+  const firstAsk = (
+    <TextSection
+      request={request}
+      title={detailed ? "Their first enquiry" : "What they asked for"}
+      fields={interestFields.filter((field) => field.key === "description")}
+      empty="Nothing recorded yet — Edit to add what the client asked for, in their words."
+    />
+  );
   return (
     <div className="space-y-5">
       <StagePicker request={request} />
+      {/* The offer first once there is one — it is what the request is about now (doc §4.11, 2026-10-14). */}
+      <RequestOffers salesRequestId={request.id} />
+      <ClientAnswer request={request} />
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-          <TextSection request={request} title="Initial interest" fields={interestFields} empty="Nothing recorded yet — Edit to add what the client asked for." />
+          {!detailed && firstAsk}
+          <RequestDetailsCard request={request} />
+          {earlierInterestFields.some((field) => request[field.key]) && (
+            <TextSection request={request} title="More detail" fields={earlierInterestFields} empty="" />
+          )}
           <RoomsCard request={request} />
           <TextSection
             request={request}
             title="Contracting details"
             fields={contractingFields}
             empty="None yet. These are what the lawyers need to draw up the contract — the client's legal name, address, VAT and registration numbers, and who signs."
-            extra={<ContractingLink request={request} />}
+            extra={
+              <>
+                <ContractingLink request={request} />
+                <Link href={`/sales/${request.id}/lawyers`} className="text-brand-700 mt-3 inline-block text-[13px] font-medium hover:underline">
+                  Summary for the lawyers →
+                </Link>
+              </>
+            }
           />
+          {detailed && firstAsk}
         </div>
         <div className="space-y-5">
+          <RequestTasks request={request} />
+          <QuotesReceived salesRequestId={request.id} />
+          <RequestRateCards salesRequestId={request.id} />
           <FollowUpCard request={request} />
           <ContractCard request={request} />
           <DetailsCard request={request} />
+          <p className="px-1">
+            <DeleteRequest request={request} onDeleted={() => router.push("/sales")} />
+          </p>
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * What the client answered on our rate cards (doc §4.11) — the most important
+ * thing on a request once it comes, so it sits at the top: what they are
+ * interested in, room by room and period by period, with what it comes to;
+ * a change of dates; their note. Earlier answers fold away underneath.
+ * Seeing it here counts as reading it.
+ */
+function ClientAnswer({ request }: { request: FullRequest }) {
+  const utils = api.useUtils();
+  const answers = api.rateCard.answersForRequest.useQuery({ salesRequestId: request.id });
+  // With an offer out, the answer it came from steps back: the offer has the highlight.
+  const offers = api.offer.forRequest.useQuery({ salesRequestId: request.id });
+  const offered = (offers.data ?? []).some((offer) => offer.status !== "WITHDRAWN");
+  const [open, setOpen] = useState<string | null>(null);
+  const [offering, setOffering] = useState<string | null>(null);
+  const [earlier, setEarlier] = useState(false);
+  const markSeen = api.rateCard.markRequestSeen.useMutation({
+    onSuccess: () => {
+      void utils.rateCard.newAnswers.invalidate();
+      void utils.rateCard.forRequest.invalidate();
+      void utils.sales.list.invalidate();
+    },
+  });
+  // New when the page opened — still marked New for this visit once read.
+  const [fresh, setFresh] = useState<string[]>([]);
+  const newIds = (answers.data ?? []).filter((answer) => answer.isNew).map((answer) => answer.id);
+  useEffect(() => {
+    if (newIds.length && markSeen.isIdle) {
+      setFresh(newIds);
+      markSeen.mutate({ salesRequestId: request.id });
+    }
+  }, [newIds, markSeen, request.id]);
+
+  const list = answers.data ?? [];
+  if (list.length === 0) return null;
+  const [latest, ...older] = list;
+
+  return (
+    <section
+      className={`overflow-hidden rounded-2xl bg-white ${offered ? "shadow-[0_1px_3px_rgba(0,0,0,0.06)]" : "border-brand-300 border-2 shadow-[0_2px_10px_rgba(115,72,214,0.10)]"}`}
+    >
+      <div className={`flex flex-wrap items-center justify-between gap-3 px-6 py-4 ${offered ? "" : "bg-brand-50"}`}>
+        <div>
+          <h2 className="text-ink-900 flex items-center gap-2 text-lg font-semibold">
+            {request.client.name} answered the rate card
+            {(latest!.isNew || fresh.includes(latest!.id)) && <span className="rounded-full bg-[#e0234e] px-2 py-0.5 text-[11px] font-medium text-white">New</span>}
+          </h2>
+          <p className="text-ink-500 text-[13px] font-light">
+            {formatMomentInWords(latest!.at)}
+            {latest!.name || latest!.email ? ` · ${[latest!.name, latest!.email].filter(Boolean).join(" · ")}` : ""} · on {latest!.card.name.split(" — ")[0]}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setOpen(latest!.card.id)} className="border-brand-300 text-brand-700 rounded-full border px-4 py-2 text-[13px] font-medium hover:bg-white">
+            Open the rate card
+          </button>
+          {latest!.items.length > 0 && !offered && (
+            <button type="button" onClick={() => setOffering(latest!.id)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white">
+              Make an offer →
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="px-6 py-5">
+        <AnswerBody answer={latest!} />
+        {older.length > 0 && (
+          <div className="border-ink-200/60 mt-5 border-t pt-3">
+            <button type="button" onClick={() => setEarlier(!earlier)} className="text-brand-700 text-[13px] font-medium hover:underline">
+              {earlier ? "Hide earlier answers" : `Earlier answers (${older.length})`}
+            </button>
+            {earlier && (
+              <ul className="mt-3 space-y-4">
+                {older.map((answer) => (
+                  <li key={answer.id} className="bg-ink-50/60 rounded-xl px-4 py-3">
+                    <p className="text-ink-500 mb-2 text-xs font-light">
+                      {formatMomentInWords(answer.at)}
+                      {answer.name ? ` · ${answer.name}` : ""} · on {answer.card.name.split(" — ")[0]}
+                    </p>
+                    <AnswerBody answer={answer} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+      {offering && <OfferPopup salesRequestId={request.id} responseId={offering} onClose={() => setOffering(null)} />}
+      {open && (
+        <RateCardEditor
+          id={open}
+          onClose={() => {
+            setOpen(null);
+            void answers.refetch();
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+function AnswerBody({ answer }: { answer: RouterOutputs["rateCard"]["answersForRequest"][number] }) {
+  const currency = answer.card.currency;
+  const total = answer.items.reduce(
+    (sum, item) => sum + (item.sellingCents !== null && item.checkIn && item.checkOut ? item.sellingCents * item.rooms * nightsBetween(item.checkIn, item.checkOut) : 0),
+    0,
+  );
+  return (
+    <div className="space-y-3">
+      {answer.datesChanged && (
+        <p className="rounded-xl border border-[#f5c98a] bg-[#fff4e0] px-4 py-3 text-[14px] text-[#8a5a00]">
+          <span className="font-semibold">Their dates have changed</span>
+          {answer.newCheckIn && answer.newCheckOut ? (
+            <>
+              {" "}
+              — now <span className="font-semibold">{formatRange(answer.newCheckIn, answer.newCheckOut)}</span> ({nightsBetween(answer.newCheckIn, answer.newCheckOut)} nights)
+            </>
+          ) : null}
+          {answer.datesNote ? <span className="block text-[13px] font-light">“{answer.datesNote}”</span> : null}
+        </p>
+      )}
+      {answer.items.length > 0 && (
+        <div className="overflow-x-auto">
+          <p className="text-ink-500 mb-1 text-[11px] font-medium tracking-wider uppercase">Interested in</p>
+          <table className="w-full text-left text-[14px]">
+            <thead>
+              <tr className="text-ink-500 border-ink-200/60 border-b text-[10px] tracking-wider uppercase">
+                <th className="py-1.5 font-medium">Property</th>
+                <th className="py-1.5 font-medium">Room</th>
+                <th className="py-1.5 text-right font-medium">Rooms</th>
+                <th className="py-1.5 pl-4 font-medium">Dates</th>
+                <th className="py-1.5 text-right font-medium">Per night</th>
+                <th className="py-1.5 text-right font-medium">Comes to</th>
+              </tr>
+            </thead>
+            <tbody>
+              {answer.items.map((item) => {
+                const nights = item.checkIn && item.checkOut ? nightsBetween(item.checkIn, item.checkOut) : null;
+                return (
+                  <tr key={item.id} className="border-ink-200/40 border-b align-top last:border-0">
+                    <td className="text-ink-900 py-2 font-medium">{item.propertyName}</td>
+                    <td className="text-ink-700 py-2">
+                      {item.roomName}
+                      {item.note && <span className="text-ink-500 block text-xs font-light italic">“{item.note}”</span>}
+                    </td>
+                    <td className="text-ink-900 py-2 text-right font-semibold">{item.rooms}</td>
+                    <td className="text-ink-700 py-2 pl-4 whitespace-nowrap">
+                      {item.checkIn && item.checkOut ? formatRange(item.checkIn, item.checkOut) : "—"}
+                      {nights !== null && <span className="text-ink-500 block text-xs font-light">{nights} nights</span>}
+                    </td>
+                    <td className="text-ink-700 py-2 text-right whitespace-nowrap">{item.sellingCents !== null ? formatMoney(item.sellingCents, currency) : "—"}</td>
+                    <td className="text-ink-900 py-2 text-right font-medium whitespace-nowrap">
+                      {item.sellingCents !== null && nights !== null ? formatMoney(item.sellingCents * item.rooms * nights, currency) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {answer.items.length > 1 && total > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan={5} className="text-ink-500 pt-2 text-right text-xs font-medium tracking-wider uppercase">
+                    Total
+                  </td>
+                  <td className="text-ink-900 pt-2 text-right font-semibold whitespace-nowrap">{formatMoney(total, currency)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      )}
+      {answer.note && (
+        <p className="text-ink-900 bg-ink-50/60 rounded-xl px-4 py-3 text-[14px] font-light whitespace-pre-line">
+          <span className="text-ink-500 mb-0.5 block text-[11px] font-medium tracking-wider uppercase">Their note</span>
+          {answer.note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The request's rate cards (doc §4.11) — made on its sourcing task, opened and changed here too. */
+function RequestRateCards({ salesRequestId }: { salesRequestId: string }) {
+  const cards = api.rateCard.forRequest.useQuery({ salesRequestId });
+  const [open, setOpen] = useState<string | null>(null);
+  if (!cards.data || cards.data.length === 0) return null;
+  return (
+    <Card>
+      <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Rate cards</h2>
+      <ul className="space-y-1.5 text-[13px]">
+        {cards.data.map((card) => (
+          <li key={card.id} className="flex items-baseline justify-between gap-2">
+            <button type="button" onClick={() => setOpen(card.id)} className="text-ink-900 hover:text-brand-700 min-w-0 truncate text-left font-light hover:underline">
+              {card.name}
+            </button>
+            <span className="text-ink-500 shrink-0 text-xs font-light">
+              {card._count.properties} {card._count.properties === 1 ? "property" : "properties"}
+              {card.shareToken ? " · shared" : ""}
+              {card._count.responses > 0 && <span className="text-brand-700 font-medium"> · {card._count.responses === 1 ? "1 answer" : `${card._count.responses} answers`}</span>}
+              {card.responses.length > 0 && <NewAnswers count={card.responses.length} />}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {open && (
+        <RateCardEditor
+          id={open}
+          onClose={() => {
+            setOpen(null);
+            void cards.refetch();
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+/**
+ * The request's tasks (doc §4.11): its sourcing task first — to whom, how far
+ * along, a click away — then the hotel contact tasks that came out of it.
+ */
+function RequestTasks({ request }: { request: FullRequest }) {
+  const sourcing = request.tasks.filter((task) => task.type?.name === "Sourcing");
+  const others = request.tasks.filter((task) => task.type?.name !== "Sourcing");
+  const who = (task: FullRequest["tasks"][number]) =>
+    task.assignees.length ? task.assignees.map((person) => person.name ?? person.email).join(", ") : "Nobody yet";
+  return (
+    <Card>
+      <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Tasks</h2>
+      {sourcing.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">
+          {request.event
+            ? "No sourcing task yet — it is made once the request's details are in."
+            : "No sourcing task — the request is not for one of our events."}
+        </p>
+      ) : (
+        sourcing.map((task) => (
+          <Link key={task.id} href={`/tasks/${task.id}`} className="border-brand-200 bg-brand-50/50 hover:border-brand-400 block rounded-lg border px-3 py-2.5 transition-colors">
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">Sourcing task</span>
+              <TaskStatusBadge status={task.status} />
+            </span>
+            <span className="text-ink-700 mt-1 block text-[13px] font-light">With {who(task)}</span>
+            <span className="text-brand-700 mt-1 block text-[13px] font-medium">Open the sourcing task →</span>
+          </Link>
+        ))
+      )}
+      {others.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {others.map((task) => (
+            <li key={task.id} className="flex items-baseline justify-between gap-2 text-[13px]">
+              <Link href={`/tasks/${task.id}`} className="text-ink-900 hover:text-brand-700 min-w-0 truncate font-light hover:underline">
+                {task.property && task.type?.name === "Hotel contact" ? `Contact ${task.property.name}` : task.title}
+              </Link>
+              {task.outcome ? (
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${contactOutcomeStyle}`}>{contactOutcomeLabels[task.outcome]}</span>
+              ) : (
+                <TaskStatusBadge status={task.status} />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
@@ -1017,7 +1494,7 @@ const rowActions: Record<RoomRow["state"], { action: RoomAction; label: string }
 };
 
 /** The stage a request has reached once its rooms are blocked or sold — offered, never made. */
-const stageAfter = { BLOCK: "BLOCKED", SELL: "SIGNED" } as const;
+const stageAfter = { BLOCK: "NEGOTIATION", SELL: "CONTRACTED" } as const;
 
 /** Re-reads the rooms, and resolves once the table shows the change — so "done" is never said before it is. */
 function useRoomsSaved() {
@@ -1134,7 +1611,7 @@ function Done({ done, request, onClose }: { done: { text: string; offer: SalesRe
         <button
           type="button"
           disabled={setStage.isPending}
-          onClick={() => (done.offer === "SIGNED" ? sign.start() : setStage.mutate({ id: request.id, stage: done.offer! }))}
+          onClick={() => (done.offer === "CONTRACTED" ? sign.start() : setStage.mutate({ id: request.id, stage: done.offer! }))}
           className="font-medium hover:underline"
         >
           Mark the request {salesStageLabels[done.offer]}
@@ -1633,7 +2110,7 @@ function ContractCard({ request }: { request: FullRequest }) {
           </Link>
         )}
       </div>
-      {rows.length === 0 && request.stage === "SIGNED" ? (
+      {rows.length === 0 && request.stage === "CONTRACTED" ? (
         // Signed before a contract was required: said, so it gets registered.
         <p className="text-sm font-light text-[#c03654]">
           Marked signed, but no contract is registered.{" "}

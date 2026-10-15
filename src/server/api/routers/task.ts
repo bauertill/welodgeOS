@@ -1,0 +1,598 @@
+import { ContactOutcome, Priority, TaskStatus, type Prisma } from "generated/prisma";
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+
+import { priorityLabels } from "~/lib/clients";
+import { parseDay } from "~/lib/dates";
+import { nightsBetween, today } from "~/lib/dates";
+import { formatDate, formatRange } from "~/lib/format";
+import { contactOutcomeLabels, taskStatusLabels } from "~/lib/tasks";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { diffFields, logAudit } from "~/server/audit";
+import { ensureHotelContactTask, HOTEL_CONTACT, hotelContactItems } from "~/server/hotel-contact";
+import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
+
+/**
+ * Tasks (doc §2.8): a board of work everyone can see — who asked for it, who
+ * completes it, by when, and what it is about. Each type will get its own
+ * workflow later; for now a task moves Backlog → To do → In progress → Done.
+ */
+
+const person = { select: { id: true, name: true, email: true, image: true } } as const;
+
+const include = {
+  type: { select: { id: true, name: true } },
+  assignees: person,
+  requestedBy: person,
+  createdBy: person,
+  event: { select: { id: true, name: true } },
+  property: { select: { id: true, name: true } },
+  client: { select: { id: true, name: true, shortName: true } },
+  salesRequest: { select: { id: true, client: { select: { name: true } } } },
+  _count: { select: { comments: true } },
+} satisfies Prisma.TaskInclude;
+
+const optionalDay = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, "That date does not look right");
+const blank = (value: string | undefined | null) => (value?.trim() ? value.trim() : null);
+
+const taskInput = z.object({
+  title: z.string().trim().min(1, "Say what the task is").max(300),
+  details: z.string().max(10_000).optional(),
+  status: z.nativeEnum(TaskStatus).optional(),
+  priority: z.nativeEnum(Priority).nullable().optional(),
+  deadline: optionalDay.optional(),
+  typeId: z.string().nullable().optional(),
+  assigneeIds: z.array(z.string()).max(50).optional(),
+  requestedById: z.string().nullable().optional(),
+  eventId: z.string().nullable().optional(),
+  propertyId: z.string().nullable().optional(),
+  clientId: z.string().nullable().optional(),
+  salesRequestId: z.string().nullable().optional(),
+});
+
+type Loaded = Prisma.TaskGetPayload<{ include: typeof include }>;
+
+/** What a task's history says about it, field by field. */
+const readable = (task: Loaded) => ({
+  title: task.title,
+  details: task.details,
+  status: taskStatusLabels[task.status],
+  priority: task.priority ? priorityLabels[task.priority] : null,
+  deadline: task.deadline ? formatDate(task.deadline) : null,
+  type: task.type?.name ?? null,
+  assignees: task.assignees.map((user) => user.name ?? user.email).join(", ") || null,
+  requestedBy: task.requestedBy ? (task.requestedBy.name ?? task.requestedBy.email) : null,
+  event: task.event?.name ?? null,
+  property: task.property?.name ?? null,
+  client: task.client?.name ?? null,
+  salesRequest: task.salesRequest ? `${task.salesRequest.client.name}'s request` : null,
+});
+const historyFields = [
+  { key: "title", label: "Task" },
+  { key: "details", label: "Details" },
+  { key: "status", label: "Status" },
+  { key: "priority", label: "Priority" },
+  { key: "deadline", label: "Deadline" },
+  { key: "type", label: "Type" },
+  { key: "assignees", label: "To complete" },
+  { key: "requestedBy", label: "Requested by" },
+  { key: "event", label: "Event" },
+  { key: "property", label: "Property" },
+  { key: "client", label: "Client" },
+  { key: "salesRequest", label: "Sales request" },
+] as const;
+
+/** A sales request ties the task to its client and event as well, unless they were said. */
+async function links(db: Prisma.TransactionClient, input: z.infer<typeof taskInput>) {
+  if (!input.salesRequestId) return {};
+  const request = await db.salesRequest.findUnique({ where: { id: input.salesRequestId }, select: { clientId: true, eventId: true } });
+  if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "That sales request no longer exists." });
+  return {
+    ...(input.clientId === undefined || input.clientId === null ? { clientId: request.clientId } : {}),
+    ...((input.eventId === undefined || input.eventId === null) && request.eventId ? { eventId: request.eventId } : {}),
+  };
+}
+
+function dataFrom(input: z.infer<typeof taskInput>) {
+  return {
+    ...(input.title !== undefined && { title: input.title }),
+    ...(input.details !== undefined && { details: blank(input.details) }),
+    ...(input.priority !== undefined && { priority: input.priority }),
+    ...(input.deadline !== undefined && { deadline: input.deadline ? parseDay(input.deadline) : null }),
+    ...(input.typeId !== undefined && { typeId: input.typeId }),
+    ...(input.requestedById !== undefined && { requestedById: input.requestedById }),
+    ...(input.eventId !== undefined && { eventId: input.eventId }),
+    ...(input.propertyId !== undefined && { propertyId: input.propertyId }),
+    ...(input.clientId !== undefined && { clientId: input.clientId }),
+    ...(input.salesRequestId !== undefined && { salesRequestId: input.salesRequestId }),
+  };
+}
+
+/** "Brandon" — who did it, as a notification says it. */
+const firstNameOf = (user: { name?: string | null; email?: string | null }) => (user.name ?? user.email ?? "Someone").split(" ")[0]!;
+
+export const taskRouter = createTRPCRouter({
+  /** The board: every task, filtered. Open ones first by deadline, then the newest. */
+  list: protectedProcedure
+    .input(
+      z
+        .object({
+          search: z.string().optional(),
+          status: z.nativeEnum(TaskStatus).optional(),
+          assigneeId: z.string().optional(),
+          requestedById: z.string().optional(),
+          priority: z.nativeEnum(Priority).optional(),
+          typeId: z.string().optional(),
+          eventId: z.string().optional(),
+          propertyId: z.string().optional(),
+          clientId: z.string().optional(),
+          salesRequestId: z.string().optional(),
+          /** Leave out what was finished more than this many days ago. */
+          doneWithinDays: z.number().int().min(1).max(3650).optional(),
+        })
+        .default({}),
+    )
+    .query(({ ctx, input }) => {
+      const search = input.search?.trim();
+      const doneSince = input.doneWithinDays ? new Date(Date.now() - input.doneWithinDays * 86_400_000) : null;
+      return ctx.db.task.findMany({
+        where: {
+          status: input.status,
+          priority: input.priority,
+          typeId: input.typeId,
+          eventId: input.eventId,
+          propertyId: input.propertyId,
+          clientId: input.clientId,
+          salesRequestId: input.salesRequestId,
+          requestedById: input.requestedById,
+          ...(input.assigneeId && { assignees: { some: { id: input.assigneeId } } }),
+          AND: [
+            ...(search
+              ? [{ OR: [{ title: { contains: search, mode: "insensitive" as const } }, { details: { contains: search, mode: "insensitive" as const } }] }]
+              : []),
+            ...(doneSince ? [{ OR: [{ status: { not: "DONE" as const } }, { doneAt: { gte: doneSince } }] }] : []),
+          ],
+        },
+        include,
+        orderBy: [{ deadline: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+        take: 500,
+      });
+    }),
+
+  /**
+   * A hotel contact task's checklist (doc §4.11): what has been gathered about
+   * the property for the event so far, read from where it is kept — the
+   * property itself, its terms for the event and its quotations. Nothing is
+   * ticked by hand, and the task is never closed on its own.
+   */
+  gathering: protectedProcedure.input(z.object({ propertyId: z.string(), eventId: z.string() })).query(async ({ ctx, input }) => {
+    const property = await ctx.db.property.findUniqueOrThrow({
+      where: { id: input.propertyId },
+      select: {
+        type: true,
+        name: true,
+        address: true,
+        city: true,
+        country: true,
+        phone: true,
+        website: true,
+        generalEmail: true,
+        contacts: { select: { id: true, name: true, role: true, email: true, phone: true } },
+        categories: { select: { unitCount: true, capacity: true, bedConfiguration: true, bedrooms: true, size: true } },
+        _count: { select: { amenities: true } },
+      },
+    });
+    const entry = await ctx.db.scoutingEntry.findUnique({
+      where: { eventId_propertyId: { eventId: input.eventId, propertyId: input.propertyId } },
+      select: {
+        id: true,
+        ratesInclude: true,
+        paymentTerms: true,
+        cancellationTerms: true,
+        extraCosts: true,
+        quotations: {
+          select: {
+            paymentTerms: true,
+            cancellationTerms: true,
+            rateIncludes: true,
+            rateIncludesOther: true,
+            cleaning: true,
+            totBasisPoints: true,
+            otherTaxes: true,
+            agreementOn: true,
+            _count: { select: { lines: true, payments: true, cancellations: true } },
+          },
+        },
+        categoryContracts: {
+          select: { ratePerNightCents: true, rateIncludes: true, rateIncludesOther: true, cleaning: true, totBasisPoints: true, otherTaxes: true },
+        },
+      },
+    });
+    const quotes = entry?.quotations ?? [];
+    const rates = entry?.categoryContracts ?? [];
+    const categories = property.categories;
+    const units = categories.reduce((sum, category) => sum + category.unitCount, 0);
+    const detailed = categories.filter((category) => (property.type === "APARTMENT" ? category.bedrooms !== null : Boolean(category.bedConfiguration?.trim()))).length;
+    const has = (value: string | null | undefined) => Boolean(value?.trim());
+    const includes = [...quotes, ...rates].some((rate) => rate.rateIncludes.length > 0 || has(rate.rateIncludesOther) || rate.cleaning !== null);
+    const extras = [...quotes, ...rates].some((rate) => rate.totBasisPoints !== null || has(rate.otherTaxes));
+    const pricedQuotes = quotes.filter((quote) => quote._count.lines > 0).length;
+    const pricedCategories = rates.filter((rate) => rate.ratePerNightCents !== null).length;
+
+    const items: { key: (typeof hotelContactItems)[number]["key"]; ok: boolean; text: string }[] = [
+      {
+        key: "categories",
+        ok: categories.length > 0 && categories.every((category) => category.unitCount > 0),
+        text: categories.length ? `${categories.length} ${categories.length === 1 ? "category" : "categories"}, ${units} units` : "None yet",
+      },
+      {
+        key: "details",
+        ok: categories.length > 0 && detailed === categories.length,
+        text: categories.length ? `${detailed} of ${categories.length} with their ${property.type === "APARTMENT" ? "bedrooms" : "beds"}` : "Once there are categories",
+      },
+      { key: "amenities", ok: property._count.amenities > 0, text: property._count.amenities ? `${property._count.amenities} recorded` : "None yet" },
+      { key: "paymentTerms", ok: has(entry?.paymentTerms) || quotes.some((quote) => has(quote.paymentTerms) || quote._count.payments > 0), text: "" },
+      { key: "cancellationTerms", ok: has(entry?.cancellationTerms) || quotes.some((quote) => has(quote.cancellationTerms) || quote._count.cancellations > 0), text: "" },
+      {
+        key: "rate",
+        ok: pricedQuotes > 0 || pricedCategories > 0,
+        text: pricedQuotes ? `${pricedQuotes} ${pricedQuotes === 1 ? "quotation" : "quotations"}` : pricedCategories ? `Set for ${pricedCategories} ${pricedCategories === 1 ? "category" : "categories"}` : "No quotation yet",
+      },
+      { key: "included", ok: has(entry?.ratesInclude) || includes, text: "" },
+      { key: "extraCosts", ok: has(entry?.extraCosts) || extras, text: "" },
+      {
+        key: "agreement",
+        ok: quotes.some((quote) => quote.agreementOn),
+        text: quotes.find((quote) => quote.agreementOn)?.agreementOn === "HOTEL" ? "Their agreement" : quotes.some((quote) => quote.agreementOn) ? "Our agreement" : "Not known yet — on the quotation",
+      },
+    ];
+    return {
+      entryId: entry?.id ?? null,
+      reach: {
+        name: property.name,
+        address: [property.address, property.city, property.country].filter(Boolean).join(", ") || null,
+        city: property.city,
+        phone: property.phone,
+        website: property.website,
+        email: property.generalEmail,
+        contacts: property.contacts,
+      },
+      items: hotelContactItems.map((item) => {
+        const found = items.find((one) => one.key === item.key)!;
+        return { ...item, ok: found.ok, text: found.text || (found.ok ? "In" : "Not yet") };
+      }),
+    };
+  }),
+
+  /**
+   * The hotel cannot help with the request (doc §4.11): the contact task is
+   * closed with why — no availability, no groups, not interested — and the
+   * property's Updates say so, for this request only; it stays on the event
+   * and in every other search.
+   */
+  cantHelp: protectedProcedure
+    .input(z.object({ id: z.string(), outcome: z.nativeEnum(ContactOutcome), note: z.string().max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(async (tx) => {
+        const task = await tx.task.findUniqueOrThrow({
+          where: { id: input.id },
+          include: {
+            type: { select: { name: true } },
+            property: { select: { id: true, name: true } },
+            event: { select: { name: true } },
+            salesRequest: { select: { client: { select: { name: true } }, lines: { orderBy: { position: "asc" } } } },
+          },
+        });
+        if (task.type?.name !== HOTEL_CONTACT || !task.property) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Only a hotel contact task can be closed this way." });
+        }
+        const note = input.note.trim() || null;
+        await tx.task.update({
+          where: { id: task.id },
+          data: { status: "DONE", doneAt: task.status === "DONE" ? task.doneAt : new Date(), outcome: input.outcome, outcomeNote: note },
+        });
+        const label = contactOutcomeLabels[input.outcome];
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Task",
+          entityId: task.id,
+          summary: `Closed — the hotel cannot help: ${label}`,
+          changes: note,
+        });
+        // On the property, for the record: who it could not help, with what.
+        const asked = (task.salesRequest?.lines ?? []).map(
+          (line) =>
+            `${line.rooms} × ${line.roomType ?? "units"}${line.checkIn && line.checkOut ? `, ${formatRange(line.checkIn, line.checkOut)} (${nightsBetween(line.checkIn, line.checkOut)} nights)` : ""}`,
+        );
+        const what = [task.salesRequest ? `For ${task.salesRequest.client.name}` : null, task.event?.name].filter(Boolean).join(" · ");
+        await tx.update.create({
+          data: {
+            kind: "CONTACT_OUTCOME",
+            propertyId: task.property.id,
+            authorId: ctx.session.user.id,
+            happenedOn: today(),
+            body: [`${label}${what ? ` — ${what}` : ""}`, ...asked, ...(note ? [note] : [])].join("\n"),
+          },
+        });
+        await notify(tx, {
+          to: [task.requestedById],
+          actorId: ctx.session.user.id,
+          kind: "TASK_STATUS",
+          title: `${task.property.name} cannot help: ${label}`,
+          body: note,
+          link: `/tasks/${task.id}`,
+          taskId: task.id,
+        });
+      });
+      await deliverImmediate(ctx.db);
+      return { ok: true };
+    }),
+
+  /**
+   * Who at the hotel the request is emailed to, as they said on the call (doc
+   * §4.11): kept on the task for its email, and among the hotel's contacts
+   * when they are not there yet.
+   */
+  setEmailTo: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().trim().max(200),
+        email: z.string().trim().max(300).email("That email address does not look right"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(async (tx) => {
+        const task = await tx.task.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, propertyId: true } });
+        await tx.task.update({ where: { id: task.id }, data: { emailToName: input.name || null, emailToAddress: input.email } });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Task",
+          entityId: task.id,
+          summary: "Who to email the request to",
+          changes: [input.name, input.email].filter(Boolean).join(" · "),
+        });
+        if (task.propertyId) {
+          const known = await tx.propertyContact.findFirst({ where: { propertyId: task.propertyId, email: { equals: input.email, mode: "insensitive" } } });
+          if (known) {
+            if (input.name && !known.name.trim()) await tx.propertyContact.update({ where: { id: known.id }, data: { name: input.name } });
+          } else {
+            await tx.propertyContact.create({ data: { propertyId: task.propertyId, name: input.name || input.email, email: input.email } });
+            await logAudit(tx, { actorId: ctx.session.user.id, entity: "Property", entityId: task.propertyId, summary: `Contact added: ${input.name || input.email}` });
+          }
+        }
+      });
+      return { ok: true };
+    }),
+
+  /**
+   * The request was emailed to the hotel (doc §4.11): a contact task not yet
+   * started moves to In progress — and the property, on the event's board,
+   * to Pending quote (§3.9).
+   */
+  requestEmailed: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const task = await ctx.db.task.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, status: true, propertyId: true, eventId: true } });
+    if (task.status !== "BACKLOG" && task.status !== "TODO") return { moved: false };
+    await ctx.db.$transaction(async (tx) => {
+      await tx.task.update({ where: { id: task.id }, data: { status: "IN_PROGRESS", doneAt: null } });
+      // On the event's list, a Prospect is now Reached out (doc §3.5).
+      if (task.propertyId && task.eventId) {
+        const entry = await tx.scoutingEntry.findUnique({ where: { eventId_propertyId: { eventId: task.eventId, propertyId: task.propertyId } }, select: { id: true, status: true } });
+        if (entry?.status === "PROSPECT") {
+          await tx.scoutingEntry.update({ where: { id: entry.id }, data: { status: "CONTACTED" } });
+          await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: entry.id, summary: "Status: Prospect → Reached out (request emailed)" });
+        }
+      }
+      await logAudit(tx, {
+        actorId: ctx.session.user.id,
+        entity: "Task",
+        entityId: task.id,
+        summary: "Request emailed to the hotel",
+        changes: `Status: ${taskStatusLabels[task.status]} → ${taskStatusLabels.IN_PROGRESS}`,
+      });
+    });
+    return { moved: true };
+  }),
+
+  /** The open hotel contact task for a property on an event, if any (doc §4.11) — for the event's map. */
+  hotelContactFor: protectedProcedure.input(z.object({ propertyId: z.string(), eventId: z.string() })).query(({ ctx, input }) =>
+    ctx.db.task.findFirst({
+      where: { propertyId: input.propertyId, eventId: input.eventId, status: { not: "DONE" }, type: { name: HOTEL_CONTACT } },
+      select: { id: true, status: true, assignees: { select: { id: true, name: true, email: true } } },
+    }),
+  ),
+
+  /** A hotel contact task asked for by hand, from the event's map: to someone chosen, with a note. */
+  createHotelContact: protectedProcedure
+    .input(z.object({ propertyId: z.string(), eventId: z.string(), assigneeId: z.string().min(1, "Choose who contacts the property."), note: z.string().max(5000) }))
+    .mutation(async ({ ctx, input }) => {
+      const task = await ctx.db.$transaction((tx) =>
+        ensureHotelContactTask(tx, {
+          propertyId: input.propertyId,
+          eventId: input.eventId,
+          salesRequestId: null,
+          actorId: ctx.session.user.id,
+          assigneeIds: [input.assigneeId],
+          note: input.note,
+        }),
+      );
+      if (!task) throw new TRPCError({ code: "BAD_REQUEST", message: "There is already an open contact task for this property." });
+      await deliverImmediate(ctx.db);
+      return { id: task.id };
+    }),
+
+  byId: protectedProcedure.input(z.object({ id: z.string() })).query(({ ctx, input }) =>
+    ctx.db.task.findUnique({ where: { id: input.id }, include }),
+  ),
+
+  /** The task types the team has named so far. */
+  types: protectedProcedure.query(({ ctx }) => ctx.db.taskType.findMany({ orderBy: { name: "asc" } })),
+
+  /** Name a new task type — or find the one already called that. */
+  addType: protectedProcedure
+    .input(z.object({ name: z.string().trim().min(1, "Give the type a name").max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.taskType.findFirst({ where: { name: { equals: input.name, mode: "insensitive" } } });
+      return existing ?? ctx.db.taskType.create({ data: { name: input.name } });
+    }),
+
+  create: protectedProcedure.input(taskInput).mutation(async ({ ctx, input }) => {
+    const created = await ctx.db.$transaction(async (tx) => {
+      const status = input.status ?? "TODO";
+      const task = await tx.task.create({
+        data: {
+          ...dataFrom(input),
+          ...(await links(tx, input)),
+          title: input.title,
+          status,
+          doneAt: status === "DONE" ? new Date() : null,
+          // Whoever adds it asked for it, unless someone else is named.
+          requestedById: input.requestedById === undefined ? ctx.session.user.id : input.requestedById,
+          createdById: ctx.session.user.id,
+          assignees: { connect: (input.assigneeIds ?? []).map((id) => ({ id })) },
+        },
+        include,
+      });
+      await logAudit(tx, {
+        actorId: ctx.session.user.id,
+        entity: "Task",
+        entityId: task.id,
+        summary: `Task added: ${task.title}`,
+        changes: task.assignees.length ? `To complete: ${readable(task).assignees}` : null,
+      });
+      // Doc §2.9: whoever is given it hears about it.
+      await notify(tx, {
+        to: task.assignees.map((person) => person.id),
+        actorId: ctx.session.user.id,
+        kind: "TASK_ASSIGNED",
+        title: `${firstNameOf(ctx.session.user)} gave you a task: ${task.title}`,
+        body: [task.deadline ? `Due ${formatDate(task.deadline)}` : null, task.details].filter(Boolean).join("\n") || null,
+        link: `/tasks/${task.id}`,
+        taskId: task.id,
+      });
+      return task;
+    });
+    await deliverImmediate(ctx.db);
+    return created;
+  }),
+
+  /** Change a task: only the fields given. */
+  update: protectedProcedure.input(taskInput.partial().extend({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const updated = await ctx.db.$transaction(async (tx) => {
+      const { id, ...fields } = input;
+      const before = await tx.task.findUniqueOrThrow({ where: { id }, include });
+      const after = await tx.task.update({
+        where: { id },
+        data: {
+          ...dataFrom(fields as z.infer<typeof taskInput>),
+          ...(fields.salesRequestId ? await links(tx, fields as z.infer<typeof taskInput>) : {}),
+          ...(fields.status !== undefined && {
+            status: fields.status,
+            doneAt: fields.status === "DONE" ? (before.status === "DONE" ? before.doneAt : new Date()) : null,
+            // Reopened: the hotel's "cannot help" no longer stands (doc §4.11).
+            ...(fields.status !== "DONE" && { outcome: null, outcomeNote: null }),
+          }),
+          ...(fields.assigneeIds !== undefined && { assignees: { set: fields.assigneeIds.map((assignee) => ({ id: assignee })) } }),
+        },
+        include,
+      });
+      const changes = diffFields(readable(before), readable(after), [...historyFields]);
+      if (changes) {
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Task", entityId: id, summary: "Updated", changes });
+      }
+      // Doc §2.9: newly given it; and a move on, to whoever asked and whoever completes it.
+      const had = new Set(before.assignees.map((person) => person.id));
+      const added = after.assignees.filter((person) => !had.has(person.id)).map((person) => person.id);
+      await notify(tx, {
+        to: added,
+        actorId: ctx.session.user.id,
+        kind: "TASK_ASSIGNED",
+        title: `${firstNameOf(ctx.session.user)} gave you a task: ${after.title}`,
+        body: after.deadline ? `Due ${formatDate(after.deadline)}` : null,
+        link: `/tasks/${id}`,
+        taskId: id,
+      });
+      if (before.status !== after.status) {
+        await notify(tx, {
+          to: [after.requestedBy?.id, ...after.assignees.map((person) => person.id)].filter((person) => !added.includes(person ?? "")),
+          actorId: ctx.session.user.id,
+          kind: "TASK_STATUS",
+          title: `${firstNameOf(ctx.session.user)} moved "${after.title}" to ${taskStatusLabels[after.status]}`,
+          link: `/tasks/${id}`,
+          taskId: id,
+        });
+      }
+      return after;
+    });
+    await deliverImmediate(ctx.db);
+    return updated;
+  }),
+
+  remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const removed = await ctx.db.task.delete({ where: { id: input.id } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Task", entityId: removed.id, summary: `Task removed: ${removed.title}` });
+    return removed;
+  }),
+
+  // --- Comments --------------------------------------------------------------
+
+  comments: protectedProcedure.input(z.object({ taskId: z.string() })).query(({ ctx, input }) =>
+    ctx.db.taskComment.findMany({
+      where: { taskId: input.taskId },
+      orderBy: { createdAt: "desc" },
+      include: { author: person },
+    }),
+  ),
+
+  comment: protectedProcedure
+    .input(z.object({ taskId: z.string(), body: z.string().trim().min(1, "A comment needs some text.").max(10_000) }))
+    .mutation(async ({ ctx, input }) => {
+      const comment = await ctx.db.$transaction(async (tx) => {
+        const created = await tx.taskComment.create({
+          data: { taskId: input.taskId, body: input.body, authorId: ctx.session.user.id },
+          include: { author: person },
+        });
+        const task = await tx.task.findUniqueOrThrow({
+          where: { id: input.taskId },
+          select: { title: true, requestedById: true, assignees: { select: { id: true } } },
+        });
+        // Doc §2.9: whoever is @mentioned, then everyone else on the task.
+        const mentioned = await mentionedIn(tx, input.body);
+        const who = firstNameOf(ctx.session.user);
+        const words = plainMentions(input.body);
+        await notify(tx, {
+          to: mentioned,
+          actorId: ctx.session.user.id,
+          kind: "TASK_MENTION",
+          title: `${who} mentioned you on "${task.title}"`,
+          body: words,
+          link: `/tasks/${input.taskId}`,
+          taskId: input.taskId,
+        });
+        await notify(tx, {
+          to: [task.requestedById, ...task.assignees.map((assignee) => assignee.id)].filter((id) => !mentioned.includes(id ?? "")),
+          actorId: ctx.session.user.id,
+          kind: "TASK_COMMENT",
+          title: `${who} commented on "${task.title}"`,
+          body: words,
+          link: `/tasks/${input.taskId}`,
+          taskId: input.taskId,
+        });
+        return created;
+      });
+      await deliverImmediate(ctx.db);
+      return comment;
+    }),
+
+  /** Change your own comment's words; it then says it was edited. */
+  editComment: protectedProcedure
+    .input(z.object({ id: z.string(), body: z.string().trim().min(1, "A comment needs some text.").max(10_000) }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.taskComment.findUniqueOrThrow({ where: { id: input.id } });
+      if (existing.authorId !== ctx.session.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the person who wrote a comment can edit it." });
+      }
+      if (existing.body === input.body) return existing;
+      return ctx.db.taskComment.update({ where: { id: input.id }, data: { body: input.body, editedAt: new Date() } });
+    }),
+});

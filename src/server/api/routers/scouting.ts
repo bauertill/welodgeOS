@@ -2,9 +2,15 @@ import { TRPCError } from "@trpc/server";
 import { Cleaning, GroupColour, RateInclusion } from "generated/prisma";
 import { z } from "zod";
 
-import { categoryContractStatusLabels, scoutingStatusLabels } from "~/lib/scouting";
+import { stageOf } from "~/lib/stages";
+
+import { categoryContractStatusLabels, distanceKm, scoutingStatusLabels } from "~/lib/scouting";
+import { reverseGeocode } from "~/server/places";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
+import { findNearby, knownAlready } from "~/server/discover";
+import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
+import { deliverImmediate } from "~/server/notify";
 
 // `CONTRACTED` is deliberately excluded — a property has no single contract
 // status of its own any more; that lives per room category (doc §3.5, §3.6).
@@ -64,6 +70,7 @@ export const scoutingRouter = createTRPCRouter({
         deposit: z.string().max(5000),
         cancellationTerms: z.string().max(5000),
         paymentTerms: z.string().max(5000),
+        extraCosts: z.string().max(5000),
         blockExpiry: z.date().nullable(),
         roomingListDeadline: z.date().nullable(),
         minimumStayNights: z.number().int().min(1, "A minimum stay is at least one night.").max(365).nullable(),
@@ -81,6 +88,7 @@ export const scoutingRouter = createTRPCRouter({
           deposit: text(terms.deposit),
           cancellationTerms: text(terms.cancellationTerms),
           paymentTerms: text(terms.paymentTerms),
+          extraCosts: text(terms.extraCosts),
         },
       });
       await logAudit(ctx.db, {
@@ -252,8 +260,8 @@ export const scoutingRouter = createTRPCRouter({
         hasQuotations: z.boolean().default(false),
       }),
     )
-    .query(({ ctx, input }) =>
-      ctx.db.scoutingEntry.findMany({
+    .query(async ({ ctx, input }) => {
+      const entries = await ctx.db.scoutingEntry.findMany({
         where: {
           eventId: input.eventId,
           status: input.status,
@@ -288,8 +296,139 @@ export const scoutingRouter = createTRPCRouter({
           categoryContracts: true,
           quotations: { select: { id: true, status: true } },
         },
+      });
+      // Where each stands, worked out from its contact tasks, quotations and contracts (doc §3.9).
+      const propertyIds = entries.map((entry) => entry.propertyId);
+      const [tasks, contracts] = await Promise.all([
+        ctx.db.task.findMany({
+          where: { eventId: input.eventId, propertyId: { in: propertyIds }, type: { name: "Hotel contact" } },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, propertyId: true, status: true, outcome: true },
+        }),
+        ctx.db.contract.findMany({ where: { eventId: input.eventId, party: "SUPPLIER", propertyId: { in: propertyIds } }, select: { propertyId: true } }),
+      ]);
+      const contracted = new Set(contracts.map((contract) => contract.propertyId));
+      return entries.map((entry) => {
+        const contactTasks = tasks.filter((task) => task.propertyId === entry.propertyId);
+        return {
+          ...entry,
+          stage: stageOf({ ...entry, contactTasks, hasSupplierContract: contracted.has(entry.propertyId) }),
+          contactTaskId: contactTasks.find((task) => task.status !== "DONE")?.id ?? contactTasks[0]?.id ?? null,
+        };
+      });
+    }),
+
+
+  /**
+   * Places to stay around one of the event's places of interest that are not
+   * in our system (doc §3.9), from Google Maps — searched from the
+   * Properties tab's map, in general rather than for a client.
+   */
+  discoverNear: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        /** One of the event's places of interest — or, instead, any address found on the map. */
+        placeId: z.string().optional(),
+        address: z.object({ label: z.string().max(300), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }).optional(),
+        radiusKm: z.number().min(1).max(30).default(5),
       }),
-    ),
+    )
+    .query(async ({ ctx, input }) => {
+      const place = input.address
+        ? { name: input.address.label, latitude: input.address.latitude, longitude: input.address.longitude }
+        : await ctx.db.placeOfInterest.findFirstOrThrow({
+            where: { id: input.placeId ?? "", eventId: input.eventId },
+            select: { name: true, latitude: true, longitude: true },
+          });
+      const result = await findNearby(place, input.radiusKm, { hotels: true, apartments: true });
+      if (!result) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "The map search did not answer — try again in a minute." });
+      const ours = await ctx.db.property.findMany({ select: { id: true, name: true, address: true, latitude: true, longitude: true } });
+      const found = result.found
+        .filter((candidate) => !knownAlready(candidate, ours))
+        .map((candidate) => ({ ...candidate, km: distanceKm(candidate, place) }))
+        .filter((candidate) => candidate.km <= input.radiusKm)
+        .sort((a, b) => a.km - b.km);
+      return { source: result.source, placeName: place.name, found };
+    }),
+
+  /** A place found on the event's map, added to our properties and the event, with a contact task (doc §3.9, §4.11). */
+  addFound: protectedProcedure
+    .input(z.object({ eventId: z.string(), placeName: z.string().max(300), place: foundPlaceInput }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.db.$transaction(async (tx) => {
+        const event = await tx.event.findUniqueOrThrow({ where: { id: input.eventId }, select: { name: true } });
+        return createFoundProperty(tx, {
+          place: input.place,
+          eventId: input.eventId,
+          salesRequestId: null,
+          foundWhile: `near ${input.placeName} for ${event.name}`,
+          actorId: ctx.session.user.id,
+        });
+      });
+      await deliverImmediate(ctx.db);
+      return result;
+    }),
+
+  /**
+   * A property added by pointing at the map (doc §3.9, 2026-10-13) — spotted
+   * on the ground, under development, not on Google: on our properties and
+   * the event's board, with a hotel contact task, as one found by search.
+   */
+  addFromMap: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        name: z.string().trim().min(1, "Give it a name — even a working one, like Hotel under construction on 5th").max(300),
+        type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]),
+        stars: z.number().int().min(1).max(5).nullable(),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        address: z.string().max(500),
+        city: z.string().max(200).nullable(),
+        country: z.string().max(200).nullable(),
+        underDevelopment: z.boolean(),
+        note: z.string().max(5000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.db.$transaction(async (tx) => {
+        const event = await tx.event.findUniqueOrThrow({ where: { id: input.eventId }, select: { name: true } });
+        const made = await createFoundProperty(tx, {
+          place: {
+            name: input.name,
+            type: input.type,
+            latitude: input.latitude,
+            longitude: input.longitude,
+            address: input.address.trim() || null,
+            city: input.city,
+            country: input.country,
+            website: null,
+            phone: null,
+            stars: input.stars,
+            rooms: null,
+            source: "map",
+          },
+          eventId: input.eventId,
+          salesRequestId: null,
+          foundWhile: `for ${event.name}`,
+          actorId: ctx.session.user.id,
+        });
+        const extra = [input.underDevelopment ? "Under development." : null, input.note.trim() || null].filter(Boolean).join(" ");
+        if (extra) {
+          const property = await tx.property.findUniqueOrThrow({ where: { id: made.id }, select: { notes: true } });
+          await tx.property.update({ where: { id: made.id }, data: { notes: [property.notes, extra].filter(Boolean).join("\n") } });
+        }
+        return made;
+      });
+      await deliverImmediate(ctx.db);
+      return result;
+    }),
+
+  /** The address at a point on the map, to start a property added there. */
+  addressAt: protectedProcedure
+    .input(z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }))
+    .query(({ input }) => reverseGeocode(input.latitude, input.longitude)),
 
   /** Properties not yet on this event's list, for the "add" picker. */
   candidates: protectedProcedure

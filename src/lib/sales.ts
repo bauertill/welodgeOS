@@ -1,4 +1,4 @@
-import type { SalesRequestStage } from "generated/prisma";
+import type { LostReason, SalesRequestStage } from "generated/prisma";
 
 /**
  * The words for a sales request (doc §4.11): where it stands, and the fields a
@@ -8,45 +8,54 @@ import type { SalesRequestStage } from "generated/prisma";
 
 export const salesStageLabels: Record<SalesRequestStage, string> = {
   INITIAL_INTEREST: "Initial interest",
+  SPECIFY: "Specify",
   PROPOSAL_SENT: "Proposal sent",
-  BLOCKED: "Blocked",
-  SIGNED: "Signed",
-  RELEASED: "Released",
-  NO_REPLY: "No reply",
-  LOST: "Lost",
+  NEGOTIATION: "Negotiation",
+  CONTRACTED: "Contracted",
+  LOST: "Lost/Declined",
 };
 
 export const salesStageHints: Record<SalesRequestStage, string> = {
-  INITIAL_INTEREST: "The client has asked. We are looking for units and preparing a proposal.",
-  PROPOSAL_SENT: "We have sent the client a proposal and are waiting for their answer.",
-  BLOCKED: "The client is holding rooms while they decide.",
-  SIGNED: "The client has signed. Closed.",
-  RELEASED: "The client let their block go. Closed.",
-  NO_REPLY: "The client never came back to us. Closed.",
-  LOST: "The client went elsewhere or dropped the plan. Closed.",
+  INITIAL_INTEREST: "The client has asked. We are finding out exactly what they need.",
+  SPECIFY: "The details are in. We are sourcing properties and preparing a rate card.",
+  PROPOSAL_SENT: "The client has a rate card and we are waiting for their answer.",
+  NEGOTIATION: "The client is interested and terms are being agreed — rooms may be held for them.",
+  CONTRACTED: "The client has signed and their contract is registered. Closed.",
+  LOST: "The client declined, went elsewhere, never replied or let their block go. Closed.",
 };
 
 /** Still being worked, in the order a request moves through them. */
-export const openStages: SalesRequestStage[] = ["INITIAL_INTEREST", "PROPOSAL_SENT", "BLOCKED"];
+export const openStages: SalesRequestStage[] = ["INITIAL_INTEREST", "SPECIFY", "PROPOSAL_SENT", "NEGOTIATION"];
 /** The ways a request ends. */
-export const closedStages: SalesRequestStage[] = ["SIGNED", "RELEASED", "NO_REPLY", "LOST"];
+export const closedStages: SalesRequestStage[] = ["CONTRACTED", "LOST"];
 export const salesStageOrder: SalesRequestStage[] = [...openStages, ...closedStages];
 
 export const isClosed = (stage: SalesRequestStage) => closedStages.includes(stage);
 
 export const salesStageStyles: Record<SalesRequestStage, string> = {
   INITIAL_INTEREST: "bg-[#fff4e0] text-[#a15c00]",
+  SPECIFY: "bg-[#e6f0fb] text-[#1d5fa8]",
   PROPOSAL_SENT: "bg-[#ffe9e0] text-[#b33f12]",
-  BLOCKED: "bg-brand-50 text-brand-800",
-  SIGNED: "bg-[#e3f8ee] text-[#0a7a47]",
-  RELEASED: "bg-ink-50 text-ink-700",
-  NO_REPLY: "bg-ink-50 text-ink-700",
+  NEGOTIATION: "bg-brand-50 text-brand-800",
+  CONTRACTED: "bg-[#e3f8ee] text-[#0a7a47]",
   LOST: "bg-[#fde8ec] text-[#a3243d]",
+};
+
+/** Why a request was lost or declined, chosen when it is closed that way. */
+export const lostReasonLabels: Record<LostReason, string> = {
+  DECLINED: "Declined",
+  NO_REPLY: "No reply",
+  RELEASED: "Released",
+};
+export const lostReasonHints: Record<LostReason, string> = {
+  DECLINED: "The client went elsewhere or dropped the plan.",
+  NO_REPLY: "The client never came back to us.",
+  RELEASED: "The client let their block go.",
 };
 
 /** The client's initial interest, as they put it. */
 export const interestFields = [
-  { key: "description", label: "What they need", placeholder: "15 twin rooms for 30 people, close to the Expo" },
+  { key: "description", label: "What they asked for", placeholder: "In their words — \"About 15 rooms for our team, close to the Expo, in July\"" },
   { key: "location", label: "Location and/or property", placeholder: "Santa Monica, within an hour by public transport" },
   { key: "rooms", label: "No. of rooms / room category / occupancy", placeholder: "35–40 twin rooms, 10–20 single rooms" },
   { key: "period", label: "Period", placeholder: "7 – 31 July 2028" },
@@ -74,6 +83,12 @@ export const contractingFields = [
 ] as const;
 
 export type InterestKey = (typeof interestFields)[number]["key"];
+
+/**
+ * What a request said in words before its details had fields of their own
+ * (doc §4.11): kept, and shown under More detail where a request has any.
+ */
+export const earlierInterestFields = interestFields.filter((field) => field.key !== "description");
 export type ContractingKey = (typeof contractingFields)[number]["key"];
 
 /**
@@ -117,4 +132,46 @@ export function splitContractContacts(text: string | null): ContractContact[] {
       const email = parts.length > 1 && parts[parts.length - 1]!.includes("@") ? parts.pop()! : "";
       return parts.length === 2 ? { name: parts[0]!, jobTitle: parts[1]!, email } : { name: parts.join(", "), jobTitle: "", email };
     });
+}
+
+/**
+ * What a client can ask for, line by line (doc §4.11): units — a hotel room,
+ * or a whole apartment of a size. Anything else is said in words.
+ */
+export const roomTypeGroups = [
+  {
+    kind: "HOTEL",
+    label: "Hotel rooms",
+    types: [
+      { name: "Single room", short: "Single" },
+      { name: "Double room", short: "Double" },
+      { name: "Twin room", short: "Twin" },
+      { name: "Triple room", short: "Triple" },
+      { name: "Suite", short: "Suite" },
+    ],
+  },
+  {
+    kind: "APARTMENT",
+    label: "Apartments",
+    types: [
+      { name: "Studio apartment", short: "Studio" },
+      { name: "1-bedroom apartment", short: "1 bedroom" },
+      { name: "2-bedroom apartment", short: "2 bedrooms" },
+      { name: "3-bedroom apartment", short: "3 bedrooms" },
+      { name: "4-bedroom apartment", short: "4 bedrooms" },
+    ],
+  },
+] as const;
+
+
+/** The currency of an event's country, to start a budget in (doc §4.11); euros when it is not known. */
+export function currencyForCountry(country: string | null | undefined) {
+  const name = (country ?? "").trim().toLowerCase();
+  const byCountry: Record<string, string> = {
+    "united states": "USD", usa: "USD", us: "USD", "united states of america": "USD",
+    switzerland: "CHF", "united kingdom": "GBP", uk: "GBP", england: "GBP", scotland: "GBP",
+    "saudi arabia": "SAR", "united arab emirates": "AED", uae: "AED", qatar: "QAR",
+    canada: "CAD", australia: "AUD", japan: "JPY", "new zealand": "NZD", norway: "NOK", sweden: "SEK", denmark: "DKK",
+  };
+  return byCountry[name] ?? "EUR";
 }
