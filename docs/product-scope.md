@@ -1891,7 +1891,9 @@ the contract.
   owner's call, 2026-10-03) — the **budget** (an amount and currency, per room per night, per person per
   night, or in total — the currency starts as the event's country's: dollars for Los
   Angeles, francs for Switzerland, euros where it is not known), **close to** (the event's
-  places of interest, chosen; and **places of the client's own** — their office, a team
+  places of interest, chosen from a dropdown that searches as you type, the chosen shown as
+  tags with × to take one off — the owner, 2026-10-15, as forty venues as buttons was a
+  wall; and **places of the client's own** — their office, a team
   hotel — found by typing the address, or by clicking the spot on a map, each kept with
   its position so it can be measured from), and the **client's comments**. Requests that had one number of rooms and
   one arrival and departure kept them as their first line. They are

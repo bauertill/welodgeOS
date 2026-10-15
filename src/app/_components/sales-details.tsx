@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { CloseToPicker, type Point } from "~/app/_components/close-to-picker";
+import { Combobox } from "~/app/_components/combobox";
 import { InfoTip } from "~/app/_components/info-tip";
 import { DatePicker } from "~/app/_components/date-picker";
 import { Card } from "~/app/_components/ui";
@@ -272,24 +273,36 @@ export function DetailsFields({
       </div>
       <div>
         <Label>{forClient ? "Where would you like to be close to?" : "Close to"}</Label>
+        {/* A dropdown to search and add from, the chosen as tags (the owner, 2026-10-15: forty venues as buttons was a wall). */}
         {places.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {places.map((place) => {
-              const chosen = values.closeToIds.includes(place.id);
-              return (
-                <button
-                  key={place.id}
-                  type="button"
-                  aria-pressed={chosen}
-                  onClick={() => set("closeToIds", chosen ? values.closeToIds.filter((id) => id !== place.id) : [...values.closeToIds, place.id])}
-                  className={`rounded-full border px-3 py-1.5 text-[13px] transition-colors ${
-                    chosen ? "border-brand-400 bg-brand-50 text-brand-800 font-medium" : "border-ink-200 text-ink-500 hover:text-ink-900 bg-white font-light"
-                  }`}
-                >
-                  {place.name}
-                </button>
-              );
-            })}
+          <div className="mb-2 space-y-2">
+            {values.closeToIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {values.closeToIds.map((id) => {
+                  const place = places.find((one) => one.id === id);
+                  if (!place) return null;
+                  return (
+                    <span key={id} className="border-brand-400 bg-brand-50 text-brand-800 inline-flex items-center gap-1.5 rounded-full border py-1 pr-1.5 pl-3 text-[13px] font-medium">
+                      {place.name}
+                      <button
+                        type="button"
+                        onClick={() => set("closeToIds", values.closeToIds.filter((one) => one !== id))}
+                        aria-label={`Remove ${place.name}`}
+                        className="text-brand-700 hover:bg-brand-100 rounded-full px-1.5 leading-none"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <Combobox
+              value=""
+              onChange={(id) => id && !values.closeToIds.includes(id) && set("closeToIds", [...values.closeToIds, id])}
+              placeholder={values.closeToIds.length ? "Add another venue — type to search" : "Choose a venue — type to search"}
+              options={places.filter((place) => !values.closeToIds.includes(place.id)).map((place) => ({ id: place.id, label: place.name }))}
+            />
           </div>
         )}
         <CloseToPicker points={values.points} onChange={(points) => set("points", points)} places={places} find={find} />
