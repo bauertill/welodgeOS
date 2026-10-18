@@ -2253,7 +2253,11 @@ days the request has been open. Within a stage, the most pressing follow-up come
 A follow-up due today or overdue shows in red, and a note above the list counts them, with
 a way to show only those. The list can show closed requests instead, or all of them, and
 be narrowed to one event, one account manager, or a search on client, contact or what they
-need. A client's own page lists that client's requests, with a way to register a new one.
+need. A client's own page lists that client's requests, with a way to register a new one. **Delete this client**, at the foot of
+a client's page (the owner, 2026-10-18), removes one made by mistake, twice or for a test,
+with its contacts and updates; it is refused, saying why, while the client has a sales
+request (open or closed), a contract or rooms in the inventory. Tasks about it stay, no
+longer tied to it, and its history is kept.
 
 #### The client fills in their own contracting details
 
