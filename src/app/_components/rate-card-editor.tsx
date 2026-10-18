@@ -523,10 +523,14 @@ function CardPhotos({
       </p>
     );
   }
+  // A YouTube video is media enough: it takes the photos' place on the card (the owner, 2026-10-18).
+  if (photos.length === 0 && hasVideo) {
+    return <p className="text-ink-500 mt-3 text-xs font-light">✓ Its YouTube video is the media on this card — it shows at the top.</p>;
+  }
   if (photos.length === 0) {
     return (
       <p className="mt-3 rounded-lg bg-[#fff4e0] px-3 py-2 text-xs text-[#8a5a00]">
-        {hasVideo ? "No photos picked for this property yet — the client sees the video only." : "No photos picked yet — the client gets the link to the photos folder only."}{" "}
+        No photos picked yet — the client gets the link to the photos folder only.{" "}
         <a href={mediaHref} target="_blank" rel="noreferrer" className="font-medium underline">
           Add them on its Media tab ↗
         </a>

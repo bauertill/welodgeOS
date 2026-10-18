@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Photo } from "~/app/_components/photo";
 import { env } from "~/env";
-import { DROPBOX_APP_KEY, youtubeEmbed } from "~/lib/media";
+import { DROPBOX_APP_KEY, youtubeEmbed, youtubeId } from "~/lib/media";
 import { api } from "~/trpc/react";
 
 type ChooserFile = { name: string; link: string };
@@ -50,13 +50,16 @@ export function PropertyMedia({ propertyId }: { propertyId: string }) {
 
   if (!media.data) return <p className="text-ink-500 p-5 text-sm font-light">Loading…</p>;
   const data = media.data;
+  // A YouTube video is picked media too — what rate cards show when there are no photos (the owner, 2026-10-18).
+  const tube = youtubeId(data.videoUrl);
+  const picked = data.photos.length + (tube ? 1 : 0);
 
   return (
     <div className="space-y-6 p-5">
       <MediaLinks propertyId={propertyId} videoUrl={data.videoUrl} photosUrl={data.photosUrl} onSaved={refresh} />
       <section>
         <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-ink-900 text-[14px] font-medium">Photos & videos for clients ({data.photos.length})</h3>
+          <h3 className="text-ink-900 text-[14px] font-medium">Photos & videos for clients ({picked})</h3>
           {data.photosUrl && (
             <a href={data.photosUrl} target="_blank" rel="noreferrer" className="text-brand-700 text-xs hover:underline">
               Open the Dropbox folder ↗
@@ -67,10 +70,25 @@ export function PropertyMedia({ propertyId }: { propertyId: string }) {
           The best few photos and videos, picked from the Dropbox folder — they are what rate cards can show. The first is the cover. Tag a photo with its room category and it shows beside that room.
         </p>
         <AddPhotos propertyId={propertyId} onAdded={refresh} />
-        {data.photos.length === 0 ? (
+        {picked === 0 ? (
           <p className="text-ink-500 bg-ink-50/60 mt-3 rounded-lg px-4 py-6 text-center text-[13px] font-light">No photos or videos picked yet.</p>
         ) : (
           <ul className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {tube && (
+              <li className="border-brand-300 overflow-hidden rounded-xl border-2 bg-white">
+                <div className="relative aspect-video bg-black">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- YouTube's own thumbnail */}
+                  <img src={`https://img.youtube.com/vi/${tube}/hqdefault.jpg`} alt="The YouTube video" className="h-full w-full object-cover" />
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <span className="rounded-xl bg-[#e0234e] px-4 py-2 text-lg leading-none text-white">▶</span>
+                  </span>
+                </div>
+                <div className="px-3 py-2.5 text-[12px]">
+                  <p className="text-ink-900 font-medium">YouTube video{data.photos.length ? "" : " — the cover"}</p>
+                  <p className="text-ink-500 font-light">Plays on rate cards. Change it with <em>Edit links</em> above.</p>
+                </div>
+              </li>
+            )}
             {data.photos.map((photo, index) => (
               <PhotoTile key={photo.id} photo={photo} index={index} last={index === data.photos.length - 1} categories={data.categories} onChanged={refresh} />
             ))}

@@ -2141,7 +2141,11 @@ room category at the rate we sell it for.
   - **once the media is in** — a video or folder link saved, or a photo added — the task
     closes on its own ("Done — the property has its media now"), and the link can be made. The client
   sees the cover large with up to four more beside it ("+3 more"), each opening full size
-  to page through with its room and caption; the YouTube video playing in the card;
+  to page through with its room and caption; the YouTube video playing in the card —
+  **in the photos' place at the top when there are none** (the owner, 2026-10-18: a YouTube
+  video is the property's media; the Media tab counts it and shows it as the first tile, the
+  cover when there are no photos, and the card's popup no longer warns that only the video
+  is shown);
   *See all photos & videos (n)* opening every photo and video picked for clients over the
   card, videos playing there with their controls — **the client never leaves the card**
   (2026-10-13; it used to open the Dropbox folder in a new tab); and beside a room,
