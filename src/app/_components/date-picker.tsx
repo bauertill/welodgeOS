@@ -66,8 +66,32 @@ export function DatePicker({
             <button type="button" onClick={() => step(-1)} aria-label="Previous month" className="text-ink-500 hover:bg-ink-50 rounded-md px-2 py-1">
               ‹
             </button>
-            <span className="text-ink-900 text-[13px] font-medium">
-              {first.toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })}
+            {/* Month and year to pick straight away — an event two years out is two clicks, not twenty (the owner, 2026-10-18). */}
+            <span className="flex items-center gap-1">
+              <select
+                value={monthIndex}
+                onChange={(e) => setMonth([year, Number(e.target.value)])}
+                aria-label="Month"
+                className="text-ink-900 hover:bg-ink-50 cursor-pointer rounded-md bg-transparent py-0.5 pr-1 text-[13px] font-medium outline-none"
+              >
+                {MONTHS.map((name, index) => (
+                  <option key={name} value={index}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={year}
+                onChange={(e) => setMonth([Number(e.target.value), monthIndex])}
+                aria-label="Year"
+                className="text-ink-900 hover:bg-ink-50 cursor-pointer rounded-md bg-transparent py-0.5 pr-1 text-[13px] font-medium outline-none"
+              >
+                {years(year).map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </span>
             <button type="button" onClick={() => step(1)} aria-label="Next month" className="text-ink-500 hover:bg-ink-50 rounded-md px-2 py-1">
               ›
@@ -125,3 +149,12 @@ export function DatePicker({
 const monthOf = (day: string): [number, number] => [Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1];
 const readable = (day: string) =>
   new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** This year to six years out — events are booked years ahead — and the year shown, if outside that. */
+function years(shown: number) {
+  const now = new Date().getUTCFullYear();
+  const range = Array.from({ length: 7 }, (_, i) => now + i);
+  return range.includes(shown) ? range : [...range, shown].sort((a, b) => a - b);
+}

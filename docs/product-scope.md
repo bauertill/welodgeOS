@@ -1883,7 +1883,9 @@ the contract.
   words — and an arrival and departure, picked on a small calendar that opens on **the
   event's month** (a later line's on where the line before ends; a departure's on its
   arrival) rather than on today's — the dates themselves start empty, so nothing is
-  assumed. **A unit is one hotel room or one whole
+  assumed. Its header has **a month and a year to pick from** beside the arrows (the owner,
+  2026-10-18), so a date years ahead is two clicks; with no event on the request it opens
+  on today's month. **A unit is one hotel room or one whole
   apartment**: a 3-bedroom apartment is 1 unit, and the form says so beside the word
   (2026-10-03; "rooms" misled). How many people each was asked at first and dropped the
   same day as unclear; *+ Add another period or room type* adds a line, starting where
