@@ -2106,7 +2106,11 @@ room category at the rate we sell it for.
   is kept, so bringing it back is putting the button back.)*
   Each room category shows **our cost per night** — its event rate (§3.9) when the card was
   made, in the card's currency (the request's budget currency, else the rates') — and **what
-  the client pays per night**, typed in; the margin beside it, red when below cost. A
+  the client pays per night**, typed in; the margin beside it, red when below cost — **for
+  the whole booking** first (the owner, 2026-10-18): on the rooms and nights the client asked
+  for, the event's dates where a line has none, as far as the units available go ("US$
+  24,900.00 for 20 units × 20 nights", or in room-nights when they asked for several stays),
+  and under it the margin a night and as a share. A
   **markup** (15% to start) is applied to every room with a cost by *Apply to all*, then any
   rate changed by hand. A property can be taken off the card. A room left without a selling
   rate is not offered. **Every room offered must say how many units are available and the
