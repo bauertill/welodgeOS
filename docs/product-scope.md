@@ -2333,6 +2333,20 @@ follow-up and the signing come next and are not built yet (§12).
   highlight or its *Make an offer* button. Once the client's needs are in, *What they asked
   for* — their first enquiry — moves to the foot of the page as **Their first enquiry**.
 
+#### The get rate task (2026-10-18)
+
+On the sourcing task, a property near the client's places that **we have no rate from for
+this request** — no quote for the event to compare — has **Get rate** (the owner,
+2026-10-18), unless a contact task is already open for it. It makes a **Get rate task** —
+*Get a rate from [hotel] for [client] — [event]* — for whoever handled that hotel's contact
+task, else the event's accommodation managers, tied to the request, the hotel and the event
+(and puts the hotel on the event if it was not). It says what to ask for: each line of the
+request — units, room type, dates and nights, people per unit — and the client's budget, for
+us only. Its page has what the hotel contact task has for reaching them: their phone and
+email, *Email them the request*, *Register their quote*, and *They can't help us*. **It closes
+on its own once their quote is registered**; the property then shows on the sourcing task as
+quoted and is judged on that rate. While it is open the row says *Rate asked — task →*.
+
 #### The contract task (2026-10-14)
 
 The owner's name for the client side of contracting: **when the client sends the rooms they
@@ -3233,6 +3247,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
 | §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
+| §4.11 Get rate task | **Built** (2026-10-18) | *Get rate* on a sourcing row with no rate for the request; a task for whoever handled the hotel, else the accommodation managers, with the dates, rooms and budget; email, call, register the quote; closes on its own when the quote is in |
 | §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Our agreement with hotels for US events, filled from the quote and contract. Not yet: follow-up task before an offer runs out, our hotel agreement outside the US, uploading PDFs (Till), AI check of the signed copy |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
