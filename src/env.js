@@ -26,7 +26,8 @@ export const env = createEnv({
     RESEND_API_KEY: z.string().optional(),
     // Set by Vercel itself: "production" on the live site, "preview" on staging.
     VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
-    // "We Lodge OS <notifications@welodge.net>" — a domain verified in Resend.
+    // "We Lodge OS <notifications@os.welodge.net>" — on the domain verified in Resend
+    // (os.welodge.net, 2026-10-21). Left unset, that is the sender.
     NOTIFICATIONS_FROM: z.string().optional(),
     // The site's own address, for links in emails.
     APP_URL: z.string().url().optional(),

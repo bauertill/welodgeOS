@@ -26,7 +26,7 @@ export async function sendEmail(message: { to: string; subject: string; text: st
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: env.NOTIFICATIONS_FROM ?? "We Lodge OS <notifications@welodge.net>",
+      from: env.NOTIFICATIONS_FROM ?? "We Lodge OS <notifications@os.welodge.net>",
       to: message.to,
       subject: live ? message.subject : `[Test] ${message.subject}`,
       text: message.text,

@@ -479,7 +479,8 @@ whichever is chosen. Emails link straight to the task.
 writes the *due tomorrow* and *overdue* notifications, then sends each person who chose the
 daily summary their email. Run twice, it sends nothing twice.
 
-**Emails are sent through Resend**, from a We Lodge address. **Off the live site — staging,
+**Emails are sent through Resend**, from **notifications@os.welodge.net** (the domain
+verified in Resend, 2026-10-21). **Off the live site — staging,
 or a computer — only these are ever emailed** (the owner, 2026-10-13): brandon@, ami@,
 till@ and volki@welodge.net, and britz.brandon@gmail.com, their subjects starting *[Test]*. Staging runs on a
 copy of the live data, every real address included, so anyone else is skipped there (the
