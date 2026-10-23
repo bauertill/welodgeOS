@@ -71,6 +71,13 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
   const utils = api.useUtils();
   const data = api.sales.sourcing.useQuery({ id: salesRequestId });
   const add = api.scouting.add.useMutation({ onSuccess: () => void utils.sales.sourcing.invalidate() });
+  // No rate from it for this request: ask for one (doc §4.11, 2026-10-18).
+  const getRate = api.sales.getRate.useMutation({
+    onSuccess: () => {
+      void utils.sales.sourcing.invalidate();
+      void utils.task.invalidate();
+    },
+  });
   const [focus, setFocus] = useState<string | null>(null);
   // Only the ones that fit entirely are shown at first; the rest wait behind their tabs.
   const [tab, setTab] = useState<Verdict>("good");
@@ -319,6 +326,22 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                       Contact task →
                     </Link>
                   )}
+                  {!property.quote && !property.openContactTaskId && eventId &&
+                    (property.rateTaskId ? (
+                      <Link href={`/tasks/${property.rateTaskId}`} className="text-brand-700 font-medium hover:underline">
+                        Rate asked — task →
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={getRate.isPending}
+                        onClick={() => getRate.mutate({ salesRequestId, propertyId: property.id })}
+                        title="A task for the accommodation manager to ask the hotel for a price for the client's dates and rooms"
+                        className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
+                      >
+                        {getRate.isPending && getRate.variables?.propertyId === property.id ? "Asking…" : "Get rate"}
+                      </button>
+                    ))}
                   {eventId &&
                     (property.onEvent ? (
                       <span className="text-ink-500">On {eventName}</span>

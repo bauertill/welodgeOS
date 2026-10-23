@@ -847,6 +847,8 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
 
   const sourcing = t.salesRequest && t.type?.name === "Sourcing";
   const hotelContact = t.property && t.event && t.type?.name === "Hotel contact";
+  // The get rate task (doc §4.11): the same means of reaching the hotel and registering its price.
+  const getRate = t.property && t.event && t.type?.name === "Get rate";
   const getMedia = t.property && t.type?.name === "Get media";
   const acquire = t.property && t.salesRequest && t.event && t.type?.name === "Acquire";
   const contract = t.salesRequest && t.type?.name === "Contract";
@@ -875,14 +877,14 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           </div>
         )}
         {/* The hotel contact task, step by step (doc §4.11): call, email the request, gather. */}
-        {hotelContact && (
+        {(hotelContact || getRate) && (
           <PropertyContactDetails
             propertyId={t.property!.id}
             eventId={t.event!.id}
             emailTo={<EmailToBox taskId={t.id} name={t.emailToName} email={t.emailToAddress} />}
           />
         )}
-        {hotelContact && (
+        {(hotelContact || getRate) && (
           <EmailTheHotel
             taskId={t.id}
             propertyId={t.property!.id}
@@ -891,7 +893,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
             emailTo={t.emailToAddress ? { name: t.emailToName, email: t.emailToAddress } : null}
           />
         )}
-        {hotelContact && <TheirQuote propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} salesRequestId={t.salesRequest?.id ?? null} />}
+        {(hotelContact || getRate) && <TheirQuote propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} salesRequestId={t.salesRequest?.id ?? null} />}
         {hotelContact && <HotelContactChecklist propertyId={t.property!.id} propertyName={t.property!.name} eventId={t.event!.id} eventName={t.event!.name} />}
         {/* The contract task (doc §4.11): from the client's interest to their signed agreement. */}
         {contract && <ContractPanel salesRequestId={t.salesRequest!.id} />}
@@ -940,7 +942,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
             )
           )}
           {/* Right under the request, easy to find on the call (doc §4.11). */}
-          {hotelContact && t.status !== "DONE" && <CantHelp taskId={t.id} propertyName={t.property!.name} />}
+          {(hotelContact || getRate) && t.status !== "DONE" && <CantHelp taskId={t.id} propertyName={t.property!.name} />}
           <dl className="space-y-2 text-sm font-light">
             {rows.map(([label, value]) => (
               <div key={label} className="flex gap-3">

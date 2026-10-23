@@ -23,6 +23,7 @@ import { diffFields, logAudit } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
+import { ensureGetRateTask, GET_RATE } from "~/server/get-rate";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { ensureSourcingTask } from "~/server/sourcing";
 import { fit } from "~/lib/sourcing-fit";
@@ -1377,6 +1378,15 @@ export const salesRouter = createTRPCRouter({
           ).map((task) => [task.propertyId!, task.id])
         : [],
     );
+    // A rate asked for, for this very request (doc §4.11, 2026-10-18).
+    const rateTasks = new Map(
+      (
+        await ctx.db.task.findMany({
+          where: { salesRequestId: request.id, status: { not: "DONE" }, type: { name: GET_RATE }, propertyId: { not: null } },
+          select: { id: true, propertyId: true },
+        })
+      ).map((task) => [task.propertyId!, task.id]),
+    );
     // Those that could not help with this very request — closed with why (doc §4.11).
     const declined = new Map(
       (
@@ -1440,6 +1450,8 @@ export const salesRouter = createTRPCRouter({
           contactTaskId: quote ? null : (contactTasks.get(property.id) ?? null),
           /** Its open contact task, even once quoted — still there to finish. */
           openContactTaskId: contactTasks.get(property.id) ?? null,
+          /** Its open get rate task for this request, if a rate was asked for. */
+          rateTaskId: quote ? null : (rateTasks.get(property.id) ?? null),
           declined: quote ? null : (declined.get(property.id) ?? null),
           quote: quote ? { id: quote.id, name: quote.name } : null,
           ...judged,
@@ -1502,6 +1514,20 @@ export const salesRouter = createTRPCRouter({
   }),
 
   /** A place found on the map, added to our properties — and to the request's event, when it has one. */
+  /**
+   * Ask a property near the client's places for a rate (doc §4.11, 2026-10-18):
+   * a get rate task for the accommodation manager, with the dates and rooms.
+   */
+  getRate: protectedProcedure.input(z.object({ salesRequestId: z.string(), propertyId: z.string() })).mutation(async ({ ctx, input }) => {
+    const task = await ctx.db.$transaction(async (tx) => {
+      const request = await tx.salesRequest.findUniqueOrThrow({ where: { id: input.salesRequestId }, select: { eventId: true } });
+      if (!request.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — a rate is for an event." });
+      return ensureGetRateTask(tx, { ...input, actorId: ctx.session.user.id });
+    });
+    await deliverImmediate(ctx.db);
+    return { taskId: task.id };
+  }),
+
   addFound: protectedProcedure
     .input(z.object({ salesRequestId: z.string(), place: foundPlaceInput }))
     .mutation(async ({ ctx, input }) => {

@@ -1,4 +1,5 @@
 import { ClientCategory, ContactType, Priority, type Prisma } from "generated/prisma";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { clientCategoryLabels, contactTypeLabels, priorityLabels } from "~/lib/clients";
@@ -115,6 +116,29 @@ const contactData = (input: z.infer<typeof contactInput>) => ({
 });
 
 export const clientRouter = createTRPCRouter({
+  /**
+   * Delete a client (doc §4.10) — one made by mistake, twice, or for a test.
+   * Refused while anything real hangs on it: a sales request, a contract,
+   * rooms in the inventory. Its contacts and updates go with it; tasks about
+   * it stay, no longer tied to it; its history is kept.
+   */
+  remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(async (tx) => {
+      const client = await tx.client.findUniqueOrThrow({
+        where: { id: input.id },
+        select: { id: true, name: true, _count: { select: { salesRequests: true, contracts: true, roomNights: true, requests: true } } },
+      });
+      const { salesRequests: requests, contracts, roomNights, requests: nightRequests } = client._count;
+      if (requests) throw new TRPCError({ code: "BAD_REQUEST", message: `${client.name} has ${requests === 1 ? "a sales request" : `${requests} sales requests`}, so it cannot be deleted — delete ${requests === 1 ? "the request" : "them"} first.` });
+      if (contracts) throw new TRPCError({ code: "BAD_REQUEST", message: `${client.name} has a contract, so it cannot be deleted.` });
+      if (roomNights || nightRequests) throw new TRPCError({ code: "BAD_REQUEST", message: `${client.name} has rooms in the inventory — release or cancel them first.` });
+      await tx.notification.deleteMany({ where: { link: { startsWith: `/clients/${client.id}` } } });
+      await tx.client.delete({ where: { id: client.id } });
+      await logAudit(tx, { actorId: ctx.session.user.id, entity: "Client", entityId: client.id, summary: `Client deleted: ${client.name}` });
+      return { ok: true };
+    }),
+  ),
+
   list: protectedProcedure.query(({ ctx }) =>
     ctx.db.client.findMany({
       orderBy: { name: "asc" },

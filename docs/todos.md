@@ -241,13 +241,15 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       *2026-09-30:* Brandon has a key and it works locally; it still has to be
       added to the Vercel project (someone with Vercel access — Till).
 - [ ] **Resend for notification emails** (`product-scope.md` §2.9) — Till.
-      1. Create a Resend account (resend.com) for We Lodge, and add the domain
-         `welodge.net` under *Domains*; it gives three DNS records (SPF, DKIM,
-         and optionally DMARC) to add where welodge.net's DNS is managed, then
-         *Verify*.
-      2. Create an API key (sending access only).
+      *2026-10-21:* the Resend account is Till's and the verified domain is
+      **`os.welodge.net`** (not welodge.net): the sender is
+      `notifications@os.welodge.net`, now the default in `src/server/email.ts`.
+      Sending works from Brandon's computer. Left: the Vercel settings below.
+      1. ~~Create a Resend account and verify the domain~~ — done (os.welodge.net).
+      2. ~~Create an API key (sending access only)~~ — done.
       3. On the Vercel project, **Production**: set `RESEND_API_KEY`,
-         `NOTIFICATIONS_FROM` = `We Lodge OS <notifications@welodge.net>`, and
+         `NOTIFICATIONS_FROM` = `We Lodge OS <notifications@os.welodge.net>` (or
+         leave it unset — that is the default; a value on welodge.net is refused), and
          `APP_URL` = `https://os.welodge.net`. **Preview (staging)** may have
          the same key and `NOTIFICATIONS_FROM`, with `APP_URL` =
          `https://staging.welodge.net`: since 2026-10-13 off the live site only

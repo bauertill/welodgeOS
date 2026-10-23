@@ -479,7 +479,11 @@ whichever is chosen. Emails link straight to the task.
 writes the *due tomorrow* and *overdue* notifications, then sends each person who chose the
 daily summary their email. Run twice, it sends nothing twice.
 
-**Emails are sent through Resend**, from a We Lodge address. **Off the live site — staging,
+**Emails are sent through Resend**, from **notifications@os.welodge.net** (the domain
+verified in Resend, 2026-10-21). **On the live site emails are switched off for now** (the owner,
+2026-10-23: the system goes live, the emails later): nothing is emailed there, the bell
+works as usual, and what would have gone counts as sent, so switching on later sends only
+what comes after. Staging and a computer still email the test addresses below. **Off the live site — staging,
 or a computer — only these are ever emailed** (the owner, 2026-10-13): brandon@, ami@,
 till@ and volki@welodge.net, and britz.brandon@gmail.com, their subjects starting *[Test]*. Staging runs on a
 copy of the live data, every real address included, so anyone else is skipped there (the
@@ -1883,7 +1887,9 @@ the contract.
   words — and an arrival and departure, picked on a small calendar that opens on **the
   event's month** (a later line's on where the line before ends; a departure's on its
   arrival) rather than on today's — the dates themselves start empty, so nothing is
-  assumed. **A unit is one hotel room or one whole
+  assumed. Its header has **a month and a year to pick from** beside the arrows (the owner,
+  2026-10-18), so a date years ahead is two clicks; with no event on the request it opens
+  on today's month. **A unit is one hotel room or one whole
   apartment**: a 3-bedroom apartment is 1 unit, and the form says so beside the word
   (2026-10-03; "rooms" misled). How many people each was asked at first and dropped the
   same day as unclear; *+ Add another period or room type* adds a line, starting where
@@ -1891,7 +1897,9 @@ the contract.
   owner's call, 2026-10-03) — the **budget** (an amount and currency, per room per night, per person per
   night, or in total — the currency starts as the event's country's: dollars for Los
   Angeles, francs for Switzerland, euros where it is not known), **close to** (the event's
-  places of interest, chosen; and **places of the client's own** — their office, a team
+  places of interest, chosen from a dropdown that searches as you type, the chosen shown as
+  tags with × to take one off — the owner, 2026-10-15, as forty venues as buttons was a
+  wall; and **places of the client's own** — their office, a team
   hotel — found by typing the address, or by clicking the spot on a map, each kept with
   its position so it can be measured from), and the **client's comments**. Requests that had one number of rooms and
   one arrival and departure kept them as their first line. They are
@@ -2102,7 +2110,11 @@ room category at the rate we sell it for.
   is kept, so bringing it back is putting the button back.)*
   Each room category shows **our cost per night** — its event rate (§3.9) when the card was
   made, in the card's currency (the request's budget currency, else the rates') — and **what
-  the client pays per night**, typed in; the margin beside it, red when below cost. A
+  the client pays per night**, typed in; the margin beside it, red when below cost — **for
+  the whole booking** first (the owner, 2026-10-18): on the rooms and nights the client asked
+  for, the event's dates where a line has none, as far as the units available go ("US$
+  24,900.00 for 20 units × 20 nights", or in room-nights when they asked for several stays),
+  and under it the margin a night and as a share. A
   **markup** (15% to start) is applied to every room with a cost by *Apply to all*, then any
   rate changed by hand. A property can be taken off the card. A room left without a selling
   rate is not offered. **Every room offered must say how many units are available and the
@@ -2137,7 +2149,11 @@ room category at the rate we sell it for.
   - **once the media is in** — a video or folder link saved, or a photo added — the task
     closes on its own ("Done — the property has its media now"), and the link can be made. The client
   sees the cover large with up to four more beside it ("+3 more"), each opening full size
-  to page through with its room and caption; the YouTube video playing in the card;
+  to page through with its room and caption; the YouTube video playing in the card —
+  **in the photos' place at the top when there are none** (the owner, 2026-10-18: a YouTube
+  video is the property's media; the Media tab counts it and shows it as the first tile, the
+  cover when there are no photos, and the card's popup no longer warns that only the video
+  is shown);
   *See all photos & videos (n)* opening every photo and video picked for clients over the
   card, videos playing there with their controls — **the client never leaves the card**
   (2026-10-13; it used to open the Dropbox folder in a new tab); and beside a room,
@@ -2251,7 +2267,11 @@ days the request has been open. Within a stage, the most pressing follow-up come
 A follow-up due today or overdue shows in red, and a note above the list counts them, with
 a way to show only those. The list can show closed requests instead, or all of them, and
 be narrowed to one event, one account manager, or a search on client, contact or what they
-need. A client's own page lists that client's requests, with a way to register a new one.
+need. A client's own page lists that client's requests, with a way to register a new one. **Delete this client**, at the foot of
+a client's page (the owner, 2026-10-18), removes one made by mistake, twice or for a test,
+with its contacts and updates; it is refused, saying why, while the client has a sales
+request (open or closed), a contract or rooms in the inventory. Tasks about it stay, no
+longer tied to it, and its history is kept.
 
 #### The client fills in their own contracting details
 
@@ -2320,6 +2340,20 @@ follow-up and the signing come next and are not built yet (§12).
   page, 2026-10-14); the client's answer steps back below it, without its
   highlight or its *Make an offer* button. Once the client's needs are in, *What they asked
   for* — their first enquiry — moves to the foot of the page as **Their first enquiry**.
+
+#### The get rate task (2026-10-18)
+
+On the sourcing task, a property near the client's places that **we have no rate from for
+this request** — no quote for the event to compare — has **Get rate** (the owner,
+2026-10-18), unless a contact task is already open for it. It makes a **Get rate task** —
+*Get a rate from [hotel] for [client] — [event]* — for whoever handled that hotel's contact
+task, else the event's accommodation managers, tied to the request, the hotel and the event
+(and puts the hotel on the event if it was not). It says what to ask for: each line of the
+request — units, room type, dates and nights, people per unit — and the client's budget, for
+us only. Its page has what the hotel contact task has for reaching them: their phone and
+email, *Email them the request*, *Register their quote*, and *They can't help us*. **It closes
+on its own once their quote is registered**; the property then shows on the sourcing task as
+quoted and is judged on that rate. While it is open the row says *Rate asked — task →*.
 
 #### The contract task (2026-10-14)
 
@@ -3221,6 +3255,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
 | §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
+| §4.11 Get rate task | **Built** (2026-10-18) | *Get rate* on a sourcing row with no rate for the request; a task for whoever handled the hotel, else the accommodation managers, with the dates, rooms and budget; email, call, register the quote; closes on its own when the quote is in |
 | §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Our agreement with hotels for US events, filled from the quote and contract. Not yet: follow-up task before an offer runs out, our hotel agreement outside the US, uploading PDFs (Till), AI check of the signed copy |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |

@@ -110,8 +110,20 @@ export function RateCardView({
             </div>
             <p className="text-ink-500 text-xs font-light">{[propertyTypeLabels[property.type], property.where].filter(Boolean).join(" · ")}</p>
             <PhotoGallery photos={property.photos} name={property.name} />
+            {/* No photos: the video takes their place at the top (the owner, 2026-10-18). */}
+            {property.video && property.photos.length === 0 && (
+              <div className="relative mt-4 aspect-video overflow-hidden rounded-xl bg-black print:hidden">
+                <iframe
+                  src={property.video}
+                  title={`Video of ${property.name}`}
+                  allow="encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  className="absolute inset-0 h-full w-full"
+                />
+              </div>
+            )}
             {property.description && <p className="text-ink-700 mt-3 text-sm leading-relaxed font-light">{property.description}</p>}
-            {property.video && (
+            {property.video && property.photos.length > 0 && (
               <div className="relative mt-4 aspect-video overflow-hidden rounded-xl bg-black print:hidden">
                 <iframe
                   src={property.video}

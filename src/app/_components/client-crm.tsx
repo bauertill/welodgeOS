@@ -381,3 +381,31 @@ function ContactEditor({ clientId, contact, onDone }: { clientId: string; contac
     </form>
   );
 }
+
+/**
+ * Delete a client made by mistake, twice, or for a test (doc §4.10). Refused —
+ * with why — while it has a sales request, a contract or rooms.
+ */
+export function DeleteClient({ clientId, name }: { clientId: string; name: string }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const remove = api.clients.remove.useMutation({
+    onSuccess: () => {
+      void utils.clients.invalidate();
+      router.push("/clients");
+    },
+  });
+  return (
+    <div className="px-1">
+      <button
+        type="button"
+        disabled={remove.isPending}
+        onClick={() => window.confirm(`Delete ${name}? Their contacts and updates go too. This cannot be undone.`) && remove.mutate({ id: clientId })}
+        className="text-xs font-light text-[#c03654] hover:underline"
+      >
+        {remove.isPending ? "Deleting…" : "Delete this client"}
+      </button>
+      {remove.error && <p className="mt-1 text-xs text-[#c03654]">{friendlyError(remove.error)}</p>}
+    </div>
+  );
+}

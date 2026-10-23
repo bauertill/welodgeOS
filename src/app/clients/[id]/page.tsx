@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { HistorySection } from "~/app/_components/activity-log";
-import { ClientContactsCard, ClientDetailsCard } from "~/app/_components/client-crm";
+import { ClientContactsCard, ClientDetailsCard, DeleteClient } from "~/app/_components/client-crm";
 import { ClientSalesRequests } from "~/app/_components/sales-requests";
 import { UpdateThread } from "~/app/_components/update-thread";
 import { Card, PageHeader } from "~/app/_components/ui";
@@ -63,6 +63,7 @@ export default async function ClientPage({
             </dl>
           </Card>
           <HistorySection entity="Client" entityId={client.id} className="" />
+          <DeleteClient clientId={client.id} name={client.name} />
         </div>
       </div>
     </>

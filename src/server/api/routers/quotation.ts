@@ -9,6 +9,7 @@ import { describeRateIncludes } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { openStages } from "~/lib/sales";
 import { logAudit } from "~/server/audit";
+import { GET_RATE } from "~/server/get-rate";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { notify } from "~/server/notify";
 import { taskStatusLabels } from "~/lib/tasks";
@@ -252,6 +253,31 @@ export const quotationRouter = createTRPCRouter({
               actorId: ctx.session.user.id,
               kind: "TASK_STATUS",
               title: `"${task.title}" is in progress — the hotel's quote came in`,
+              link: `/tasks/${task.id}`,
+              taskId: task.id,
+            });
+          }
+        }
+        // Their price is in: the get rate task for it is done (doc §4.11, 2026-10-18).
+        if (!input.id) {
+          const asked = await tx.task.findMany({
+            where: {
+              propertyId: entry.propertyId,
+              eventId: entry.eventId,
+              status: { not: "DONE" },
+              type: { name: GET_RATE },
+              ...(fields.salesRequestId && { OR: [{ salesRequestId: fields.salesRequestId }, { salesRequestId: null }] }),
+            },
+            select: { id: true, title: true, requestedById: true, assignees: { select: { id: true } } },
+          });
+          for (const task of asked) {
+            await tx.task.update({ where: { id: task.id }, data: { status: "DONE", doneAt: new Date() } });
+            await logAudit(tx, { actorId: ctx.session.user.id, entity: "Task", entityId: task.id, summary: `Done — their rate came in: ${fields.name}` });
+            await notify(tx, {
+              to: [task.requestedById, ...task.assignees.map((person) => person.id)],
+              actorId: ctx.session.user.id,
+              kind: "TASK_STATUS",
+              title: `"${task.title}" is done — the hotel's rate came in`,
               link: `/tasks/${task.id}`,
               taskId: task.id,
             });

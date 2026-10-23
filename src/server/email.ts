@@ -8,12 +8,25 @@ import { env } from "~/env";
 export const TEST_ADDRESSES = ["brandon@welodge.net", "ami@welodge.net", "till@welodge.net", "volki@welodge.net", "britz.brandon@gmail.com"];
 
 /**
- * Sends one email through Resend (doc §2.9). Without a key, or off the live
+ * The live site emails nobody until this is switched on (the owner,
+ * 2026-10-23: live, but no emails yet). While off, an email there is written
+ * to the server log and counts as sent — so switching on later does not send
+ * everything that piled up meanwhile.
+ */
+export const LIVE_EMAILS_ON = false;
+
+/**
+ * Sends one email through Resend (doc §2.9). On the live site only once
+ * LIVE_EMAILS_ON. Without a key, or off the live
  * site to anyone not in TEST_ADDRESSES, the email is written to the server log
  * instead, and counts as sent.
  */
 export async function sendEmail(message: { to: string; subject: string; text: string; html: string }) {
   const live = env.VERCEL_ENV === "production";
+  if (live && !LIVE_EMAILS_ON) {
+    console.log(`\n[email] Not sent — emails are switched off on the live site: ${message.subject}\n`);
+    return true;
+  }
   if (!live && !TEST_ADDRESSES.includes(message.to.trim().toLowerCase())) {
     console.log(`\n[email] Not sent — off the live site, ${message.to} is not on the test list: ${message.subject}\n`);
     return true;
@@ -26,7 +39,7 @@ export async function sendEmail(message: { to: string; subject: string; text: st
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: env.NOTIFICATIONS_FROM ?? "We Lodge OS <notifications@welodge.net>",
+      from: env.NOTIFICATIONS_FROM ?? "We Lodge OS <notifications@os.welodge.net>",
       to: message.to,
       subject: live ? message.subject : `[Test] ${message.subject}`,
       text: message.text,

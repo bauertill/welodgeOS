@@ -105,6 +105,26 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
 
   const c = card.data;
   const dirty = draft !== null && JSON.stringify(draft) !== saved;
+  /**
+   * The booking a margin is reckoned on (the owner, 2026-10-18): the rooms and
+   * nights the client asked for — the event's dates where a line has none —
+   * as far as the units available go.
+   */
+  const asked = (() => {
+    if (!c) return null;
+    const eventNights = c.event ? nightsBetween(c.event.startDate, c.event.endDate) : 0;
+    const lines = c.asked.map((line) => ({ rooms: line.rooms, nights: line.checkIn && line.checkOut ? nightsBetween(line.checkIn, line.checkOut) : eventNights })).filter((line) => line.rooms > 0 && line.nights > 0);
+    if (!lines.length) return null;
+    const rooms = lines.reduce((sum, line) => sum + line.rooms, 0);
+    return { rooms, roomNights: lines.reduce((sum, line) => sum + line.rooms * line.nights, 0), single: lines.length === 1 ? lines[0]! : null };
+  })();
+  const bookingOf = (available: number | null) => {
+    if (!asked) return null;
+    const share = available !== null && available < asked.rooms ? available / asked.rooms : 1;
+    const roomNights = Math.round(asked.roomNights * share);
+    const words = asked.single ? `${available !== null ? Math.min(available, asked.single.rooms) : asked.single.rooms} units × ${asked.single.nights} nights` : `${roomNights} room-nights`;
+    return { roomNights, words };
+  };
   /** Rooms offered without how many units or the shortest stay — not saved until given (doc §4.11). */
   /** Properties with no photos or video — the card is not shared while there are any (doc §4.11). */
   const bare = c && draft ? c.properties.filter((property) => !draft.removed.includes(property.id) && !property.hasMedia) : [];
@@ -354,9 +374,24 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                               );
                             })}
                             <td className={`py-1.5 text-right whitespace-nowrap ${margin !== null && margin < 0 ? "text-[#c03654]" : "text-ink-500"}`}>
-                              {margin !== null && lineSource.buyingCents
-                                ? `${formatMoney(margin, c.currency)} · ${Math.round((margin / lineSource.buyingCents) * 100)}%`
-                                : "—"}
+                              {margin !== null && lineSource.buyingCents ? (
+                                <>
+                                  {(() => {
+                                    const booking = bookingOf(toCount(line.available));
+                                    return booking ? (
+                                      <span className={`block font-medium ${margin < 0 ? "" : "text-ink-900"}`} title="On the rooms and nights the client asked for">
+                                        {formatMoney(margin * booking.roomNights, c.currency)}
+                                        <span className="text-ink-500 font-light"> for {booking.words}</span>
+                                      </span>
+                                    ) : null;
+                                  })()}
+                                  <span className="block text-[11px] font-light">
+                                    {formatMoney(margin, c.currency)} a night · {Math.round((margin / lineSource.buyingCents) * 100)}%
+                                  </span>
+                                </>
+                              ) : (
+                                "—"
+                              )}
                             </td>
                           </tr>
                         );
@@ -523,10 +558,14 @@ function CardPhotos({
       </p>
     );
   }
+  // A YouTube video is media enough: it takes the photos' place on the card (the owner, 2026-10-18).
+  if (photos.length === 0 && hasVideo) {
+    return <p className="text-ink-500 mt-3 text-xs font-light">✓ Its YouTube video is the media on this card — it shows at the top.</p>;
+  }
   if (photos.length === 0) {
     return (
       <p className="mt-3 rounded-lg bg-[#fff4e0] px-3 py-2 text-xs text-[#8a5a00]">
-        {hasVideo ? "No photos picked for this property yet — the client sees the video only." : "No photos picked yet — the client gets the link to the photos folder only."}{" "}
+        No photos picked yet — the client gets the link to the photos folder only.{" "}
         <a href={mediaHref} target="_blank" rel="noreferrer" className="font-medium underline">
           Add them on its Media tab ↗
         </a>

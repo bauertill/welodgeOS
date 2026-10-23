@@ -9,6 +9,7 @@ import { formatDate, formatRange } from "~/lib/format";
 import { contactOutcomeLabels, taskStatusLabels } from "~/lib/tasks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
+import { GET_RATE } from "~/server/get-rate";
 import { ensureHotelContactTask, HOTEL_CONTACT, hotelContactItems } from "~/server/hotel-contact";
 import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
 
@@ -283,8 +284,8 @@ export const taskRouter = createTRPCRouter({
             salesRequest: { select: { client: { select: { name: true } }, lines: { orderBy: { position: "asc" } } } },
           },
         });
-        if (task.type?.name !== HOTEL_CONTACT || !task.property) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Only a hotel contact task can be closed this way." });
+        if ((task.type?.name !== HOTEL_CONTACT && task.type?.name !== GET_RATE) || !task.property) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Only a hotel contact or get rate task can be closed this way." });
         }
         const note = input.note.trim() || null;
         await tx.task.update({
