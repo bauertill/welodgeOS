@@ -480,7 +480,10 @@ writes the *due tomorrow* and *overdue* notifications, then sends each person wh
 daily summary their email. Run twice, it sends nothing twice.
 
 **Emails are sent through Resend**, from **notifications@os.welodge.net** (the domain
-verified in Resend, 2026-10-21). **Off the live site — staging,
+verified in Resend, 2026-10-21). **On the live site emails are switched off for now** (the owner,
+2026-10-23: the system goes live, the emails later): nothing is emailed there, the bell
+works as usual, and what would have gone counts as sent, so switching on later sends only
+what comes after. Staging and a computer still email the test addresses below. **Off the live site — staging,
 or a computer — only these are ever emailed** (the owner, 2026-10-13): brandon@, ami@,
 till@ and volki@welodge.net, and britz.brandon@gmail.com, their subjects starting *[Test]*. Staging runs on a
 copy of the live data, every real address included, so anyone else is skipped there (the
