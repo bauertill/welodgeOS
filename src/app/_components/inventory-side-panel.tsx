@@ -232,6 +232,24 @@ export function InventorySidePanel({
   );
   // The client's details only carry over while it is the same client: for
   // another one, the boxes start empty (and the server clears the last one's).
+  // Every night already what the action makes it — bought, or blocked/sold to this client —
+  // keeps its price: changing only notes or a reference needs no price again (Ami, 2026-10-25).
+  const alreadyBought =
+    known.length > 0 &&
+    known.length === totalNights &&
+    known.every((cell) => cell.buyPriceCents !== null || cell.acquisitionState === acquisitionTarget[action]);
+  const alreadySold =
+    known.length > 0 &&
+    known.length === totalNights &&
+    known.every((cell) => cell.clientId === clientId && (cell.sellPriceCents !== null || cell.salesState === salesTarget[action]));
+  const amending =
+    known.length > 0 &&
+    known.length === totalNights &&
+    (acquisitionTarget[action]
+      ? known.every((cell) => cell.acquisitionState === acquisitionTarget[action])
+      : salesTarget[action]
+        ? known.every((cell) => cell.salesState === salesTarget[action] && cell.clientId === clientId)
+        : false);
   const sameClient = start.clientId.same && Boolean(start.clientId.value) && start.clientId.value === clientId;
   const clientStart = (detail: Shared) => (sameClient ? initial(detail) : "");
   // Switching to another client empties its boxes; switching back refills them.
@@ -380,14 +398,14 @@ export function InventorySidePanel({
       "buyPrice",
       (needsBuyPrice.includes(action) || action === "REPRICE_BUY") &&
         !buyPrice.trim() &&
-        (action === "REPRICE_BUY" || known.length === 0 || known.some((cell) => cell.buyPriceCents === null)),
+        (action === "REPRICE_BUY" || !alreadyBought),
       "Give the price we pay per night — a night marked bought needs its price.",
     );
     needs(
       "sellPrice",
       (needsSellPrice.includes(action) || action === "REPRICE_SELL") &&
         !sellPrice.trim() &&
-        (action === "REPRICE_SELL" || known.length === 0 || known.some((cell) => cell.sellPriceCents === null || cell.clientId !== clientId)),
+        (action === "REPRICE_SELL" || !alreadySold),
       `Give the price the client pays per night — a night ${action === "BLOCK" ? "blocked" : "sold"} for a client needs its agreed price.`,
     );
     needs("acquisitionOwner", action === "REASSIGN_ACQUISITION_OWNER" && !acquisitionOwnerId, "Pick who takes over with the supplier.");
@@ -418,8 +436,10 @@ export function InventorySidePanel({
       const activeCount = acquisitionTo
         ? existing.acquisitionActive
         : existing.salesActive;
+      // Amending what the nights already are needs no "update them anyway?" (Ami, 2026-10-25).
       if (
         activeCount > 0 &&
+        !amending &&
         !window.confirm(
           `${activeCount} of the ${totalNights} room-nights you selected already have an entry for this period. Update ${activeCount === 1 ? "it" : "them"} anyway? Details you leave as they are keep what each night has.`,
         )
@@ -539,7 +559,14 @@ export function InventorySidePanel({
         </div>
 
         <div className="space-y-4">
-          <Field label="What happened" hint={actionHints[action]}>
+          <Field
+            label="What happened"
+            hint={
+              amending
+                ? `These nights already are this. Change what you need — notes, reference, manager, contract, price — and save; anything left as it is stays as recorded.`
+                : actionHints[action]
+            }
+          >
             <Select
               value={action}
               onChange={(e) => setAction(e.target.value as InventoryAction)}
@@ -718,10 +745,12 @@ export function InventorySidePanel({
                 </div>
               ) : (
                 <Field
-                  label={needsBuyPrice.includes(action) ? "We pay, per night — required" : "We pay, per night"}
+                  label={needsBuyPrice.includes(action) && !alreadyBought ? "We pay, per night — required" : "We pay, per night"}
                   hint={
                     needsBuyPrice.includes(action)
-                      ? "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
+                      ? alreadyBought
+                        ? "Left empty, each night keeps the price it has."
+                        : "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
                       : undefined
                   }
                 >
@@ -772,10 +801,12 @@ export function InventorySidePanel({
                 </div>
               ) : (
                 <Field
-                  label={needsSellPrice.includes(action) ? "Client pays, per night — required" : "Client pays, per night"}
+                  label={needsSellPrice.includes(action) && !alreadySold ? "Client pays, per night — required" : "Client pays, per night"}
                   hint={
                     needsSellPrice.includes(action)
-                      ? "The agreed price. Left empty, it is only accepted where every night already has this client's price."
+                      ? alreadySold
+                        ? "Left empty, each night keeps the price it has."
+                        : "The agreed price. Left empty, it is only accepted where every night already has this client's price."
                       : undefined
                   }
                 >
@@ -895,7 +926,7 @@ export function InventorySidePanel({
             disabled={!slotIds.length || !validRange || apply.isPending}
             onClick={() => void submit()}
           >
-            {apply.isPending ? "Applying…" : actionLabels[action]}
+            {apply.isPending ? "Applying…" : amending ? "Save changes" : actionLabels[action]}
           </Button>
           <Button type="button" variant="ghost" onClick={onClose}>
             Close

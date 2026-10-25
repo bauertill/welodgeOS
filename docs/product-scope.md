@@ -2670,6 +2670,13 @@ themselves** ("varies — US$ 450.00 · US$ 500.00"; Ami's feedback, 2026-10-25)
 Every box below starts filled in with what the nights share, so amending an entry starts
 from what is there rather than from nothing; a box where the nights differ starts empty and
 shows the values it holds ("Varies: 450 · 500"), and left empty keeps each night's own (§4.8).
+**Amending is just changing what differs** (Ami's feedback, 2026-10-25): when every
+selected night already is what the action makes it — bought, or blocked or sold to the
+chosen client — the panel says so ("These nights already are this. Change what you need…"),
+the price is no longer required (left empty, each night keeps the price it has — even
+nights that had none), there is no "update them anyway?" question, and the button reads
+*Save changes*. So a note, a reference, a manager or a contract is added without typing the
+rates again. The server applies the same rule.
 **Changing the dates at the top of the panel keeps all this** for the selected nights still
 inside them (it used to clear it); nights added by widening the dates are not shown, and
 *Recorded now* says so. Choosing a different client empties
