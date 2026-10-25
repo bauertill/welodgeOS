@@ -467,7 +467,10 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
             !allowedAcquisitionMoves[from].includes(acquisitionTo)
           ) {
             fail(
-              `cannot go from ${acquisitionLabels[from].toLowerCase()} to ${acquisitionLabels[acquisitionTo].toLowerCase()}.`,
+              from === "NONE" && acquisitionTo === "RELEASED"
+                ? // Ami, 2026-10-25: rooms never bought are not released — they are removed.
+                  "was never bought, so there is nothing to release. To take these rooms off the hotel, use “Change the number of rooms” on the room type's row."
+                : `cannot go from ${acquisitionLabels[from].toLowerCase()} to ${acquisitionLabels[acquisitionTo].toLowerCase()}.`,
             );
           }
         }

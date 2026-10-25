@@ -814,6 +814,7 @@ export function InventoryGrid({
                                 colSpan={columns.length + 2}
                                 className="sticky left-0 z-10 border-b border-ink-200/60 bg-white px-3 py-1.5 pl-6"
                               >
+                                <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
                                 <button
                                   type="button"
                                   onClick={() => toggleSet(setExpandedCategories, category.id)}
@@ -828,6 +829,8 @@ export function InventoryGrid({
                                     {nothingSecured.has(category.id) && " · nothing secured"}
                                   </span>
                                 </button>
+                                <RoomCount categoryId={category.id} count={category.slots.length} />
+                                </span>
                               </td>
                             </tr>
 
@@ -1545,5 +1548,60 @@ function Chevron({ open }: { open: boolean }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/**
+ * A room type's number of rooms, changed on the sheet (doc §4.8; Ami, 2026-10-25):
+ * more adds empty rooms, fewer removes empty ones from the top — refused,
+ * naming the rooms, if any of them is in use.
+ */
+function RoomCount({ categoryId, count }: { categoryId: string; count: number }) {
+  const utils = api.useUtils();
+  const [draft, setDraft] = useState<string | null>(null);
+  const save = api.property.setRoomCount.useMutation({
+    onSuccess: () => {
+      setDraft(null);
+      void utils.inventory.invalidate();
+      void utils.property.invalidate();
+    },
+  });
+  if (draft === null) {
+    return (
+      <button type="button" onClick={() => setDraft(String(count))} className="text-brand-700 text-[11px] font-light hover:underline print:hidden">
+        Change the number of rooms
+      </button>
+    );
+  }
+  const value = Number(draft);
+  const valid = draft.trim() !== "" && Number.isInteger(value) && value >= 0;
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-[11px] print:hidden">
+      <Input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        inputMode="numeric"
+        aria-label="Number of rooms"
+        className="w-16 px-2 py-1 text-[12px]"
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && valid) save.mutate({ categoryId, unitCount: value });
+          if (e.key === "Escape") setDraft(null);
+        }}
+      />
+      <span className="text-ink-500">rooms</span>
+      <button
+        type="button"
+        disabled={!valid || save.isPending}
+        onClick={() => save.mutate({ categoryId, unitCount: value })}
+        className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-50"
+      >
+        {save.isPending ? "Saving…" : "Save"}
+      </button>
+      <button type="button" onClick={() => (setDraft(null), save.reset())} className="text-ink-500 hover:underline">
+        Cancel
+      </button>
+      {save.error && <span className="max-w-xl text-[#c03654]">{save.error.message}</span>}
+    </span>
   );
 }

@@ -9,6 +9,7 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/
 import { eventRates } from "~/server/event-rates";
 import { findContacts } from "~/server/find-contacts";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
+import { trimRooms } from "~/server/room-count";
 import { diffFields, logAudit, logFieldChanges } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
 
@@ -512,7 +513,22 @@ export const propertyRouter = createTRPCRouter({
         include: {
           slots: {
             orderBy: { slotNumber: "desc" },
-            include: { _count: { select: { roomNights: true } } },
+            // Only nights in use count (doc §3.6): an empty room is just a row on the sheet.
+            include: {
+              _count: {
+                select: {
+                  roomNights: {
+                    where: {
+                      OR: [
+                        { acquisitionState: { in: ["IN_PROGRESS", "OPTION", "BOUGHT"] } },
+                        { salesState: { in: ["BLOCKED", "SOLD"] } },
+                        { requests: { some: {} } },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       });
@@ -535,14 +551,9 @@ export const propertyRouter = createTRPCRouter({
           });
         }
 
-        // Invariant §4.5.3 — slot numbers may not exceed the category's count.
-        const incoming = categories.find((c) => c.id === category.id);
-        if (incoming && incoming.unitCount < highestSlot) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `"${category.name}" already has inventory numbered up to #${highestSlot}, so it cannot be reduced to ${incoming.unitCount} rooms.`,
-          });
-        }
+        // Invariant §4.5.3 — slot numbers may not exceed the category's count:
+        // the empty rooms above it go, in the transaction below (trimRooms).
+        void highestSlot;
       }
 
       const removing = existing
@@ -585,6 +596,7 @@ export const propertyRouter = createTRPCRouter({
           // An emptied size or note is cleared, not left as it was.
           const data = { ...fields, size: blank(fields.size), notes: blank(fields.notes) };
           if (categoryId) {
+            await trimRooms(tx, categoryId, data.unitCount, data.name);
             await tx.roomCategory.update({
               where: { id: categoryId },
               data: { ...data, sortOrder: index },
@@ -855,18 +867,11 @@ export const propertyRouter = createTRPCRouter({
         notes: blank(fields.notes),
       };
       if (id) {
-        const highest = await ctx.db.roomSlot.findFirst({
-          where: { categoryId: id },
-          orderBy: { slotNumber: "desc" },
-          select: { slotNumber: true },
+        // Lowered: the empty rooms above the new count go; one in use stops it, named (doc §3.6).
+        const updated = await ctx.db.$transaction(async (tx) => {
+          await trimRooms(tx, id, data.unitCount, data.name);
+          return tx.roomCategory.update({ where: { id }, data });
         });
-        if (highest && data.unitCount < highest.slotNumber) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `"${data.name}" already has inventory numbered up to #${highest.slotNumber}, so it cannot be reduced to ${data.unitCount} rooms.`,
-          });
-        }
-        const updated = await ctx.db.roomCategory.update({ where: { id }, data });
         await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: input.propertyId, summary: "Room categories updated" });
         return updated;
       }
@@ -881,23 +886,38 @@ export const propertyRouter = createTRPCRouter({
       return created;
     }),
 
-  /** Remove a room category — refused while inventory is booked against it. */
+  /**
+   * Change a room type's number of rooms straight from the inventory sheet
+   * (doc §4.8; Ami's feedback, 2026-10-25). More adds empty rooms; fewer
+   * removes the empty ones from the top — refused, naming them, if any is in use.
+   */
+  setRoomCount: protectedProcedure
+    .input(z.object({ categoryId: z.string(), unitCount: z.number().int().min(0).max(5000) }))
+    .mutation(async ({ ctx, input }) => {
+      const category = await ctx.db.roomCategory.findUniqueOrThrow({ where: { id: input.categoryId }, select: { name: true, unitCount: true, propertyId: true } });
+      if (category.unitCount === input.unitCount) return;
+      await ctx.db.$transaction(async (tx) => {
+        await trimRooms(tx, input.categoryId, input.unitCount, category.name);
+        await tx.roomCategory.update({ where: { id: input.categoryId }, data: { unitCount: input.unitCount } });
+      });
+      await logAudit(ctx.db, {
+        actorId: ctx.session.user.id,
+        entity: "Property",
+        entityId: category.propertyId,
+        summary: `${category.name}: ${category.unitCount} → ${input.unitCount} rooms`,
+      });
+    }),
+
+  /** Remove a room category — refused, naming the rooms, while any is in use (doc §3.6). */
   removeCategory: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const category = await ctx.db.roomCategory.findUniqueOrThrow({
-        where: { id: input.id },
-        include: { slots: { include: { _count: { select: { roomNights: true } } } } },
+      const category = await ctx.db.roomCategory.findUniqueOrThrow({ where: { id: input.id }, select: { name: true, propertyId: true } });
+      await ctx.db.$transaction(async (tx) => {
+        await trimRooms(tx, input.id, 0, category.name);
+        await tx.roomCategory.delete({ where: { id: input.id } });
       });
-      const nights = category.slots.reduce((sum, slot) => sum + slot._count.roomNights, 0);
-      if (nights > 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `"${category.name}" cannot be removed: ${nights} room-nights of inventory are booked against it. Release them first, or leave the category in place.`,
-        });
-      }
-      await ctx.db.roomCategory.delete({ where: { id: input.id } });
-      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: category.propertyId, summary: "Room categories updated" });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: category.propertyId, summary: `Room category removed: ${category.name}` });
     }),
 
   remove: protectedProcedure

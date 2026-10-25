@@ -1497,7 +1497,15 @@ never a silent write.
 2. **Slot uniqueness.** `(property, category, slotNumber, date)` is unique. One room-night
    record, one truth.
 3. **Slot bound.** Slot numbers within a category may not exceed the category's
-   `roomCount` unless the category's count is explicitly raised.
+   `roomCount` unless the category's count is explicitly raised. **Lowering the count
+   removes the rooms above it if they are empty** (Ami's feedback, 2026-10-25): a room is
+   in use only if, on any night, it is in progress, on option or bought with the hotel,
+   blocked or sold to a client, or requested — anything else (nothing started, released,
+   a cancelled sale) is just a row on the sheet and goes, its nights with it; the ledger's
+   entries stay. A room in use stops it, named with what holds it ("#4 (bought, sold)").
+   The same goes for removing a whole room type. The count can be changed on the property's
+   page or **on the stock sheet** — *Change the number of rooms* on each room type's row.
+   Releasing nights that were never bought says so and points there.
 4. **Expiry required.** `OPTION` without `optionExpiry`, or `BLOCKED` without
    `blockExpiry`, is invalid.
 5. **Deadline coherence.** `optionExpiry ≥ blockExpiry` on the same night. If a client's
