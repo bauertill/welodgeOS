@@ -305,6 +305,14 @@ export function InventoryGrid({
     () => allProperties.filter((property) => property.categories.every((category) => category.slots.every((slot) => slot.empty))).length,
     [allProperties],
   );
+  // Room types hidden too (Ami, 2026-10-25): all their rooms empty, in a hotel that still shows.
+  const emptyCategories = useMemo(
+    () =>
+      allProperties
+        .filter((property) => !property.categories.every((category) => category.slots.every((slot) => slot.empty)))
+        .reduce((sum, property) => sum + property.categories.filter((category) => category.slots.every((slot) => slot.empty)).length, 0),
+    [allProperties],
+  );
   // All of a property's rooms, before the empty ones are hidden — to say what its line holds.
   const roomsOf = useMemo(
     () => new Map(allProperties.map((property) => [property.id, property.categories.reduce((sum, category) => sum + category.slots.length, 0)])),
@@ -656,20 +664,25 @@ export function InventoryGrid({
           }))}
         />
 
-        {!propertyId && (emptyRooms > 0 || emptyHotels > 0 || showEmpty) && (
+        {!propertyId && (emptyRooms > 0 || emptyHotels > 0 || emptyCategories > 0 || showEmpty) && (
           <button
             type="button"
             onClick={() => setShowEmpty(!showEmpty)}
             aria-pressed={showEmpty}
-            title="Rooms with nothing on them in these dates — no supplier or client side, and nobody asking — and hotels on the list with no rooms yet"
+            title="Rooms with nothing on them in these dates — no supplier or client side, and nobody asking — room types whose rooms are all empty, and hotels on the list with no rooms yet"
             className={`rounded-full px-4 py-2 text-[13px] font-light transition-colors ${
               showEmpty ? "bg-brand-700 text-white" : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
             }`}
           >
             {showEmpty
               ? "Hide the empty ones"
-              : emptyHotels
-                ? `Show empty (${emptyHotels} ${emptyHotels === 1 ? "hotel" : "hotels"})`
+              : emptyHotels || emptyCategories
+                ? `Show empty (${[
+                    emptyHotels ? `${emptyHotels} ${emptyHotels === 1 ? "hotel" : "hotels"}` : null,
+                    emptyCategories ? `${emptyCategories} ${emptyCategories === 1 ? "room type" : "room types"}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")})`
                 : "Show empty rooms"}
           </button>
         )}
