@@ -2665,10 +2665,14 @@ contiguous range of days — which opens a panel scoped to exactly that selectio
 **The panel shows what is already recorded** on those nights, under *Recorded now*: each
 side's status, and every detail — buy price, option date, supplier reference, Accommodation
 Manager, supplier notes; client, sell price, deadline, client reference, Sales Manager,
-client notes — as the one value the nights share, or *varies* where they differ.
+client notes — as the one value the nights share, or, where they differ, **the values
+themselves** ("varies — US$ 450.00 · US$ 500.00"; Ami's feedback, 2026-10-25).
 Every box below starts filled in with what the nights share, so amending an entry starts
 from what is there rather than from nothing; a box where the nights differ starts empty and
-says so, and left empty keeps each night's own (§4.8). Choosing a different client empties
+shows the values it holds ("Varies: 450 · 500"), and left empty keeps each night's own (§4.8).
+**Changing the dates at the top of the panel keeps all this** for the selected nights still
+inside them (it used to clear it); nights added by widening the dates are not shown, and
+*Recorded now* says so. Choosing a different client empties
 the client's boxes. **The action starts as what the nights already are** on that side —
 Option nights open on *Take an option*, bought ones on *Buy*, sold ones on *Sell to a
 client*, a mixed selection on what most of its nights are — with their option or block
