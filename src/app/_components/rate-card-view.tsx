@@ -16,7 +16,8 @@ export type ClientRateCard = {
   name: string;
   currency: string;
   intro: string | null;
-  clientName: string;
+  /** Empty on a general card — for any client. */
+  clientName: string | null;
   event: { name: string; startDate: Date; endDate: Date } | null;
   asked: { rooms: number; roomType: string | null; checkIn: Date | null; checkOut: Date | null }[];
   properties: {
@@ -61,8 +62,7 @@ export function RateCardView({
           <p className="text-brand-700 text-[11px] font-medium tracking-[0.18em] uppercase">Rate card</p>
           <h1 className="text-ink-900 mt-1 text-2xl font-semibold">{card.event?.name ?? card.name}</h1>
           <p className="text-ink-500 mt-1 text-sm font-light">
-            Prepared for {card.clientName}
-            {card.event ? ` · ${formatRange(card.event.startDate, card.event.endDate)}` : ""}
+            {[card.clientName ? `Prepared for ${card.clientName}` : null, card.event ? formatRange(card.event.startDate, card.event.endDate) : null].filter(Boolean).join(" · ")}
           </p>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element -- an SVG needs no optimisation */}

@@ -772,13 +772,13 @@ export const salesRouter = createTRPCRouter({
       // Answers from the client on a rate card nobody in the team has opened yet (doc §4.11).
       const unseen = requests.length
         ? await ctx.db.rateCardResponse.findMany({
-            where: { seenAt: null, rateCard: { salesRequestId: { in: requests.map((request) => request.id) } } },
-            select: { rateCard: { select: { salesRequestId: true } } },
+            where: { seenAt: null, salesRequestId: { in: requests.map((request) => request.id) } },
+            select: { salesRequestId: true },
           })
         : [];
       return requests.map((request) => ({
         ...request,
-        newAnswers: unseen.filter((response) => response.rateCard.salesRequestId === request.id).length,
+        newAnswers: unseen.filter((response) => response.salesRequestId === request.id).length,
         nightsBlocked: count(request.id, "BLOCKED"),
         nightsSold: count(request.id, "SOLD"),
       }));

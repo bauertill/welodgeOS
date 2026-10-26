@@ -224,7 +224,11 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
   return (
     <Popup
       title={draft?.name ?? "Rate card"}
-      subtitle={c ? `For ${c.clientName}${c.event ? ` · ${c.event.name}` : ""} — buying rates are for us only; the client never sees them.` : undefined}
+      subtitle={
+        c
+          ? `${c.clientName ? `For ${c.clientName}` : "For any client — each answer starts its own sales request"}${c.event ? ` · ${c.event.name}` : ""} — buying rates are for us only; the client never sees them.`
+          : undefined
+      }
       onClose={close}
       aside={
         c && (
@@ -488,7 +492,13 @@ function ClientAnswers({ answers, currency }: { answers: RouterOutputs["rateCard
             <p className="text-ink-500 text-xs font-light">
               {answer.isNew && <span className="mr-1.5 rounded-full bg-[#e0234e] px-1.5 py-px text-[10px] font-medium text-white">New</span>}
               {formatMoment(answer.at)}
-              {answer.name || answer.email ? ` · ${[answer.name, answer.email].filter(Boolean).join(" · ")}` : ""}
+              {answer.company || answer.name || answer.email ? ` · ${[answer.company, answer.name, answer.email].filter(Boolean).join(" · ")}` : ""}
+              {/* A general card's answer started its own sales request (doc §4.11). */}
+              {answer.salesRequestId && answer.company && (
+                <a href={`/sales/${answer.salesRequestId}`} className="text-brand-700 ml-2 font-medium hover:underline">
+                  Their sales request →
+                </a>
+              )}
             </p>
             {answer.items.length > 0 && (
               <ul className="mt-1 space-y-0.5">

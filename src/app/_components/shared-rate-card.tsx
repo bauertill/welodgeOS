@@ -54,7 +54,20 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   const [sending, setSending] = useState<"rooms" | "dates" | "contracting" | null>(null);
   /** The contracting popup opened straight after sending the rooms. */
   const [justSent, setJustSent] = useState(false);
-  const contracting = api.rateCard.contracting.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
+  // On a general card, this browser's own answer — what its contracting details and a resend go onto (doc §4.11).
+  const answerKey = `rate-card-answer:${token}`;
+  const [responseId, setResponseId] = useState<string | null>(() => {
+    if (!card.general || typeof window === "undefined") return null;
+    try {
+      return window.localStorage.getItem(answerKey);
+    } catch {
+      return null;
+    }
+  });
+  const [company, setCompany] = useState("");
+  // A general card asks who is answering, until their first answer is in.
+  const askCompany = Boolean(card.general) && !responseId;
+  const contracting = api.rateCard.contracting.useQuery({ token, responseId }, { retry: false, refetchOnWindowFocus: false });
   const [detailsSent, setDetailsSent] = useState(false);
   const sendDetails = api.rateCard.submitContracting.useMutation({
     onSuccess: () => {
@@ -65,8 +78,16 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
     },
   });
   const answer = api.rateCard.answer.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       setSent(sending === "dates" ? "dates" : "rooms");
+      if (card.general) {
+        setResponseId(result.id);
+        try {
+          window.localStorage.setItem(answerKey, result.id);
+        } catch {
+          // A private window: they can still send their details now.
+        }
+      }
       // The rooms are in: now the details the agreement needs (doc §4.11, 2026-10-14).
       setJustSent(sending === "rooms");
       setSending(sending === "rooms" ? "contracting" : null);
@@ -134,7 +155,7 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
           Thank you — your company details have been sent. We have what we need to prepare your agreement.
         </p>
       )}
-      {contracting.data && !contracting.data.submittedAt && (
+      {contracting.data && !contracting.data.general && !contracting.data.submittedAt && (
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 print:hidden">
           <p className="text-sm text-[#7a5410]">
             <span className="font-semibold">Complete your contracting details</span> — your company and who signs — so we can prepare your agreement.
@@ -315,6 +336,11 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
             </p>
             <div className="rounded-xl bg-white px-5 py-4">
               <div className="grid gap-3 sm:grid-cols-2">
+                {askCompany && (
+                  <Field label="Your company" className="sm:col-span-2">
+                    <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="The organisation you are booking for" />
+                  </Field>
+                )}
                 <Field label="Your name">
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
@@ -330,12 +356,14 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                 {blocked && <p className="text-xs text-[#c03654]">Please check the rooms marked in red on the card — the number of rooms or the length of stay.</p>}
                 <Button
                   type="button"
-                  disabled={answer.isPending || blocked || chosen.length === 0}
+                  disabled={answer.isPending || blocked || chosen.length === 0 || (askCompany && !company.trim())}
                   onClick={() =>
                     answer.mutate({
                       token,
                       name,
                       email,
+                      company,
+                      previousResponseId: responseId,
                       note,
                       dateChange: null,
                       items: chosen.flatMap(([lineId, periods]) =>
@@ -379,6 +407,11 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
+                {askCompany && (
+                  <Field label="Your company" className="sm:col-span-2">
+                    <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="The organisation you are booking for" />
+                  </Field>
+                )}
                 <Field label="Your name">
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
@@ -393,8 +426,8 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
               <FormError message={answer.error ? friendlyError(answer.error) : null} />
               <Button
                 type="button"
-                disabled={answer.isPending || !newDates.checkIn || !newDates.checkOut || newDates.checkOut <= newDates.checkIn}
-                onClick={() => answer.mutate({ token, name, email, note, dateChange: newDates, items: [] })}
+                disabled={answer.isPending || !newDates.checkIn || !newDates.checkOut || newDates.checkOut <= newDates.checkIn || (askCompany && !company.trim())}
+                onClick={() => answer.mutate({ token, name, email, company, previousResponseId: responseId, note, dateChange: newDates, items: [] })}
               >
                 {answer.isPending ? "Sending…" : "Send new dates"}
               </Button>
@@ -416,12 +449,12 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                 You sent these {formatMomentInWords(contracting.data.submittedAt)} — check they are still right.
               </p>
             )}
-            {contracting.data ? (
+            {contracting.data?.values ? (
               <ContractingFields
                 values={contracting.data.values}
                 pending={sendDetails.isPending}
                 error={sendDetails.error ? friendlyError(sendDetails.error) : null}
-                onSubmit={(values) => sendDetails.mutate({ token, values })}
+                onSubmit={(values) => sendDetails.mutate({ token, responseId, values })}
                 submitLabel="Send my details"
                 after={
                   <button type="button" onClick={() => setSending(null)} className="text-ink-500 text-sm hover:underline">
