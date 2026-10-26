@@ -93,6 +93,8 @@ export function InventoryGrid({
   const [focus, setFocus] = useState<CellRef | null>(null);
   const [dragging, setDragging] = useState(false);
   const [committed, setCommitted] = useState<{ anchor: CellRef; focus: CellRef } | null>(null);
+  /** Every room of a hotel or a room type, for the dates shown — a buyout in two clicks (Ami, 2026-10-26). */
+  const [bulk, setBulk] = useState<{ slotIds: string[] } | null>(null);
 
   const scroller = useRef<HTMLDivElement>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
@@ -313,6 +315,21 @@ export function InventoryGrid({
         .reduce((sum, property) => sum + property.categories.filter((category) => category.slots.every((slot) => slot.empty)).length, 0),
     [allProperties],
   );
+  // Every room of each room type and hotel, empty ones included — what Select all takes.
+  const slotsOfCategory = useMemo(
+    () => new Map(allProperties.flatMap((property) => property.categories.map((category) => [category.id, category.slots.map((slot) => slot.id)] as const))),
+    [allProperties],
+  );
+  const slotsOfProperty = useMemo(
+    () => new Map(allProperties.map((property) => [property.id, property.categories.flatMap((category) => category.slots.map((slot) => slot.id))] as const)),
+    [allProperties],
+  );
+  const selectAll = (slotIds: string[]) => {
+    setCommitted(null);
+    setAnchor(null);
+    setFocus(null);
+    setBulk({ slotIds });
+  };
   // All of a property's rooms, before the empty ones are hidden — to say what its line holds.
   const roomsOf = useMemo(
     () => new Map(allProperties.map((property) => [property.id, property.categories.reduce((sum, category) => sum + category.slots.length, 0)])),
@@ -507,13 +524,14 @@ export function InventoryGrid({
   }, [dragging, anchor, focus, columns]);
 
   const selection = useMemo(() => {
+    if (bulk && dates.length) return { slotIds: bulk.slotIds, checkIn: dates[0]!, checkOut: addDays(dates[dates.length - 1]!, 1) };
     if (!committed) return null;
     const { rowFrom, rowTo, dateFrom, dateTo } = rectangle(committed.anchor, committed.focus);
     const slotIds = visibleRows.slice(rowFrom, rowTo + 1).map((row) => row.slotId);
     const stay = stayOf(dateFrom, dateTo);
     if (!slotIds.length || !stay) return null;
     return { slotIds, checkIn: stay.checkIn, checkOut: stay.checkOut };
-  }, [committed, visibleRows, columns]);
+  }, [bulk, dates, committed, visibleRows, columns]);
 
   const selectedCells: SelectedCell[] = useMemo(() => {
     if (!selection) return [];
@@ -529,6 +547,7 @@ export function InventoryGrid({
   }, [selection, dates, cells]);
 
   const clearSelection = () => {
+    setBulk(null);
     setCommitted(null);
     setAnchor(null);
     setFocus(null);
@@ -798,6 +817,16 @@ export function InventoryGrid({
                             </span>
                           )}
                         </button>
+                        {(slotsOfProperty.get(property.id)?.length ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => selectAll(slotsOfProperty.get(property.id)!)}
+                            title="Every room of this hotel for the dates shown — to take an option, buy, block or sell them all at once"
+                            className="text-brand-700 ml-4 text-[11px] font-light hover:underline print:hidden"
+                          >
+                            Select all {slotsOfProperty.get(property.id)!.length} rooms
+                          </button>
+                        )}
                         {property.categories.length === 0 &&
                           ((roomsOf.get(property.id) ?? 0) === 0 ? (
                             <span className="text-ink-500 ml-6 block text-[11px] font-light">
@@ -842,7 +871,18 @@ export function InventoryGrid({
                                     {nothingSecured.has(category.id) && " · nothing secured"}
                                   </span>
                                 </button>
-                                <RoomCount categoryId={category.id} count={category.slots.length} />
+                                <span className="text-ink-500 text-[11px] font-light">{(slotsOfCategory.get(category.id) ?? category.slots).length} rooms</span>
+                                {(slotsOfCategory.get(category.id)?.length ?? 0) > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => selectAll(slotsOfCategory.get(category.id)!)}
+                                    title="Every room of this type for the dates shown"
+                                    className="text-brand-700 text-[11px] font-light hover:underline print:hidden"
+                                  >
+                                    Select all
+                                  </button>
+                                )}
+                                <RoomCount categoryId={category.id} count={(slotsOfCategory.get(category.id) ?? category.slots).length} />
                                 </span>
                               </td>
                             </tr>
@@ -908,6 +948,7 @@ export function InventoryGrid({
                                             pointer.current = { x: e.clientX, y: e.clientY };
                                             setHovered(null);
                                             setDragging(true);
+                                            setBulk(null);
                                             setAnchor({ rowIndex, dateIndex });
                                             setFocus({ rowIndex, dateIndex });
                                             setCommitted(null);
@@ -1582,7 +1623,7 @@ function RoomCount({ categoryId, count }: { categoryId: string; count: number })
   if (draft === null) {
     return (
       <button type="button" onClick={() => setDraft(String(count))} className="text-brand-700 text-[11px] font-light hover:underline print:hidden">
-        Change the number of rooms
+        Change
       </button>
     );
   }

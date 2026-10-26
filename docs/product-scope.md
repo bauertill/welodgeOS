@@ -1329,6 +1329,7 @@ stateDiagram-v2
     [*] --> NONE
     NONE --> IN_PROGRESS: start negotiation
     NONE --> BOUGHT: purchased directly, no negotiation
+    NONE --> OPTION: option secured straight away (expiry required)
     IN_PROGRESS --> OPTION: option secured (expiry required)
     IN_PROGRESS --> BOUGHT: purchased directly
     IN_PROGRESS --> NONE: abandoned
@@ -1339,6 +1340,10 @@ stateDiagram-v2
     RELEASED --> IN_PROGRESS: talking again
     RELEASED --> BOUGHT: bought back
 ```
+
+An **option can be taken straight away** on nights where nothing has started, without first
+marking them *In progress* (Ami's feedback, 2026-10-26 — taking a whole hotel on option, a
+buyout, was two steps). Its expiry is still required.
 
 A released night can be **bought back** straight away — the hotel takes us back on — or
 returned to *In progress* if the talks start again (the owner's decision, 2026-10-02).
@@ -1506,8 +1511,12 @@ never a silent write.
    a cancelled sale) is just a row on the sheet and goes, its nights with it; the ledger's
    entries stay. A room in use stops it, named with what holds it ("#4 (bought, sold)").
    The same goes for removing a whole room type. The count can be changed on the property's
-   page or **on the stock sheet** — *Change the number of rooms* on each room type's row.
-   Releasing nights that were never bought says so and points there.
+   page or **on the stock sheet** — each room type's row shows its number of rooms ("5 rooms")
+   with *Change* beside it (Ami, 2026-10-26).
+   Releasing nights that were never bought says so and points there. **Select all** — *Select all 8 rooms* on a hotel's row, *Select all* on a room
+   type's — selects every room, empty ones included, for the dates shown and opens the panel,
+   so a buyout (an option on, or the purchase of, a whole hotel or room type) is two clicks
+   rather than a drag across every row (Ami, 2026-10-26).
 4. **Expiry required.** `OPTION` without `optionExpiry`, or `BLOCKED` without
    `blockExpiry`, is invalid.
 5. **Deadline coherence.** `optionExpiry ≥ blockExpiry` on the same night. If a client's
