@@ -2379,7 +2379,9 @@ quoted and is judged on that rate. While it is open the row says *Rate asked —
 Sometimes the properties are contracted first and a rate card is shared with clients before
 any of them has asked (the owner, 2026-10-26). **+ Rate card for any client**, on the event's
 properties board, opens a popup of the event's properties — the *Contracted* ones ticked to
-start, any other ticked or unticked — and makes a card from them like any other: every room
+start, any other ticked or unticked, with **a search by name, city or status** and *Tick all
+shown* / *Untick all* (the owner, 2026-10-26: there will be many; what is ticked stays ticked
+when the search hides it) — and makes a card from them like any other: every room
 type at our event rate plus the markup, the same popup to set the rates, units, minimum stay,
 descriptions and media, and the same link. It belongs to the event, not to a client or a
 request: its name says *for any client*, the client's copy has no "Prepared for", and the

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, FormError, friendlyError } from "~/app/_components/form";
+import { Button, FormError, friendlyError, Input } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { RateCardEditor } from "~/app/_components/rate-card-editor";
 import { scoutingStatusLabels } from "~/lib/scouting";
@@ -74,6 +74,13 @@ function PickProperties({ eventId, onClose, onMade }: { eventId: string; onClose
   const rows = (entries.data ?? []).filter((entry) => entry.status !== "REJECTED");
   // The contracted properties to start — what is usually put on such a card.
   const [picked, setPicked] = useState<Set<string> | null>(null);
+  // Many properties on an event (the owner, 2026-10-26): find them by name, city or status.
+  const [search, setSearch] = useState("");
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = rows.filter((entry) => {
+    const text = `${entry.property.name} ${entry.property.city ?? ""} ${scoutingStatusLabels[entry.status]}`.toLowerCase();
+    return words.every((word) => text.includes(word));
+  });
   const chosen = picked ?? new Set(rows.filter((entry) => entry.status === "CONTRACTED").map((entry) => entry.property.id));
   const create = api.rateCard.create.useMutation({ onSuccess: (card) => onMade(card.id) });
   const toggle = (id: string) => {
@@ -96,14 +103,34 @@ function PickProperties({ eventId, onClose, onMade }: { eventId: string; onClose
         ) : rows.length === 0 ? (
           <p className="text-ink-500 text-sm font-light">No properties on this event yet.</p>
         ) : (
-          <ul className="divide-ink-200/60 divide-y rounded-xl bg-white">
-            {rows.map((entry) => {
+          <>
+          <div className="flex flex-wrap items-center gap-3">
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, city or status — “contracted”, “Burbank”…" aria-label="Search properties" className="min-w-64 flex-1" autoFocus />
+            <button
+              type="button"
+              onClick={() => setPicked(new Set([...chosen, ...shown.map((entry) => entry.property.id)]))}
+              className="text-brand-700 text-[13px] hover:underline"
+            >
+              Tick {words.length ? "all shown" : "all"}
+            </button>
+            {chosen.size > 0 && (
+              <button type="button" onClick={() => setPicked(new Set())} className="text-ink-500 text-[13px] hover:underline">
+                Untick all
+              </button>
+            )}
+          </div>
+          {shown.length === 0 && <p className="text-ink-500 text-sm font-light">No property matches “{search.trim()}”.</p>}
+          <ul className="divide-ink-200/60 max-h-[50vh] divide-y overflow-y-auto rounded-xl bg-white">
+            {shown.map((entry) => {
               const rooms = entry.property.categories.length;
               return (
                 <li key={entry.id}>
                   <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-[13px]">
                     <input type="checkbox" checked={chosen.has(entry.property.id)} onChange={() => toggle(entry.property.id)} className="accent-brand-500 h-4 w-4" />
-                    <span className="text-ink-900 min-w-0 flex-1 font-medium">{entry.property.name}</span>
+                    <span className="text-ink-900 min-w-0 flex-1 font-medium">
+                      {entry.property.name}
+                      {entry.property.city && <span className="text-ink-500 ml-2 text-xs font-light">{entry.property.city}</span>}
+                    </span>
                     <span className="text-ink-500 text-xs font-light">
                       {scoutingStatusLabels[entry.status]} · {rooms ? `${rooms} room ${rooms === 1 ? "type" : "types"}` : "no room types yet"}
                     </span>
@@ -112,6 +139,10 @@ function PickProperties({ eventId, onClose, onMade }: { eventId: string; onClose
               );
             })}
           </ul>
+          {words.length > 0 && chosen.size > shown.filter((entry) => chosen.has(entry.property.id)).length && (
+            <p className="text-ink-500 text-xs font-light">Ticked properties not matching the search stay ticked.</p>
+          )}
+          </>
         )}
         <FormError message={create.error ? friendlyError(create.error) : null} />
         <Button type="button" disabled={chosen.size === 0 || create.isPending} onClick={() => create.mutate({ eventId, propertyIds: [...chosen] })}>
