@@ -693,7 +693,9 @@ moment the category is there with its number of rooms — numbered #1 to that co
 until something is recorded on it. Rooms of a property marked *Rejected* are left off; a
 category with no number of rooms has no rows. **Empty hotels are hidden by default** (2026-10-11): a hotel on the list whose rooms are
 all empty in the dates shown, or with no room categories yet, is left off the sheet until
-**Show empty** is on — its label counts the hotels ("Show empty (6 hotels)"). Shown,
+**Show empty** is on — its label counts the hotels and, in the hotels that do show, the
+room types whose rooms are all empty, hidden too ("Show empty (4 hotels · 1 room type)";
+Ami's feedback, 2026-10-25). Shown,
 a hotel with no room categories says *No room categories yet — add them on its page*, and
 one whose rooms are all empty lists them. The hotels with rooms on the sheet come first,
 then those whose rooms are all empty, then those with no rooms yet, by name within each.
@@ -1327,6 +1329,7 @@ stateDiagram-v2
     [*] --> NONE
     NONE --> IN_PROGRESS: start negotiation
     NONE --> BOUGHT: purchased directly, no negotiation
+    NONE --> OPTION: option secured straight away (expiry required)
     IN_PROGRESS --> OPTION: option secured (expiry required)
     IN_PROGRESS --> BOUGHT: purchased directly
     IN_PROGRESS --> NONE: abandoned
@@ -1337,6 +1340,10 @@ stateDiagram-v2
     RELEASED --> IN_PROGRESS: talking again
     RELEASED --> BOUGHT: bought back
 ```
+
+An **option can be taken straight away** on nights where nothing has started, without first
+marking them *In progress* (Ami's feedback, 2026-10-26 — taking a whole hotel on option, a
+buyout, was two steps). Its expiry is still required.
 
 A released night can be **bought back** straight away — the hotel takes us back on — or
 returned to *In progress* if the talks start again (the owner's decision, 2026-10-02).
@@ -1497,7 +1504,19 @@ never a silent write.
 2. **Slot uniqueness.** `(property, category, slotNumber, date)` is unique. One room-night
    record, one truth.
 3. **Slot bound.** Slot numbers within a category may not exceed the category's
-   `roomCount` unless the category's count is explicitly raised.
+   `roomCount` unless the category's count is explicitly raised. **Lowering the count
+   removes the rooms above it if they are empty** (Ami's feedback, 2026-10-25): a room is
+   in use only if, on any night, it is in progress, on option or bought with the hotel,
+   blocked or sold to a client, or requested — anything else (nothing started, released,
+   a cancelled sale) is just a row on the sheet and goes, its nights with it; the ledger's
+   entries stay. A room in use stops it, named with what holds it ("#4 (bought, sold)").
+   The same goes for removing a whole room type. The count can be changed on the property's
+   page or **on the stock sheet** — each room type's row shows its number of rooms ("5 rooms")
+   with *Change* beside it (Ami, 2026-10-26).
+   Releasing nights that were never bought says so and points there. **Select all** — *Select all 8 rooms* on a hotel's row, *Select all* on a room
+   type's — selects every room, empty ones included, for the dates shown and opens the panel,
+   so a buyout (an option on, or the purchase of, a whole hotel or room type) is two clicks
+   rather than a drag across every row (Ami, 2026-10-26).
 4. **Expiry required.** `OPTION` without `optionExpiry`, or `BLOCKED` without
    `blockExpiry`, is invalid.
 5. **Deadline coherence.** `optionExpiry ≥ blockExpiry` on the same night. If a client's
@@ -2655,10 +2674,21 @@ contiguous range of days — which opens a panel scoped to exactly that selectio
 **The panel shows what is already recorded** on those nights, under *Recorded now*: each
 side's status, and every detail — buy price, option date, supplier reference, Accommodation
 Manager, supplier notes; client, sell price, deadline, client reference, Sales Manager,
-client notes — as the one value the nights share, or *varies* where they differ.
+client notes — as the one value the nights share, or, where they differ, **the values
+themselves** ("varies — US$ 450.00 · US$ 500.00"; Ami's feedback, 2026-10-25).
 Every box below starts filled in with what the nights share, so amending an entry starts
 from what is there rather than from nothing; a box where the nights differ starts empty and
-says so, and left empty keeps each night's own (§4.8). Choosing a different client empties
+shows the values it holds ("Varies: 450 · 500"), and left empty keeps each night's own (§4.8).
+**Amending is just changing what differs** (Ami's feedback, 2026-10-25): when every
+selected night already is what the action makes it — bought, or blocked or sold to the
+chosen client — the panel says so ("These nights already are this. Change what you need…"),
+the price is no longer required (left empty, each night keeps the price it has — even
+nights that had none), there is no "update them anyway?" question, and the button reads
+*Save changes*. So a note, a reference, a manager or a contract is added without typing the
+rates again. The server applies the same rule.
+**Changing the dates at the top of the panel keeps all this** for the selected nights still
+inside them (it used to clear it); nights added by widening the dates are not shown, and
+*Recorded now* says so. Choosing a different client empties
 the client's boxes. **The action starts as what the nights already are** on that side —
 Option nights open on *Take an option*, bought ones on *Buy*, sold ones on *Sell to a
 client*, a mixed selection on what most of its nights are — with their option or block

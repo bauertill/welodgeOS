@@ -392,10 +392,12 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
       // A night bought, blocked or sold without its price is a payment
       // nobody can plan for (doc §4.1, §4.2). Left empty is fine only where
       // every night already carries one — for the same client, on the sales side.
+      // Nights already bought (or already sold to this client) keep their price: amending
+      // their notes or reference needs no price typed again (Ami's feedback, 2026-10-25).
       if (needsBuyPrice.includes(action)) {
         const priced =
           input.buyPriceCents != null ||
-          (input.buyPriceCents === undefined && nights.every((night) => night.buyPriceCents !== null));
+          (input.buyPriceCents === undefined && nights.every((night) => night.buyPriceCents !== null || night.acquisitionState === acquisitionTarget[action]));
         if (!priced) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -407,7 +409,7 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         const priced =
           input.sellPriceCents != null ||
           (input.sellPriceCents === undefined &&
-            nights.every((night) => night.sellPriceCents !== null && night.clientId === input.clientId));
+            nights.every((night) => night.clientId === input.clientId && (night.sellPriceCents !== null || night.salesState === salesTarget[action])));
         if (!priced) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -467,7 +469,10 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
             !allowedAcquisitionMoves[from].includes(acquisitionTo)
           ) {
             fail(
-              `cannot go from ${acquisitionLabels[from].toLowerCase()} to ${acquisitionLabels[acquisitionTo].toLowerCase()}.`,
+              from === "NONE" && acquisitionTo === "RELEASED"
+                ? // Ami, 2026-10-25: rooms never bought are not released — they are removed.
+                  "was never bought, so there is nothing to release. To take these rooms off the hotel, use “Change” beside the number of rooms on the room type's row."
+                : `cannot go from ${acquisitionLabels[from].toLowerCase()} to ${acquisitionLabels[acquisitionTo].toLowerCase()}.`,
             );
           }
         }

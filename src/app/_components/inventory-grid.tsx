@@ -93,6 +93,8 @@ export function InventoryGrid({
   const [focus, setFocus] = useState<CellRef | null>(null);
   const [dragging, setDragging] = useState(false);
   const [committed, setCommitted] = useState<{ anchor: CellRef; focus: CellRef } | null>(null);
+  /** Every room of a hotel or a room type, for the dates shown — a buyout in two clicks (Ami, 2026-10-26). */
+  const [bulk, setBulk] = useState<{ slotIds: string[] } | null>(null);
 
   const scroller = useRef<HTMLDivElement>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
@@ -305,6 +307,29 @@ export function InventoryGrid({
     () => allProperties.filter((property) => property.categories.every((category) => category.slots.every((slot) => slot.empty))).length,
     [allProperties],
   );
+  // Room types hidden too (Ami, 2026-10-25): all their rooms empty, in a hotel that still shows.
+  const emptyCategories = useMemo(
+    () =>
+      allProperties
+        .filter((property) => !property.categories.every((category) => category.slots.every((slot) => slot.empty)))
+        .reduce((sum, property) => sum + property.categories.filter((category) => category.slots.every((slot) => slot.empty)).length, 0),
+    [allProperties],
+  );
+  // Every room of each room type and hotel, empty ones included — what Select all takes.
+  const slotsOfCategory = useMemo(
+    () => new Map(allProperties.flatMap((property) => property.categories.map((category) => [category.id, category.slots.map((slot) => slot.id)] as const))),
+    [allProperties],
+  );
+  const slotsOfProperty = useMemo(
+    () => new Map(allProperties.map((property) => [property.id, property.categories.flatMap((category) => category.slots.map((slot) => slot.id))] as const)),
+    [allProperties],
+  );
+  const selectAll = (slotIds: string[]) => {
+    setCommitted(null);
+    setAnchor(null);
+    setFocus(null);
+    setBulk({ slotIds });
+  };
   // All of a property's rooms, before the empty ones are hidden — to say what its line holds.
   const roomsOf = useMemo(
     () => new Map(allProperties.map((property) => [property.id, property.categories.reduce((sum, category) => sum + category.slots.length, 0)])),
@@ -499,13 +524,14 @@ export function InventoryGrid({
   }, [dragging, anchor, focus, columns]);
 
   const selection = useMemo(() => {
+    if (bulk && dates.length) return { slotIds: bulk.slotIds, checkIn: dates[0]!, checkOut: addDays(dates[dates.length - 1]!, 1) };
     if (!committed) return null;
     const { rowFrom, rowTo, dateFrom, dateTo } = rectangle(committed.anchor, committed.focus);
     const slotIds = visibleRows.slice(rowFrom, rowTo + 1).map((row) => row.slotId);
     const stay = stayOf(dateFrom, dateTo);
     if (!slotIds.length || !stay) return null;
     return { slotIds, checkIn: stay.checkIn, checkOut: stay.checkOut };
-  }, [committed, visibleRows, columns]);
+  }, [bulk, dates, committed, visibleRows, columns]);
 
   const selectedCells: SelectedCell[] = useMemo(() => {
     if (!selection) return [];
@@ -521,6 +547,7 @@ export function InventoryGrid({
   }, [selection, dates, cells]);
 
   const clearSelection = () => {
+    setBulk(null);
     setCommitted(null);
     setAnchor(null);
     setFocus(null);
@@ -656,20 +683,25 @@ export function InventoryGrid({
           }))}
         />
 
-        {!propertyId && (emptyRooms > 0 || emptyHotels > 0 || showEmpty) && (
+        {!propertyId && (emptyRooms > 0 || emptyHotels > 0 || emptyCategories > 0 || showEmpty) && (
           <button
             type="button"
             onClick={() => setShowEmpty(!showEmpty)}
             aria-pressed={showEmpty}
-            title="Rooms with nothing on them in these dates — no supplier or client side, and nobody asking — and hotels on the list with no rooms yet"
+            title="Rooms with nothing on them in these dates — no supplier or client side, and nobody asking — room types whose rooms are all empty, and hotels on the list with no rooms yet"
             className={`rounded-full px-4 py-2 text-[13px] font-light transition-colors ${
               showEmpty ? "bg-brand-700 text-white" : "border-ink-200 text-ink-500 hover:border-brand-400 border bg-white"
             }`}
           >
             {showEmpty
               ? "Hide the empty ones"
-              : emptyHotels
-                ? `Show empty (${emptyHotels} ${emptyHotels === 1 ? "hotel" : "hotels"})`
+              : emptyHotels || emptyCategories
+                ? `Show empty (${[
+                    emptyHotels ? `${emptyHotels} ${emptyHotels === 1 ? "hotel" : "hotels"}` : null,
+                    emptyCategories ? `${emptyCategories} ${emptyCategories === 1 ? "room type" : "room types"}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")})`
                 : "Show empty rooms"}
           </button>
         )}
@@ -785,6 +817,16 @@ export function InventoryGrid({
                             </span>
                           )}
                         </button>
+                        {(slotsOfProperty.get(property.id)?.length ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => selectAll(slotsOfProperty.get(property.id)!)}
+                            title="Every room of this hotel for the dates shown — to take an option, buy, block or sell them all at once"
+                            className="text-brand-700 ml-4 text-[11px] font-light hover:underline print:hidden"
+                          >
+                            Select all {slotsOfProperty.get(property.id)!.length} rooms
+                          </button>
+                        )}
                         {property.categories.length === 0 &&
                           ((roomsOf.get(property.id) ?? 0) === 0 ? (
                             <span className="text-ink-500 ml-6 block text-[11px] font-light">
@@ -814,6 +856,7 @@ export function InventoryGrid({
                                 colSpan={columns.length + 2}
                                 className="sticky left-0 z-10 border-b border-ink-200/60 bg-white px-3 py-1.5 pl-6"
                               >
+                                <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
                                 <button
                                   type="button"
                                   onClick={() => toggleSet(setExpandedCategories, category.id)}
@@ -828,6 +871,19 @@ export function InventoryGrid({
                                     {nothingSecured.has(category.id) && " · nothing secured"}
                                   </span>
                                 </button>
+                                <span className="text-ink-500 text-[11px] font-light">{(slotsOfCategory.get(category.id) ?? category.slots).length} rooms</span>
+                                {(slotsOfCategory.get(category.id)?.length ?? 0) > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => selectAll(slotsOfCategory.get(category.id)!)}
+                                    title="Every room of this type for the dates shown"
+                                    className="text-brand-700 text-[11px] font-light hover:underline print:hidden"
+                                  >
+                                    Select all
+                                  </button>
+                                )}
+                                <RoomCount categoryId={category.id} count={(slotsOfCategory.get(category.id) ?? category.slots).length} />
+                                </span>
                               </td>
                             </tr>
 
@@ -892,6 +948,7 @@ export function InventoryGrid({
                                             pointer.current = { x: e.clientX, y: e.clientY };
                                             setHovered(null);
                                             setDragging(true);
+                                            setBulk(null);
                                             setAnchor({ rowIndex, dateIndex });
                                             setFocus({ rowIndex, dateIndex });
                                             setCommitted(null);
@@ -1545,5 +1602,60 @@ function Chevron({ open }: { open: boolean }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/**
+ * A room type's number of rooms, changed on the sheet (doc §4.8; Ami, 2026-10-25):
+ * more adds empty rooms, fewer removes empty ones from the top — refused,
+ * naming the rooms, if any of them is in use.
+ */
+function RoomCount({ categoryId, count }: { categoryId: string; count: number }) {
+  const utils = api.useUtils();
+  const [draft, setDraft] = useState<string | null>(null);
+  const save = api.property.setRoomCount.useMutation({
+    onSuccess: () => {
+      setDraft(null);
+      void utils.inventory.invalidate();
+      void utils.property.invalidate();
+    },
+  });
+  if (draft === null) {
+    return (
+      <button type="button" onClick={() => setDraft(String(count))} className="text-brand-700 text-[11px] font-light hover:underline print:hidden">
+        Change
+      </button>
+    );
+  }
+  const value = Number(draft);
+  const valid = draft.trim() !== "" && Number.isInteger(value) && value >= 0;
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-[11px] print:hidden">
+      <Input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        inputMode="numeric"
+        aria-label="Number of rooms"
+        className="w-16 px-2 py-1 text-[12px]"
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && valid) save.mutate({ categoryId, unitCount: value });
+          if (e.key === "Escape") setDraft(null);
+        }}
+      />
+      <span className="text-ink-500">rooms</span>
+      <button
+        type="button"
+        disabled={!valid || save.isPending}
+        onClick={() => save.mutate({ categoryId, unitCount: value })}
+        className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-50"
+      >
+        {save.isPending ? "Saving…" : "Save"}
+      </button>
+      <button type="button" onClick={() => (setDraft(null), save.reset())} className="text-ink-500 hover:underline">
+        Cancel
+      </button>
+      {save.error && <span className="max-w-xl text-[#c03654]">{save.error.message}</span>}
+    </span>
   );
 }

@@ -64,12 +64,20 @@ export type SelectedCell = {
  * they differ. What is shared is filled in for editing; what differs is left
  * empty, and left empty keeps each night's own (doc §4.8).
  */
-type Shared = { same: true; value: string } | { same: false; count: number };
+type Shared = { same: true; value: string } | { same: false; count: number; values: string[] };
 
 function shared(cells: SelectedCell[], read: (cell: SelectedCell) => string): Shared {
   const values = new Set(cells.map(read));
   if (values.size <= 1) return { same: true, value: [...values][0] ?? "" };
-  return { same: false, count: values.size };
+  return { same: false, count: values.size, values: [...values] };
+}
+
+/** The selected nights inside a date range — what is known of them, once the range is changed. */
+function within(cells: SelectedCell[], checkIn: string, checkOut: string) {
+  return cells.filter((cell) => {
+    const date = cell.key.split("|")[1] ?? "";
+    return date >= checkIn && date < checkOut;
+  });
 }
 
 /** What to send for one detail: left as it was → nothing (kept); emptied → cleared; else the new value. */
@@ -174,7 +182,8 @@ export function InventorySidePanel({
 
   // What every selected night already says, detail by detail — the starting
   // point of each box, so what is recorded shows and only changes are sent.
-  const known = dateRangeEdited ? [] : cells;
+  // Changing the dates keeps what is known of the nights still inside them (Ami's feedback, 2026-10-25).
+  const known = validRange ? within(cells, dayKey(effectiveCheckIn), dayKey(effectiveCheckOut)) : [];
   const start = {
     supplierRef: shared(known, (cell) => cell.supplierRef ?? ""),
     optionExpiry: shared(known, (cell) => (cell.acquisitionState === "OPTION" && cell.optionExpiry ? dayKey(cell.optionExpiry) : "")),
@@ -223,6 +232,24 @@ export function InventorySidePanel({
   );
   // The client's details only carry over while it is the same client: for
   // another one, the boxes start empty (and the server clears the last one's).
+  // Every night already what the action makes it — bought, or blocked/sold to this client —
+  // keeps its price: changing only notes or a reference needs no price again (Ami, 2026-10-25).
+  const alreadyBought =
+    known.length > 0 &&
+    known.length === totalNights &&
+    known.every((cell) => cell.buyPriceCents !== null || cell.acquisitionState === acquisitionTarget[action]);
+  const alreadySold =
+    known.length > 0 &&
+    known.length === totalNights &&
+    known.every((cell) => cell.clientId === clientId && (cell.sellPriceCents !== null || cell.salesState === salesTarget[action]));
+  const amending =
+    known.length > 0 &&
+    known.length === totalNights &&
+    (acquisitionTarget[action]
+      ? known.every((cell) => cell.acquisitionState === acquisitionTarget[action])
+      : salesTarget[action]
+        ? known.every((cell) => cell.salesState === salesTarget[action] && cell.clientId === clientId)
+        : false);
   const sameClient = start.clientId.same && Boolean(start.clientId.value) && start.clientId.value === clientId;
   const clientStart = (detail: Shared) => (sameClient ? initial(detail) : "");
   // Switching to another client empties its boxes; switching back refills them.
@@ -346,8 +373,11 @@ export function InventorySidePanel({
     return { [cents]: Math.round(Number(amount) * 100), [code]: currency };
   };
   /** What a box says while the selected nights differ on it. */
-  const varies = (detail: Shared) =>
-    !detail.same ? `Varies across these nights (${detail.count} different) — leave empty to keep each night's own` : undefined;
+  const varies = (detail: Shared) => {
+    if (detail.same) return undefined;
+    const shown = detail.values.map((value) => value || "nothing");
+    return `Varies across these nights — ${shown.slice(0, 4).join(" · ")}${shown.length > 4 ? ` · ${shown.length - 4} more` : ""}. Leave empty to keep each night's own.`;
+  };
 
   const groups = tab === "acquisition" ? [actionGroups[0]!] : actionGroups.slice(1);
 
@@ -360,7 +390,7 @@ export function InventorySidePanel({
     const needs = (field: PanelField, missing: boolean, message: string) => {
       if (missing && !problems[field]) problems[field] = message;
     };
-    const known = dateRangeEdited ? [] : cells;
+    const known = validRange ? within(cells, dayKey(effectiveCheckIn), dayKey(effectiveCheckOut)) : [];
     needs("client", shows("client") && !clientId, "Say which client this is for.");
     needs("optionExpiry", shows("optionExpiry") && !optionExpiry, "Give the option deadline.");
     needs("blockExpiry", shows("blockExpiry") && !blockExpiry, "Give the client's deadline — a block without one is inventory frozen for free.");
@@ -368,14 +398,14 @@ export function InventorySidePanel({
       "buyPrice",
       (needsBuyPrice.includes(action) || action === "REPRICE_BUY") &&
         !buyPrice.trim() &&
-        (action === "REPRICE_BUY" || known.length === 0 || known.some((cell) => cell.buyPriceCents === null)),
+        (action === "REPRICE_BUY" || !alreadyBought),
       "Give the price we pay per night — a night marked bought needs its price.",
     );
     needs(
       "sellPrice",
       (needsSellPrice.includes(action) || action === "REPRICE_SELL") &&
         !sellPrice.trim() &&
-        (action === "REPRICE_SELL" || known.length === 0 || known.some((cell) => cell.sellPriceCents === null || cell.clientId !== clientId)),
+        (action === "REPRICE_SELL" || !alreadySold),
       `Give the price the client pays per night — a night ${action === "BLOCK" ? "blocked" : "sold"} for a client needs its agreed price.`,
     );
     needs("acquisitionOwner", action === "REASSIGN_ACQUISITION_OWNER" && !acquisitionOwnerId, "Pick who takes over with the supplier.");
@@ -406,8 +436,10 @@ export function InventorySidePanel({
       const activeCount = acquisitionTo
         ? existing.acquisitionActive
         : existing.salesActive;
+      // Amending what the nights already are needs no "update them anyway?" (Ami, 2026-10-25).
       if (
         activeCount > 0 &&
+        !amending &&
         !window.confirm(
           `${activeCount} of the ${totalNights} room-nights you selected already have an entry for this period. Update ${activeCount === 1 ? "it" : "them"} anyway? Details you leave as they are keep what each night has.`,
         )
@@ -504,7 +536,7 @@ export function InventorySidePanel({
           </button>
         </div>
 
-        {!dateRangeEdited && cells.length > 0 && <Recorded cells={cells} />}
+        {known.length > 0 && <Recorded cells={known} partly={dateRangeEdited && known.length < totalNights} />}
 
         <div className="border-ink-200/60 mb-4 flex gap-1 border-b">
           {(["acquisition", "sales"] as const).map((t) => (
@@ -527,7 +559,14 @@ export function InventorySidePanel({
         </div>
 
         <div className="space-y-4">
-          <Field label="What happened" hint={actionHints[action]}>
+          <Field
+            label="What happened"
+            hint={
+              amending
+                ? `These nights already are this. Change what you need — notes, reference, manager, contract, price — and save; anything left as it is stays as recorded.`
+                : actionHints[action]
+            }
+          >
             <Select
               value={action}
               onChange={(e) => setAction(e.target.value as InventoryAction)}
@@ -706,10 +745,12 @@ export function InventorySidePanel({
                 </div>
               ) : (
                 <Field
-                  label={needsBuyPrice.includes(action) ? "We pay, per night — required" : "We pay, per night"}
+                  label={needsBuyPrice.includes(action) && !alreadyBought ? "We pay, per night — required" : "We pay, per night"}
                   hint={
                     needsBuyPrice.includes(action)
-                      ? "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
+                      ? alreadyBought
+                        ? "Left empty, each night keeps the price it has."
+                        : "A night marked bought needs its price. Left empty, it is only accepted where every night already has one."
                       : undefined
                   }
                 >
@@ -720,7 +761,7 @@ export function InventorySidePanel({
                       min={0}
                       value={buyPrice}
                       onChange={(e) => setBuyPrice(e.target.value)}
-                      placeholder={varies(start.buyPrice) ? "Varies — leave empty to keep" : undefined}
+                      placeholder={!start.buyPrice.same ? `Varies: ${start.buyPrice.values.map((v) => v || "none").join(" · ")}` : undefined}
                       title={varies(start.buyPrice)}
                     />
                     <Select
@@ -760,10 +801,12 @@ export function InventorySidePanel({
                 </div>
               ) : (
                 <Field
-                  label={needsSellPrice.includes(action) ? "Client pays, per night — required" : "Client pays, per night"}
+                  label={needsSellPrice.includes(action) && !alreadySold ? "Client pays, per night — required" : "Client pays, per night"}
                   hint={
                     needsSellPrice.includes(action)
-                      ? "The agreed price. Left empty, it is only accepted where every night already has this client's price."
+                      ? alreadySold
+                        ? "Left empty, each night keeps the price it has."
+                        : "The agreed price. Left empty, it is only accepted where every night already has this client's price."
                       : undefined
                   }
                 >
@@ -774,7 +817,7 @@ export function InventorySidePanel({
                       min={0}
                       value={sellPrice}
                       onChange={(e) => setSellPrice(e.target.value)}
-                      placeholder={sameClient && varies(start.sellPrice) ? "Varies — leave empty to keep" : undefined}
+                      placeholder={sameClient && !start.sellPrice.same ? `Varies: ${start.sellPrice.values.map((v) => v || "none").join(" · ")}` : undefined}
                       title={sameClient ? varies(start.sellPrice) : undefined}
                     />
                     <Select
@@ -883,7 +926,7 @@ export function InventorySidePanel({
             disabled={!slotIds.length || !validRange || apply.isPending}
             onClick={() => void submit()}
           >
-            {apply.isPending ? "Applying…" : actionLabels[action]}
+            {apply.isPending ? "Applying…" : amending ? "Save changes" : actionLabels[action]}
           </Button>
           <Button type="button" variant="ghost" onClick={onClose}>
             Close
@@ -910,7 +953,7 @@ export function InventorySidePanel({
  * each side, and every detail — prices, references, dates, managers, notes —
  * as the one value they share, or as varying where they differ.
  */
-function Recorded({ cells }: { cells: SelectedCell[] }) {
+function Recorded({ cells, partly = false }: { cells: SelectedCell[]; partly?: boolean }) {
   const line = (label: string, read: (cell: SelectedCell) => string | null) => {
     const values = [...new Set(cells.map(read))];
     const known = values.filter((value): value is string => Boolean(value));
@@ -920,7 +963,7 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
         ? known[0]!
         : known.length === 1
           ? `${known[0]} on some nights, nothing on others`
-          : `varies — ${known.length} different`;
+          : `varies — ${known.slice(0, 4).join(" · ")}${known.length > 4 ? ` · ${known.length - 4} more` : ""}`;
     return (
       <div key={label} className="flex gap-2">
         <dt className="text-ink-500 w-32 shrink-0">{label}</dt>
@@ -934,6 +977,7 @@ function Recorded({ cells }: { cells: SelectedCell[] }) {
   return (
     <div className="border-ink-200/60 mb-4 space-y-3 rounded-lg border p-3 text-xs font-light">
       <p className="text-ink-500 text-[10px] font-medium tracking-wider uppercase">Recorded now</p>
+      {partly && <p className="text-ink-500 -mt-2">For the nights highlighted on the sheet within these dates — the others are not shown here.</p>}
       <dl className="space-y-1">
         <div className="flex gap-2">
           <dt className="text-ink-500 w-32 shrink-0">Supplier side</dt>

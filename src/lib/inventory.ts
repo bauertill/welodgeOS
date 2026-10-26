@@ -142,7 +142,8 @@ export const allowedAcquisitionMoves: Record<
   AcquisitionState,
   AcquisitionState[]
 > = {
-  NONE: ["IN_PROGRESS", "BOUGHT"],
+  // An option straight away, without first marking it in negotiation — a buyout's usual first step (Ami, 2026-10-26).
+  NONE: ["IN_PROGRESS", "OPTION", "BOUGHT"],
   IN_PROGRESS: ["OPTION", "BOUGHT", "NONE"],
   OPTION: ["BOUGHT", "IN_PROGRESS", "NONE"],
   BOUGHT: ["RELEASED"],
