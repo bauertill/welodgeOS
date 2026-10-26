@@ -2374,6 +2374,30 @@ email, *Email them the request*, *Register their quote*, and *They can't help us
 on its own once their quote is registered**; the property then shows on the sourcing task as
 quoted and is judged on that rate. While it is open the row says *Rate asked — task →*.
 
+#### A rate card for any client (2026-10-26)
+
+Sometimes the properties are contracted first and a rate card is shared with clients before
+any of them has asked (the owner, 2026-10-26). **+ Rate card for any client**, on the event's
+properties board, opens a popup of the event's properties — the *Contracted* ones ticked to
+start, any other ticked or unticked — and makes a card from them like any other: every room
+type at our event rate plus the markup, the same popup to set the rates, units, minimum stay,
+descriptions and media, and the same link. It belongs to the event, not to a client or a
+request: its name says *for any client*, the client's copy has no "Prepared for", and the
+board lists the event's such cards (with *shared*, how many answers, and the new ones in red)
+to open again.
+
+**Each client who answers starts their own sales request** (the owner's choice, 2026-10-26).
+On such a card the send popup also asks for **their company**. When they send: their company
+is found among our clients by name or short name, or added; a sales request for the event
+starts at *Proposal sent* — they had our rates — for whoever made the card, with the rooms
+they chose as its lines, the person who answered as its contact (added if new), and a
+**Contract task**; the team is told. From there it is the ordinary flow: their contracting
+details asked straight after, the offer, the agreement. **No client sees another's answer**:
+the link shows no earlier answer, and contracting details go to the request their own answer
+started. A second send from the same browser goes onto that same request, without asking for
+the company again. On our side the card's answers show who answered for which company, each
+with *Their sales request →*; the request's page shows the answer like any other.
+
 #### The contract task (2026-10-14)
 
 The owner's name for the client side of contracting: **when the client sends the rooms they
@@ -3285,6 +3309,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
 | §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
+| §4.11 Rate card for any client | **Built** (2026-10-26) | From the event's properties board, Contracted properties ticked to start; not tied to a request; each answer (with the company) finds or adds the client and starts its own sales request at Proposal sent with lines, contact and a Contract task; no one sees another's answer; a resend from the same browser stays on its request |
 | §4.11 Get rate task | **Built** (2026-10-18) | *Get rate* on a sourcing row with no rate for the request; a task for whoever handled the hotel, else the accommodation managers, with the dates, rooms and budget; email, call, register the quote; closes on its own when the quote is in |
 | §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Our agreement with hotels for US events, filled from the quote and contract. Not yet: follow-up task before an offer runs out, our hotel agreement outside the US, uploading PDFs (Till), AI check of the signed copy |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
