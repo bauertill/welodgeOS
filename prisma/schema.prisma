@@ -724,6 +724,8 @@ model Contract {
   quotations        Quotation[]
   /// The client offer this contract was made from, when it was (doc §4.11).
   offer             Offer?                 @relation("OfferContract")
+  /// The addenda to it: requests for more rooms or changes under it (doc §4.11).
+  addenda           SalesRequest[]         @relation("Addendum")
   acquisitionNights RoomNight[]            @relation("AcquisitionContract")
   salesNights       RoomNight[]            @relation("SalesContract")
 
@@ -1203,6 +1205,14 @@ enum LostReason {
   RELEASED
 }
 
+/// Where an open request is waiting, chosen under Mark as… (doc §4.11,
+/// 2026-10-30) — beside its stage, never instead of it.
+enum WaitingOn {
+  CONTRACT_SENT
+  AWAITING_APPROVAL
+  PENDING
+}
+
 /// A client's interest in accommodation, followed from the first enquiry to
 /// its end — signed, released, lost, or never answered (doc §4.11). Monday
 /// calls it a deal. It is the commercial conversation, not the rooms: a
@@ -1212,6 +1222,14 @@ model SalesRequest {
   stage      SalesRequestStage @default(INITIAL_INTEREST)
   /// Why, when it is Lost/Declined.
   lostReason LostReason?
+  /// What it is waiting on while open, and since when (doc §4.11) — cleared when it closes.
+  waitingOn    WaitingOn?
+  waitingSince DateTime?  @db.Date
+
+  /// An addendum: more rooms, or a change, under an agreement the client
+  /// already has with us (doc §4.11, 2026-10-30). Empty for a request of its own.
+  amendsContract   Contract? @relation("Addendum", fields: [amendsContractId], references: [id], onDelete: SetNull)
+  amendsContractId String?
 
   client    Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   clientId  String
@@ -1325,6 +1343,7 @@ model SalesRequest {
   @@index([eventId])
   @@index([stage])
   @@index([followUpOn])
+  @@index([amendsContractId])
 }
 
 /// A free-text post on a property or a client's history — a meeting note, a

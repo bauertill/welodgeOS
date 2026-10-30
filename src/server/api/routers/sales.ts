@@ -1,4 +1,4 @@
-import { BudgetBasis, LostReason, SalesRequestStage, type Prisma, type PrismaClient } from "generated/prisma";
+import { BudgetBasis, LostReason, SalesRequestStage, WaitingOn, type Prisma, type PrismaClient } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -14,6 +14,7 @@ import {
   openStages,
   lostReasonLabels,
   salesStageLabels,
+  waitingOnLabels,
 } from "~/lib/sales";
 import { peopleWords, wishesInWords } from "~/lib/needs";
 import { measuredPlaces } from "~/lib/scouting";
@@ -62,6 +63,8 @@ const requestInput = z.object({
   blockedUntil: day,
   valueCents: z.number().int().min(0).nullable().optional(),
   valueCurrency: z.string().length(3).nullable().optional(),
+  /** The client's contract this request is an addendum to, or null for a request of its own (doc §4.11). */
+  amendsContractId: z.string().nullable().optional(),
 });
 
 const blank = (value: string) => (value.trim() ? value.trim() : null);
@@ -74,7 +77,7 @@ function dataFrom(input: z.infer<typeof requestInput>) {
     const value = input[key];
     if (value !== undefined) data[key] = blank(value);
   }
-  for (const key of ["contactId", "eventId", "ownerId"] as const) {
+  for (const key of ["contactId", "eventId", "ownerId", "amendsContractId"] as const) {
     if (input[key] !== undefined) data[key] = input[key] || null;
   }
   for (const key of ["followUpOn", "proposalSentOn", "blockedUntil"] as const) {
@@ -98,6 +101,7 @@ const include = {
   closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
   lines: { orderBy: [{ position: "asc" }] },
   closeToPoints: { orderBy: [{ position: "asc" }] },
+  amendsContract: { select: { id: true, name: true, signedOn: true, eventId: true } },
 } satisfies Prisma.SalesRequestInclude;
 
 async function needsLinkInUse(db: Prisma.TransactionClient, token: string) {
@@ -226,6 +230,7 @@ function readable(request: Loaded) {
     proposalSentOn: date(request.proposalSentOn),
     blockedUntil: date(request.blockedUntil),
     closedOn: date(request.closedOn),
+    amendsContract: request.amendsContract?.name ?? null,
     asked:
       request.lines
         .map((line) =>
@@ -258,6 +263,7 @@ const historyFields = [
   { key: "owner", label: "Account manager" },
   { key: "contact", label: "Contact" },
   { key: "event", label: "Event" },
+  { key: "amendsContract", label: "Addendum to" },
   { key: "followUpOn", label: "Follow up on" },
   { key: "nextStep", label: "Next step" },
   { key: "proposalSentOn", label: "Proposal sent on" },
@@ -278,6 +284,23 @@ async function checkContact(db: Prisma.TransactionClient, contactId: string | nu
   if (contact?.clientId !== clientId) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "That contact does not work at this client." });
   }
+}
+
+/**
+ * An addendum is to one of the client's own contracts with us, for the
+ * request's event (doc §4.11) — anything else is refused. Returns the
+ * contract's event, which the request takes when it has none yet.
+ */
+async function checkAddendum(db: Prisma.TransactionClient, contractId: string | null | undefined, clientId: string, eventId: string | null | undefined) {
+  if (!contractId) return null;
+  const contract = await db.contract.findUnique({ where: { id: contractId }, select: { party: true, clientId: true, eventId: true } });
+  if (!contract || contract.party !== "CLIENT" || contract.clientId !== clientId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "An addendum is to one of this client's own contracts." });
+  }
+  if (eventId && eventId !== contract.eventId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "An addendum is for the same event as the contract it adds to." });
+  }
+  return contract.eventId;
 }
 
 /** "2028-07-10", required. */
@@ -656,6 +679,8 @@ export async function moveStage(tx: Prisma.TransactionClient, actorId: string | 
       closedOn: closing ? (before.closedOn && isClosed(before.stage) ? before.closedOn : today()) : null,
       ...(stage === "PROPOSAL_SENT" && !before.proposalSentOn && { proposalSentOn: today() }),
       lostReason: stage === "LOST" ? (lostReason ?? before.lostReason ?? "DECLINED") : null,
+      // A closed request waits on nothing (doc §4.11).
+      ...(closing && { waitingOn: null, waitingSince: null }),
     },
     include,
   });
@@ -1089,15 +1114,17 @@ export const salesRouter = createTRPCRouter({
           }
         }
         await checkContact(tx, fields.contactId, clientId);
+        // An addendum is for its contract's event, which it takes if none was chosen (doc §4.11).
+        const addendumEvent = await checkAddendum(tx, fields.amendsContractId, clientId, fields.eventId);
         const request = await tx.salesRequest.create({
-          data: { ...(dataFrom(fields) as Prisma.SalesRequestUncheckedCreateInput), clientId },
+          data: { ...(dataFrom(fields) as Prisma.SalesRequestUncheckedCreateInput), clientId, ...(addendumEvent && { eventId: addendumEvent }) },
           include,
         });
         await logAudit(tx, {
           actorId: ctx.session.user.id,
           entity: "SalesRequest",
           entityId: request.id,
-          summary: "Initial interest registered",
+          summary: request.amendsContract ? `Addendum to ${request.amendsContract.name} registered` : "Initial interest registered",
         });
         await logAudit(tx, {
           actorId: ctx.session.user.id,
@@ -1117,7 +1144,12 @@ export const salesRouter = createTRPCRouter({
         const { id, ...fields } = input;
         const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
         await checkContact(tx, fields.contactId, before.clientId);
-        const after = await tx.salesRequest.update({ where: { id }, data: dataFrom(fields), include });
+        const data = dataFrom(fields);
+        const contractId = fields.amendsContractId !== undefined ? fields.amendsContractId : before.amendsContractId;
+        const eventId = fields.eventId !== undefined ? fields.eventId || null : before.eventId;
+        const addendumEvent = await checkAddendum(tx, contractId, before.clientId, eventId);
+        if (addendumEvent && !eventId) data.eventId = addendumEvent;
+        const after = await tx.salesRequest.update({ where: { id }, data, include });
         const changes = diffFields(readable(before), readable(after), historyFields);
         if (changes) {
           await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: id, summary: "Updated", changes });
@@ -1150,6 +1182,33 @@ export const salesRouter = createTRPCRouter({
       ctx.db.$transaction(async (tx) => {
         if (input.contractId) await tieContract(tx, ctx.session.user.id, input.id, input.contractId);
         return moveStage(tx, ctx.session.user.id, input.id, input.stage, input.lostReason);
+      }),
+    ),
+
+  /**
+   * Say what an open request is waiting on — the contract sent, the client's
+   * approval, or pending — or clear it (doc §4.11, 2026-10-30). Its stage is
+   * left as it is.
+   */
+  setWaiting: protectedProcedure
+    .input(z.object({ id: z.string(), waitingOn: z.nativeEnum(WaitingOn).nullable() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const before = await tx.salesRequest.findUniqueOrThrow({ where: { id: input.id }, select: { stage: true, waitingOn: true } });
+        if (isClosed(before.stage) && input.waitingOn) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "The request is closed — reopen it first." });
+        }
+        if (before.waitingOn === input.waitingOn) return;
+        await tx.salesRequest.update({
+          where: { id: input.id },
+          data: { waitingOn: input.waitingOn, waitingSince: input.waitingOn ? today() : null },
+        });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "SalesRequest",
+          entityId: input.id,
+          summary: input.waitingOn ? `Marked as ${waitingOnLabels[input.waitingOn]}` : `No longer marked ${waitingOnLabels[before.waitingOn!]}`,
+        });
       }),
     ),
 

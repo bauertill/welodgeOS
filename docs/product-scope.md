@@ -1851,11 +1851,23 @@ kept as its reason (*Lost* as *Declined*).
 **On a request's page the stage is a progress bar** (2026-10-03): *Initial interest →
 Specify → Proposal sent → Negotiation → Contracted*, the steps passed ticked and the current
 one marked, each a click away. The next move is a button — *Mark specify*, then *Mark
-proposal sent*, then *Mark negotiation* or *Mark contracted*, then *Mark contracted*. *Close
-as…* asks why it was lost or declined. A request closed that way shows as such — "No reply —
-closed on 3 Oct" — with *Reopen*, which takes it back to *Proposal sent* if one was sent,
-else *Specify* if its details are in, else *Initial interest*. A contracted one shows every
-step done.
+proposal sent*, then *Mark negotiation* or *Mark contracted*, then *Mark contracted*. **Mark
+as…** (2026-10-30, Megan's testing; it was *Close as…*) offers two kinds of thing:
+
+- **What an open request is waiting on** — **Contract sent** (the agreement or addendum is
+  with the client; we are waiting for the signed copy), **Waiting for approval** (the
+  client is getting it approved on their side) or **Pending** (on hold, waiting on
+  something else). It shows beside the stage — on the request, in the list and on the
+  client's page — with the day it was marked, and can be cleared. **It never moves the
+  stage**: a rep marking *Contract sent* on a request still at *Specify* leaves it at
+  *Specify*. It is cleared when the request closes. It is the rep's marker, separate from
+  the offer's own *Agreement sent* (§ The agreement), which is still marked on the
+  agreement.
+- **Lost/Declined, and why** — as before.
+
+A request closed that way shows as such — "No reply — closed on 3 Oct" — with *Reopen*,
+which takes it back to *Proposal sent* if one was sent, else *Specify* if its details are
+in, else *Initial interest*. A contracted one shows every step done.
 
 The stage is changed by hand, with one click, in any direction — except that *Proposal
 sent* is reached from *Initial interest* or *Specify* only once a rate card has been sent:
@@ -1891,7 +1903,10 @@ proposed; and, at contracting, the client's legal details sent to our lawyers to
 the contract.
 
 - **An enquiry** is registered with just the client, what they asked for in their own
-  words, an account manager, and a date to follow up. On that date the account manager is
+  words, an account manager, and a date to follow up. Registering it opens its page; from
+  the click until that page is there, the button reads *Opening the request…* and cannot be
+  pressed again, and the page shows *Opening the request…* while it loads (2026-10-30: the
+  page took long enough to appear that a new request looked as if nothing had happened). On that date the account manager is
   reminded (§2.9) — once for each date set — until the request closes.
 - **Getting the details.** On the request, **Email the client** opens the account manager's
   own email with a message already written — to the contact's address when there is one —
@@ -2350,6 +2365,12 @@ follow-up and the signing come next and are not built yet (§12).
   Both act on the request's blocked rooms of the offer's room types.
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
+- **Before there is any offer** (2026-10-30), an open request with no rate card answer has a
+  card of its own under the stages — *The contract* (*The addendum*, for one) — saying what
+  comes next — make the offer, which blocks the rooms; draw up the agreement, send it, mark
+  it *Contract sent*; register it signed, which sells them — with **Make an offer →**. Until
+  then the way to an offer was only through a rate card answer or the contract task, so a
+  request without one — an addendum, typically — had no visible way to a sale.
 - **Who signs for We Lodge** (the owner, 2026-10-14): **Volkhard Bauer, CEO, for an event
   in the United States; Raphael Angelo Dornier, President of the Board, for every other** —
   decided by the event's country, for the client's agreement and, once it is in the
@@ -2359,6 +2380,46 @@ follow-up and the signing come next and are not built yet (§12).
   page, 2026-10-14); the client's answer steps back below it, without its
   highlight or its *Make an offer* button. Once the client's needs are in, *What they asked
   for* — their first enquiry — moves to the foot of the page as **Their first enquiry**.
+
+#### Addenda — more rooms or a change under a signed agreement (2026-10-30)
+
+A client who has signed often comes back: more rooms, other dates, a change to what was
+agreed. That is an **addendum** to their agreement (Megan, testing on 2026-10-30, for FDFA,
+whose agreement Ami had registered). **An addendum is a sales request that says which of the
+client's contracts it adds to** — followed like any request, from the offer to the signed
+copy, so its rooms, its offer, its stage and its history are its own, and the original
+agreement is left as it was.
+
+- **Starting one.** The client's page has a **Contracts** card — every contract the client
+  has with us, signed or not, with what it is worth — and each has **+ Addendum**; so does
+  each contract on a request's *Contract* card. It opens the new request form with the
+  client and **Is it an addendum?** chosen. That question is on the form whenever the chosen
+  client has a contract with us: *No — a new request of its own*, or *Addendum to …* each
+  contract. An addendum takes its contract's event, which cannot then be changed: **an
+  addendum is to one of the client's own contracts, for the same event** — anything else is
+  refused. The form then asks *What they want to add or change*, and its button says
+  *Register the addendum*.
+- **A request registered before this**, or as an ordinary one by mistake, can still be made
+  one: when the client already has a contract for the request's event, the request says so
+  over its stages — *Is this an addendum to it?* — and choosing the contract makes it one.
+  *Not an addendum* undoes it. Either is in the request's history (*Addendum to*).
+- **On the request**, a dark banner first: *Addendum to [contract], signed [date]*, linking
+  to the contract. The list and the client's page tag it **Addendum**; on the client's
+  *Contracts* card each contract lists its addenda — *Addendum 1, 2…* in the order made, with
+  their stage.
+- **Selling it** is the ordinary way: *Make an offer →* (above) blocks the rooms; the
+  document is drawn up, sent, *Mark as… Contract sent*; *✓ Client signed* sells the rooms.
+  **The signed addendum is a contract of its own**, named *Addendum to [the original
+  contract's name]*, with its own total, payments and cancellation cut-offs, tied to the
+  addendum's request — so Finances follows what the addendum adds, and the original contract's
+  terms do not change. *Decided here, to be confirmed by the owner*: the alternative —
+  adding the addendum's rooms and payments onto the original contract — would make one
+  contract's terms change after signing, which nothing else in the system does.
+- **There is no addendum wording yet.** *Draw up the agreement →* on an addendum's offer
+  opens the framework agreement, headed *Addendum* and with a warning above it that the wording
+  is the full agreement's: change it for this client with *Edit the wording*, or write the
+  addendum outside and use *Mark as sent*. An addendum template, like the framework, is for
+  the owner to provide (§9).
 
 #### The get rate task (2026-10-18)
 
@@ -3114,6 +3175,12 @@ payments and its deadlines is in the contract's history.
     be able to keep the emails from their mailbox to themselves (monday's *Can view: Only
     me*), or does everyone see every email with a client? Specified as *everyone*, the
     same as everything else in the system, until this is answered.
+13. **Addenda (§4.11, 2026-10-30).** Two things to confirm. *Its contract*: a signed
+    addendum is made a contract of its own, named *Addendum to …*, rather than changing the
+    original contract's total, payments and cut-offs — is that how Finances should follow
+    it? *Its wording*: there is no addendum template, so an addendum's document is the
+    framework agreement with a warning, to edit or replace. Should there be one, and what
+    does it say?
 
 ---
 
@@ -3136,6 +3203,8 @@ payments and its deadlines is in the contract's history.
 | **Audit trail** | The general, read-only history (§4.9) of everything that isn't a room-night — statuses, and property/client/event edits. |
 | **Place of interest** | Somewhere guests need to get to for one event: a venue (such as the stadium or the IBC), train station, airport, or other. |
 | **Client map link** | A private web page showing one client a chosen shortlist, with availability and travel times. |
+| **Addendum** | More rooms, or a change, under an agreement a client already has with us. A sales request that names the contract it adds to; once signed, a contract of its own (§4.11). |
+| **Waiting on** | What an open sales request is waiting for — *Contract sent*, *Waiting for approval*, *Pending* — marked beside its stage, never moving it (§4.11). |
 
 ---
 
@@ -3312,6 +3381,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
 | §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
 | §4.11 Rate card for any client | **Built** (2026-10-26) | From the event's properties board, Contracted properties ticked to start; not tied to a request; each answer (with the company) finds or adds the client and starts its own sales request at Proposal sent with lines, contact and a Contract task; no one sees another's answer; a resend from the same browser stays on its request |
+| §4.11 Addenda, Mark as…, the offer before there is one | **Built** (2026-10-30) | A request can be an addendum to one of the client's contracts for the same event — started with + Addendum from the client's new *Contracts* card or a request's *Contract* card, chosen on the new-request form, or set afterwards on the request; banner, *Addendum* tags, addenda listed under each contract; signed, it is its own contract named *Addendum to …*. *Close as…* became *Mark as…*, adding *Contract sent*, *Waiting for approval* and *Pending* beside the stage, cleared on closing. *Make an offer →* shown on any open request with no offer or rate card answer. Registering a request stays busy until its page opens. Not yet: addendum wording (§9.13) |
 | §4.11 Get rate task | **Built** (2026-10-18) | *Get rate* on a sourcing row with no rate for the request; a task for whoever handled the hotel, else the accommodation managers, with the dates, rooms and budget; email, call, register the quote; closes on its own when the quote is in |
 | §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Our agreement with hotels for US events, filled from the quote and contract. Not yet: follow-up task before an offer runs out, our hotel agreement outside the US, uploading PDFs (Till), AI check of the signed copy |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |

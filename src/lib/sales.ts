@@ -1,4 +1,4 @@
-import type { LostReason, SalesRequestStage } from "generated/prisma";
+import type { LostReason, SalesRequestStage, WaitingOn } from "generated/prisma";
 
 /**
  * The words for a sales request (doc §4.11): where it stands, and the fields a
@@ -52,6 +52,24 @@ export const lostReasonHints: Record<LostReason, string> = {
   NO_REPLY: "The client never came back to us.",
   RELEASED: "The client let their block go.",
 };
+
+/**
+ * What an open request is waiting on (doc §4.11, 2026-10-30), chosen under
+ * Mark as… beside the ways it can end. It says where the request stands
+ * within its stage; it never moves the stage, and it is cleared once the
+ * request closes.
+ */
+export const waitingOnLabels: Record<WaitingOn, string> = {
+  CONTRACT_SENT: "Contract sent",
+  AWAITING_APPROVAL: "Waiting for approval",
+  PENDING: "Pending",
+};
+export const waitingOnHints: Record<WaitingOn, string> = {
+  CONTRACT_SENT: "The agreement or addendum is with the client; we are waiting for the signed copy.",
+  AWAITING_APPROVAL: "The client is getting it approved on their side.",
+  PENDING: "On hold — waiting on something else before it moves.",
+};
+export const waitingOnOrder: WaitingOn[] = ["CONTRACT_SENT", "AWAITING_APPROVAL", "PENDING"];
 
 /** The client's initial interest, as they put it. */
 export const interestFields = [
