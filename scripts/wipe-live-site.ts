@@ -65,7 +65,8 @@ async function tableCounts(tables: string[], client: Pick<PrismaClient, "$queryR
 
 async function main() {
   const host = new URL(url!).host;
-  const [{ now }] = await db.$queryRawUnsafe<{ now: Date }[]>(`SELECT now()`);
+  const [row] = await db.$queryRawUnsafe<{ now: Date }[]>(`SELECT now()`);
+  const now = row!.now;
   console.log(`Database: ${host}   ${write ? "WIPING" : "dry run — nothing is changed"}   at ${now.toISOString()}`);
 
   const tables = (
