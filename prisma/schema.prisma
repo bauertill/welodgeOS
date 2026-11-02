@@ -87,6 +87,7 @@ model Event {
   projectLead           User?           @relation("EventProjectLead", fields: [projectLeadId], references: [id], onDelete: SetNull)
   projectLeadId         String?
   accommodationManagers User[]          @relation("EventAccommodationManagers")
+  rateCards             RateCard[]
 
   @@index([startDate])
 }
@@ -723,6 +724,8 @@ model Contract {
   quotations        Quotation[]
   /// The client offer this contract was made from, when it was (doc §4.11).
   offer             Offer?                 @relation("OfferContract")
+  /// The addenda to it: requests for more rooms or changes under it (doc §4.11).
+  addenda           SalesRequest[]         @relation("Addendum")
   acquisitionNights RoomNight[]            @relation("AcquisitionContract")
   salesNights       RoomNight[]            @relation("SalesContract")
 
@@ -1202,6 +1205,14 @@ enum LostReason {
   RELEASED
 }
 
+/// Where an open request is waiting, chosen under Mark as… (doc §4.11,
+/// 2026-10-30) — beside its stage, never instead of it.
+enum WaitingOn {
+  CONTRACT_SENT
+  AWAITING_APPROVAL
+  PENDING
+}
+
 /// A client's interest in accommodation, followed from the first enquiry to
 /// its end — signed, released, lost, or never answered (doc §4.11). Monday
 /// calls it a deal. It is the commercial conversation, not the rooms: a
@@ -1211,6 +1222,14 @@ model SalesRequest {
   stage      SalesRequestStage @default(INITIAL_INTEREST)
   /// Why, when it is Lost/Declined.
   lostReason LostReason?
+  /// What it is waiting on while open, and since when (doc §4.11) — cleared when it closes.
+  waitingOn    WaitingOn?
+  waitingSince DateTime?  @db.Date
+
+  /// An addendum: more rooms, or a change, under an agreement the client
+  /// already has with us (doc §4.11, 2026-10-30). Empty for a request of its own.
+  amendsContract   Contract? @relation("Addendum", fields: [amendsContractId], references: [id], onDelete: SetNull)
+  amendsContractId String?
 
   client    Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   clientId  String
@@ -1309,19 +1328,22 @@ model SalesRequest {
   nightRequests RoomNightRequest[]
   contracts     Contract[]
 
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  tasks      Task[]
-  rateCards  RateCard[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  tasks           Task[]
+  rateCards       RateCard[]
   /// The hotels' quotations for this request's group (doc §3.10).
-  quotations Quotation[]
+  quotations      Quotation[]
   /// Binding offers to the client, made from their rate card answer (doc §4.11).
-  offers     Offer[]
+  offers          Offer[]
+  /// Answers to rate cards that are on this request — a general card's answer starts one.
+  rateCardAnswers RateCardResponse[]
 
   @@index([clientId])
   @@index([eventId])
   @@index([stage])
   @@index([followUpOn])
+  @@index([amendsContractId])
 }
 
 /// A free-text post on a property or a client's history — a meeting note, a
@@ -1792,10 +1814,15 @@ model SalesRequestPoint {
 /// category at the rate we sell it for. Our buying rate is kept beside it, for
 /// us only — the client's copy never shows it.
 model RateCard {
-  id                String       @id @default(cuid())
+  id                String        @id @default(cuid())
   name              String
-  salesRequest      SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
-  salesRequestId    String
+  /// The client's request it was made for — empty for a general card, made
+  /// from the event's properties board for any client (doc §4.11, 2026-10-26).
+  salesRequest      SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  salesRequestId    String?
+  /// The event it is for — always set; a request's card has its request's event.
+  event             Event?        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId           String?
   /// Every rate on the card is in this currency (§4.5).
   currency          String
   /// The markup last applied to all selling rates, in hundredths of a percent: 15.00% is 1500.
@@ -1803,16 +1830,17 @@ model RateCard {
   /// A short word to the client above the properties.
   intro             String?
   /// The unguessable part of the client's link; empty means not shared, or switched off.
-  shareToken        String?      @unique
-  createdBy         User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  shareToken        String?       @unique
+  createdBy         User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById       String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   properties RateCardProperty[]
   responses  RateCardResponse[]
 
   @@index([salesRequestId])
+  @@index([eventId])
 }
 
 model RateCardProperty {
@@ -1859,21 +1887,27 @@ model RateCardLine {
 /// they are interested in, a note, and — if so — that their dates have changed.
 /// Each sending is kept; the newest is the current one.
 model RateCardResponse {
-  id           String    @id @default(cuid())
-  rateCard     RateCard  @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
-  rateCardId   String
-  createdAt    DateTime  @default(now())
+  id             String        @id @default(cuid())
+  rateCard       RateCard      @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  rateCardId     String
+  createdAt      DateTime      @default(now())
   /// When someone in the team first opened the card after it came in; empty while it is new to us.
-  seenAt       DateTime?
+  seenAt         DateTime?
   /// Who answered, as they gave it.
-  name         String?
-  email        String?
-  note         String?
+  name           String?
+  email          String?
+  note           String?
+  /// The company that answered a general card, as they gave it (doc §4.11).
+  company        String?
+  /// The sales request this answer is on: the card's own, or — for a general
+  /// card — the one the answer started.
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId String?
   /// Their dates have changed: the new ones, and a word on it.
-  datesChanged Boolean   @default(false)
-  newCheckIn   DateTime? @db.Date
-  newCheckOut  DateTime? @db.Date
-  datesNote    String?
+  datesChanged   Boolean       @default(false)
+  newCheckIn     DateTime?     @db.Date
+  newCheckOut    DateTime?     @db.Date
+  datesNote      String?
 
   items  RateCardResponseItem[]
   offers Offer[]

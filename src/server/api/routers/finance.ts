@@ -34,6 +34,8 @@ const contractInclude = {
   property: { select: { id: true, name: true } },
   client: { select: { id: true, name: true, shortName: true } },
   salesRequest: { select: { id: true, stage: true } },
+  /** Requests for more rooms or changes under it (doc §4.11). */
+  addenda: { select: { id: true, stage: true, waitingOn: true, createdAt: true }, orderBy: { createdAt: "asc" } },
   owner: person,
   _count: { select: { payments: true, cancellations: true, acquisitionNights: true, salesNights: true } },
 } satisfies Prisma.ContractInclude;
@@ -99,11 +101,13 @@ export const financeRouter = createTRPCRouter({
         party: z.nativeEnum(ContractParty).optional(),
         salesRequestId: z.string().optional(),
         propertyId: z.string().optional(),
+        /** A client's contracts, for their page and for choosing what an addendum adds to (doc §4.11). */
+        clientId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const contracts = await ctx.db.contract.findMany({
-        where: { eventId: input.eventId, party: input.party, salesRequestId: input.salesRequestId, propertyId: input.propertyId },
+        where: { eventId: input.eventId, party: input.party, salesRequestId: input.salesRequestId, propertyId: input.propertyId, clientId: input.clientId },
         orderBy: [{ event: { startDate: "asc" } }, { name: "asc" }],
         include: contractInclude,
       });

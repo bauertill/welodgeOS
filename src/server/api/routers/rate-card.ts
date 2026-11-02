@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { env } from "~/env";
-import { nightsBetween, parseDay } from "~/lib/dates";
+import { nightsBetween, parseDay, today } from "~/lib/dates";
 import { clientMedia, photoSrc } from "~/lib/media";
 import { measuredPlaces, nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
@@ -34,16 +34,23 @@ const answerInclude = { orderBy: { createdAt: "desc" }, include: { items: true }
 
 const cardInclude = {
   responses: answerInclude,
+  // The event a card is for — its request's, or, for a general card, its own (doc §4.11).
+  event: {
+    select: {
+      id: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      placesOfInterest: {
+        select: { id: true, name: true, category: true, notes: true, latitude: true, longitude: true, layer: { select: { measured: true, name: true, color: true } } },
+      },
+    },
+  },
   salesRequest: {
     select: {
       id: true,
       ownerId: true,
       client: { select: { name: true } },
-      event: { select: { id: true, name: true, startDate: true, endDate: true, placesOfInterest: {
-            select: { id: true, name: true, category: true, notes: true, latitude: true, longitude: true, layer: { select: { measured: true, name: true, color: true } } },
-          },
-        },
-      },
       lines: { orderBy: { position: "asc" } },
     },
   },
@@ -74,9 +81,15 @@ const cardInclude = {
 } satisfies Prisma.RateCardInclude;
 type LoadedCard = Prisma.RateCardGetPayload<{ include: typeof cardInclude }>;
 
+/** Where a card's history goes: its request's, or — a general card — its event's (doc §4.11). */
+const cardHistory = (card: { id: string; salesRequestId: string | null; eventId: string | null }) =>
+  card.salesRequestId
+    ? { entity: "SalesRequest", entityId: card.salesRequestId }
+    : { entity: card.eventId ? "Event" : "RateCard", entityId: card.eventId ?? card.id };
+
 /** The card as it is read: each property with how far it is from the nearest venue (worked out, never stored). */
 function shape(card: LoadedCard) {
-  const places = card.salesRequest.event?.placesOfInterest ?? [];
+  const places = card.event?.placesOfInterest ?? [];
   const venues = measuredPlaces(places);
   return {
     id: card.id,
@@ -86,7 +99,8 @@ function shape(card: LoadedCard) {
     intro: card.intro,
     shareToken: card.shareToken,
     updatedAt: card.updatedAt,
-    clientName: card.salesRequest.client.name,
+    /** Empty for a general card — for any client (doc §4.11, 2026-10-26). */
+    clientName: card.salesRequest?.client.name ?? null,
     /** The client's answers from its link, newest first (doc §4.11). */
     answers: card.responses.map((response) => ({
       id: response.id,
@@ -94,6 +108,9 @@ function shape(card: LoadedCard) {
       isNew: response.seenAt === null,
       name: response.name,
       email: response.email,
+      company: response.company,
+      /** The request it is on — for a general card, the one it started. */
+      salesRequestId: response.salesRequestId,
       note: response.note,
       datesChanged: response.datesChanged,
       newCheckIn: response.newCheckIn,
@@ -111,9 +128,10 @@ function shape(card: LoadedCard) {
         note: item.note,
       })),
     })),
-    salesRequestId: card.salesRequest.id,
-    event: card.salesRequest.event ? { name: card.salesRequest.event.name, startDate: card.salesRequest.event.startDate, endDate: card.salesRequest.event.endDate } : null,
-    asked: card.salesRequest.lines.map((line) => ({ rooms: line.rooms, roomType: line.roomType, checkIn: line.checkIn, checkOut: line.checkOut })),
+    salesRequestId: card.salesRequest?.id ?? null,
+    eventId: card.eventId,
+    event: card.event ? { name: card.event.name, startDate: card.event.startDate, endDate: card.event.endDate } : null,
+    asked: (card.salesRequest?.lines ?? []).map((line) => ({ rooms: line.rooms, roomType: line.roomType, checkIn: line.checkIn, checkOut: line.checkOut })),
     venues: venues.map((place) => ({
       id: place.id,
       name: place.name,
@@ -177,15 +195,28 @@ async function loadCard(db: Db, where: Prisma.RateCardWhereUniqueInput) {
 }
 
 export const rateCardRouter = createTRPCRouter({
-  /** A new card from the properties ticked on a sourcing task: every room category, bought at its event rate, sold at it plus the markup. */
+  /**
+   * A new card from the properties ticked on a sourcing task — or, with no
+   * request, a general card for any client of the event, from its properties
+   * board (doc §4.11, 2026-10-26): every room category, bought at its event
+   * rate, sold at it plus the markup.
+   */
   create: protectedProcedure
-    .input(z.object({ salesRequestId: z.string(), propertyIds: z.array(z.string()).min(1, "Tick at least one property.").max(30) }))
+    .input(
+      z
+        .object({ salesRequestId: z.string().optional(), eventId: z.string().optional(), propertyIds: z.array(z.string()).min(1, "Tick at least one property.").max(30) })
+        .refine((input) => input.salesRequestId ?? input.eventId, "A rate card is for a request or an event."),
+    )
     .mutation(async ({ ctx, input }) => {
       return ctx.db.$transaction(async (tx) => {
-        const request = await tx.salesRequest.findUniqueOrThrow({
-          where: { id: input.salesRequestId },
-          select: { eventId: true, budgetCurrency: true, client: { select: { name: true } }, event: { select: { name: true } }, _count: { select: { rateCards: true } } },
-        });
+        const request = input.salesRequestId
+          ? await tx.salesRequest.findUniqueOrThrow({
+              where: { id: input.salesRequestId },
+              select: { eventId: true, budgetCurrency: true, client: { select: { name: true } }, event: { select: { name: true } }, _count: { select: { rateCards: true } } },
+            })
+          : null;
+        const eventId = request?.eventId ?? input.eventId ?? null;
+        const event = eventId ? await tx.event.findUnique({ where: { id: eventId }, select: { name: true, country: true, _count: { select: { rateCards: { where: { salesRequestId: null } } } } } }) : null;
         const properties = await tx.property.findMany({
           where: { id: { in: input.propertyIds } },
           select: {
@@ -195,12 +226,16 @@ export const rateCardRouter = createTRPCRouter({
             photos: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], take: CARD_PHOTOS, select: { id: true } },
           },
         });
-        const rates = request.eventId ? (await eventRates(tx, { propertyIds: input.propertyIds, eventId: request.eventId })).get(request.eventId) : undefined;
-        const currency = request.budgetCurrency ?? [...(rates?.values() ?? [])][0]?.currency ?? "USD";
+        const rates = eventId ? (await eventRates(tx, { propertyIds: input.propertyIds, eventId })).get(eventId) : undefined;
+        const currency = request?.budgetCurrency ?? [...(rates?.values() ?? [])][0]?.currency ?? "USD";
+        const name = request
+          ? `Rate card${request._count.rateCards ? ` ${request._count.rateCards + 1}` : ""} — ${request.client.name}${request.event ? ` — ${request.event.name}` : ""}`
+          : `Rate card${event?._count.rateCards ? ` ${event._count.rateCards + 1}` : ""} — ${event?.name ?? "event"} — for any client`;
         const card = await tx.rateCard.create({
           data: {
-            name: `Rate card${request._count.rateCards ? ` ${request._count.rateCards + 1}` : ""} — ${request.client.name}${request.event ? ` — ${request.event.name}` : ""}`,
-            salesRequestId: input.salesRequestId,
+            name,
+            salesRequestId: input.salesRequestId ?? null,
+            eventId,
             currency,
             markupBasisPoints: DEFAULT_MARKUP,
             createdById: ctx.session.user.id,
@@ -231,10 +266,15 @@ export const rateCardRouter = createTRPCRouter({
             },
           },
         });
-        await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.salesRequestId, summary: `Rate card made: ${card.name}` });
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: input.salesRequestId ? "SalesRequest" : "Event",
+          entityId: input.salesRequestId ?? eventId ?? card.id,
+          summary: `Rate card made: ${card.name}`,
+        });
         // Any property with no photos or video yet: a task to get them, as the card cannot be shared without (doc §4.11).
         for (const property of properties.filter((one) => !hasMedia(one))) {
-          await ensureGetMediaTask(tx, { propertyId: property.id, salesRequestId: input.salesRequestId, actorId: ctx.session.user.id });
+          await ensureGetMediaTask(tx, { propertyId: property.id, salesRequestId: input.salesRequestId ?? null, eventId, actorId: ctx.session.user.id });
         }
         return { id: card.id };
       });
@@ -257,10 +297,26 @@ export const rateCardRouter = createTRPCRouter({
     }),
   ),
 
+  /** An event's general rate cards — for any client, made from its properties board (doc §4.11). */
+  forEvent: protectedProcedure.input(z.object({ eventId: z.string() })).query(({ ctx, input }) =>
+    ctx.db.rateCard.findMany({
+      where: { eventId: input.eventId, salesRequestId: null },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        shareToken: true,
+        _count: { select: { properties: true, responses: true } },
+        responses: { where: { seenAt: null }, select: { id: true } },
+      },
+    }),
+  ),
+
   /** How many requests have an answer from the client nobody in the team has opened yet — the red count on Sales (doc §4.11). */
   newAnswers: protectedProcedure.query(async ({ ctx }) => {
-    const unseen = await ctx.db.rateCardResponse.findMany({ where: { seenAt: null }, select: { rateCard: { select: { salesRequestId: true } } } });
-    return { requests: new Set(unseen.map((response) => response.rateCard.salesRequestId)).size };
+    const unseen = await ctx.db.rateCardResponse.findMany({ where: { seenAt: null }, select: { salesRequestId: true, rateCardId: true } });
+    return { requests: new Set(unseen.map((response) => response.salesRequestId ?? response.rateCardId)).size };
   }),
 
   /**
@@ -269,7 +325,8 @@ export const rateCardRouter = createTRPCRouter({
    */
   answersForRequest: protectedProcedure.input(z.object({ salesRequestId: z.string() })).query(async ({ ctx, input }) => {
     const responses = await ctx.db.rateCardResponse.findMany({
-      where: { rateCard: { salesRequestId: input.salesRequestId } },
+      // On the request: its own cards' answers, and a general card's answer that started it.
+      where: { salesRequestId: input.salesRequestId },
       orderBy: { createdAt: "desc" },
       include: { items: true, rateCard: { select: { id: true, name: true, currency: true } } },
     });
@@ -280,6 +337,9 @@ export const rateCardRouter = createTRPCRouter({
       card: response.rateCard,
       name: response.name,
       email: response.email,
+      company: response.company,
+      /** The request it is on — for a general card, the one it started. */
+      salesRequestId: response.salesRequestId,
       note: response.note,
       datesChanged: response.datesChanged,
       newCheckIn: response.newCheckIn,
@@ -300,7 +360,7 @@ export const rateCardRouter = createTRPCRouter({
 
   /** The request's answers have been read — seeing them on its page does it. */
   markRequestSeen: protectedProcedure.input(z.object({ salesRequestId: z.string() })).mutation(async ({ ctx, input }) => {
-    await ctx.db.rateCardResponse.updateMany({ where: { rateCard: { salesRequestId: input.salesRequestId }, seenAt: null }, data: { seenAt: new Date() } });
+    await ctx.db.rateCardResponse.updateMany({ where: { salesRequestId: input.salesRequestId, seenAt: null }, data: { seenAt: new Date() } });
     return { ok: true };
   }),
 
@@ -357,7 +417,7 @@ export const rateCardRouter = createTRPCRouter({
         }
       }
       await ctx.db.$transaction(async (tx) => {
-        const card = await tx.rateCard.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, salesRequestId: true, properties: { select: { id: true, lines: { select: { id: true } } } } } });
+        const card = await tx.rateCard.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, salesRequestId: true, eventId: true, properties: { select: { id: true, lines: { select: { id: true } } } } } });
         const ownProperties = new Set(card.properties.map((property) => property.id));
         const ownLines = new Set(card.properties.flatMap((property) => property.lines.map((line) => line.id)));
         await tx.rateCard.update({
@@ -383,14 +443,14 @@ export const rateCardRouter = createTRPCRouter({
             await tx.rateCardLine.update({ where: { id: line.id }, data: { sellingCents: line.sellingCents, available: line.available, minNights: line.minNights } });
           }
         }
-        await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card saved: ${input.name}` });
+        await logAudit(tx, { actorId: ctx.session.user.id, ...cardHistory(card), summary: `Rate card saved: ${input.name}` });
       });
       return { ok: true };
     }),
 
   remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
     const card = await ctx.db.rateCard.delete({ where: { id: input.id } });
-    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card deleted: ${card.name}` });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, ...cardHistory(card), summary: `Rate card deleted: ${card.name}` });
     return { ok: true };
   }),
 
@@ -415,11 +475,11 @@ export const rateCardRouter = createTRPCRouter({
       const card = await tx.rateCard.update({
         where: { id: input.id },
         data: { shareToken: randomBytes(24).toString("base64url") },
-        select: { shareToken: true, salesRequestId: true, name: true, salesRequest: { select: { stage: true } } },
+        select: { id: true, shareToken: true, salesRequestId: true, eventId: true, name: true, salesRequest: { select: { stage: true } } },
       });
-      await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: card.salesRequestId, summary: `Rate card link made: ${card.name}` });
-      const early = card.salesRequest.stage === "INITIAL_INTEREST" || card.salesRequest.stage === "SPECIFY";
-      if (early) await moveStage(tx, ctx.session.user.id, card.salesRequestId, "PROPOSAL_SENT");
+      await logAudit(tx, { actorId: ctx.session.user.id, ...cardHistory(card), summary: `Rate card link made: ${card.name}` });
+      const early = card.salesRequest?.stage === "INITIAL_INTEREST" || card.salesRequest?.stage === "SPECIFY";
+      if (early && card.salesRequestId) await moveStage(tx, ctx.session.user.id, card.salesRequestId, "PROPOSAL_SENT");
       return { shareToken: card.shareToken!, movedToProposal: early };
     });
   }),
@@ -442,13 +502,13 @@ export const rateCardRouter = createTRPCRouter({
       const card = await ctx.db.rateCard.findUnique({
         where: { shareToken: input.token },
         select: {
-          salesRequest: { select: { eventId: true } },
+          eventId: true,
           properties: { where: { id: input.rateCardPropertyId }, select: { property: { select: { latitude: true, longitude: true } } } },
         },
       });
       const from = card?.properties[0]?.property;
       const place = await ctx.db.placeOfInterest.findFirst({
-        where: { id: input.placeId, eventId: card?.salesRequest.eventId ?? "none" },
+        where: { id: input.placeId, eventId: card?.eventId ?? "none" },
         select: { latitude: true, longitude: true },
       });
       if (!from?.latitude || !from.longitude || !place) throw new TRPCError({ code: "NOT_FOUND", message: "That journey cannot be worked out." });
@@ -471,18 +531,20 @@ export const rateCardRouter = createTRPCRouter({
    * 2026-10-14): asked for right after they send their request, and until
    * they are in — what the agreement is drawn up with.
    */
-  contracting: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
-    const card = await ctx.db.rateCard.findUnique({ where: { shareToken: input.token }, select: { salesRequestId: true } });
-    if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
-    return clientContracting(ctx.db, card.salesRequestId);
-  }),
+  contracting: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), responseId: z.string().nullable().default(null) }))
+    .query(async ({ ctx, input }) => {
+      const requestId = await answeringRequest(ctx.db, input.token, input.responseId);
+      // A general card before its answer: nobody to ask yet.
+      return requestId ? { general: false, ...(await clientContracting(ctx.db, requestId)) } : { general: true, submittedAt: null, values: null };
+    }),
 
   submitContracting: publicProcedure
-    .input(z.object({ token: z.string().min(20).max(100), values: clientContractingValues }))
+    .input(z.object({ token: z.string().min(20).max(100), responseId: z.string().nullable().default(null), values: clientContractingValues }))
     .mutation(async ({ ctx, input }) => {
-      const card = await ctx.db.rateCard.findUnique({ where: { shareToken: input.token }, select: { salesRequestId: true } });
-      if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
-      await ctx.db.$transaction((tx) => saveClientContracting(tx, card.salesRequestId, input.values, "from the rate card"));
+      const requestId = await answeringRequest(ctx.db, input.token, input.responseId);
+      if (!requestId) throw new TRPCError({ code: "BAD_REQUEST", message: "Send your request first — your company details go with it." });
+      await ctx.db.$transaction((tx) => saveClientContracting(tx, requestId, input.values, "from the rate card"));
       await deliverImmediate(ctx.db);
       return { ok: true };
     }),
@@ -499,6 +561,10 @@ export const rateCardRouter = createTRPCRouter({
         token: z.string().min(20).max(100),
         name: z.string().trim().max(200),
         email: z.string().trim().max(300),
+        /** Their company — asked on a general card, where we do not know them yet (doc §4.11). */
+        company: z.string().trim().max(200).default(""),
+        /** On a general card, their earlier answer from this browser: a new one goes onto the same request. */
+        previousResponseId: z.string().nullable().default(null),
         note: z.string().max(3000),
         dateChange: z.object({ checkIn: z.string().max(10), checkOut: z.string().max(10), note: z.string().max(2000) }).nullable(),
         items: z
@@ -533,6 +599,7 @@ export const rateCardRouter = createTRPCRouter({
             name: true,
             currency: true,
             createdById: true,
+            eventId: true,
             salesRequest: { select: { id: true, ownerId: true, client: { select: { name: true } } } },
             properties: { select: { property: { select: { name: true } }, lines: { select: { id: true, name: true, sellingCents: true, available: true, minNights: true } } } },
           },
@@ -551,9 +618,23 @@ export const rateCardRouter = createTRPCRouter({
             throw new TRPCError({ code: "BAD_REQUEST", message: `${line.propertyName}, ${line.name}: the minimum stay is ${line.minNights} nights.` });
           }
         }
+        // A general card's answer starts a sales request for whoever answered (doc §4.11, 2026-10-26).
+        const earlier =
+          !card.salesRequest && input.previousResponseId
+            ? await tx.rateCardResponse.findFirst({
+                where: { id: input.previousResponseId, rateCardId: card.id, salesRequestId: { not: null } },
+                select: { salesRequest: { select: { id: true, ownerId: true, client: { select: { name: true } } } } },
+              })
+            : null;
+        const request =
+          card.salesRequest ??
+          earlier?.salesRequest ??
+          (await requestFromAnswer(tx, card, input, items.map((item) => ({ ...item, roomName: lines.get(item.lineId)!.name })), day));
         const response = await tx.rateCardResponse.create({
           data: {
             rateCardId: card.id,
+            salesRequestId: request.id,
+            company: input.company || null,
             name: input.name || null,
             email: input.email || null,
             note: input.note.trim() || null,
@@ -587,22 +668,22 @@ export const rateCardRouter = createTRPCRouter({
         await logAudit(tx, {
           actorId: null,
           entity: "SalesRequest",
-          entityId: card.salesRequest.id,
+          entityId: request.id,
           summary: `Rate card answered by the client: ${card.name}`,
           changes: said || input.note.trim() || null,
         });
         await notify(tx, {
-          to: [card.salesRequest.ownerId, card.createdById],
+          to: [request.ownerId, card.createdById],
           actorId: null,
           kind: "RATE_CARD_ANSWERED",
-          title: `${card.salesRequest.client.name} answered the rate card${said ? `: ${said}` : ""}`,
+          title: `${request.client.name} answered the rate card${said ? `: ${said}` : ""}${card.salesRequest ? "" : " — a new sales request"}`,
           body: input.note.trim() || null,
-          link: `/sales/${card.salesRequest.id}`,
+          link: `/sales/${request.id}`,
         });
         // Rooms chosen: the account manager's contract task, to put the offer together (doc §4.11).
         if (items.length) {
           await ensureContractTask(tx, {
-            salesRequestId: card.salesRequest.id,
+            salesRequestId: request.id,
             cardMadeById: card.createdById,
             currency: card.currency,
             items: items.map((item) => {
@@ -611,7 +692,7 @@ export const rateCardRouter = createTRPCRouter({
             }),
           });
         }
-        return { id: response.id };
+        return { id: response.id, salesRequestId: request.id };
       });
       await deliverImmediate(ctx.db);
       return result;
@@ -695,6 +776,68 @@ export const rateCardRouter = createTRPCRouter({
 });
 
 /** What the client sees: no buying rates, only the rates offered, only properties offering one. */
+/**
+ * Someone answered a general card (doc §4.11, 2026-10-26): their company is
+ * found among our clients — by name or short name — or added; a sales request
+ * for the event starts, for whoever made the card, at *Proposal sent* — they
+ * had our rate card — with the rooms they chose as its lines, and whoever
+ * answered as its contact.
+ */
+async function requestFromAnswer(
+  tx: Prisma.TransactionClient,
+  card: { name: string; eventId: string | null; createdById: string | null },
+  input: { company: string; name: string; email: string },
+  items: { rooms: number; checkIn: string; checkOut: string; roomName: string }[],
+  day: (text: string) => Date | null,
+) {
+  const company = input.company.trim();
+  if (!company) throw new TRPCError({ code: "BAD_REQUEST", message: "Please give your company's name." });
+  const client =
+    (await tx.client.findFirst({
+      where: { OR: [{ name: { equals: company, mode: "insensitive" } }, { shortName: { equals: company, mode: "insensitive" } }] },
+      select: { id: true, name: true },
+    })) ?? (await tx.client.create({ data: { name: company }, select: { id: true, name: true } }));
+  const contact = input.name
+    ? ((await tx.clientContact.findFirst({
+        where: { clientId: client.id, OR: [...(input.email ? [{ email: { equals: input.email, mode: "insensitive" as const } }] : []), { name: { equals: input.name, mode: "insensitive" } }] },
+        select: { id: true },
+      })) ?? (await tx.clientContact.create({ data: { clientId: client.id, name: input.name, email: input.email || null }, select: { id: true } })))
+    : null;
+  const request = await tx.salesRequest.create({
+    data: {
+      clientId: client.id,
+      contactId: contact?.id ?? null,
+      eventId: card.eventId,
+      ownerId: card.createdById,
+      stage: "PROPOSAL_SENT",
+      proposalSentOn: today(),
+      description: `Answered the rate card "${card.name}".`,
+      detailedAt: items.length ? new Date() : null,
+      lines: {
+        create: items.map((item, position) => ({ rooms: item.rooms, roomType: item.roomName, checkIn: day(item.checkIn), checkOut: day(item.checkOut), position })),
+      },
+    },
+    select: { id: true, ownerId: true, client: { select: { name: true } } },
+  });
+  await logAudit(tx, { actorId: null, entity: "SalesRequest", entityId: request.id, summary: `Registered from the rate card "${card.name}", answered by ${input.name || client.name}` });
+  await logAudit(tx, { actorId: null, entity: "Client", entityId: client.id, summary: "Sales request added, from a rate card answer" });
+  return request;
+}
+
+/**
+ * The request a client on a card's link is answering for: the card's own, or —
+ * on a general card — the one their own answer started, known by its id, which
+ * only they were given (doc §4.11). Null on a general card before they answer.
+ */
+async function answeringRequest(db: PrismaClient, token: string, responseId: string | null) {
+  const card = await db.rateCard.findUnique({ where: { shareToken: token }, select: { id: true, salesRequestId: true } });
+  if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
+  if (card.salesRequestId) return card.salesRequestId;
+  if (!responseId) return null;
+  const answer = await db.rateCardResponse.findFirst({ where: { id: responseId, rateCardId: card.id }, select: { salesRequestId: true } });
+  return answer?.salesRequestId ?? null;
+}
+
 export function clientCopy(card: ReturnType<typeof shape>) {
   return {
     name: card.name,
@@ -702,7 +845,9 @@ export function clientCopy(card: ReturnType<typeof shape>) {
     intro: card.intro,
     clientName: card.clientName,
     /** Their last answer, to change and send again. */
-    lastAnswer: card.answers[0] ? (({ isNew: _isNew, ...answer }) => answer)(card.answers[0]) : null,
+    /** A general card's link is for anyone: no one is shown another's answer (doc §4.11). */
+    general: card.salesRequestId === null,
+    lastAnswer: card.salesRequestId && card.answers[0] ? (({ isNew: _isNew, company: _company, ...answer }) => answer)(card.answers[0]) : null,
     event: card.event,
     asked: card.asked,
     /** For the client's map (doc §4.11): the places distances are measured to — the venues. */

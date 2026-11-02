@@ -160,6 +160,8 @@ type ReviewData = {
   templateLabel: string;
   /** Where gaps are filled, in words. */
   fillFrom: string;
+  /** Said above the document, when there is something to warn of. */
+  notice?: string;
 };
 
 /**
@@ -221,6 +223,8 @@ function ReviewShell({
         ) : (
           <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-[13px] text-[#0a7a47]">✓ Nothing missing. Check it reads right, save it as a PDF and send it by DocuSign.</p>
         )}
+
+        {data.notice && <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 text-[13px] text-[#7a5410]">{data.notice}</p>}
 
         {data.edited && (
           <p className="bg-brand-50 text-brand-800 rounded-xl px-5 py-3 text-[13px] font-light">
@@ -329,8 +333,12 @@ export function AgreementReview({ offerId }: { offerId: string }) {
       data={{
         backHref: `/sales/${data.salesRequestId}`,
         backLabel: `${data.clientName} · ${data.eventName}`,
-        title: "Agreement",
+        title: data.amends ? "Addendum" : "Agreement",
         party: "client",
+        // No addendum wording is in the system yet: say so rather than pass the framework off as one (doc §4.11).
+        notice: data.amends
+          ? `This is an addendum to ${data.amends}. The system only has the framework agreement's wording, shown below — change it for this client with “Edit the wording”, or write the addendum outside and use Mark as sent.`
+          : undefined,
         text: data.text,
         edited: data.edited,
         sentOn: data.sentOn,

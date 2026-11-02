@@ -96,6 +96,7 @@ async function filledAgreement(db: PrismaClient, offerId: string) {
           signatory2Designation: true,
           client: { select: { name: true } },
           event: { select: { name: true, startDate: true, endDate: true, country: true } },
+          amendsContract: { select: { name: true } },
         },
       },
     },
@@ -147,7 +148,7 @@ async function closeOffer(
 ) {
   const offer = await tx.offer.findUniqueOrThrow({
     where: { id: offerId },
-    include: { ...include, salesRequest: { select: { id: true, clientId: true, eventId: true, ownerId: true, client: { select: { name: true } }, event: { select: { name: true } } } } },
+    include: { ...include, salesRequest: { select: { id: true, clientId: true, eventId: true, ownerId: true, client: { select: { name: true } }, event: { select: { name: true } }, amendsContract: { select: { name: true } } } } },
   });
   if (offer.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: "This offer is not open any more." });
   const request = offer.salesRequest;
@@ -157,7 +158,8 @@ async function closeOffer(
   const contract = await tx.contract.create({
     data: {
       party: "CLIENT",
-      name: `${request.client.name} — ${request.event.name} agreement`,
+      // An addendum's signed copy is its own contract, named for the one it adds to (doc §4.11).
+      name: request.amendsContract ? `Addendum to ${request.amendsContract.name}` : `${request.client.name} — ${request.event.name} agreement`,
       eventId: request.eventId,
       clientId: request.clientId,
       salesRequestId: request.id,
@@ -266,30 +268,29 @@ export const offerRouter = createTRPCRouter({
         tradeName: true,
         signatory1Name: true,
         client: { select: { name: true } },
-        rateCards: {
+        // The answers on this request — on its own cards, or the general card's answer that started it (doc §4.11).
+        rateCardAnswers: {
           orderBy: { createdAt: "desc" },
           select: {
-            currency: true,
-            properties: { select: { propertyId: true } },
-            responses: {
-              orderBy: { createdAt: "desc" },
-              select: {
-                id: true,
-                createdAt: true,
-                items: { select: { rooms: true, checkIn: true, checkOut: true, sellingCents: true, line: { select: { categoryId: true } } } },
-              },
-            },
+            id: true,
+            createdAt: true,
+            rateCard: { select: { currency: true, properties: { select: { propertyId: true } } } },
+            items: { select: { rooms: true, checkIn: true, checkOut: true, sellingCents: true, line: { select: { categoryId: true } } } },
           },
         },
+        rateCards: { orderBy: { createdAt: "desc" }, select: { currency: true, properties: { select: { propertyId: true } } } },
       },
     });
     if (!request.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — an offer's rooms belong to an event." });
-    const responses = request.rateCards.flatMap((card) => card.responses.map((response) => ({ ...response, currency: card.currency })));
+    const responses = request.rateCardAnswers.map((response) => ({ ...response, currency: response.rateCard.currency }));
     const answer =
       (input.responseId ? responses.find((response) => response.id === input.responseId) : null) ??
       responses.filter((response) => response.items.length).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ??
       null;
-    const onCards = new Set(request.rateCards.flatMap((card) => card.properties.map((property) => property.propertyId)));
+    const onCards = new Set([
+      ...request.rateCards.flatMap((card) => card.properties.map((property) => property.propertyId)),
+      ...request.rateCardAnswers.flatMap((answer) => answer.rateCard.properties.map((property) => property.propertyId)),
+    ]);
     const entries = await ctx.db.scoutingEntry.findMany({
       where: { eventId: request.eventId },
       select: { property: { select: { id: true, name: true, categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true } } } } },
@@ -431,6 +432,8 @@ export const offerRouter = createTRPCRouter({
       salesRequestId: request.id,
       clientName: request.client.name,
       eventName: request.event!.name,
+      /** An addendum's: the contract it adds to (doc §4.11). */
+      amends: request.amendsContract?.name ?? null,
       validUntil: offer.validUntil,
       sentOn: offer.agreementSentOn,
       text: offer.agreementText ?? filled,
@@ -515,7 +518,7 @@ export const offerRouter = createTRPCRouter({
     const [request, answer] = await Promise.all([
       ctx.db.salesRequest.findUniqueOrThrow({ where: { id: input.salesRequestId }, select: { id: true, tradeName: true, signatory1Name: true } }),
       ctx.db.rateCardResponse.findFirst({
-        where: { rateCard: { salesRequestId: input.salesRequestId }, items: { some: {} } },
+        where: { salesRequestId: input.salesRequestId, items: { some: {} } },
         orderBy: { createdAt: "desc" },
         select: { id: true },
       }),

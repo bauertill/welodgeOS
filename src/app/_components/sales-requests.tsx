@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData } from "@tanstack/react-query";
-import type { LostReason, SalesRequestStage } from "generated/prisma";
+import type { LostReason, SalesRequestStage, WaitingOn } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -34,6 +34,9 @@ import {
   salesStageLabels,
   salesStageOrder,
   salesStageStyles,
+  waitingOnHints,
+  waitingOnLabels,
+  waitingOnOrder,
   type ContractingKey,
   type InterestKey,
 } from "~/lib/sales";
@@ -54,6 +57,26 @@ export function StageBadge({ stage }: { stage: SalesRequestStage }) {
       className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${salesStageStyles[stage]}`}
     >
       {salesStageLabels[stage]}
+    </span>
+  );
+}
+
+/** What an open request is waiting on (doc §4.11), beside its stage. */
+export function WaitingBadge({ waitingOn, since }: { waitingOn: WaitingOn | null; since?: Date | null }) {
+  if (!waitingOn) return null;
+  return (
+    <span title={waitingOnHints[waitingOn]} className="inline-block rounded-full bg-[#fff4e0] px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-[#8a5a00]">
+      {waitingOnLabels[waitingOn]}
+      {since ? ` · ${formatDate(since)}` : ""}
+    </span>
+  );
+}
+
+/** A request for more rooms or a change under an agreement the client already has (doc §4.11). */
+export function AddendumBadge({ contractName }: { contractName?: string }) {
+  return (
+    <span title={contractName ? `Addendum to ${contractName}` : undefined} className="bg-ink-900 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-white">
+      Addendum
     </span>
   );
 }
@@ -242,7 +265,9 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   <Link href={`/sales/${request.id}`} className="text-ink-900 hover:text-brand-700 font-medium">
                     {request.client.name}
                   </Link>{" "}
-                  {!request.detailedAt && <RequestKind request={request} />}
+                  {request.amendsContract && <AddendumBadge contractName={request.amendsContract.name} />}{" "}
+                  {!request.detailedAt && !request.amendsContract && <RequestKind request={request} />}
+                  <WaitingBadge waitingOn={request.waitingOn} />
                   {request.newAnswers > 0 && <NewAnswers count={request.newAnswers} />}
                   {request.contact && <span className="text-ink-500 block text-xs">{request.contact.name}</span>}
                 </td>
@@ -299,8 +324,12 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
 
 // --- Registering a new request --------------------------------------------------
 
-/** The initial-interest form (doc §4.11): who asked, for what, and when to follow up. */
-export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: string; clientId?: string }) {
+/**
+ * The initial-interest form (doc §4.11): who asked, for what, and when to
+ * follow up — or, for a client who already has a contract with us, an
+ * addendum to it: more rooms, or a change.
+ */
+export function NewSalesRequestForm({ me, clientId: presetClientId, addendumTo }: { me: string; clientId?: string; addendumTo?: string }) {
   const router = useRouter();
   const utils = api.useUtils();
   const clients = api.clients.list.useQuery();
@@ -318,6 +347,14 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
   );
   const [problem, setProblem] = useState<string | null>(null);
   const client = api.clients.byId.useQuery({ id: clientId }, { enabled: Boolean(clientId) });
+  // What an addendum can add to: the client's own contracts with us (doc §4.11).
+  const contracts = api.finance.contracts.useQuery({ clientId, party: "CLIENT" }, { enabled: Boolean(clientId) });
+  const [amendsContractId, setAmendsContractId] = useState(addendumTo ?? "");
+  const amends = (contracts.data ?? []).find((contract) => contract.id === amendsContractId);
+  // An addendum is for its contract's event.
+  useEffect(() => {
+    if (amends) setEventId(amends.event.id);
+  }, [amends]);
 
   const create = api.sales.create.useMutation({
     onSuccess: (request) => {
@@ -337,6 +374,7 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
       clientId,
       contactId: contactId || null,
       eventId: eventId || null,
+      amendsContractId: amendsContractId || null,
       ownerId: ownerId || null,
       followUpOn,
       nextStep,
@@ -356,6 +394,7 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
               onChange={(id) => {
                 setClientId(id);
                 setContactId("");
+                setAmendsContractId("");
               }}
               placeholder="Choose a client"
               options={(clients.data ?? []).map((c) => ({ id: c.id, label: c.name, detail: c.shortName }))}
@@ -391,8 +430,8 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
               ))}
             </Select>
           </Field>
-          <Field label="Event">
-            <Select value={eventId} onChange={(e) => setEventId(e.target.value)}>
+          <Field label="Event" hint={amends ? "The event of the contract it adds to." : undefined}>
+            <Select value={eventId} onChange={(e) => setEventId(e.target.value)} disabled={Boolean(amends)}>
               <option value="">Not one of our events</option>
               {(events.data ?? []).map((event) => (
                 <option key={event.id} value={event.id}>
@@ -411,14 +450,32 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
               ))}
             </Select>
           </Field>
+          {(contracts.data?.length ?? 0) > 0 && (
+            <Field
+              label="Is it an addendum?"
+              hint="More rooms, or a change, under an agreement the client already has with us."
+              className="sm:col-span-2 lg:col-span-4"
+            >
+              <Select value={amendsContractId} onChange={(e) => setAmendsContractId(e.target.value)}>
+                <option value="">No — a new request of its own</option>
+                {(contracts.data ?? []).map((contract) => (
+                  <option key={contract.id} value={contract.id}>
+                    Addendum to {contract.name}
+                    {contract.signedOn ? ` (signed ${formatDate(contract.signedOn)})` : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
         </div>
       </Card>
 
       <Card>
-        <h2 className="text-ink-900 mb-1 text-[15px] font-medium">What they asked for</h2>
+        <h2 className="text-ink-900 mb-1 text-[15px] font-medium">{amends ? "What they want to add or change" : "What they asked for"}</h2>
         <p className="text-ink-500 mb-3 text-xs font-light">
-          As the client put it, however vague. It is an enquiry until the details are in — rooms, dates, budget, where to be — after a call, or
-          from the client through a form you send them from the request.
+          {amends
+            ? "In their words — more rooms, other dates, a change to what was agreed. The rooms themselves are offered from the request once it is registered."
+            : "As the client put it, however vague. It is an enquiry until the details are in — rooms, dates, budget, where to be — after a call, or from the client through a form you send them from the request."}
         </p>
         <Textarea
           rows={5}
@@ -444,8 +501,9 @@ export function NewSalesRequestForm({ me, clientId: presetClientId }: { me: stri
       <div className="space-y-2">
         <FormError message={problem ?? (create.error ? friendlyError(create.error) : null)} />
         <div className="flex gap-2">
-          <Button type="button" onClick={submit} disabled={create.isPending}>
-            {create.isPending ? "Registering…" : "Register the enquiry"}
+          {/* Stays busy until the request's page has opened, so it is not registered twice (2026-10-30). */}
+          <Button type="button" onClick={submit} disabled={create.isPending || create.isSuccess}>
+            {create.isPending ? "Registering…" : create.isSuccess ? "Opening the request…" : amends ? "Register the addendum" : "Register the enquiry"}
           </Button>
           <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancel
@@ -785,7 +843,7 @@ function SignNeedsContract({
 
 /** The way a request goes when it goes well (doc §4.11) — Blocked is a step some skip. */
 const pipeline: SalesRequestStage[] = ["INITIAL_INTEREST", "SPECIFY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACTED"];
-/** Why it ended without being contracted — chosen under Close as…. */
+/** Why it ended without being contracted — chosen under Mark as…. */
 const lostReasons: LostReason[] = ["DECLINED", "NO_REPLY", "RELEASED"];
 const moveOnLabels: Partial<Record<SalesRequestStage, string>> = {
   SPECIFY: "Mark specify",
@@ -797,12 +855,18 @@ const moveOnLabels: Partial<Record<SalesRequestStage, string>> = {
 /**
  * Where a request stands (doc §4.11), as the steps of the pipeline — done,
  * current, still to come — each a click away, with the next one offered as a
- * button; the other ways it can end are under Close as…, and a closed one says
- * so, with Reopen.
+ * button. Mark as… says what it is waiting on — the contract sent, approval,
+ * pending — or that it was lost or declined (doc §4.11, 2026-10-30); a closed
+ * one says so, with Reopen.
  */
 function StagePicker({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const setStage = api.sales.setStage.useMutation({ onSuccess: saved });
+  const setWaiting = api.sales.setWaiting.useMutation({ onSuccess: saved });
+  const wait = (waitingOn: WaitingOn | null) => {
+    setClosing(false);
+    setWaiting.mutate({ id: request.id, waitingOn });
+  };
   const sign = useSign(request, saved);
   const [closing, setClosing] = useState(false);
   const move = (stage: SalesRequestStage, lostReason?: LostReason) => {
@@ -890,12 +954,29 @@ function StagePicker({ request }: { request: FullRequest }) {
               ))}
               {request.stage !== "CONTRACTED" && (
                 <div className="relative">
-                  <Button type="button" variant="ghost" onClick={() => setClosing(!closing)} aria-expanded={closing}>
-                    Close as… ▾
+                  <Button type="button" variant="ghost" onClick={() => setClosing(!closing)} aria-expanded={closing} disabled={setWaiting.isPending}>
+                    Mark as… ▾
                   </Button>
                   {closing && (
                     <div className="border-ink-200 absolute right-0 z-20 mt-1 w-72 overflow-hidden rounded-xl border bg-white shadow-lg">
-                      <span className="text-ink-500 block px-4 pt-2.5 pb-1 text-[11px] font-medium tracking-wider uppercase">Lost/Declined — why?</span>
+                      <span className="text-ink-500 block px-4 pt-2.5 pb-1 text-[11px] font-medium tracking-wider uppercase">Still open — waiting on</span>
+                      {waitingOnOrder.map((waitingOn) => (
+                        <button key={waitingOn} type="button" onClick={() => wait(waitingOn)} className="hover:bg-ink-50 block w-full px-4 py-2.5 text-left">
+                          <span className="text-ink-900 block text-[13px] font-medium">
+                            {waitingOnLabels[waitingOn]}
+                            {request.waitingOn === waitingOn ? " ✓" : ""}
+                          </span>
+                          <span className="text-ink-500 block text-xs font-light">{waitingOnHints[waitingOn]}</span>
+                        </button>
+                      ))}
+                      {request.waitingOn && (
+                        <button type="button" onClick={() => wait(null)} className="hover:bg-ink-50 text-ink-700 block w-full px-4 py-2 text-left text-[13px]">
+                          Not waiting any more — clear it
+                        </button>
+                      )}
+                      <span className="text-ink-500 border-ink-200/70 block border-t px-4 pt-2.5 pb-1 text-[11px] font-medium tracking-wider uppercase">
+                        Closed — Lost/Declined, why?
+                      </span>
                       {lostReasons.map((reason) => (
                         <button
                           key={reason}
@@ -913,15 +994,18 @@ function StagePicker({ request }: { request: FullRequest }) {
               )}
             </div>
           </div>
-          <p className="text-ink-500 mt-3 text-xs font-light">
+          <p className="text-ink-500 mt-3 flex flex-wrap items-center gap-2 text-xs font-light">
+            {request.stage !== "CONTRACTED" && <WaitingBadge waitingOn={request.waitingOn} since={request.waitingSince} />}
             {request.stage === "CONTRACTED"
               ? `Contracted${request.closedOn ? ` on ${formatDate(request.closedOn)}` : ""}. Click a step to move it back.`
-              : salesStageHints[request.stage]}
+              : request.waitingOn
+                ? waitingOnHints[request.waitingOn]
+                : salesStageHints[request.stage]}
           </p>
         </>
       )}
       {sign.panel}
-      {setStage.error && <FormError message={friendlyError(setStage.error)} />}
+      {(setStage.error ?? setWaiting.error) && <FormError message={friendlyError(setStage.error ?? setWaiting.error)} />}
     </Card>
   );
 }
@@ -1156,9 +1240,11 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
   );
   return (
     <div className="space-y-5">
+      <AddendumBanner request={request} />
       <StagePicker request={request} />
       {/* The offer first once there is one — it is what the request is about now (doc §4.11, 2026-10-14). */}
       <RequestOffers salesRequestId={request.id} />
+      <NoOfferYet request={request} />
       <ClientAnswer request={request} />
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
@@ -1197,6 +1283,134 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Whether the request is an addendum (doc §4.11, 2026-10-30): if it is, which
+ * contract it adds to, said first; if it is not but the client has a
+ * contract with us for the event, a quiet offer to make it one — a request
+ * registered before addenda were in, say.
+ */
+function AddendumBanner({ request }: { request: FullRequest }) {
+  const saved = useSaved();
+  const save = api.sales.update.useMutation({ onSuccess: saved });
+  const contracts = api.finance.contracts.useQuery({ clientId: request.client.id, party: "CLIENT" });
+  // What it could add to: the client's contracts for the request's event (any, with no event yet), never its own.
+  const candidates = (contracts.data ?? []).filter(
+    (contract) => contract.salesRequest?.id !== request.id && (!request.event || contract.event.id === request.event.id),
+  );
+  const [choosing, setChoosing] = useState(false);
+  const [chosen, setChosen] = useState("");
+  const error = save.error ? <FormError message={friendlyError(save.error)} /> : null;
+
+  if (request.amendsContract) {
+    const contract = (contracts.data ?? []).find((c) => c.id === request.amendsContract!.id);
+    return (
+      <div className="bg-ink-900 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-6 py-4 text-white">
+        <div className="text-sm font-light">
+          <span className="mr-2 font-semibold">Addendum</span>
+          to{" "}
+          {contract ? (
+            <Link href={contractHref(contract.event.id, contract.id)} className="font-medium underline">
+              {request.amendsContract.name}
+            </Link>
+          ) : (
+            <span className="font-medium">{request.amendsContract.name}</span>
+          )}
+          {request.amendsContract.signedOn ? `, signed ${formatDate(request.amendsContract.signedOn)}` : ", not signed yet"}.
+          <span className="block text-xs text-white/70">
+            More rooms or a change under that agreement. Make the offer below; once the client signs the addendum it is a contract of its own, named as this
+            addendum.
+          </span>
+        </div>
+        <button type="button" onClick={() => save.mutate({ id: request.id, amendsContractId: null })} disabled={save.isPending} className="text-xs text-white/70 hover:underline">
+          Not an addendum
+        </button>
+        {error}
+      </div>
+    );
+  }
+  if (!candidates.length || isClosed(request.stage)) return null;
+  return (
+    <div className="text-ink-700 flex flex-wrap items-center gap-2 px-1 text-[13px] font-light">
+      {choosing ? (
+        <>
+          <span>Addendum to</span>
+          <div className="w-80">
+            <Select value={chosen} onChange={(e) => setChosen(e.target.value)} aria-label="The contract it adds to">
+              <option value="">Choose the contract</option>
+              {candidates.map((contract) => (
+                <option key={contract.id} value={contract.id}>
+                  {contract.name}
+                  {contract.signedOn ? ` (signed ${formatDate(contract.signedOn)})` : ""}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Button type="button" disabled={!chosen || save.isPending} onClick={() => save.mutate({ id: request.id, amendsContractId: chosen }, { onSuccess: () => setChoosing(false) })}>
+            Save
+          </Button>
+          <button type="button" onClick={() => setChoosing(false)} className="text-ink-500 hover:underline">
+            Cancel
+          </button>
+        </>
+      ) : (
+        <>
+          <span>
+            {request.client.name} already has {candidates.length === 1 ? "a contract" : `${candidates.length} contracts`} with us
+            {request.event ? ` for ${request.event.name}` : ""}.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setChosen(candidates.length === 1 ? candidates[0]!.id : "");
+              setChoosing(true);
+            }}
+            className="text-brand-700 font-medium hover:underline"
+          >
+            Is this an addendum to it?
+          </button>
+        </>
+      )}
+      {error}
+    </div>
+  );
+}
+
+/**
+ * The way to a sale, shown before there is an offer (doc §4.11, 2026-10-30):
+ * the offer blocks the rooms; the agreement — or addendum — is drawn up, sent
+ * and registered signed, which sells them. Before this it appeared only once
+ * the client had answered a rate card, so a request without one had no way on.
+ */
+function NoOfferYet({ request }: { request: FullRequest }) {
+  const offers = api.offer.forRequest.useQuery({ salesRequestId: request.id });
+  const answers = api.rateCard.answersForRequest.useQuery({ salesRequestId: request.id });
+  const [making, setMaking] = useState(false);
+  // An answer on a rate card has its own Make an offer; a closed request is not offered anything.
+  if (!offers.data || offers.data.length > 0 || !answers.data || answers.data.length > 0 || isClosed(request.stage)) return null;
+  const what = request.amendsContract ? "addendum" : "agreement";
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <h2 className="text-ink-900 text-[15px] font-medium">{request.amendsContract ? "The addendum" : "The contract"}</h2>
+          <p className="text-ink-500 mt-1 text-[13px] font-light">
+            No offer yet. When the client is ready to go ahead, make them an offer — the rooms, the rates and the terms. It blocks the rooms for them until a date you
+            choose; then draw up the {what}, send it (and Mark as… <em>Contract sent</em>), and register it signed, which sells the rooms and makes the contract.
+          </p>
+        </div>
+        {request.event ? (
+          <Button type="button" onClick={() => setMaking(true)}>
+            Make an offer →
+          </Button>
+        ) : (
+          <span className="text-ink-500 text-xs font-light">Choose the event under Details first — an offer is for an event.</span>
+        )}
+      </div>
+      {making && <OfferPopup salesRequestId={request.id} responseId={null} onClose={() => setMaking(false)} />}
+    </Card>
   );
 }
 
@@ -2140,6 +2354,69 @@ function ContractCard({ request }: { request: FullRequest }) {
                   ? `Missing ${contract.missing.join(", ")}`
                   : `${contract._count.payments} payments · ${contract.totalCents !== null && contract.currency ? formatMoney(contract.totalCents, contract.currency) : ""}`}
               </span>
+              {/* More rooms or a change later is an addendum to it (doc §4.11, 2026-10-30). */}
+              <Link href={addendumHref(request.client.id, contract.id)} className="text-brand-700 text-xs font-medium hover:underline">
+                + Addendum
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+const addendumHref = (clientId: string, contractId: string) => `/sales/new?client=${clientId}&addendumTo=${contractId}`;
+
+/**
+ * A client's contracts with us, on their page (doc §4.11, 2026-10-30): each
+ * with its addenda, and + Addendum to start one — more rooms, or a change,
+ * under an agreement they already have.
+ */
+export function ClientContracts({ clientId }: { clientId: string }) {
+  const contracts = api.finance.contracts.useQuery({ clientId, party: "CLIENT" });
+  const rows = contracts.data ?? [];
+  return (
+    <Card>
+      <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Contracts</h2>
+      {rows.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">{contracts.isLoading ? "…" : "None yet. A contract is made when a request is signed, or registered under Finances."}</p>
+      ) : (
+        <ul className="divide-ink-200/60 divide-y">
+          {rows.map((contract) => (
+            <li key={contract.id} className="py-2.5 first:pt-0 last:pb-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link href={contractHref(contract.event.id, contract.id)} className="hover:text-brand-700 text-sm font-medium">
+                    {contract.name}
+                  </Link>
+                  <span className="text-ink-500 block text-xs font-light">
+                    {[
+                      contract.event.name,
+                      contract.signedOn ? `signed ${formatDate(contract.signedOn)}` : "not signed yet",
+                      contract.totalCents !== null && contract.currency ? formatMoney(contract.totalCents, contract.currency) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+                <Link href={addendumHref(clientId, contract.id)} className="text-brand-700 shrink-0 text-[13px] font-medium hover:underline">
+                  + Addendum
+                </Link>
+              </div>
+              {contract.addenda.length > 0 && (
+                <ul className="mt-1.5 space-y-1 pl-3">
+                  {contract.addenda.map((addendum, index) => (
+                    <li key={addendum.id} className="flex flex-wrap items-center gap-2 text-xs">
+                      <Link href={`/sales/${addendum.id}`} className="text-ink-700 hover:text-brand-700">
+                        Addendum {index + 1} · {formatDate(addendum.createdAt)}
+                      </Link>
+                      <StageBadge stage={addendum.stage} />
+                      <WaitingBadge waitingOn={addendum.waitingOn} />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>
@@ -2173,7 +2450,11 @@ export function ClientSalesRequests({ clientId }: { clientId: string }) {
                 </Link>
                 <span className="text-ink-500 line-clamp-1 block text-xs font-light">{request.description ?? request.rooms ?? "—"}</span>
               </div>
-              <StageBadge stage={request.stage} />
+              <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                {request.amendsContract && <AddendumBadge contractName={request.amendsContract.name} />}
+                <WaitingBadge waitingOn={request.waitingOn} />
+                <StageBadge stage={request.stage} />
+              </span>
             </li>
           ))}
         </ul>

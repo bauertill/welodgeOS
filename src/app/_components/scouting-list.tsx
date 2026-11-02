@@ -6,6 +6,7 @@ import { Fragment, useMemo, useState } from "react";
 import type { CategoryContractStatus, PropertyType } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
+import { EventRateCards } from "~/app/_components/event-rate-cards";
 import { Button, Select } from "~/app/_components/form";
 import type { MapLayer, MapPin, MapPlace } from "~/app/_components/scouting-map";
 import {
@@ -453,6 +454,8 @@ export function ScoutingList({
 
   return (
     <div className="space-y-4">
+      {/* Rate cards for any client, not tied to a sales request (doc §4.11, 2026-10-26). */}
+      <EventRateCards eventId={eventId} />
       <div className="flex flex-wrap items-center gap-3">
         <div className="border-ink-200 flex rounded-full border bg-white p-1">
           {(["list", "map"] as const).map((option) => (
