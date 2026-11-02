@@ -24,14 +24,14 @@ export const navItems = [
  * The sales side (doc §4.10, §4.11) is one menu item that opens a panel, as
  * Events does: its Requests and Clients pages live under these paths.
  */
-const salesPaths = ["/sales", "/clients"];
+const salesPaths = ["/sales", "/clients", "/fact-sheets"];
 
 /**
  * Pages opened by people outside We Lodge — a client filling in their
  * contracting details (doc §4.11) — show none of our own menus or header.
  */
 export function isPublicPath(pathname: string) {
-  return pathname.startsWith("/contracting/") || pathname.startsWith("/needs/") || pathname.startsWith("/property-details/") || pathname.startsWith("/rate-card/") || pathname.startsWith("/rate-cards/");
+  return pathname.startsWith("/contracting/") || pathname.startsWith("/download/") || pathname.startsWith("/needs/") || pathname.startsWith("/property-details/") || pathname.startsWith("/rate-card/") || pathname.startsWith("/rate-cards/");
 }
 
 /** The team's own sidebar and header, left out on a public page. */

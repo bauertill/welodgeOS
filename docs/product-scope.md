@@ -2565,6 +2565,62 @@ offer opens it as a document, as it will print.
   every hotel have signed**. The inventory says the same night by night: *Sold* with the
   hotel *In progress*, or *Bought and sold*.
 
+### 4.12 Fact sheets — downloads from the newsletter (2026-11-02)
+
+> **Built.** Uploading needs a file store switched on (below); until then a fact sheet
+> is a link to the PDF.
+
+The owner sends a newsletter about once a month, sometimes with a resource to download —
+a fact sheet. **A fact sheet is a PDF whose link, put behind the download button in the
+mailer, asks the reader for their email and then hands over the file** — and records who
+downloaded it, so the CRM shows which people took an interest in which part of our
+marketing.
+
+- **Where.** *Sales → Fact sheets*: every fact sheet, newest first, with how many downloads
+  and by how many people, when it was last downloaded, and *Copy link*.
+- **Adding one.** *+ Add a fact sheet* asks for a **title**, an optional **line for the
+  reader**, and the PDF — **uploaded** (up to 50 MB, PDFs only), or a **link to it**
+  where it already is, Dropbox or Google Drive shared so anyone with the link can open it.
+  Either way the reader only gets the file after giving an email. *Change* replaces the
+  title, the line or the file; a replaced upload is removed from the store.
+- **The link** — `/download/…` on our site — opens a page in We Lodge's colours with none of
+  our menus: the logo, the title, the line, **Your email** and **Download**. The email is
+  checked to look like one; nothing else is asked, and nothing is said about keeping it
+  (the owner's choice, 2026-11-02). The download is recorded and the PDF opens. **Switch
+  off** stops the link at once — readers see "This link is not in use any more" — and
+  *Make a new link* gives a fresh one; an old one never comes back. *See what they see*
+  opens it as a reader would.
+- **Who downloaded it**, on the fact sheet's page: every download, newest first, each as
+  - **a contact** — their name and client — when the email is one of our contacts';
+  - **someone at a client, not a contact yet** — when the email's company domain
+    (`@eda.admin.ch`) is that of one of a client's contacts, or of the client's general
+    email or website;
+  - **not in the CRM yet** — a lead — otherwise.
+
+  Addresses at Gmail, Outlook, Bluewin and the like say nothing about the company and are
+  never matched by their domain, only as a contact's own email. **Add as contact** on a
+  download that is not a contact puts them under a client (the matched one chosen to start)
+  with their name; a company not in the CRM is added under *Clients* first. **Nothing is
+  added to the CRM on its own** (the owner's choice, 2026-11-02: unknown readers are kept as
+  leads).
+- **On the client's page**, *Fact sheets downloaded*: who at the client downloaded what, and
+  when — contacts by name, others by email, "not a contact yet". It is there only once
+  someone has.
+- **Worked out, not stored.** A download keeps only the fact sheet, the email and when.
+  Which contact and client it was is worked out from the email each time it is shown — so a
+  reader added as a contact later is credited with everything they downloaded before, and
+  a contact's changed email follows them.
+- **Deleting a fact sheet** is for one added by mistake. Once downloaded it is refused —
+  switch its link off instead, so who downloaded it stays on record.
+- **Where the files are kept.** This is the first thing uploaded into the system — photos
+  stay in Dropbox (§3.9) and signed contracts are Drive links (§7.1). Uploads go to **Vercel
+  Blob**, the file store of the host the site runs on, at an address with a long random
+  part no one can guess; the address is only handed out after an email. **It must be
+  switched on once** in the Vercel project (*Storage → Create → Blob*, connected to the
+  project), which Vercel does by adding `BLOB_READ_WRITE_TOKEN`; until then *Add a fact
+  sheet* offers the link only, and says why. Once on, the same store could take the signed
+  contracts that wait on it (§7.1).
+
 ---
 
 ## 5. Reporting and derived views
@@ -3204,6 +3260,8 @@ payments and its deadlines is in the contract's history.
 | **Place of interest** | Somewhere guests need to get to for one event: a venue (such as the stadium or the IBC), train station, airport, or other. |
 | **Client map link** | A private web page showing one client a chosen shortlist, with availability and travel times. |
 | **Addendum** | More rooms, or a change, under an agreement a client already has with us. A sales request that names the contract it adds to; once signed, a contract of its own (§4.11). |
+| **Fact sheet** | A PDF shared from the newsletter whose link asks for the reader's email before the download; who downloaded it shows on the client (§4.12). |
+| **Lead** | Someone who downloaded a fact sheet with an email not yet one of our contacts (§4.12). |
 | **Waiting on** | What an open sales request is waiting for — *Contract sent*, *Waiting for approval*, *Pending* — marked beside its stage, never moving it (§4.11). |
 
 ---
@@ -3384,6 +3442,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Addenda, Mark as…, the offer before there is one | **Built** (2026-10-30) | A request can be an addendum to one of the client's contracts for the same event — started with + Addendum from the client's new *Contracts* card or a request's *Contract* card, chosen on the new-request form, or set afterwards on the request; banner, *Addendum* tags, addenda listed under each contract; signed, it is its own contract named *Addendum to …*. *Close as…* became *Mark as…*, adding *Contract sent*, *Waiting for approval* and *Pending* beside the stage, cleared on closing. *Make an offer →* shown on any open request with no offer or rate card answer. Registering a request stays busy until its page opens. Not yet: addendum wording (§9.13) |
 | §4.11 Get rate task | **Built** (2026-10-18) | *Get rate* on a sourcing row with no rate for the request; a task for whoever handled the hotel, else the accommodation managers, with the dates, rooms and budget; email, call, register the quote; closes on its own when the quote is in |
 | §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Our agreement with hotels for US events, filled from the quote and contract. Not yet: follow-up task before an offer runs out, our hotel agreement outside the US, uploading PDFs (Till), AI check of the signed copy |
+| §4.12 Fact sheets | **Built** (2026-11-02) | Sales → Fact sheets: PDFs uploaded (Vercel Blob, 50 MB) or linked from Dropbox/Drive; a public download link asking only for an email; each download recorded and matched on read to a contact, to a client by company domain, or kept as a lead with *Add as contact*; *Fact sheets downloaded* on the client's page; link switched off or renewed; delete refused once downloaded. **Uploading waits on a Blob store being connected in Vercel** — links work until then. Not yet: telling the account manager when their client downloads, a downloads export |
 | §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |

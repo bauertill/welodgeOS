@@ -77,6 +77,7 @@ export function SalesPanel({ onClose }: { onClose: () => void }) {
                 : `${requests.length} open · every client's interest, from first enquiry to contracted`,
             )}
             {row("/clients", "Clients", "The companies we sell to and the people there — search by company or by person")}
+            {row("/fact-sheets", "Fact sheets", "PDFs for the newsletter, downloaded for an email — and who downloaded which")}
           </ul>
         </div>
 

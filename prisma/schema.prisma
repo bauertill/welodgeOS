@@ -885,6 +885,7 @@ model User {
   eventsSourced      Event[]              @relation("EventAccommodationManagers")
   offersMade         Offer[]              @relation("OfferCreatedBy")
   offersClosed       Offer[]              @relation("OfferClosedBy")
+  factSheets         FactSheet[]          @relation("FactSheetCreatedBy")
   agreementTemplates AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
 }
 
@@ -1218,13 +1219,13 @@ enum WaitingOn {
 /// calls it a deal. It is the commercial conversation, not the rooms: a
 /// room-night's own "requested" is a different, per-night thing (§4.2).
 model SalesRequest {
-  id         String            @id @default(cuid())
-  stage      SalesRequestStage @default(INITIAL_INTEREST)
+  id           String            @id @default(cuid())
+  stage        SalesRequestStage @default(INITIAL_INTEREST)
   /// Why, when it is Lost/Declined.
-  lostReason LostReason?
+  lostReason   LostReason?
   /// What it is waiting on while open, and since when (doc §4.11) — cleared when it closes.
   waitingOn    WaitingOn?
-  waitingSince DateTime?  @db.Date
+  waitingSince DateTime?         @db.Date
 
   /// An addendum: more rooms, or a change, under an agreement the client
   /// already has with us (doc §4.11, 2026-10-30). Empty for a request of its own.
@@ -2079,4 +2080,47 @@ model AgreementTemplate {
   updatedBy   User?    @relation("AgreementTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   updatedById String?
   updatedAt   DateTime @updatedAt
+}
+
+/// A fact sheet or other PDF shared with the newsletter's readers (doc §4.12):
+/// its private link asks for an email, then hands over the file. The file is
+/// uploaded to our file store, or kept where it is — Dropbox, Google Drive —
+/// and only its link is held here.
+model FactSheet {
+  id          String  @id @default(cuid())
+  title       String
+  /// Shown on the download page, above the email box.
+  description String?
+
+  /// The uploaded PDF in our file store (Vercel Blob), with its name and size…
+  fileUrl  String?
+  fileName String?
+  fileSize Int?
+  /// …or a link to it elsewhere. One of the two is set.
+  linkUrl  String?
+
+  /// The download link's code. Empty means switched off.
+  token String? @unique
+
+  createdBy   User?    @relation("FactSheetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  downloads FactSheetDownload[]
+}
+
+/// One download: who gave which email, and when. Which contact and client it
+/// was is worked out from the email when read, never stored (doc §4.12), so a
+/// reader added to the CRM later is credited with what they downloaded before.
+model FactSheetDownload {
+  id          String    @id @default(cuid())
+  factSheet   FactSheet @relation(fields: [factSheetId], references: [id], onDelete: Cascade)
+  factSheetId String
+  /// As typed, lower-cased.
+  email       String
+  createdAt   DateTime  @default(now())
+
+  @@index([factSheetId, createdAt])
+  @@index([email])
 }

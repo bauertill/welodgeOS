@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { HistorySection } from "~/app/_components/activity-log";
 import { ClientContactsCard, ClientDetailsCard, DeleteClient } from "~/app/_components/client-crm";
+import { ClientFactSheets } from "~/app/_components/fact-sheets";
 import { ClientContracts, ClientSalesRequests } from "~/app/_components/sales-requests";
 import { UpdateThread } from "~/app/_components/update-thread";
 import { Card, PageHeader } from "~/app/_components/ui";
@@ -42,6 +43,7 @@ export default async function ClientPage({
         <div className="space-y-5 lg:col-span-2">
           <ClientSalesRequests clientId={client.id} />
           <ClientContracts clientId={client.id} />
+          <ClientFactSheets clientId={client.id} />
 
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
