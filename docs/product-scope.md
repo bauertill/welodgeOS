@@ -753,7 +753,12 @@ of ours (or adds to ours of the same name), with its colour, each point a place 
 description as notes; lines and shapes are counted and left out, and a place whose name the
 event already has is skipped. When places were first put into layers, each went into one of
 its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *Other places*
-(not measured until switched on). A place's form has its **Map layer**.
+(not measured until switched on). A place's form has its **Map layer**. **The map is there
+on a new event too** (2026-11-05): with no properties yet, *Map* still shows the map and its
+Layers panel — the venues and points come first, before any property — where it used to say
+"Nothing on this list yet" and hide them; *List* still says so. A My Maps export of
+places with an address but no position (a layer built from a spreadsheet) has those places
+skipped: they need a position first.
 
 **Adding anything from the map** (2026-10-13): **＋ Add to the map** at the top of the map, then
 a click on the spot, or **📍 Use where I am** from a phone in front of it; a red "＋ New here"

@@ -530,7 +530,8 @@ export function ScoutingList({
         </span>
       </div>
 
-      {rows.length === 0 && !entries.isLoading ? (
+      {/* The map shows even with no properties: its Layers panel is where places are added and My Maps imported (doc §3.7). */}
+      {rows.length === 0 && !entries.isLoading && view !== "map" ? (
         hasQuotations ? (
           <EmptyState
             title="No property has a quotation yet"
