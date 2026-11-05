@@ -169,7 +169,13 @@ function QuotationCard({
       router.push(contractHref(contract.eventId, contract.id));
     },
   });
-  const error = setStatus.error ?? remove.error ?? makeContract.error;
+  const buyRooms = api.quotation.buyRooms.useMutation({
+    onSuccess: () => {
+      refresh();
+      void utils.inventory.invalidate();
+    },
+  });
+  const error = setStatus.error ?? remove.error ?? makeContract.error ?? buyRooms.error;
   const terms = [
     [
       "Payments",
@@ -290,9 +296,21 @@ function QuotationCard({
           Edit
         </button>
         {quotation.contract ? (
-          <Link href={contractHref(quotation.contract.eventId, quotation.contract.id)} className="text-brand-700 font-medium hover:underline">
-            Open its contract →
-          </Link>
+          <>
+            <Link href={contractHref(quotation.contract.eventId, quotation.contract.id)} className="text-brand-700 font-medium hover:underline">
+              Open its contract →
+            </Link>
+            {/* Accepted is bought (doc §3.10): for a quote accepted before that, or tied to a contract made by hand. Doing it twice buys nothing more. */}
+            {buyRooms.data ? (
+              <span className="text-[#0a7a47]">
+                {buyRooms.data.bought ? `✓ ${buyRooms.data.bought} room-nights bought on the stock sheet` : "✓ Its rooms are already bought"}
+              </span>
+            ) : (
+              <button type="button" disabled={buyRooms.isPending} onClick={() => buyRooms.mutate({ id: quotation.id })} className="text-brand-700 font-medium hover:underline">
+                {buyRooms.isPending ? "Buying…" : "Buy its rooms on the stock sheet"}
+              </button>
+            )}
+          </>
         ) : (
           <>
             {quotation.status !== "DECLINED" && (

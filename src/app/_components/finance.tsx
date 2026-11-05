@@ -21,6 +21,7 @@ import {
   paymentStatusLabels,
   paymentStatusOrder,
   paymentStatusStyles,
+  contractBack,
   contractHref,
   newContractHref,
   percent,
@@ -819,7 +820,39 @@ function ContractDetails({ contract }: { contract: FullContract }) {
           {contract.notes && <Row label="Notes" value={contract.notes} />}
         </dl>
       )}
+      {!editing && <DeleteContract contract={contract} />}
     </Card>
+  );
+}
+
+/** Deleting a contract made by mistake or twice (doc §7.1); the server refuses one that is relied on, saying why. */
+function DeleteContract({ contract }: { contract: FullContract }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const remove = api.finance.removeContract.useMutation({
+    onSuccess: () => {
+      void utils.finance.invalidate();
+      void utils.quotation.invalidate();
+      router.push(contractBack(contract).href);
+      router.refresh();
+    },
+  });
+  return (
+    <div className="border-ink-200/60 mt-4 border-t pt-3">
+      <button
+        type="button"
+        disabled={remove.isPending}
+        onClick={() => {
+          if (window.confirm(`Delete “${contract.name}”, with its payments and cancellation deadlines? Use this for a contract made by mistake or twice.`)) {
+            remove.mutate({ id: contract.id });
+          }
+        }}
+        className="text-[13px] font-light text-[#c03654] hover:underline"
+      >
+        {remove.isPending ? "Deleting…" : "Delete this contract"}
+      </button>
+      {remove.error && <FormError message={friendlyError(remove.error)} />}
+    </div>
   );
 }
 

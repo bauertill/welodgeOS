@@ -243,6 +243,47 @@ export const financeRouter = createTRPCRouter({
     }),
 
   /** Add a payment to a contract, or change one. */
+  /**
+   * Delete a contract made by mistake or twice — say one a quotation made
+   * when the contract was already there (doc §7.1). Refused once it is
+   * relied on: rooms bought or sold under it, a client's signature it
+   * records, a contracted request or an addendum that rests on it. Its
+   * payments and cut-offs go with it; a quotation that made it stays
+   * accepted, no longer tied to it.
+   */
+  removeContract: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(async (tx) => {
+      const contract = await tx.contract.findUniqueOrThrow({
+        where: { id: input.id },
+        include: {
+          _count: { select: { acquisitionNights: true, salesNights: true, addenda: true } },
+          offer: { select: { id: true } },
+          salesRequest: { select: { stage: true } },
+        },
+      });
+      const nights = contract._count.acquisitionNights + contract._count.salesNights;
+      const refuse = (message: string) => {
+        throw new TRPCError({ code: "BAD_REQUEST", message });
+      };
+      if (nights) refuse(`${nights} ${nights === 1 ? "room-night is" : "room-nights are"} ${contract.party === "SUPPLIER" ? "bought" : "sold"} under it — move them to another contract on the stock sheet first.`);
+      if (contract.offer) refuse("It records the client signing their offer — it cannot be deleted.");
+      if (contract.salesRequest?.stage === "CONTRACTED") refuse("Its sales request is contracted on it — move the request back a step first.");
+      if (contract._count.addenda) refuse("An addendum is tied to it — untie the addendum first.");
+      // A quotation that made it moves to the hotel's one other contract for the event, if there is exactly one —
+      // the contract it duplicated — so it does not offer to make the contract again.
+      const others = contract.propertyId
+        ? await tx.contract.findMany({ where: { propertyId: contract.propertyId, eventId: contract.eventId, id: { not: contract.id } }, select: { id: true }, take: 2 })
+        : [];
+      if (others.length === 1) await tx.quotation.updateMany({ where: { contractId: contract.id }, data: { contractId: others[0]!.id } });
+      await tx.contract.delete({ where: { id: input.id } });
+      const summary = `Contract deleted: ${contract.name}`;
+      await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary });
+      // Said where people look afterwards: the hotel's log, or the client's history.
+      if (contract.propertyId) await logAudit(tx, { actorId: ctx.session.user.id, entity: "Property", entityId: contract.propertyId, summary });
+      if (contract.clientId) await logAudit(tx, { actorId: ctx.session.user.id, entity: "Client", entityId: contract.clientId, summary });
+    }),
+  ),
+
   savePayment: protectedProcedure
     .input(z.object({ contractId: z.string(), id: z.string().optional(), payment: paymentInput }))
     .mutation(async ({ ctx, input }) => {

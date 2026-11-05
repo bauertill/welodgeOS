@@ -753,7 +753,12 @@ of ours (or adds to ours of the same name), with its colour, each point a place 
 description as notes; lines and shapes are counted and left out, and a place whose name the
 event already has is skipped. When places were first put into layers, each went into one of
 its kind — *Venues* (measured to, as before), *Train stations*, *Airports*, *Other places*
-(not measured until switched on). A place's form has its **Map layer**.
+(not measured until switched on). A place's form has its **Map layer**. **The map is there
+on a new event too** (2026-11-05): with no properties yet, *Map* still shows the map and its
+Layers panel — the venues and points come first, before any property — where it used to say
+"Nothing on this list yet" and hide them; *List* still says so. A My Maps export of
+places with an address but no position (a layer built from a spreadsheet) has those places
+skipped: they need a position first.
 
 **Adding anything from the map** (2026-10-13): **＋ Add to the map** at the top of the map, then
 a click on the spot, or **📍 Use where I am** from a phone in front of it; a red "＋ New here"
@@ -1296,6 +1301,20 @@ contract's notes. Those terms still have to
 be entered as payments and cut-offs on the contract, which flags itself incomplete until
 they are. Once a quotation has its contract, it links to it and can no longer be declined
 or removed from the board.
+
+**Accepted is bought** (the owner, 2026-11-05: "adding the rooms and accepting the quote
+should automatically add them to the inventory"). *Accept and make the contract* also
+**buys the quotation's rooms on the event's stock sheet**, under the new contract: each line's
+rooms of its room type, for its stay, at its rate — the lowest-numbered rooms not yet bought
+for the whole stay — through the inventory's own rules, written to *What changed* with the
+reason "Quotation accepted: …" and undone there like any change (§4.7). The stay may run
+outside the event's own dates (a pre or post period). **All or nothing**: a line for more
+rooms than its room type has, or than are free to buy, stops it — no contract, nothing
+bought — and says to raise the room type's number of rooms or check what is bought.
+A quotation already tied to a contract has **Buy its rooms on the stock sheet**, for one
+accepted before this, or one moved onto a contract made by hand (§7.1, deleting a
+contract); doing it again buys nothing more. Until 2026-11-05 accepting bought nothing, and
+the rooms were bought on the stock sheet by hand.
 
 A quotation commits nothing: it creates no room-nights and changes no inventory. Rooms are
 bought on the stock sheet (§4), under the contract.
@@ -3056,6 +3075,18 @@ and *Release* (we may hand rooms back, or an exclusivity lapses) on a supplier c
 type, the fee ("30%"), and remarks. **A cut-off is a reminder**: nothing is released or
 cancelled on its own (§2.4). Someone ticks it once it has been dealt with.
 
+**Deleting a contract** (2026-11-05) is for one made by mistake or twice — as when a
+quotation's *Accept and make the contract* made a second contract for a hotel whose signed
+one was already typed in. *Delete this contract*, at the foot of its details, asks first,
+and takes its payments and cancellation deadlines with it. It is **refused, saying why**,
+while anything rests on it: rooms bought or sold under it (move them to another contract
+on the stock sheet first), a client's signed offer it records, a sales request contracted
+on it, or an addendum tied to it. A quotation that made it moves to the hotel's one other
+contract for the event when there is exactly one — the contract it duplicated — so the
+quotation does not offer to make the contract again; otherwise it is simply untied, still
+accepted. The deletion is written to the contract's history and to the hotel's Log (or the
+client's history).
+
 **Incomplete contracts are flagged.** A contract missing its total, its payment terms, its
 cancellation terms (unless it has been said, on purpose, that it has none) or its signed PDF
 says so in red on its page, in the list of contracts, and where it is chosen. It can still be
@@ -3362,7 +3393,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Groups | **Built** | Per event: add, rename, recolour (ten colours), move up and down, delete — its properties go to *No group*, nothing leaves the list. Each group's header shows how many properties it holds, and collapses. A property's group is chosen in its row |
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
-| §3.10 Quotations | **Built** | On the property's page, third of its tabs (Updates, Room categories, Quotations, Contracts, Log — since 2026-10-06), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 Quotations | **Built** | On the property's page, third of its tabs (Updates, Room categories, Quotations, Contracts, Log — since 2026-10-06), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract and buys the quoted rooms on the stock sheet (2026-11-05); *Buy its rooms on the stock sheet* for one already tied to a contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |
@@ -3399,7 +3430,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
-| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. PDF upload into Drive waits on Till; reading the PDF automatically deferred |
+| §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. *Delete this contract* for one made by mistake or twice, refused once rooms, a signed offer, a contracted request or an addendum rest on it (2026-11-05). PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
 | §4.8 Bulk operations | **Built** | Every required action except shift-dates (Phase 3) and split/merge as one act (open question 3) |
