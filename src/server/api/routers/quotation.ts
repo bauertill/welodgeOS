@@ -117,6 +117,13 @@ function withTotals(quotation: Loaded) {
 }
 
 /** Once a quotation has become a contract, it stays accepted and on the board. */
+/**
+ * Buying a quotation's rooms writes every night of the stay — 630 for 30 rooms
+ * over three weeks — so it gets the stock sheet's own time, not the default
+ * five seconds, which the live database ran past on 2026-11-05.
+ */
+const BUYING = { timeout: 60_000, maxWait: 10_000 };
+
 async function refuseOnceContracted(db: Prisma.TransactionClient, id: string, refuse: boolean) {
   if (!refuse) return;
   const quotation = await db.quotation.findUniqueOrThrow({ where: { id }, select: { contractId: true } });
@@ -458,7 +465,7 @@ export const quotationRouter = createTRPCRouter({
       const { bought } = await buyQuotedRooms(tx, ctx.session.user.id, quotation.id);
       if (bought) await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary: `${bought} room-nights bought from the quotation` });
       return contract;
-    }),
+    }, BUYING),
   ),
 
   /**
@@ -474,6 +481,6 @@ export const quotationRouter = createTRPCRouter({
         await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: quotation.scoutingEntryId, summary: `${bought} room-nights bought from the quotation "${quotation.name}"` });
       }
       return { bought };
-    }),
+    }, BUYING),
   ),
 });
