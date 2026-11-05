@@ -12,6 +12,7 @@ import { logAudit } from "~/server/audit";
 import { GET_RATE } from "~/server/get-rate";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { notify } from "~/server/notify";
+import { buyQuotedRooms } from "~/server/quoted-rooms";
 import { taskStatusLabels } from "~/lib/tasks";
 
 /**
@@ -453,7 +454,26 @@ export const quotationRouter = createTRPCRouter({
         entityId: quotation.scoutingEntryId,
         summary: `Quotation accepted and made into a contract: ${quotation.name}`,
       });
+      // Accepted is bought (the owner, 2026-11-05): its rooms go on the stock sheet under the new contract.
+      const { bought } = await buyQuotedRooms(tx, ctx.session.user.id, quotation.id);
+      if (bought) await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary: `${bought} room-nights bought from the quotation` });
       return contract;
+    }),
+  ),
+
+  /**
+   * Buy an accepted quotation's rooms on the stock sheet, under its contract —
+   * for one accepted before accepting bought them, or tied to a contract made
+   * by hand. Doing it again buys nothing more (doc §3.10).
+   */
+  buyRooms: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(async (tx) => {
+      const { bought } = await buyQuotedRooms(tx, ctx.session.user.id, input.id);
+      const quotation = await tx.quotation.findUniqueOrThrow({ where: { id: input.id }, select: { name: true, scoutingEntryId: true } });
+      if (bought) {
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: quotation.scoutingEntryId, summary: `${bought} room-nights bought from the quotation "${quotation.name}"` });
+      }
+      return { bought };
     }),
   ),
 });
