@@ -186,7 +186,26 @@ export const quotationRouter = createTRPCRouter({
       where: { id: input.scoutingEntryId },
       select: {
         event: { select: { name: true, startDate: true, endDate: true } },
-        property: { select: { id: true, name: true, categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true } } } },
+        property: {
+          select: {
+            id: true,
+            name: true,
+            categories: {
+              orderBy: { sortOrder: "asc" },
+              select: {
+                id: true,
+                name: true,
+                // What a new quotation starts from (doc §3.10, 2026-11-06): its rooms, and its rate on this event.
+                unitCount: true,
+                capacity: true,
+                categoryContracts: {
+                  where: { scoutingEntryId: input.scoutingEntryId },
+                  select: { ratePerNightCents: true, rateCurrency: true, rateIncludes: true, rateIncludesOther: true, cleaning: true, cleaningOther: true, totBasisPoints: true, otherTaxes: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
     return entry;
