@@ -1287,6 +1287,17 @@ A quotation has:
 | Link | The quotation itself, as a Google Drive link |
 | Notes | Anything else |
 
+**A new quotation starts from the hotel** (the owner, 2026-11-06: "it should recognise that I
+have added room categories and quantities already … sometimes the quote would be different
+but that's the exception"). Its lines open filled in: one per room category with a number of
+rooms — that number, the event's dates, its people per room, and its buying rate on this event
+where one is set (§3.9) — with the quotation's rooms (their sum), currency, what the rates
+include and the TOT and other taxes taken from those rates. A line says it started from the
+hotel's room categories; what the hotel quoted differently is changed, and lines it did not
+quote are removed. The room category's *applicable period* is words, not dates, so the lines
+start on the event's dates. It happens once, when the form opens on a new quotation — never on
+one being changed, nor over anything already typed.
+
 **Totals are worked out, never stored**: each line comes to nights × rooms × rate, and
 the quotation to the sum of its lines, with its room-nights and its overall period. The
 form shows the total while it is typed.
