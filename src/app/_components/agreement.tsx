@@ -6,7 +6,7 @@ import { Fragment, useState } from "react";
 import { Button, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { PrintButton } from "~/app/_components/print-button";
-import { agreementGaps, readAgreement } from "~/lib/agreement";
+import { agreementGaps, readAgreement, type AgreementBlock } from "~/lib/agreement";
 import { dayKey, today } from "~/lib/dates";
 import { formatDate, formatMomentInWords } from "~/lib/format";
 import { api } from "~/trpc/react";
@@ -33,12 +33,43 @@ function Inline({ text }: { text: string }) {
   );
 }
 
+/** A table this wide reads badly on a portrait page: its schedule is printed landscape (2026-11-09). */
+const WIDE_TABLE = 7;
+/** An amount, a date or a count — kept on one line rather than broken ("US$ 220'000.\n00"). */
+const unbreakable = /^(\d|US\$|[A-Z]{3}\s?\d|[€$£])/;
+
+/**
+ * The document in parts: what comes before the first schedule, then each
+ * schedule with what follows it — so a wide schedule can have a page of its own.
+ */
+function bySchedule(blocks: AgreementBlock[]) {
+  const parts: { blocks: AgreementBlock[]; wide: boolean }[] = [{ blocks: [], wide: false }];
+  for (const block of blocks) {
+    if (block.kind === "schedule") parts.push({ blocks: [], wide: false });
+    const part = parts.at(-1)!;
+    part.blocks.push(block);
+    if (block.kind === "table" && (block.rows[0]?.length ?? 0) >= WIDE_TABLE) part.wide = true;
+  }
+  return parts.filter((part) => part.blocks.length > 0);
+}
+
 /** The agreement drawn as a document — on screen as on paper. */
 export function AgreementDocument({ text }: { text: string }) {
   const blocks = readAgreement(text);
+  let index = 0;
   return (
     <article className="text-ink-900 mx-auto max-w-3xl rounded-2xl bg-white px-12 py-12 text-[13px] leading-relaxed shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:max-w-none print:rounded-none print:p-0 print:shadow-none">
-      {blocks.map((block, index) => {
+      {bySchedule(blocks).map((part, p) => (
+        // A wide schedule — Schedule 2.1's rooms, dates and rates — prints on a landscape page of its own.
+        <section key={p} className={part.wide ? "landscape-page" : undefined}>
+          {part.blocks.map((block) => drawBlock(block, index++, part.wide))}
+        </section>
+      ))}
+    </article>
+  );
+}
+
+function drawBlock(block: AgreementBlock, index: number, wide: boolean) {
         switch (block.kind) {
           case "title":
             return (
@@ -81,28 +112,32 @@ export function AgreementDocument({ text }: { text: string }) {
             );
           case "table":
             return (
-              <table key={index} className="my-3 w-full table-fixed border-collapse text-[11px] break-words">
-                <thead>
-                  <tr>
-                    {block.rows[0]!.map((cell, i) => (
-                      <th key={i} className="border-ink-300 border-b px-1.5 py-1.5 text-left font-semibold">
-                        {cell}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {block.rows.slice(1).map((row, r) => (
-                    <tr key={r}>
-                      {row.map((cell, i) => (
-                        <td key={i} className="border-ink-200 border-b px-1.5 py-1.5 align-top">
-                          <Inline text={cell} />
-                        </td>
+              // A wide table sizes its columns to what is in them, words never split, amounts and dates on one line;
+              // on screen it scrolls sideways if it must, on paper its page is landscape.
+              <div key={index} className={wide ? "my-3 overflow-x-auto print:overflow-visible" : "my-3"}>
+                <table className={`w-full border-collapse text-[11px] ${wide ? "table-auto break-normal" : "table-fixed break-words"}`}>
+                  <thead>
+                    <tr>
+                      {block.rows[0]!.map((cell, i) => (
+                        <th key={i} className="border-ink-300 border-b px-1.5 py-1.5 text-left align-bottom font-semibold">
+                          {cell}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {block.rows.slice(1).map((row, r) => (
+                      <tr key={r}>
+                        {row.map((cell, i) => (
+                          <td key={i} className={`border-ink-200 border-b px-1.5 py-1.5 align-top ${wide && unbreakable.test(cell.trim()) ? "whitespace-nowrap" : ""}`}>
+                            <Inline text={cell} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             );
           case "sign":
             return (
@@ -142,9 +177,6 @@ export function AgreementDocument({ text }: { text: string }) {
               </p>
             );
         }
-      })}
-    </article>
-  );
 }
 
 type ReviewData = {

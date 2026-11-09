@@ -47,3 +47,17 @@
     var(--color-brand-400) 100%
   );
 }
+
+/*
+ * A wide schedule printed across the page (doc §4.11, 2026-11-09): an
+ * agreement's Schedule 2.1 — hotel, unit type, units, dates, nights, rate,
+ * total — on a landscape page of its own, the rest of the document portrait.
+ */
+@page landscape {
+  size: A4 landscape;
+}
+@media print {
+  .landscape-page {
+    page: landscape;
+  }
+}

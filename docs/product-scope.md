@@ -2535,6 +2535,11 @@ offer opens it as a document, as it will print.
   afresh* refills it.
 - **Print or save as PDF**, then send it by DocuSign — outside the system — and **Mark as
   sent** with the day it went. The offer on the request then shows *Agreement sent …*.
+  **Schedule 2.1 prints landscape** (the owner, 2026-11-09: the total broke over two lines):
+  a schedule whose table has seven columns or more — the rooms, dates and rates — is printed
+  on an A4 landscape page of its own, the rest of the document portrait; in it, words are
+  never split and amounts, dates and counts stay on one line. On screen such a table scrolls
+  sideways if the window is narrow. The same holds for our agreement with a hotel.
 - **The framework wording, for every client** (its own page, linked from every agreement):
   the whole text, with what each {{field}} fills in and how lines are drawn (# a clause,
   ## a schedule, numbers at the start of a line). A change reaches every agreement drawn up
