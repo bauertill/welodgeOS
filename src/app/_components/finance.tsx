@@ -644,14 +644,47 @@ function useSaved() {
   };
 }
 
+/**
+ * Where the signed PDF goes, said and done in one place (2026-11-09: "it says it's missing but
+ * there is no clear place to add it"). It is a Google Drive link — the system keeps no files.
+ */
+function AddSignedPdf({ contract, compact = false }: { contract: FullContract; compact?: boolean }) {
+  const saved = useSaved();
+  const [url, setUrl] = useState("");
+  const update = api.finance.updateContract.useMutation({ onSuccess: saved });
+  return (
+    <form
+      className={compact ? "space-y-1.5" : "mt-2 flex flex-wrap items-start gap-2"}
+      onSubmit={(e) => {
+        e.preventDefault();
+        update.mutate({ id: contract.id, documentUrl: url });
+      }}
+    >
+      <div className={compact ? "" : "min-w-64 flex-1"}>
+        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the Google Drive link to the signed PDF" aria-label="Signed PDF — Google Drive link" />
+        {!compact && <p className="mt-1 text-xs font-light">In Drive: right-click the signed PDF → Share → Copy link, then paste it here.</p>}
+      </div>
+      <Button type="submit" disabled={!url.trim() || update.isPending}>
+        {update.isPending ? "Saving…" : "Add the signed PDF"}
+      </Button>
+      {update.error && <FormError message={friendlyError(update.error)} />}
+    </form>
+  );
+}
+
 export function ContractView({ contract }: { contract: FullContract }) {
+  const pdfMissing = !contract.documentUrl;
   return (
     <div className="space-y-5">
       {contract.missing.length > 0 && (
-        <p className="rounded-xl border-2 border-[#c03654] bg-[#fde8ec] px-4 py-3 text-[13px] text-[#8e1f36]">
-          <span className="font-semibold">This contract is missing {contract.missing.join(", ")}.</span> Rooms can be bought or
-          sold under it meanwhile, but it stays flagged until they are added.
-        </p>
+        <div className="rounded-xl border-2 border-[#c03654] bg-[#fde8ec] px-4 py-3 text-[13px] text-[#8e1f36]">
+          <p>
+            <span className="font-semibold">This contract is missing {contract.missing.join(", ")}.</span> Rooms can be bought or
+            sold under it meanwhile, but it stays flagged until {contract.missing.length === 1 ? "it is" : "they are"} added
+            {contract.missing.some((item) => item !== "the signed PDF") ? " — payment and cancellation terms below, the total under Contract → Edit" : ""}.
+          </p>
+          {pdfMissing && <AddSignedPdf contract={contract} />}
+        </div>
       )}
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
@@ -811,7 +844,9 @@ function ContractDetails({ contract }: { contract: FullContract }) {
                 <a href={contract.documentUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
                   Open in Drive ↗
                 </a>
-              ) : null
+              ) : (
+                <AddSignedPdf contract={contract} compact />
+              )
             }
           />
           <Row label="Signed on" value={contract.signedOn ? formatDate(contract.signedOn) : null} />
