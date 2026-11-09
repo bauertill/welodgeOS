@@ -3,7 +3,7 @@
 import type { Cleaning, QuotationStatus, RateInclusion } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
@@ -418,6 +418,54 @@ function QuotationEditor({
       occupancy: line.occupancy?.toString() ?? "",
     })) ?? [blankLine()],
   );
+  // A new quotation starts from what is already on the hotel (the owner, 2026-11-06, doc §3.10): a line per
+  // room category with rooms — its count, the event's dates, its people per room and its rate on this event —
+  // and the rates' currency, inclusions and taxes. A quote that differs is the exception: change or remove lines.
+  const [prefilled, setPrefilled] = useState(false);
+  const [startedFromHotel, setStartedFromHotel] = useState(false);
+  useEffect(() => {
+    if (quotation || prefilled || !context.data) return;
+    setPrefilled(true);
+    const withRooms = context.data.property.categories.filter((category) => category.unitCount > 0);
+    if (withRooms.length === 0) return;
+    // Only while the form is as it opened: nothing typed into the lines yet.
+    const untouched = lines.length === 1 && !lines[0]!.rooms && !lines[0]!.rate;
+    if (!untouched) return;
+    setLines(
+      withRooms.map((category) => {
+        const rate = category.categoryContracts[0];
+        return {
+          categoryId: category.id,
+          checkIn: stay.checkIn,
+          checkOut: stay.checkOut,
+          rooms: String(category.unitCount),
+          rate: rate?.ratePerNightCents != null ? (rate.ratePerNightCents / 100).toFixed(2) : "",
+          occupancy: category.capacity ? String(category.capacity) : "",
+        };
+      }),
+    );
+    const rates = withRooms.map((category) => category.categoryContracts[0]).filter((rate) => rate !== undefined);
+    const priced = rates.find((rate) => rate.ratePerNightCents != null && rate.rateCurrency);
+    const included = rates.find((rate) => rate.rateIncludes.length > 0 || rate.rateIncludesOther || rate.cleaning);
+    const taxed = rates.find((rate) => rate.totBasisPoints != null || rate.otherTaxes);
+    setDraft((current) => ({
+      ...current,
+      rooms: current.rooms || String(withRooms.reduce((sum, category) => sum + category.unitCount, 0)),
+      currency: priced?.rateCurrency && CURRENCIES.includes(priced.rateCurrency) ? priced.rateCurrency : current.currency,
+      rateIncludesOther: current.rateIncludesOther || (included?.rateIncludesOther ?? ""),
+      cleaningOther: current.cleaningOther || (included?.cleaningOther ?? ""),
+      tot: current.tot || (taxed?.totBasisPoints != null ? (taxed.totBasisPoints / 100).toFixed(2) : ""),
+      otherTaxes: current.otherTaxes || (taxed?.otherTaxes ?? ""),
+    }));
+    if (included) {
+      setIncludes(included.rateIncludes);
+      if (included.cleaning) {
+        setCleaningIncluded(true);
+        setCleaning(included.cleaning);
+      }
+    }
+    setStartedFromHotel(true);
+  }, [context.data, quotation, prefilled, lines, stay]);
   const [problem, setProblem] = useState<string | null>(null);
   // Payments and cancellation cut-offs, line by line (doc §3.10) — one to start, more when quoted.
   const [payments, setPayments] = useState<PaymentDraft[]>(
@@ -545,6 +593,12 @@ function QuotationEditor({
             </Select>
           </div>
         </div>
+        {startedFromHotel && (
+          <p className="text-ink-500 mb-2 text-xs font-light">
+            Started from the hotel&rsquo;s room categories — their rooms, the event&rsquo;s dates and the rates on this event where set. Change what the hotel quoted
+            differently, and remove the lines it did not quote.
+          </p>
+        )}
         <div className="space-y-2">
           {lines.map((line, index) => (
             <div key={index} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_8.75rem_8.75rem_4.5rem_5.5rem_4.5rem_auto] sm:items-end">
