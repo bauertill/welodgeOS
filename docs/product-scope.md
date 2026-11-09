@@ -1800,9 +1800,9 @@ read-only mail access, kept to the Workspace (`docs/todos.md`).
 
 > **Built.** Registering a request, its stages, follow-ups and contracting details, the
 > list, each request's page, the link for a client to fill in their own contracting
-> details, and the rooms behind a request. Nothing has been imported into the live system
-> from monday.com's *Sales Requests* board (199 deals); four were copied into a laptop's
-> own database as test data only.
+> details, and the rooms behind a request. The import from monday.com's *Sales Requests*
+> board (206 deals) is built — *Importing from monday.com*, below; what has been run on the
+> live site is said in §12.
 
 **A sales request is a client's interest in accommodation, followed from the first enquiry
 to its end.** It replaces monday's *Sales Requests* board, which calls one a *deal*. It is
@@ -2146,6 +2146,38 @@ the contract.
 - **For the lawyers**, *Summary for the lawyers* on the request is one page to print or
   save as a PDF: the client and who signs (their contracting details, §below), what they
   asked for, the rooms blocked and sold for them with stays and prices, and our terms.
+
+**Importing from monday.com** (2026-11-09). monday's *Sales Requests* board (the *Sales*
+workspace, 206 deals) is brought in by a file of its deals, read from monday and chosen on
+*Sales requests → Import from monday.com*. What the owner chose to bring in: **every deal in
+monday's Initial Interest group** — 36: 28 for SOL28 (LA28), 5 for Belgrade, 2 for the Ryder
+Cup, 1 for the Women's World Cup. **The three signed SOL28 deals (Swiss Olympic, FDFA, BBC)
+are entered by hand**, not imported; the rest of the board — proposals, blocks, signed and
+lost deals of past events — stays in monday.
+
+- **monday's events are matched to ours** on the page — a first guess by name (SOL28 →
+  LA28, Rydercup → Ryder Cup), changed with a dropdown; an event not yet in the system is
+  created first. A deal whose event is left as none comes in without one.
+- **A preview, before anything is written**: each deal with its client (*existing* — the
+  same name or short name — or *new*), event, account manager (found by email, name or the
+  start of an email: "Volki" is volki@…), and contacts (*on the client* already, by email or
+  name, or *new*), and anything to look at — an event not chosen, a manager not found, a
+  client that already has a request for that event. Each deal can be unticked.
+- **Each deal is its own sales request** at *Initial interest* — two deals for the same
+  client stay two requests (the owner: "leave them separate, it's like that for a reason").
+  Its words go in the request's own fields — *What they asked for*, *Location and/or
+  property*, *Rooms*, *Period*, *Budget*, *Rate includes* — shown under *More detail*; its
+  first contact is the request's contact, and every contact is added to the client with
+  title, email and phones. It is registered on the monday deal's date, and its history says
+  "Imported from monday.com — deal …".
+- **Importing twice adds nothing twice**: each request keeps which monday deal it came
+  from, and the preview marks those *Already imported*.
+
+**Handing a request over** (the owner, 2026-11-09: "sometimes we want to hand things over"):
+in the list of sales requests, each row's *Account manager* is a dropdown of the team — choosing
+someone else hands the request to them at once, without opening it, or *Nobody yet*. It is
+written to the request's history like any change of account manager. No one is told by the
+system; the new account manager sees it in their list.
 
 **Deleting a request** — from its row in the list, or at the foot of its page — is for one
 that went nowhere: an enquiry made by mistake, or twice. It asks first. One with rooms in
@@ -3432,7 +3464,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates, which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
-| §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups |
+| §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09) |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
@@ -3442,7 +3474,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Addenda, Mark as…, the offer before there is one | **Built** (2026-10-30) | A request can be an addendum to one of the client's contracts for the same event — started with + Addendum from the client's new *Contracts* card or a request's *Contract* card, chosen on the new-request form, or set afterwards on the request; banner, *Addendum* tags, addenda listed under each contract; signed, it is its own contract named *Addendum to …*. *Close as…* became *Mark as…*, adding *Contract sent*, *Waiting for approval* and *Pending* beside the stage, cleared on closing. *Make an offer →* shown on any open request with no offer or rate card answer. Registering a request stays busy until its page opens. Not yet: addendum wording (§9.13) |
 | §4.11 Get rate task | **Built** (2026-10-18) | *Get rate* on a sourcing row with no rate for the request; a task for whoever handled the hotel, else the accommodation managers, with the dates, rooms and budget; email, call, register the quote; closes on its own when the quote is in |
 | §4.11 Contract task, signing, acquire tasks | **Built** (2026-10-14) | Contract task to the account manager when the client chooses rooms on a rate card; client signed (Drive link) or Volki's trust guarantee → client contract from the offer, rooms sold, request Contracted, account manager told; an acquire task per hotel for whoever handled it, the rooms in progress with it; hotel contract made from the quote, marked signed → rooms bought, task done; whose agreement on the quote; Volki signs for US events, Raphael Dornier otherwise. Our agreement with hotels for US events, filled from the quote and contract. Not yet: follow-up task before an offer runs out, our hotel agreement outside the US, uploading PDFs (Till), AI check of the signed copy |
-| §4.11 Import from monday.com | **Not built** | 199 deals on the *Sales Requests* board; to be decided. Four copied into a local database as test data only |
+| §4.11 Import from monday.com | **Built** (2026-11-09) | *Sales requests → Import from monday.com*: a file of monday deals, monday's events matched to ours, a preview (client new or existing, event, manager, contacts, warnings), each deal its own request at Initial interest, contacts on the client, never imported twice. Prepared: the 36 Initial Interest deals; the 3 signed SOL28 deals entered by hand. **Run on the live site: not yet** |
 | §3.6 Scouting → inventory | **Built** | No bring-in step since 2026-10-02: every room of every category of a listed (not Rejected) property is on the stock sheet, blank until used; nights are made by the first change on them. Empty rooms hidden behind *Show empty rooms*; choosing one property shows all its rooms. The Contracted gate, *Bring rooms into inventory*, *Only add them to inventory* and *Remove from inventory* are gone |
 | §4.1 Acquisition axis | **Built** | All five states, the transitions the diagram allows, and no others |
 | §4.2 Sales axis | **Built** | Hard hold as stored state; `blockExpiry` mandatory, with no way to record an indefinite block |
