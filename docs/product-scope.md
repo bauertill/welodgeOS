@@ -2793,6 +2793,11 @@ were possible.)
 Editing happens by highlighting a rectangle of cells — a set of rooms crossed with a
 contiguous range of days — which opens a panel scoped to exactly that selection.
 
+**The panel says which rooms** (Ami, 2026-11-09): under "2 rooms · 130 room-nights", how many
+of each room type — "1 × Suite K, 1 × Fam 3" — and, when the selection spans several hotels,
+each hotel with its own ("Courtyard by Marriott Culver City: 30 × ROH · Hotel Carmel: 4 ×
+Queen").
+
 **The panel shows what is already recorded** on those nights, under *Recorded now*: each
 side's status, and every detail — buy price, option date, supplier reference, Accommodation
 Manager, supplier notes; client, sell price, deadline, client reference, Sales Manager,

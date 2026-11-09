@@ -116,6 +116,7 @@ export function InventorySidePanel({
   checkIn,
   checkOut,
   roomCount,
+  roomTypes = [],
   cells,
   onClose,
   onApplied,
@@ -125,6 +126,8 @@ export function InventorySidePanel({
   checkIn: Date;
   checkOut: Date;
   roomCount: number;
+  /** How many of the selected rooms are of each room type, per hotel (Ami, 2026-11-09). */
+  roomTypes?: { hotel: string; roomType: string; count: number }[];
   /** Only the selected room-nights that are actually in inventory. */
   cells: SelectedCell[];
   onClose: () => void;
@@ -497,6 +500,20 @@ export function InventorySidePanel({
               {roomCount} {roomCount === 1 ? "room" : "rooms"} ·{" "}
               {totalNights} room-{totalNights === 1 ? "night" : "nights"}
             </h2>
+            {/* Which rooms, by type — "2 × Suite K, 1 × Fam 3" — the hotel named when the selection spans several. */}
+            {roomTypes.length > 0 && (
+              <p className="text-ink-700 mt-0.5 text-[13px] font-light">
+                {(() => {
+                  const hotels = [...new Set(roomTypes.map((type) => type.hotel))];
+                  const of = (hotel: string) =>
+                    roomTypes
+                      .filter((type) => type.hotel === hotel)
+                      .map((type) => `${type.count} × ${type.roomType}`)
+                      .join(", ");
+                  return hotels.length === 1 ? of(hotels[0]!) : hotels.map((hotel) => `${hotel}: ${of(hotel)}`).join(" · ");
+                })()}
+              </p>
+            )}
             <div className="mt-1.5 flex items-center gap-2">
               <div className="w-36">
                 <Input
