@@ -324,6 +324,16 @@ export function InventoryGrid({
     () => new Map(allProperties.map((property) => [property.id, property.categories.flatMap((category) => category.slots.map((slot) => slot.id))] as const)),
     [allProperties],
   );
+  // Which hotel and room type each room is — so the side panel can say what is selected, not only how many (Ami, 2026-11-09).
+  const roomTypeOfSlot = useMemo(
+    () =>
+      new Map(
+        allProperties.flatMap((property) =>
+          property.categories.flatMap((category) => category.slots.map((slot) => [slot.id, { hotel: property.name, roomType: category.name }] as const)),
+        ),
+      ),
+    [allProperties],
+  );
   const selectAll = (slotIds: string[]) => {
     setCommitted(null);
     setAnchor(null);
@@ -1137,6 +1147,7 @@ export function InventoryGrid({
           checkIn={selection.checkIn}
           checkOut={selection.checkOut}
           roomCount={selection.slotIds.length}
+          roomTypes={roomTypesOf(selection.slotIds, roomTypeOfSlot)}
           cells={selectedCells}
           onClose={clearSelection}
           onApplied={() => {
@@ -1147,6 +1158,23 @@ export function InventoryGrid({
       )}
     </div>
   );
+}
+
+/**
+ * The selected rooms by hotel and room type, in the order first selected —
+ * "Courtyard by Marriott Culver City: 30 × ROH" — for the side panel's heading.
+ */
+function roomTypesOf(slotIds: string[], of: Map<string, { hotel: string; roomType: string }>) {
+  const groups = new Map<string, { hotel: string; roomType: string; count: number }>();
+  for (const id of slotIds) {
+    const room = of.get(id);
+    if (!room) continue;
+    const key = `${room.hotel}|${room.roomType}`;
+    const group = groups.get(key) ?? { ...room, count: 0 };
+    group.count++;
+    groups.set(key, group);
+  }
+  return [...groups.values()];
 }
 
 /**
