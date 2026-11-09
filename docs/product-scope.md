@@ -3107,6 +3107,12 @@ client's history).
 cancellation terms (unless it has been said, on purpose, that it has none) or its signed PDF
 says so in red on its page, in the list of contracts, and where it is chosen. It can still be
 used meanwhile — that was the decision (2026-10-01) — but it stays flagged until complete.
+**The signed PDF is added where it is missing** (the owner, 2026-11-09: "it says it's missing
+but there is no clear place to add it"): the red notice on the contract's page, and its
+*Signed PDF* line, each have a box for the PDF's **Google Drive link** — *Add the signed PDF* —
+with how to copy it from Drive (Share → Copy link). It is a link, not an upload: the system
+keeps no files of its own yet (§4.12, parked). The notice also says where the other missing
+parts go.
 
 **Buying and selling can name their contract — they do not wait for it.** *Buy* on the
 stock sheet offers the supplier contract — one with that hotel, for that event — and
