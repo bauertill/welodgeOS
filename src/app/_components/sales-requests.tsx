@@ -232,6 +232,36 @@ export function NewAnswers({ count }: { count: number }) {
   );
 }
 
+/**
+ * The account manager, changed right in the list — a request handed over
+ * without opening it (2026-11-09). Written to the request's history like any change.
+ */
+function OwnerPicker({ request }: { request: Request }) {
+  const utils = api.useUtils();
+  const people = api.user.list.useQuery(undefined, { staleTime: 60_000 });
+  const update = api.sales.update.useMutation({ onSuccess: () => void utils.sales.invalidate() });
+  return (
+    <div className="min-w-36">
+      <select
+        value={request.owner?.id ?? ""}
+        disabled={update.isPending}
+        onChange={(e) => update.mutate({ id: request.id, ownerId: e.target.value || null })}
+        aria-label={`Account manager for ${request.client.name}`}
+        title="Hand the request to someone else"
+        className="text-ink-900 hover:border-ink-200 w-full cursor-pointer rounded-md border border-transparent bg-transparent py-0.5 pr-6 pl-1 text-[13px] font-light focus:border-brand-300 focus:outline-none"
+      >
+        <option value="">— Nobody yet</option>
+        {(people.data ?? []).map((person) => (
+          <option key={person.id} value={person.id}>
+            {person.name ?? person.email}
+          </option>
+        ))}
+      </select>
+      {update.error && <span className="block text-[11px] text-[#c03654]">{friendlyError(update.error)}</span>}
+    </div>
+  );
+}
+
 function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: Request[] }) {
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
@@ -307,7 +337,7 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   )}
                 </td>
                 <td className={td}>
-                  <Manager person={request.owner} />
+                  <OwnerPicker request={request} />
                 </td>
                 <td className={`${td} whitespace-nowrap`}>{daysOpen(request)}</td>
                 <td className={`${td} text-right`}>

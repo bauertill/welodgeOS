@@ -25,7 +25,12 @@ const hints: Record<string, string[]> = {
 };
 function guess(label: string, events: { id: string; name: string }[]) {
   const words = hints[label.toLowerCase()] ?? [label.toLowerCase()];
-  return events.find((event) => words.some((word) => event.name.toLowerCase().includes(word)))?.id ?? "";
+  // The most telling word first, across every event — "Belgrade" before "Expo", so EXPO 2030 is not taken for Belgrade.
+  for (const word of words) {
+    const found = events.find((event) => event.name.toLowerCase().includes(word));
+    if (found) return found.id;
+  }
+  return "";
 }
 
 export function MondayImport() {
