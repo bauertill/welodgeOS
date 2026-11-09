@@ -1231,6 +1231,9 @@ model SalesRequest {
   amendsContract   Contract? @relation("Addendum", fields: [amendsContractId], references: [id], onDelete: SetNull)
   amendsContractId String?
 
+  /// The monday.com deal it was imported from (doc §4.11) — so importing the same file twice adds nothing twice.
+  mondayItemId String? @unique
+
   client    Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   clientId  String
   /// The person at the client who asked, if known.
