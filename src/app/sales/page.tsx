@@ -18,6 +18,10 @@ export default async function SalesRequestsPage() {
         subtitle="Every client's interest, from the first enquiry until it is contracted, lost or declined — and who to follow up with."
         action={
           <div className="flex items-center gap-4">
+            {/* The sales team's guide (doc §2.11). */}
+            <Link href="/guide" className="text-brand-700 text-[13px] font-light hover:underline">
+              How this works
+            </Link>
             {/* Bringing monday.com's sales requests in (doc §4.11, 2026-11-09). */}
             <Link href="/sales/import" className="text-brand-700 text-[13px] font-light hover:underline">
               Import from monday.com

@@ -132,6 +132,10 @@ export function Nav() {
         >
           Finances
         </button>
+        {/* How the system is worked, for anyone stuck (doc §2.11). */}
+        <Link href="/guide" aria-current={pathname.startsWith("/guide") ? "page" : undefined} className={`${itemStyles(pathname.startsWith("/guide"))} mt-4`}>
+          Guide
+        </Link>
       </nav>
 
       {eventsOpen && <EventsPanel onClose={() => setEventsOpen(false)} />}

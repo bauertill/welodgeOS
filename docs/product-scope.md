@@ -540,6 +540,31 @@ Only fingerprints of keys are kept, never the keys. **My profile → Claude** li
 connection — since when, last used — with **Disconnect**, which stops it at once. Someone who
 leaves We Lodge and is removed from the team is disconnected with their account.
 
+### 2.11 The guide — how the sales team works the system (2026-11-10)
+
+**The sales team learns the system from a guide inside it**, so that many people can start
+with few questions (the owner, 2026-11-10: "a wall of text won't work … it should be
+searchable, if someone is stuck they can refer to it"). It is **Guide** in the menu, at
+`/guide`, for anyone signed in, and *How this works* on the Sales requests page links to it.
+
+- **What it holds**: twelve sections in the order a request is worked — before your first
+  request, the words we use, clients, registering a request, the request page, getting the
+  details, rate cards, the offer, the agreement and signing, addenda, day to day, Claude —
+  each with its point in one sentence, numbered steps, *Good to know* notes and screenshots of
+  the real screens, which enlarge on a click. Above them, **Your first day** (five things to do
+  once, ticked off — remembered in that browser only) and **the journey of a request**, stage
+  by stage, each linking to its section.
+- **I'm stuck**: the questions people ask most — the link that cannot be made, the request
+  that will not move on, the offer that ran out — each answered in two sentences and pointing
+  to its section.
+- **Search** (or press /) looks through every section, step, note and answer as you type and
+  shows the matches with the words marked.
+- **The screenshots are of demo data** (a made-up client, *Swiss Ski Federation*, and a demo
+  team), taken on a laptop, never of real clients.
+- **The words are kept with the system** (`src/lib/guide.ts`): a change to how a request is
+  worked changes the guide in the same change, as for this document. Who to tell when
+  something in it is wrong: the owner.
+
 ## 3. Phase 1 — Scouting
 
 A scouting list is the long list of properties that *could* be contracted for an event.
@@ -1772,8 +1797,7 @@ into one list, since both are edited in the same place.
 ### 4.10 Clients and their contacts — the sales CRM
 
 > **Partly built.** Clients with their details and contacts, and search by company or by
-> person, exist. **The Gmail link below is specified, not built** — it needs Google
-> switched on first (§12). Nothing has been imported from monday.com: the CRM starts
+> person, exist. **The Gmail link below is built and switched on** (2026-11-10, §12). Nothing has been imported from monday.com: the CRM starts
 > empty, as agreed, and an import is to be decided.
 
 This replaces the team's monday.com CRM. **A client and a company are the same thing.**
@@ -3523,7 +3547,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
-| §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Not yet tried from claude.ai itself — only end to end on a laptop |
+| §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
+| §2.11 The guide | **Built** (2026-11-10) | Guide in the menu (/guide): twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |
