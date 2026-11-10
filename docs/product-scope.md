@@ -491,6 +491,45 @@ email goes to the server log). The live site is told apart by Vercel itself, not
 setting someone could forget. Until Resend is set up (Till, `docs/todos.md`), nothing is
 emailed and the bell works on its own.
 
+### 2.10 Claude — the WeLodge OS connector (2026-11-10)
+
+**Anyone in the team can connect Claude to WeLodge OS and have it work on the site for them**
+— look things up, and make everyday changes in their name (the owner's choices, 2026-11-10:
+for claude.ai and the Claude app; read and safe changes; the whole team). It is an MCP
+server, the standard way Claude connects to an app, at **`https://os.welodge.net/api/mcp`**.
+
+**Connecting** — *My profile → Claude* says how: in Claude, *Settings → Connectors → Add
+custom connector*, the name *WeLodge OS* and that address; *Connect* sends you to WeLodge's
+own sign-in (if not signed in) and then to a page — **"Allow Claude to work in WeLodge OS as
+you?"** — saying what it can and cannot do. *Allow* connects it; *Cancel* does not. Nothing is
+granted before Allow. (Standard OAuth 2.1 with PKCE and dynamic client registration — what
+claude.ai expects of any connector; the site publishes where to sign in at
+`/.well-known/oauth-authorization-server`.)
+
+**Claude acts as you, under the site's own rules.** Each of its tools calls the same action
+the site's pages call, as the person who connected it: it sees what they see, and anything
+the site refuses — a request marked Contracted without a contract, say — it is refused too,
+with the same reason. **Every change it makes is in the history as made by that person, "—
+via Claude"**, so a change made through Claude is told from one made by hand.
+
+| Claude can look up | Claude can change |
+| --- | --- |
+| Events; the team; clients (search, and one in full with its requests) | Register a sales request, for an existing client or a new one |
+| Sales requests (filtered by event, account manager, a word, follow-ups due), and one in full | A request's details, follow-up and next step, event, contact, and account manager (hand it over) |
+| An event's properties board, and a property in full | A request's stage, and what it is waiting on (Mark as…) |
+| An event's stock-sheet position (bought, option, sold, blocked, short, warnings) | Add a contact to a client |
+| Tasks on the board | Post an update on a client or property; create a task, move it, comment on it |
+
+**It cannot** delete anything, buy, block or sell rooms, take or extend options, or make
+contracts or offers — those stay on the site, by hand. Widening that is a decision for the
+owner, tool by tool.
+
+**Keys.** Allowing gives Claude a key good for an hour, which it renews by itself with a second
+key good for 60 days of disuse; each renewal replaces both, and the old ones stop working.
+Only fingerprints of keys are kept, never the keys. **My profile → Claude** lists each live
+connection — since when, last used — with **Disconnect**, which stops it at once. Someone who
+leaves We Lodge and is removed from the team is disconnected with their account.
+
 ## 3. Phase 1 — Scouting
 
 A scouting list is the long list of properties that *could* be contracted for an event.
@@ -3434,6 +3473,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
+| §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Not yet tried from claude.ai itself — only end to end on a laptop |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |

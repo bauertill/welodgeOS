@@ -47,6 +47,25 @@ const profileSelect = {
 } as const;
 
 export const userRouter = createTRPCRouter({
+  /** My connections to Claude (doc §2.10): each live one, when made and last used. */
+  claudeConnections: protectedProcedure.query(async ({ ctx }) => {
+    const tokens = await ctx.db.mcpToken.findMany({
+      where: { userId: ctx.session.user.id, revokedAt: null, refreshExpiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, lastUsedAt: true, client: { select: { id: true, name: true } } },
+    });
+    return tokens;
+  }),
+
+  /** Disconnect Claude: every key it holds for me stops working at once. */
+  disconnectClaude: protectedProcedure.input(z.object({ clientId: z.string().optional() })).mutation(async ({ ctx, input }) => {
+    const { count } = await ctx.db.mcpToken.updateMany({
+      where: { userId: ctx.session.user.id, revokedAt: null, ...(input.clientId && { clientId: input.clientId }) },
+      data: { revokedAt: new Date() },
+    });
+    return { disconnected: count };
+  }),
+
   /** The We Lodge reps, for the owner pickers on both axes (doc §4.7). */
   list: protectedProcedure.query(({ ctx }) =>
     ctx.db.user.findMany({

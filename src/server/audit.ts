@@ -1,4 +1,17 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import type { Prisma } from "generated/prisma";
+
+/**
+ * Set while Claude acts for someone through the WeLodge OS connector (doc §2.10):
+ * every history line written meanwhile says "via Claude", so a change made by
+ * Claude in someone's name can be told from one they made themselves.
+ */
+export const actingVia = new AsyncLocalStorage<{ via: string }>();
+const via = (summary: string) => {
+  const acting = actingVia.getStore();
+  return acting ? `${summary} — via ${acting.via}` : summary;
+};
 
 /**
  * The general audit trail (doc §4.9): one place that builds a human-readable
@@ -42,7 +55,7 @@ export function logAudit(
     changes?: string | null;
   },
 ) {
-  return tx.auditEntry.create({ data });
+  return tx.auditEntry.create({ data: { ...data, summary: via(data.summary) } });
 }
 
 /** Diffs `before`/`after` and writes an `AuditEntry` only if something
@@ -56,5 +69,5 @@ export async function logFieldChanges<T extends Record<string, unknown>>(
 ) {
   const changes = diffFields(before, after, fields);
   if (!changes) return;
-  await tx.auditEntry.create({ data: { ...data, changes } });
+  await tx.auditEntry.create({ data: { ...data, summary: via(data.summary), changes } });
 }
