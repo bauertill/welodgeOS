@@ -30,9 +30,7 @@ export type GuideQuestion = { id: string; question: string; answer: string; sect
 export const firstDay = [
   { id: "gmail", label: "My profile → Gmail → Connect Gmail" },
   { id: "booking", label: "My profile → paste your booking link (Google Calendar or Calendly)" },
-  { id: "notifications", label: "My profile → choose your email notifications" },
-  { id: "practise", label: "Walk one pretend request through every stage on staging.welodge.net" },
-] as const;
+  { id: "notifications", label: "My profile → choose your email notifications" },] as const;
 
 /** The journey on one line, for the strip at the top of the guide. */
 export const journey = [
@@ -54,11 +52,8 @@ export const guideSections: GuideSection[] = [
       "Paste your **booking link** — a Google Calendar appointment page or Calendly. It goes into every *Email the client* message.",
       "Choose your **email notifications**. The bell at the top shows the same things inside the system.",
     ],
-    tips: [
-      "**Practise on staging.welodge.net first.** It is a copy of the live site, reset every night. Never send its links to a client.",
-    ],
     shots: [{ src: "/guide/profile.webp", caption: "My profile: Gmail, your booking link, notifications and Claude." }],
-    keywords: "login sign in onboarding setup gmail calendly booking link profile notifications staging",
+    keywords: "onboarding setup gmail calendly booking link profile notifications",
   },
   {
     id: "words",

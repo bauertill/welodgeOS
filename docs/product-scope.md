@@ -551,9 +551,11 @@ searchable, if someone is stuck they can refer to it"). It is **Guide** in the m
   request, the words we use, clients, registering a request, the request page, getting the
   details, rate cards, the offer, the agreement and signing, addenda, day to day, Claude —
   each with its point in one sentence, numbered steps, *Good to know* notes and screenshots of
-  the real screens, which enlarge on a click. Above them, **Your first day** (four things to do
+  the real screens, which enlarge on a click. Above them, **Your first day** (three things to do on My profile
   once, ticked off — remembered in that browser only) and **the journey of a request**, stage
   by stage, each linking to its section.
+- **It never mentions staging** (the owner, 2026-11-10): the team works on the live site
+  only; staging is for testing changes to the system, not for the team to practise on.
 - **I'm stuck**: the questions people ask most — the link that cannot be made, the request
   that will not move on, the offer that ran out — each answered in two sentences and pointing
   to its section.
