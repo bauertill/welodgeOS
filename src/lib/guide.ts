@@ -28,7 +28,6 @@ export type GuideSection = {
 export type GuideQuestion = { id: string; question: string; answer: string; section: string };
 
 export const firstDay = [
-  { id: "signin", label: "Sign in at os.welodge.net with your We Lodge Google account" },
   { id: "gmail", label: "My profile → Gmail → Connect Gmail" },
   { id: "booking", label: "My profile → paste your booking link (Google Calendar or Calendly)" },
   { id: "notifications", label: "My profile → choose your email notifications" },
@@ -51,7 +50,6 @@ export const guideSections: GuideSection[] = [
     title: "Before your first request",
     lead: "Do these once, on My profile, before you register anything.",
     steps: [
-      "Sign in at **os.welodge.net** with your We Lodge Google account.",
       "Open **My profile** (your name, top right) and click **Connect Gmail**. Google asks for read-only access. Your emails with client contacts then show on each request and client — nothing is ever sent or deleted from your mailbox.",
       "Paste your **booking link** — a Google Calendar appointment page or Calendly. It goes into every *Email the client* message.",
       "Choose your **email notifications**. The bell at the top shows the same things inside the system.",
