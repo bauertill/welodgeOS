@@ -1867,7 +1867,10 @@ come to belong to.
 **Selling from the request: its rooms are the inventory.** A request's page has a **Rooms**
 card, and it is where the rooms for that request are requested, blocked and sold — in the
 event's inventory itself, not in a copy of it. There is no separate step of going to the
-stock sheet and doing it again.
+stock sheet and doing it again. **The card shows only once the request has rooms** — blocked
+by an offer, sold on signing, or a client's loose holds to tie (the owner, 2026-11-10: the
+empty card was noise); until then the way to rooms is *Make an offer →*, and rooms can still
+be held by hand on the stock sheet for the request.
 
 - **+ Add rooms** takes a room category of the event, how many rooms, check-in and
   check-out, and what to do: *Request* (a soft claim that locks nothing, §4.3), *Block*

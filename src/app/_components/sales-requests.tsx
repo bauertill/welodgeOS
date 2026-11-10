@@ -1780,6 +1780,11 @@ function RoomsCard({ request }: { request: FullRequest }) {
     setDone({ text, offer: ahead ? next : null });
   };
 
+  // Shown only once the request has rooms — blocked by an offer, sold on signing, or loose
+  // holds to tie — or one is being added: an empty card was noise (the owner, 2026-11-10).
+  const empty = !data || (data.rows.length === 0 && data.loose === 0);
+  if (empty && !adding && !done) return null;
+
   return (
     <Card>
       <div className="mb-3 flex items-baseline justify-between gap-3">
