@@ -1909,9 +1909,10 @@ and picks it when there is only one; it can be left as none. Releasing a block u
 from the request; a cancelled sale stays on it, as the client stays on the night (§4.2).
 Where a client has holds or requests on the event that belong to no request — made on the
 stock sheet before this, or left as none — the card says how many and offers to **tie them
-to this request**; that is written to the ledger too. The list of requests shows each one's
-nights sold and blocked, counted from the nights themselves: nothing about the rooms is
-stored on the request, so it cannot disagree with the stock sheet.
+to this request**; that is written to the ledger too. Nothing about the rooms is stored on
+the request, so it cannot disagree with the stock sheet. (The list of requests showed each
+one's nights sold and blocked until 2026-11-10, when the owner took that column — and *Days
+open* — off the list to clean it up; a request's rooms are on its own page.)
 
 **Where a request stands** — its *stage* (the owner's set, 2026-10-11, replacing Rate card
 sent, Blocked, Signed, Released and No reply):
@@ -2244,8 +2245,11 @@ lost deals of past events — stays in monday.
   from, and the preview marks those *Already imported*.
 
 **Handing a request over** (the owner, 2026-11-09: "sometimes we want to hand things over"):
-in the list of sales requests, each row's *Account manager* is a dropdown of the team — choosing
-someone else hands the request to them at once, without opening it, or *Nobody yet*. It is
+in the list of sales requests, each row's *Manager* is the account manager's initials in a
+circle — **VB** for Volki Bauer, the full name on pointing at it; a dashed **+** for nobody
+(2026-11-10). A click opens the team to choose from — choosing someone else hands the request
+to them at once, without opening it, or *Nobody yet*. On the request's own page it is a
+dropdown in the header. It is
 written to the request's history like any change of account manager. No one is told by the
 system; the new account manager sees it in their list.
 

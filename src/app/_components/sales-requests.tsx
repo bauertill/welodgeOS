@@ -238,7 +238,16 @@ export function NewAnswers({ count }: { count: number }) {
  * The account manager, changed right in the list — a request handed over
  * without opening it (2026-11-09). Written to the request's history like any change.
  */
-function OwnerPicker({ request, onChanged }: { request: { id: string; client: { name: string }; owner: { id: string } | null }; onChanged?: () => void }) {
+function OwnerPicker({
+  request,
+  onChanged,
+  compact = false,
+}: {
+  request: { id: string; client: { name: string }; owner: { id: string } | null };
+  onChanged?: () => void;
+  /** In the list: initials in a circle — "VB" — the dropdown opening on a click (the owner, 2026-11-10). */
+  compact?: boolean;
+}) {
   const utils = api.useUtils();
   const people = api.user.list.useQuery(undefined, { staleTime: 60_000 });
   const update = api.sales.update.useMutation({
@@ -247,6 +256,34 @@ function OwnerPicker({ request, onChanged }: { request: { id: string; client: { 
       onChanged?.();
     },
   });
+  if (compact) {
+    const owner = (people.data ?? []).find((person) => person.id === request.owner?.id);
+    const name = owner?.name ?? owner?.email ?? null;
+    return (
+      <label
+        title={name ? `${name} — click to hand it over` : "Nobody yet — click to give it to someone"}
+        className={`relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-[11px] font-semibold ${
+          name ? "bg-brand-100 text-brand-800 hover:bg-brand-200" : "border-ink-300 text-ink-400 hover:border-brand-400 border border-dashed"
+        } ${update.isPending ? "opacity-50" : ""}`}
+      >
+        {name ? initialsOf(name) : "+"}
+        <select
+          value={request.owner?.id ?? ""}
+          disabled={update.isPending}
+          onChange={(e) => update.mutate({ id: request.id, ownerId: e.target.value || null })}
+          aria-label={`Account manager for ${request.client.name}`}
+          className="absolute inset-0 cursor-pointer opacity-0"
+        >
+          <option value="">— Nobody yet</option>
+          {(people.data ?? []).map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.name ?? person.email}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
   return (
     <div className="min-w-36">
       <select
@@ -269,6 +306,13 @@ function OwnerPicker({ request, onChanged }: { request: { id: string; client: { 
   );
 }
 
+/** "VB" for Volki Bauer, "EC" for Elena Condini Mosna (first and last name), "A" for ami@welodge.net. */
+function initialsOf(name: string) {
+  const words = name.split("@")[0]!.split(/[\s._-]+/).filter(Boolean);
+  const letters = words.length > 1 ? [words[0]![0], words[words.length - 1]![0]] : [words[0]?.[0]];
+  return letters.join("").toUpperCase();
+}
+
 function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: Request[] }) {
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
@@ -286,10 +330,8 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
               <th className={th}>Event</th>
               <th className={th}>What they need</th>
               <th className={th}>Period</th>
-              <th className={th} title="The client's room-nights on this event, from the inventory">Rooms</th>
               <th className={th}>Follow up</th>
-              <th className={th}>Account manager</th>
-              <th className={th}>Days open</th>
+              <th className={th} title="Account manager — click to hand it over">Manager</th>
               <th className={th}>
                 <span className="sr-only">Delete</span>
               </th>
@@ -327,16 +369,6 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                     <span className="line-clamp-2">{request.period ?? "—"}</span>
                   )}
                 </td>
-                <td className={`${td} whitespace-nowrap`}>
-                  {request.nightsSold || request.nightsBlocked ? (
-                    <>
-                      {request.nightsSold > 0 && <span className="block">{request.nightsSold} nights sold</span>}
-                      {request.nightsBlocked > 0 && <span className="text-brand-800 block">{request.nightsBlocked} blocked</span>}
-                    </>
-                  ) : (
-                    <span className="text-ink-500">—</span>
-                  )}
-                </td>
                 <td className={td}>
                   <FollowUp on={request.followUpOn} closed={isClosed(request.stage)} />
                   {request.nextStep && !isClosed(request.stage) && (
@@ -344,9 +376,8 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   )}
                 </td>
                 <td className={td}>
-                  <OwnerPicker request={request} />
+                  <OwnerPicker request={request} compact />
                 </td>
-                <td className={`${td} whitespace-nowrap`}>{daysOpen(request)}</td>
                 <td className={`${td} text-right`}>
                   <DeleteRequest request={request} subtle />
                 </td>
