@@ -1858,10 +1858,10 @@ first; everyone sees them):
 - **Writing emails from the system** (monday's *New email*) is not part of this. Replies are
   written in Gmail as today, and appear here once sent.
 
-What has to happen first, outside the system: someone with access to Google Cloud for
-`welodge.net` (Till) switches on the Gmail service for WeLodge OS and allows it to ask for
-read-only mail access, kept to the Workspace (`docs/todos.md`). Until then *Connect Gmail*
-says Gmail is not switched on yet.
+**Switched on 2026-11-10** by the owner in Google Cloud (the project of the WeLodge sign-in):
+the Gmail service enabled, read-only mail access allowed on the Workspace-only (Internal)
+consent screen, and the return addresses for the live site, staging and a laptop added. The
+owner's mailbox connected on staging the same day.
 
 ### 4.11 Sales requests — from first interest to signed
 
@@ -3551,7 +3551,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §4.10 Clients and contacts | **Built** | Category, account manager, general phone, email and website; contacts with title, email, mobile, phone, type, priority, account manager and comments, added, edited and removed on the client's page; every change in the client's history |
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
-| §4.10 Emails from Gmail | **Built** (2026-11-10), **waiting on Google** | Connect Gmail on My profile (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. **Tested against a pretend Gmail only — real mailboxes connect once Till switches the Gmail service on in Google Cloud** |
+| §4.10 Emails from Gmail | **Built** (2026-11-10) | Connect Gmail on My profile (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. Google set up and the owner's mailbox connected on staging, 2026-11-10; each colleague connects theirs on the live site |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates, which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09) |
