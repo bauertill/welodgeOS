@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { GmailPrompt } from "~/app/_components/gmail-prompt";
 import { HeaderAuth } from "~/app/_components/header-auth";
 import { NotificationBell } from "~/app/_components/notification-bell";
 import { Nav, TeamChrome } from "~/app/_components/nav";
@@ -25,6 +26,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         <>
           <MessageSound />
           <PresenceHeartbeat />
+          <GmailPrompt />
         </>
       )}
       <TeamChrome>
