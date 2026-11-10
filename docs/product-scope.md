@@ -528,7 +528,7 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | Sales requests (filtered by event, account manager, a word, follow-ups due), and one in full | A request's details, follow-up and next step, event, contact, and account manager (hand it over) |
 | An event's properties board, and a property in full | A request's stage, and what it is waiting on (Mark as…) |
 | An event's stock-sheet position (bought, option, sold, blocked, short, warnings) | Add a contact to a client |
-| Tasks on the board | Post an update on a sales request, client or property; create a task, move it, comment on it |
+| Tasks on the board; a request's or client's emails | Post an update on a sales request, client or property; create a task, move it, comment on it |
 
 **It cannot** delete anything, buy, block or sell rooms, take or extend options, or make
 contracts or offers — those stay on the site, by hand. Widening that is a decision for the
@@ -1820,30 +1820,48 @@ page shows the same two figures.
 The category, type and priority lists are a first draft taken from the monday board; they
 are expected to change once the team has used them.
 
-#### Emails from Gmail — *specified, not built*
+#### Emails from Gmail (2026-11-10)
 
-In monday, a client's page shows every email the team has sent to or received from its
-people. We Lodge OS will do the same:
+In monday, a client's page and each deal showed every email the team had sent to or received
+from its people, linked from each person's Gmail and "Can view: Everyone". WeLodge OS does the
+same (the owner's choices, 2026-11-10: on the sales request and the client; the last month at
+first; everyone sees them):
 
-- **Each colleague connects their own Gmail**, once, with *Connect Gmail* on their profile,
-  and can disconnect at any time. Nobody's mailbox is read without them connecting it.
-  Connecting asks Google for permission to *read* mail only; nothing is sent, deleted or
-  changed in anyone's mailbox.
-- **Only emails with a known contact are brought in**: an email is shown on a client's page
-  when one of its senders or recipients is the email address of one of that client's
-  contacts. Nothing else in anyone's mailbox is read into the system. An email with a new
-  person at the company appears once that person is added as a contact.
-- **Who can see them**: everyone who signs in, like everything else in the system (§2.5) —
-  monday's *Can view: Everyone*. Whether a colleague may keep their emails to themselves
-  (*Only me*) is an open question (§9).
-- **Where**: newest first on the client's page, each saying who sent it to whom and when,
-  opening to the full text; and on the contact, just that person's emails.
+- **Each colleague connects their own Gmail**, once, with *Connect Gmail* on **My profile →
+  Gmail**, and can disconnect at any time. Google asks them to allow **read-only** access;
+  nothing is ever sent, deleted or changed in anyone's mailbox. Nobody's mailbox is read
+  without them connecting it. Google's key to it is kept encrypted.
+- **Only emails with a known contact are brought in.** The system asks Gmail only for messages
+  from, to or copying the email address of one of our clients' contacts — nothing else in a
+  mailbox is read, let alone kept. **The first time**, a mailbox's last month is brought in;
+  after that, what is new since its last sync. **A contact added later** has their last month
+  brought in at the next sync, so an email with a new person appears once they are added as a
+  contact. The same email in two colleagues' mailboxes is kept once and says it was found in
+  both.
+- **What is kept of an email**: who sent it to whom and who was copied, when, the subject, and
+  its text — as plain text, never shown as a web page — with the names of any attachments (the
+  files themselves stay in Gmail: *Open in Gmail* opens it there, for the mailbox's owner).
+- **Who can see them: everyone who signs in**, read-only, like everything else in the system
+  (§2.5) — monday's *Can view: Everyone* (the owner, 2026-11-10, answering the open question
+  of keeping one's emails private: no *Only me*).
+- **Where**: newest first, each opening to its full text — on **each sales request, its
+  *Emails* tab** (every email with that client's contacts), and on **the client's page**, with
+  a choice of one contact for just that person's emails. Which client an email belongs to is
+  worked out from its addresses each time, never stored — so it shows wherever its people are
+  contacts.
+- **When emails come in**: opening a request's or client's emails brings the team's mailboxes
+  up to date — each at most every ten minutes; *Sync now* does it at once; and every morning's
+  run catches up all of them. My profile shows when a mailbox was last synced, how many of its
+  emails are in, and why the last sync failed, if it did. **Disconnecting** stops a mailbox being
+  read; the emails already brought in stay, as the team's record.
+- **Claude** (§2.10) can read a request's or a client's emails too.
 - **Writing emails from the system** (monday's *New email*) is not part of this. Replies are
   written in Gmail as today, and appear here once sent.
 
 What has to happen first, outside the system: someone with access to Google Cloud for
-`welodge.net` switches on the Gmail service for We Lodge OS and allows it to ask for
-read-only mail access, kept to the Workspace (`docs/todos.md`).
+`welodge.net` (Till) switches on the Gmail service for WeLodge OS and allows it to ask for
+read-only mail access, kept to the Workspace (`docs/todos.md`). Until then *Connect Gmail*
+says Gmail is not switched on yet.
 
 ### 4.11 Sales requests — from first interest to signed
 
@@ -3335,10 +3353,7 @@ payments and its deadlines is in the contract's history.
     already wired up (magic-link sign-in, §2.5) — or is the visual highlight the intended
     behaviour going forward? Left as a visual tag only until this is answered, since it is
     the smaller and fully reversible choice.
-12. **Keeping one's emails private (§4.10).** Once Gmail is connected, should a colleague
-    be able to keep the emails from their mailbox to themselves (monday's *Can view: Only
-    me*), or does everyone see every email with a client? Specified as *everyone*, the
-    same as everything else in the system, until this is answered.
+12. *Answered 2026-11-10 — everyone sees every email with a client; no "Only me" (§4.10).*
 13. **Addenda (§4.11, 2026-10-30).** Two things to confirm. *Its contract*: a signed
     addendum is made a contract of its own, named *Addendum to …*, rather than changing the
     original contract's total, payments and cut-offs — is that how Finances should follow
@@ -3536,7 +3551,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §4.10 Clients and contacts | **Built** | Category, account manager, general phone, email and website; contacts with title, email, mobile, phone, type, priority, account manager and comments, added, edited and removed on the client's page; every change in the client's history |
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
-| §4.10 Emails from Gmail | **Specified, not built** | Needs the Gmail service switched on in Google Cloud for `welodge.net` first (`docs/todos.md`) |
+| §4.10 Emails from Gmail | **Built** (2026-11-10), **waiting on Google** | Connect Gmail on My profile (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. **Tested against a pretend Gmail only — real mailboxes connect once Till switches the Gmail service on in Google Cloud** |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates, which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09) |

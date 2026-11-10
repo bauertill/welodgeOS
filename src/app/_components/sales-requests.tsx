@@ -21,6 +21,7 @@ import { contactOutcomeLabels, contactOutcomeStyle } from "~/lib/tasks";
 import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
+import { ClientEmails } from "~/app/_components/client-emails";
 import { addDays, daysUntil, dayKey, nightsBetween, today } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
 import {
@@ -1360,6 +1361,13 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         </div>
       )}
 
+      {tab === "emails" && (
+        // Every email the team has with the client's contacts, from their connected Gmail (doc §4.10, 2026-11-10).
+        <Card>
+          <ClientEmails salesRequestId={request.id} />
+        </Card>
+      )}
+
       {tab === "updates" && (
         // The team's running notes as the request goes — a meeting, a call, feedback (doc §2.6, 2026-11-10).
         <Card>
@@ -1418,6 +1426,7 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
 const requestTabs = [
   { key: "overview", label: "Overview" },
   { key: "updates", label: "Updates" },
+  { key: "emails", label: "Emails" },
   { key: "offer", label: "Offer & contract" },
   { key: "contracting", label: "Contracting details" },
   { key: "tasks", label: "Tasks & quotes" },
