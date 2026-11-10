@@ -1930,6 +1930,24 @@ details in → *Specify*; *Rate card sent* → *Proposal sent*; *Blocked* → *N
 *Signed* → *Contracted*; *Lost*, *No reply* and *Released* → *Lost/Declined*, the old stage
 kept as its reason (*Lost* as *Declined*).
 
+**A request's page is a header and tabs** (the owner, 2026-11-10: the long page of cards was
+clunky — like a monday item instead). **The header**: the client, event and contact; the
+stage (below) with its buttons; and the facts most looked at — the **account manager**,
+changed right there, the follow-up with its next step, the value, and the contact with their
+email. **The tabs**, in the order a request is worked:
+
+| Tab | What is on it |
+| --- | --- |
+| Overview | What they asked for and the request in detail (with *Email the client*); on the side, **Next** — one pointer from where it stands (get the details; make an offer; see their answer; the offer is out), with the button to go there — the follow-up, the details, and *Delete* |
+| Updates | The request's Updates (§2.6), how many in the tab's name |
+| Offer & contract | The offer or *Make an offer →*, the client's rate card answer, the client's contract, rate cards sent and the rooms — "n new" in the tab's name while an answer is unread |
+| Contracting details | The company details for the lawyers, the client's link to fill them in, *Summary for the lawyers* |
+| Tasks & quotes | The sourcing and hotel tasks, and hotels' quotes for the request |
+| History | Everything that changed on it |
+
+The tab is kept in the page's address (…/sales/…#updates), so a link or a reload opens the
+same one. Nothing was taken off the page; it was rearranged.
+
 **On a request's page the stage is a progress bar** (2026-10-03): *Initial interest →
 Specify → Proposal sent → Negotiation → Contracted*, the steps passed ticked and the current
 one marked, each a click away. The next move is a button — *Mark specify*, then *Mark
