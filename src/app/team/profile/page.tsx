@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ProfileForm } from "~/app/_components/profile-form";
 import { EmailPreferenceCard } from "~/app/_components/notification-bell";
 import { BookingLinkCard } from "~/app/_components/sales-details";
+import { ClaudeConnectionCard } from "~/app/_components/claude-connection";
 import { MyWork } from "~/app/_components/tasks";
 import { PageHeader } from "~/app/_components/ui";
 import { auth } from "~/server/auth";
@@ -25,6 +26,7 @@ export default async function ProfilePage() {
       </div>
       <EmailPreferenceCard />
       <BookingLinkCard />
+      <ClaudeConnectionCard />
       <ProfileForm />
     </>
   );

@@ -885,6 +885,8 @@ model User {
   eventsSourced      Event[]              @relation("EventAccommodationManagers")
   offersMade         Offer[]              @relation("OfferCreatedBy")
   offersClosed       Offer[]              @relation("OfferClosedBy")
+  mcpCodes           McpAuthCode[]
+  mcpTokens          McpToken[]
   agreementTemplates AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
 }
 
@@ -1218,13 +1220,13 @@ enum WaitingOn {
 /// calls it a deal. It is the commercial conversation, not the rooms: a
 /// room-night's own "requested" is a different, per-night thing (§4.2).
 model SalesRequest {
-  id         String            @id @default(cuid())
-  stage      SalesRequestStage @default(INITIAL_INTEREST)
+  id           String            @id @default(cuid())
+  stage        SalesRequestStage @default(INITIAL_INTEREST)
   /// Why, when it is Lost/Declined.
-  lostReason LostReason?
+  lostReason   LostReason?
   /// What it is waiting on while open, and since when (doc §4.11) — cleared when it closes.
   waitingOn    WaitingOn?
-  waitingSince DateTime?  @db.Date
+  waitingSince DateTime?         @db.Date
 
   /// An addendum: more rooms, or a change, under an agreement the client
   /// already has with us (doc §4.11, 2026-10-30). Empty for a request of its own.
@@ -2082,4 +2084,56 @@ model AgreementTemplate {
   updatedBy   User?    @relation("AgreementTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   updatedById String?
   updatedAt   DateTime @updatedAt
+}
+
+// --- Claude: the WeLodge OS connector (doc §2.10) ---------------------------------
+
+/// An app allowed to ask for access — Claude, registering itself the first
+/// time someone adds the connector (OAuth dynamic client registration).
+model McpClient {
+  id           String   @id @default(cuid())
+  name         String?
+  /// Where it may be sent back to after sign-in; nowhere else.
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+
+  codes  McpAuthCode[]
+  tokens McpToken[]
+}
+
+/// A one-time code, handed back to the app after someone signs in and allows
+/// it — good for ten minutes, once. Only its fingerprint is kept.
+model McpAuthCode {
+  id            String    @id @default(cuid())
+  codeHash      String    @unique
+  client        McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId      String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  redirectUri   String
+  /// PKCE: the app proves it is the one that asked.
+  codeChallenge String
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+/// One person's connection: Claude acting as them. The access key lasts an
+/// hour and is renewed with the refresh key; disconnecting ends both. Only
+/// their fingerprints are kept.
+model McpToken {
+  id               String    @id @default(cuid())
+  accessHash       String    @unique
+  refreshHash      String    @unique
+  client           McpClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId         String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  expiresAt        DateTime
+  refreshExpiresAt DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([userId])
 }
