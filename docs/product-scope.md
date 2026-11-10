@@ -540,6 +540,34 @@ Only fingerprints of keys are kept, never the keys. **My profile → Claude** li
 connection — since when, last used — with **Disconnect**, which stops it at once. Someone who
 leaves We Lodge and is removed from the team is disconnected with their account.
 
+### 2.11 The guide — how the sales team works the system (2026-11-10)
+
+**The sales team learns the system from a guide inside it**, so that many people can start
+with few questions (the owner, 2026-11-10: "a wall of text won't work … it should be
+searchable, if someone is stuck they can refer to it"). It is **Guide** in the team menu (the company name at the foot of the sidebar, with My profile, Team and Messages), for anyone signed in. `/guide` lists the guides to choose from — for now only
+the **Sales guide**, at `/guide/sales` (the owner, 2026-11-10: the sales guide is the first
+of several) — and *How this works* on the Sales requests page goes straight to it.
+
+- **What it holds**: twelve sections in the order a request is worked — before your first
+  request, the words we use, clients, registering a request, the request page, getting the
+  details, rate cards, the offer, the agreement and signing, addenda, day to day, Claude —
+  each with its point in one sentence, numbered steps, *Good to know* notes and screenshots of
+  the real screens, which enlarge on a click. Above them, **Your first day** (three things to do on My profile
+  once, ticked off — remembered in that browser only) and **the journey of a request**, stage
+  by stage, each linking to its section.
+- **It never mentions staging** (the owner, 2026-11-10): the team works on the live site
+  only; staging is for testing changes to the system, not for the team to practise on.
+- **I'm stuck**: the questions people ask most — the link that cannot be made, the request
+  that will not move on, the offer that ran out — each answered in two sentences and pointing
+  to its section.
+- **Search** (or press /) looks through every section, step, note and answer as you type and
+  shows the matches with the words marked.
+- **The screenshots are of demo data** (a made-up client, *Swiss Ski Federation*, and a demo
+  team), taken on a laptop, never of real clients.
+- **The words are kept with the system** (`src/lib/guide.ts`): a change to how a request is
+  worked changes the guide in the same change, as for this document. Who to tell when
+  something in it is wrong: the owner.
+
 ## 3. Phase 1 — Scouting
 
 A scouting list is the long list of properties that *could* be contracted for an event.
@@ -1772,8 +1800,7 @@ into one list, since both are edited in the same place.
 ### 4.10 Clients and their contacts — the sales CRM
 
 > **Partly built.** Clients with their details and contacts, and search by company or by
-> person, exist. **The Gmail link below is specified, not built** — it needs Google
-> switched on first (§12). Nothing has been imported from monday.com: the CRM starts
+> person, exist. **The Gmail link below is built and switched on** (2026-11-10, §12). Nothing has been imported from monday.com: the CRM starts
 > empty, as agreed, and an import is to be decided.
 
 This replaces the team's monday.com CRM. **A client and a company are the same thing.**
@@ -1831,6 +1858,10 @@ first; everyone sees them):
   Gmail**, and can disconnect at any time. Google asks them to allow **read-only** access;
   nothing is ever sent, deleted or changed in anyone's mailbox. Nobody's mailbox is read
   without them connecting it. Google's key to it is kept encrypted.
+- **Until they do, a card asks them on every page** (the owner, 2026-11-10: on My profile alone
+  it was lost): *Connect your Gmail*, in the bottom-right corner, with **Connect Gmail** and
+  **Not now**, which puts it away for a day in that browser. Not on My profile itself, and not
+  while Gmail is not switched on for the system.
 - **Only emails with a known contact are brought in.** The system asks Gmail only for messages
   from, to or copying the email address of one of our clients' contacts — nothing else in a
   mailbox is read, let alone kept. **The first time**, a mailbox's last month is brought in;
@@ -1858,10 +1889,10 @@ first; everyone sees them):
 - **Writing emails from the system** (monday's *New email*) is not part of this. Replies are
   written in Gmail as today, and appear here once sent.
 
-What has to happen first, outside the system: someone with access to Google Cloud for
-`welodge.net` (Till) switches on the Gmail service for WeLodge OS and allows it to ask for
-read-only mail access, kept to the Workspace (`docs/todos.md`). Until then *Connect Gmail*
-says Gmail is not switched on yet.
+**Switched on 2026-11-10** by the owner in Google Cloud (the project of the WeLodge sign-in):
+the Gmail service enabled, read-only mail access allowed on the Workspace-only (Internal)
+consent screen, and the return addresses for the live site, staging and a laptop added. The
+owner's mailbox connected on staging the same day.
 
 ### 4.11 Sales requests — from first interest to signed
 
@@ -3523,7 +3554,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
-| §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Not yet tried from claude.ai itself — only end to end on a laptop |
+| §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
+| §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |
@@ -3551,7 +3583,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §4.10 Clients and contacts | **Built** | Category, account manager, general phone, email and website; contacts with title, email, mobile, phone, type, priority, account manager and comments, added, edited and removed on the client's page; every change in the client's history |
 | §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
-| §4.10 Emails from Gmail | **Built** (2026-11-10), **waiting on Google** | Connect Gmail on My profile (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. **Tested against a pretend Gmail only — real mailboxes connect once Till switches the Gmail service on in Google Cloud** |
+| §4.10 Emails from Gmail | **Built** (2026-11-10) | Connect Gmail on My profile, and a card on every page until connected (Not now = a day) (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. Google set up and the owner's mailbox connected on staging, 2026-11-10; each colleague connects theirs on the live site |
 | §4.10 Import from monday.com | **Not built** | The CRM starts empty, as agreed; an import is to be decided |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates, which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09) |

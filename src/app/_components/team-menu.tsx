@@ -22,6 +22,8 @@ export const teamItems = [
   { href: "/team/profile", label: "My profile" },
   { href: "/team", label: "Team" },
   { href: "/messages", label: "Messages" },
+  // How the system is worked, for anyone stuck (doc §2.11).
+  { href: "/guide", label: "Guide" },
 ] as const;
 
 /**

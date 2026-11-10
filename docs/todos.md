@@ -218,7 +218,7 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       powers as the person who built it. Worth deciding whether that's
       acceptable or blocking.
 
-- [ ] **Switch on Gmail for the client emails** (`product-scope.md` §4.10) —
+- [x] **Switch on Gmail for the client emails** — *done by Brandon, 2026-11-10* (`product-scope.md` §4.10) —
       needs someone with access to Google Cloud for `welodge.net` (Till). In
       the same Google Cloud project as the sign-in: enable the **Gmail API**,
       and on the consent screen (still **Internal**) add the read-only scope
