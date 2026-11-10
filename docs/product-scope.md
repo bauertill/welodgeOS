@@ -182,6 +182,16 @@ permanent record of every inventory change (§4.7). Unlike a room-night, an upda
 about a commercial position, so it sits outside all three phases and applies to a property
 or a client regardless of what phase work is happening on it.
 
+**A sales request has its own feed too** (the owner, 2026-11-10: "a place where our team can
+write updates as the request goes — maybe they had a meeting or some general feedback", as
+monday's Updates tab on a deal). On the request's page, an **Updates** card under *The
+request in detail*: the same box, *+ Meeting feedback* and *+ Call summary*, mentions and
+editing as on a client. **Each update on a request shows on its client's feed as well**,
+marked *on the LA28 Olympic Games request* and linking to it, so the client's page tells the
+whole story across its requests; an update written on the client stays on the client only.
+Deleting a request — one made by mistake (§4.11) — takes its updates with it. Claude's
+connector can post on a request too (§2.10).
+
 A post can mention a colleague with `@Name`, which highlights their name inline. This is a
 visual tag only: nothing is sent to them, and nothing is stored beyond the post's own text
 — there is no notification, and no record of who was mentioned separate from the words
@@ -518,7 +528,7 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | Sales requests (filtered by event, account manager, a word, follow-ups due), and one in full | A request's details, follow-up and next step, event, contact, and account manager (hand it over) |
 | An event's properties board, and a property in full | A request's stage, and what it is waiting on (Mark as…) |
 | An event's stock-sheet position (bought, option, sold, blocked, short, warnings) | Add a contact to a client |
-| Tasks on the board | Post an update on a client or property; create a task, move it, comment on it |
+| Tasks on the board | Post an update on a sales request, client or property; create a task, move it, comment on it |
 
 **It cannot** delete anything, buy, block or sell rooms, take or extend options, or make
 contracts or offers — those stay on the site, by hand. Widening that is a decision for the
@@ -1857,7 +1867,10 @@ come to belong to.
 **Selling from the request: its rooms are the inventory.** A request's page has a **Rooms**
 card, and it is where the rooms for that request are requested, blocked and sold — in the
 event's inventory itself, not in a copy of it. There is no separate step of going to the
-stock sheet and doing it again.
+stock sheet and doing it again. **The card shows only once the request has rooms** — blocked
+by an offer, sold on signing, or a client's loose holds to tie (the owner, 2026-11-10: the
+empty card was noise); until then the way to rooms is *Make an offer →*, and rooms can still
+be held by hand on the stock sheet for the request.
 
 - **+ Add rooms** takes a room category of the event, how many rooms, check-in and
   check-out, and what to do: *Request* (a soft claim that locks nothing, §4.3), *Block*
@@ -1896,9 +1909,10 @@ and picks it when there is only one; it can be left as none. Releasing a block u
 from the request; a cancelled sale stays on it, as the client stays on the night (§4.2).
 Where a client has holds or requests on the event that belong to no request — made on the
 stock sheet before this, or left as none — the card says how many and offers to **tie them
-to this request**; that is written to the ledger too. The list of requests shows each one's
-nights sold and blocked, counted from the nights themselves: nothing about the rooms is
-stored on the request, so it cannot disagree with the stock sheet.
+to this request**; that is written to the ledger too. Nothing about the rooms is stored on
+the request, so it cannot disagree with the stock sheet. (The list of requests showed each
+one's nights sold and blocked until 2026-11-10, when the owner took that column — and *Days
+open* — off the list to clean it up; a request's rooms are on its own page.)
 
 **Where a request stands** — its *stage* (the owner's set, 2026-10-11, replacing Rate card
 sent, Blocked, Signed, Released and No reply):
@@ -1916,6 +1930,24 @@ When the stages changed, every request was carried over: *Initial interest* with
 details in → *Specify*; *Rate card sent* → *Proposal sent*; *Blocked* → *Negotiation*;
 *Signed* → *Contracted*; *Lost*, *No reply* and *Released* → *Lost/Declined*, the old stage
 kept as its reason (*Lost* as *Declined*).
+
+**A request's page is a header and tabs** (the owner, 2026-11-10: the long page of cards was
+clunky — like a monday item instead). **The header**: the client, event and contact; the
+stage (below) with its buttons; and the facts most looked at — the **account manager**,
+changed right there, the follow-up with its next step, the value, and the contact with their
+email. **The tabs**, in the order a request is worked:
+
+| Tab | What is on it |
+| --- | --- |
+| Overview | What they asked for and the request in detail (with *Email the client*); on the side, **Next** — one pointer from where it stands (get the details; make an offer; see their answer; the offer is out), with the button to go there — the follow-up, the details, and *Delete* |
+| Updates | The request's Updates (§2.6), how many in the tab's name |
+| Offer & contract | The offer or *Make an offer →*, the client's rate card answer, the client's contract, rate cards sent and the rooms — "n new" in the tab's name while an answer is unread |
+| Contracting details | The company details for the lawyers, the client's link to fill them in, *Summary for the lawyers* |
+| Tasks & quotes | The sourcing and hotel tasks, and hotels' quotes for the request |
+| History | Everything that changed on it |
+
+The tab is kept in the page's address (…/sales/…#updates), so a link or a reload opens the
+same one. Nothing was taken off the page; it was rearranged.
 
 **On a request's page the stage is a progress bar** (2026-10-03): *Initial interest →
 Specify → Proposal sent → Negotiation → Contracted*, the steps passed ticked and the current
@@ -2213,8 +2245,11 @@ lost deals of past events — stays in monday.
   from, and the preview marks those *Already imported*.
 
 **Handing a request over** (the owner, 2026-11-09: "sometimes we want to hand things over"):
-in the list of sales requests, each row's *Account manager* is a dropdown of the team — choosing
-someone else hands the request to them at once, without opening it, or *Nobody yet*. It is
+in the list of sales requests, each row's *Manager* is the account manager's initials in a
+circle — **VB** for Volki Bauer, the full name on pointing at it; a dashed **+** for nobody
+(2026-11-10). A click opens the team to choose from — choosing someone else hands the request
+to them at once, without opening it, or *Nobody yet*. On the request's own page it is a
+dropdown in the header. It is
 written to the request's history like any change of account manager. No one is told by the
 system; the new account manager sees it in their list.
 
@@ -3459,7 +3494,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
-| §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9 |
+| §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |

@@ -63,8 +63,8 @@ export function ActivityLog({ entity, entityId, latestOnly }: { entity: string; 
  * clicked (the owner, 2026-10-14: always minimised — it is rarely needed and
  * open it crowds the page). Every page and popup shows its history this way.
  */
-export function HistorySection({ entity, entityId, className = "mt-5" }: { entity: string; entityId: string; className?: string }) {
-  const [open, setOpen] = useState(false);
+export function HistorySection({ entity, entityId, className = "mt-5", startOpen = false }: { entity: string; entityId: string; className?: string; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   const activity = api.audit.list.useQuery({ entity, entityId });
   const count = activity.data?.length ?? 0;
   return (

@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
 
-import { HistorySection } from "~/app/_components/activity-log";
 import { SalesRequestView } from "~/app/_components/sales-requests";
 import { PageHeader } from "~/app/_components/ui";
 import { auth } from "~/server/auth";
@@ -22,7 +21,6 @@ export default async function SalesRequestPage({ params }: { params: Promise<{ i
         subtitle={[request.event?.name ?? "No event", request.contact?.name].filter(Boolean).join(" · ")}
       />
       <SalesRequestView request={request} />
-      <HistorySection entity="SalesRequest" entityId={request.id} />
     </>
   );
 }

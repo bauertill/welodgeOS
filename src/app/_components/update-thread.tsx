@@ -1,6 +1,7 @@
 "use client";
 
 import type { UpdateKind } from "generated/prisma";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button, Input } from "~/app/_components/form";
@@ -12,7 +13,10 @@ import { composeBody, isHeading, updateKindOrder, updateKinds } from "~/lib/upda
 import { MENTION_PATTERN, renderUpdateBody } from "~/lib/updates";
 import { api } from "~/trpc/react";
 
-type Scope = { propertyId: string; clientId?: undefined } | { clientId: string; propertyId?: undefined };
+type Scope =
+  | { propertyId: string; clientId?: undefined; salesRequestId?: undefined }
+  | { clientId: string; propertyId?: undefined; salesRequestId?: undefined }
+  | { salesRequestId: string; propertyId?: undefined; clientId?: undefined };
 
 /**
  * The Updates feed (doc §2.6; called Feedback from 2026-10-01 to 2026-10-06): a running history of meeting notes and
@@ -168,6 +172,12 @@ export function UpdateThread(scope: Scope) {
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${updateKinds[entry.kind].badge}`}>{updateKinds[entry.kind].label}</span>
                   )}
                   <span className="text-ink-900 text-[13px] font-medium">{entry.author?.name ?? entry.author?.email ?? "—"}</span>
+                  {/* On a client's feed, an update written on one of its sales requests says which (doc §2.6). */}
+                  {entry.salesRequest && !scope.salesRequestId && (
+                    <Link href={`/sales/${entry.salesRequest.id}`} className="text-brand-700 shrink-0 text-xs font-light whitespace-nowrap hover:underline">
+                      on the {entry.salesRequest.event?.name ?? "sales"} request
+                    </Link>
+                  )}
                   {entry.happenedOn && (
                     <span className="text-ink-500 shrink-0 text-xs font-light whitespace-nowrap">
                       {updateKinds[entry.kind].short} on {formatDate(entry.happenedOn)}

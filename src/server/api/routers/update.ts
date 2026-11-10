@@ -10,28 +10,31 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
  * Updates: a chronological, append-only history of meeting notes, call
  * summaries and feedback — kept on a property or a client the same way
  * `LedgerEntry` keeps inventory changes (doc §2.6). Exactly one of
- * `propertyId`/`clientId` scopes a post. Its author can edit it, which marks
- * it as edited and keeps the wording it replaced; nobody can delete one.
+ * `propertyId`/`clientId`/`salesRequestId` scopes a post. Its author can edit
+ * it, which marks it as edited and keeps the wording it replaced; nobody can
+ * delete one. A client's feed also shows the updates on its sales requests.
  */
 const scope = z
   .object({
     propertyId: z.string().optional(),
     clientId: z.string().optional(),
+    salesRequestId: z.string().optional(),
   })
-  .refine((value) => Boolean(value.propertyId) !== Boolean(value.clientId), {
-    message: "An update belongs to exactly one property or client.",
+  .refine((value) => [value.propertyId, value.clientId, value.salesRequestId].filter(Boolean).length === 1, {
+    message: "An update belongs to exactly one property, client or sales request.",
   });
 
 export const updateRouter = createTRPCRouter({
   list: protectedProcedure.input(scope).query(({ ctx, input }) =>
     ctx.db.update.findMany({
-      where: {
-        propertyId: input.propertyId,
-        clientId: input.clientId,
-      },
+      where: input.clientId
+        ? // The client's own, and those on its sales requests (doc §2.6, 2026-11-10).
+          { OR: [{ clientId: input.clientId }, { salesRequest: { clientId: input.clientId } }] }
+        : { propertyId: input.propertyId, salesRequestId: input.salesRequestId },
       orderBy: { createdAt: "desc" },
       include: {
         author: { select: { id: true, name: true, email: true, image: true } },
+        salesRequest: { select: { id: true, event: { select: { name: true } } } },
       },
     }),
   ),
@@ -65,6 +68,7 @@ export const updateRouter = createTRPCRouter({
           happenedOn: input.happenedOn ? parseDay(input.happenedOn) : null,
           propertyId: input.propertyId,
           clientId: input.clientId,
+          salesRequestId: input.salesRequestId,
           authorId: ctx.session.user.id,
         },
         include: {

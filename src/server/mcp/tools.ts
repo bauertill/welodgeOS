@@ -256,8 +256,9 @@ export function welodgeServer(person: Person, headers: Headers) {
 
   tool(
     "post_update",
-    "Post an update on a client's or a property's history — a note, meeting feedback or call summary.",
+    "Post an update — a note, meeting feedback or call summary — on a sales request, a client or a property (exactly one). An update on a sales request shows on its client's feed too.",
     {
+      salesRequestId: z.string().optional(),
       clientId: z.string().optional(),
       propertyId: z.string().optional(),
       body: z.string().min(1).max(20_000),

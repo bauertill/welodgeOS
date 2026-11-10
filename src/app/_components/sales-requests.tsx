@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { HistorySection } from "~/app/_components/activity-log";
 import { Manager } from "~/app/_components/client-list";
 import { contractHref, newContractHref } from "~/lib/finance";
 import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
@@ -19,6 +20,7 @@ import { TaskStatusBadge } from "~/app/_components/tasks";
 import { contactOutcomeLabels, contactOutcomeStyle } from "~/lib/tasks";
 import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
+import { UpdateThread } from "~/app/_components/update-thread";
 import { addDays, daysUntil, dayKey, nightsBetween, today } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
 import {
@@ -236,10 +238,52 @@ export function NewAnswers({ count }: { count: number }) {
  * The account manager, changed right in the list — a request handed over
  * without opening it (2026-11-09). Written to the request's history like any change.
  */
-function OwnerPicker({ request }: { request: Request }) {
+function OwnerPicker({
+  request,
+  onChanged,
+  compact = false,
+}: {
+  request: { id: string; client: { name: string }; owner: { id: string } | null };
+  onChanged?: () => void;
+  /** In the list: initials in a circle — "VB" — the dropdown opening on a click (the owner, 2026-11-10). */
+  compact?: boolean;
+}) {
   const utils = api.useUtils();
   const people = api.user.list.useQuery(undefined, { staleTime: 60_000 });
-  const update = api.sales.update.useMutation({ onSuccess: () => void utils.sales.invalidate() });
+  const update = api.sales.update.useMutation({
+    onSuccess: () => {
+      void utils.sales.invalidate();
+      onChanged?.();
+    },
+  });
+  if (compact) {
+    const owner = (people.data ?? []).find((person) => person.id === request.owner?.id);
+    const name = owner?.name ?? owner?.email ?? null;
+    return (
+      <label
+        title={name ? `${name} — click to hand it over` : "Nobody yet — click to give it to someone"}
+        className={`relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-[11px] font-semibold ${
+          name ? "bg-brand-100 text-brand-800 hover:bg-brand-200" : "border-ink-300 text-ink-400 hover:border-brand-400 border border-dashed"
+        } ${update.isPending ? "opacity-50" : ""}`}
+      >
+        {name ? initialsOf(name) : "+"}
+        <select
+          value={request.owner?.id ?? ""}
+          disabled={update.isPending}
+          onChange={(e) => update.mutate({ id: request.id, ownerId: e.target.value || null })}
+          aria-label={`Account manager for ${request.client.name}`}
+          className="absolute inset-0 cursor-pointer opacity-0"
+        >
+          <option value="">— Nobody yet</option>
+          {(people.data ?? []).map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.name ?? person.email}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
   return (
     <div className="min-w-36">
       <select
@@ -262,6 +306,13 @@ function OwnerPicker({ request }: { request: Request }) {
   );
 }
 
+/** "VB" for Volki Bauer, "EC" for Elena Condini Mosna (first and last name), "A" for ami@welodge.net. */
+function initialsOf(name: string) {
+  const words = name.split("@")[0]!.split(/[\s._-]+/).filter(Boolean);
+  const letters = words.length > 1 ? [words[0]![0], words[words.length - 1]![0]] : [words[0]?.[0]];
+  return letters.join("").toUpperCase();
+}
+
 function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: Request[] }) {
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
@@ -279,10 +330,8 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
               <th className={th}>Event</th>
               <th className={th}>What they need</th>
               <th className={th}>Period</th>
-              <th className={th} title="The client's room-nights on this event, from the inventory">Rooms</th>
               <th className={th}>Follow up</th>
-              <th className={th}>Account manager</th>
-              <th className={th}>Days open</th>
+              <th className={th} title="Account manager — click to hand it over">Manager</th>
               <th className={th}>
                 <span className="sr-only">Delete</span>
               </th>
@@ -320,16 +369,6 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                     <span className="line-clamp-2">{request.period ?? "—"}</span>
                   )}
                 </td>
-                <td className={`${td} whitespace-nowrap`}>
-                  {request.nightsSold || request.nightsBlocked ? (
-                    <>
-                      {request.nightsSold > 0 && <span className="block">{request.nightsSold} nights sold</span>}
-                      {request.nightsBlocked > 0 && <span className="text-brand-800 block">{request.nightsBlocked} blocked</span>}
-                    </>
-                  ) : (
-                    <span className="text-ink-500">—</span>
-                  )}
-                </td>
                 <td className={td}>
                   <FollowUp on={request.followUpOn} closed={isClosed(request.stage)} />
                   {request.nextStep && !isClosed(request.stage) && (
@@ -337,9 +376,8 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   )}
                 </td>
                 <td className={td}>
-                  <OwnerPicker request={request} />
+                  <OwnerPicker request={request} compact />
                 </td>
-                <td className={`${td} whitespace-nowrap`}>{daysOpen(request)}</td>
                 <td className={`${td} text-right`}>
                   <DeleteRequest request={request} subtle />
                 </td>
@@ -889,7 +927,7 @@ const moveOnLabels: Partial<Record<SalesRequestStage, string>> = {
  * pending — or that it was lost or declined (doc §4.11, 2026-10-30); a closed
  * one says so, with Reopen.
  */
-function StagePicker({ request }: { request: FullRequest }) {
+function StagePicker({ request, children }: { request: FullRequest; children?: React.ReactNode }) {
   const saved = useSaved();
   const setStage = api.sales.setStage.useMutation({ onSuccess: saved });
   const setWaiting = api.sales.setWaiting.useMutation({ onSuccess: saved });
@@ -1036,6 +1074,7 @@ function StagePicker({ request }: { request: FullRequest }) {
       )}
       {sign.panel}
       {(setStage.error ?? setWaiting.error) && <FormError message={friendlyError(setStage.error ?? setWaiting.error)} />}
+      {children}
     </Card>
   );
 }
@@ -1268,50 +1307,207 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
       empty="Nothing recorded yet — Edit to add what the client asked for, in their words."
     />
   );
+  const [tab, goTo] = useTab();
+  const updates = api.update.list.useQuery({ salesRequestId: request.id });
+  const offers = api.offer.forRequest.useQuery({ salesRequestId: request.id });
+  const answers = api.rateCard.answersForRequest.useQuery({ salesRequestId: request.id });
+  const newAnswers = (answers.data ?? []).filter((answer) => answer.isNew).length;
+
   return (
     <div className="space-y-5">
       <AddendumBanner request={request} />
-      <StagePicker request={request} />
-      {/* The offer first once there is one — it is what the request is about now (doc §4.11, 2026-10-14). */}
-      <RequestOffers salesRequestId={request.id} />
-      <NoOfferYet request={request} />
-      <ClientAnswer request={request} />
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
-          {!detailed && firstAsk}
-          <RequestDetailsCard request={request} />
-          {earlierInterestFields.some((field) => request[field.key]) && (
-            <TextSection request={request} title="More detail" fields={earlierInterestFields} empty="" />
-          )}
-          <RoomsCard request={request} />
-          <TextSection
-            request={request}
-            title="Contracting details"
-            fields={contractingFields}
-            empty="None yet. These are what the lawyers need to draw up the contract — the client's legal name, address, VAT and registration numbers, and who signs."
-            extra={
-              <>
-                <ContractingLink request={request} />
-                <Link href={`/sales/${request.id}/lawyers`} className="text-brand-700 mt-3 inline-block text-[13px] font-medium hover:underline">
-                  Summary for the lawyers →
-                </Link>
-              </>
-            }
-          />
-          {detailed && firstAsk}
+      {/* The header: where it stands, and the facts most looked at (doc §4.11, 2026-11-10). */}
+      <StagePicker request={request}>
+        <RequestFacts request={request} />
+      </StagePicker>
+
+      <nav className="border-ink-200/70 flex gap-1 overflow-x-auto border-b" aria-label="Sales request">
+        {requestTabs.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => goTo(key)}
+            aria-current={tab === key ? "page" : undefined}
+            className={`-mb-px shrink-0 border-b-2 px-3 py-2 text-[13px] whitespace-nowrap transition-colors ${
+              tab === key ? "border-brand-400 text-ink-900 font-medium" : "text-ink-500 hover:text-ink-900 border-transparent"
+            }`}
+          >
+            {label}
+            {key === "updates" && (updates.data?.length ?? 0) > 0 && <span className="text-ink-500 ml-1 font-light">({updates.data!.length})</span>}
+            {key === "offer" && newAnswers > 0 && <span className="ml-1.5 rounded-full bg-[#c03654] px-1.5 text-[10px] font-medium text-white">{newAnswers} new</span>}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "overview" && (
+        <div className="grid gap-5 lg:grid-cols-3">
+          <div className="space-y-5 lg:col-span-2">
+            {!detailed && firstAsk}
+            <RequestDetailsCard request={request} />
+            {earlierInterestFields.some((field) => request[field.key]) && (
+              <TextSection request={request} title="More detail" fields={earlierInterestFields} empty="" />
+            )}
+            {detailed && firstAsk}
+          </div>
+          <div className="space-y-5">
+            <NextStep request={request} hasOffer={(offers.data?.length ?? 0) > 0} hasAnswer={(answers.data?.length ?? 0) > 0} goTo={goTo} />
+            <FollowUpCard request={request} />
+            <DetailsCard request={request} />
+            <p className="px-1">
+              <DeleteRequest request={request} onDeleted={() => router.push("/sales")} />
+            </p>
+          </div>
         </div>
+      )}
+
+      {tab === "updates" && (
+        // The team's running notes as the request goes — a meeting, a call, feedback (doc §2.6, 2026-11-10).
+        <Card>
+          <p className="text-ink-500 mb-3 text-xs font-light">
+            Notes as the request goes — a meeting, a call, feedback. They show on {request.client.name}&rsquo;s page too.
+          </p>
+          <UpdateThread salesRequestId={request.id} />
+        </Card>
+      )}
+
+      {tab === "offer" && (
         <div className="space-y-5">
+          {/* The offer first once there is one — it is what the request is about now (doc §4.11, 2026-10-14). */}
+          <RequestOffers salesRequestId={request.id} />
+          <NoOfferYet request={request} />
+          <ClientAnswer request={request} />
+          {/* Side by side, two to a row — a card with nothing to show takes no place. */}
+          <div className="grid items-start gap-5 lg:grid-cols-2">
+            <ContractCard request={request} />
+            <RequestRateCards salesRequestId={request.id} />
+            <RoomsCard request={request} />
+          </div>
+        </div>
+      )}
+
+      {tab === "contracting" && (
+        <TextSection
+          request={request}
+          title="Contracting details"
+          fields={contractingFields}
+          empty="None yet. These are what the lawyers need to draw up the contract — the client's legal name, address, VAT and registration numbers, and who signs."
+          extra={
+            <>
+              <ContractingLink request={request} />
+              <Link href={`/sales/${request.id}/lawyers`} className="text-brand-700 mt-3 inline-block text-[13px] font-medium hover:underline">
+                Summary for the lawyers →
+              </Link>
+            </>
+          }
+        />
+      )}
+
+      {tab === "tasks" && (
+        <div className="grid gap-5 lg:grid-cols-2">
           <RequestTasks request={request} />
           <QuotesReceived salesRequestId={request.id} />
-          <RequestRateCards salesRequestId={request.id} />
-          <FollowUpCard request={request} />
-          <ContractCard request={request} />
-          <DetailsCard request={request} />
-          <p className="px-1">
-            <DeleteRequest request={request} onDeleted={() => router.push("/sales")} />
-          </p>
         </div>
+      )}
+
+      {tab === "history" && <HistorySection entity="SalesRequest" entityId={request.id} className="" startOpen />}
+    </div>
+  );
+}
+
+/** The request page's tabs (doc §4.11, 2026-11-10), in the order a request is worked. */
+const requestTabs = [
+  { key: "overview", label: "Overview" },
+  { key: "updates", label: "Updates" },
+  { key: "offer", label: "Offer & contract" },
+  { key: "contracting", label: "Contracting details" },
+  { key: "tasks", label: "Tasks & quotes" },
+  { key: "history", label: "History" },
+] as const;
+type RequestTab = (typeof requestTabs)[number]["key"];
+
+/** The open tab, kept in the address (#updates) so a link or a reload opens the same one. */
+function useTab(): [RequestTab, (tab: RequestTab) => void] {
+  const [tab, setTab] = useState<RequestTab>("overview");
+  useEffect(() => {
+    const read = () => {
+      const fromHash = window.location.hash.slice(1);
+      setTab(requestTabs.some((t) => t.key === fromHash) ? (fromHash as RequestTab) : "overview");
+    };
+    read();
+    // A link to another tab of the same request (#offer) switches to it.
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+  const goTo = (next: RequestTab) => {
+    setTab(next);
+    window.history.replaceState(null, "", next === "overview" ? window.location.pathname + window.location.search : `#${next}`);
+  };
+  return [tab, goTo];
+}
+
+/** The facts most looked at, under the stage: who manages it (changed right here), follow-up, value, contact. */
+function RequestFacts({ request }: { request: FullRequest }) {
+  const saved = useSaved();
+  const label = "text-ink-500 text-[11px] font-medium tracking-wider uppercase";
+  return (
+    <dl className="border-ink-200/60 mt-4 grid gap-x-6 gap-y-3 border-t pt-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <dt className={label}>Account manager</dt>
+        <dd className="-ml-1">
+          <OwnerPicker request={request} onChanged={saved} />
+        </dd>
       </div>
+      <div>
+        <dt className={label}>Follow up</dt>
+        <dd className="text-ink-900 font-light">
+          {request.followUpOn ? <FollowUp on={request.followUpOn} closed={isClosed(request.stage)} /> : "—"}
+          {request.nextStep && <span className="text-ink-500 block truncate text-xs">{request.nextStep}</span>}
+        </dd>
+      </div>
+      <div>
+        <dt className={label}>Value</dt>
+        <dd className="text-ink-900 font-light">{request.valueCents !== null && request.valueCurrency ? formatMoney(request.valueCents, request.valueCurrency) : "—"}</dd>
+      </div>
+      <div>
+        <dt className={label}>Contact</dt>
+        <dd className="text-ink-900 min-w-0 font-light">
+          {request.contact ? (
+            <>
+              <span className="block truncate">{request.contact.name}</span>
+              {request.contact.email && (
+                <a href={`mailto:${request.contact.email}`} className="text-brand-700 block truncate text-xs hover:underline">
+                  {request.contact.email}
+                </a>
+              )}
+            </>
+          ) : (
+            "—"
+          )}
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+/** What to do next, from where the request stands — one pointer, with the button to do it. */
+function NextStep({ request, hasOffer, hasAnswer, goTo }: { request: FullRequest; hasOffer: boolean; hasAnswer: boolean; goTo: (tab: RequestTab) => void }) {
+  if (isClosed(request.stage)) return null;
+  const next = !request.detailedAt
+    ? { text: "Get the details — fill them in after a call, or email the client the form to tell us their needs.", button: null }
+    : hasOffer
+      ? { text: "The offer is out — draw up the agreement, send it, and register it signed.", button: { label: "Open the offer →", tab: "offer" as const } }
+      : hasAnswer
+        ? { text: "The client has answered the rate card — make them an offer.", button: { label: "See their answer →", tab: "offer" as const } }
+        : { text: "When the client is ready to go ahead, make them an offer — it blocks the rooms for them.", button: { label: "Make an offer →", tab: "offer" as const } };
+  return (
+    <div className="border-brand-200 bg-brand-50/60 rounded-2xl border px-5 py-4">
+      <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">Next</p>
+      <p className="text-ink-900 mt-1 text-sm">{next.text}</p>
+      {next.button && (
+        <button type="button" onClick={() => goTo(next.button.tab)} className="text-brand-700 mt-2 text-[13px] font-medium hover:underline">
+          {next.button.label}
+        </button>
+      )}
     </div>
   );
 }
@@ -1770,6 +1966,11 @@ function RoomsCard({ request }: { request: FullRequest }) {
     const ahead = next && salesStageOrder.indexOf(next) > salesStageOrder.indexOf(request.stage) && !isClosed(request.stage);
     setDone({ text, offer: ahead ? next : null });
   };
+
+  // Shown only once the request has rooms — blocked by an offer, sold on signing, or loose
+  // holds to tie — or one is being added: an empty card was noise (the owner, 2026-11-10).
+  const empty = !data || (data.rows.length === 0 && data.loose === 0);
+  if (empty && !adding && !done) return null;
 
   return (
     <Card>
