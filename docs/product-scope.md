@@ -182,6 +182,16 @@ permanent record of every inventory change (§4.7). Unlike a room-night, an upda
 about a commercial position, so it sits outside all three phases and applies to a property
 or a client regardless of what phase work is happening on it.
 
+**A sales request has its own feed too** (the owner, 2026-11-10: "a place where our team can
+write updates as the request goes — maybe they had a meeting or some general feedback", as
+monday's Updates tab on a deal). On the request's page, an **Updates** card under *The
+request in detail*: the same box, *+ Meeting feedback* and *+ Call summary*, mentions and
+editing as on a client. **Each update on a request shows on its client's feed as well**,
+marked *on the LA28 Olympic Games request* and linking to it, so the client's page tells the
+whole story across its requests; an update written on the client stays on the client only.
+Deleting a request — one made by mistake (§4.11) — takes its updates with it. Claude's
+connector can post on a request too (§2.10).
+
 A post can mention a colleague with `@Name`, which highlights their name inline. This is a
 visual tag only: nothing is sent to them, and nothing is stored beyond the post's own text
 — there is no notification, and no record of who was mentioned separate from the words
@@ -518,7 +528,7 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | Sales requests (filtered by event, account manager, a word, follow-ups due), and one in full | A request's details, follow-up and next step, event, contact, and account manager (hand it over) |
 | An event's properties board, and a property in full | A request's stage, and what it is waiting on (Mark as…) |
 | An event's stock-sheet position (bought, option, sold, blocked, short, warnings) | Add a contact to a client |
-| Tasks on the board | Post an update on a client or property; create a task, move it, comment on it |
+| Tasks on the board | Post an update on a sales request, client or property; create a task, move it, comment on it |
 
 **It cannot** delete anything, buy, block or sell rooms, take or extend options, or make
 contracts or offers — those stay on the site, by hand. Widening that is a decision for the
@@ -3459,7 +3469,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Magic-link sign-in by email | **Built, switched off** | Deliberate: nobody outside the Workspace needs an account yet. Configuring an email sender re-enables it, with no code change |
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
-| §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9 |
+| §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |

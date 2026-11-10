@@ -1343,6 +1343,8 @@ model SalesRequest {
   offers          Offer[]
   /// Answers to rate cards that are on this request — a general card's answer starts one.
   rateCardAnswers RateCardResponse[]
+  /// Its running notes (doc §2.6).
+  updates         Update[]
 
   @@index([clientId])
   @@index([eventId])
@@ -1395,8 +1397,14 @@ model Update {
   client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
   clientId String?
 
+  /// On a sales request (doc §2.6, 2026-11-10) — the deal's own running notes,
+  /// as monday's Updates tab had them. Shown on the client's feed too.
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  salesRequestId String?
+
   @@index([propertyId])
   @@index([clientId])
+  @@index([salesRequestId])
 }
 
 /// Our own numbering of a countable room: `property + category + slot number`

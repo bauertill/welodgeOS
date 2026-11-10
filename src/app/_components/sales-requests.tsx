@@ -19,6 +19,7 @@ import { TaskStatusBadge } from "~/app/_components/tasks";
 import { contactOutcomeLabels, contactOutcomeStyle } from "~/lib/tasks";
 import { RequestDetailsCard, RequestKind } from "~/app/_components/sales-details";
 import { Card, EmptyState } from "~/app/_components/ui";
+import { UpdateThread } from "~/app/_components/update-thread";
 import { addDays, daysUntil, dayKey, nightsBetween, today } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
 import {
@@ -1280,6 +1281,14 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
         <div className="space-y-5 lg:col-span-2">
           {!detailed && firstAsk}
           <RequestDetailsCard request={request} />
+          {/* The team's running notes as the request goes — a meeting, a call, feedback (doc §2.6, 2026-11-10). */}
+          <Card>
+            <h2 className="text-ink-900 mb-1 text-[15px] font-medium">Updates</h2>
+            <p className="text-ink-500 mb-3 text-xs font-light">
+              Notes as the request goes — a meeting, a call, feedback. They show on {request.client.name}&rsquo;s page too.
+            </p>
+            <UpdateThread salesRequestId={request.id} />
+          </Card>
           {earlierInterestFields.some((field) => request[field.key]) && (
             <TextSection request={request} title="More detail" fields={earlierInterestFields} empty="" />
           )}
