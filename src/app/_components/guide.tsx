@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { firstDay, guideSections, journey, stuck, type GuideSection, type GuideShot } from "~/lib/guide";
@@ -94,7 +95,10 @@ export function Guide() {
       <div className="brand-gradient relative overflow-hidden rounded-2xl px-6 py-10 text-white shadow-sm md:px-10 md:py-12">
         <div className="pointer-events-none absolute -top-16 -right-16 h-64 w-64 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -right-4 -bottom-24 h-48 w-48 rounded-full bg-white/10" />
-        <p className="text-[12px] font-medium tracking-[0.18em] text-white/70 uppercase">WeLodge OS · Sales team</p>
+        <Link href="/guide" className="relative text-[13px] font-light text-white/80 hover:text-white hover:underline">
+          ← All guides
+        </Link>
+        <p className="mt-4 text-[12px] font-medium tracking-[0.18em] text-white/70 uppercase">WeLodge OS · Sales team</p>
         <h1 className="mt-2 text-3xl font-semibold md:text-4xl">The sales guide</h1>
         <p className="mt-2 max-w-2xl text-[15px] font-light text-white/85">
           From the first enquiry to the signed agreement — every step, with pictures. Stuck? Search for what you are trying to do.
