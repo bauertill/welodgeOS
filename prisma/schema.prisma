@@ -887,6 +887,7 @@ model User {
   offersClosed       Offer[]              @relation("OfferClosedBy")
   mcpCodes           McpAuthCode[]
   mcpTokens          McpToken[]
+  gmail              GmailConnection?
   agreementTemplates AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
 }
 
@@ -2144,4 +2145,69 @@ model McpToken {
   createdAt        DateTime  @default(now())
 
   @@index([userId])
+}
+
+// --- Client emails from Gmail (doc §4.10) ------------------------------------------
+
+/// One person's Gmail, connected on My profile for reading only. Its Google
+/// refresh key is kept encrypted; disconnecting deletes the row.
+model GmailConnection {
+  id               String    @id @default(cuid())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String    @unique
+  /// The mailbox's own address, as Google gives it.
+  email            String
+  refreshTokenEnc  String
+  connectedAt      DateTime  @default(now())
+  /// When emails were last fetched, and which contact addresses were already
+  /// covered — a contact added later has its last month fetched on the next sync.
+  lastSyncedAt     DateTime?
+  coveredAddresses String[]  @default([])
+  /// Why the last sync failed, said on My profile; empty once it works again.
+  lastError        String?
+
+  copies EmailCopy[]
+}
+
+/// An email with one of our clients' contacts, as found in the team's
+/// mailboxes — once, however many mailboxes it is in (by its Message-ID).
+/// Which client and request it belongs to is worked out from its addresses
+/// when shown, never stored (doc §4.10).
+model ClientEmail {
+  id              String   @id @default(cuid())
+  /// The email's own Message-ID header — the same in every mailbox it is in.
+  messageId       String   @unique
+  threadId        String?
+  subject         String?
+  fromName        String?
+  fromEmail       String
+  to              String[]
+  cc              String[]
+  /// Every address on it, lower-cased: who sent it, to and copied.
+  addresses       String[]
+  sentAt          DateTime
+  snippet         String?
+  /// The text, as plain text — never shown as HTML.
+  bodyText        String?
+  attachmentNames String[] @default([])
+  createdAt       DateTime @default(now())
+
+  copies EmailCopy[]
+
+  @@index([sentAt])
+  @@index([addresses], type: Gin)
+}
+
+/// In whose mailbox an email was found — for "from Volki's mailbox" and the
+/// owner's own "Open in Gmail".
+model EmailCopy {
+  id           String          @id @default(cuid())
+  email        ClientEmail     @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  emailId      String
+  connection   GmailConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connectionId String
+  gmailId      String
+
+  @@unique([connectionId, gmailId])
+  @@index([emailId])
 }

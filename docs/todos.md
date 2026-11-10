@@ -226,10 +226,14 @@ grants them access to We Lodge OS; removing them is what withdraws it. See
       Internal, Google does not need to review the app. On the sign-in's
       OAuth client, add the authorised redirect address
       `https://os.welodge.net/api/gmail/callback` (and
+      `https://staging.welodge.net/api/gmail/callback` to try it on staging,
       `http://localhost:3000/api/gmail/callback` for building it locally).
       Nothing to paste or set: the connection reuses `AUTH_GOOGLE_ID` /
-      `AUTH_GOOGLE_SECRET`.
-      The code for it is not written yet.
+      `AUTH_GOOGLE_SECRET`, and Google's key is encrypted with `AUTH_SECRET`.
+      **The code is written (2026-11-10)** and waits only on this: until then
+      *My profile → Gmail* says Gmail is not switched on yet. To check it
+      worked: *Connect Gmail* on staging, allow, and a client's emails from the
+      last month appear on its sales requests' *Emails* tab.
 
 - [ ] **A GIPHY key for GIFs in chat** (`product-scope.md` §2.7). Anyone can
       get one, free: sign up at https://developers.giphy.com, *Create an App*,

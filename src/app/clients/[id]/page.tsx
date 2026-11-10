@@ -4,6 +4,7 @@ import { HistorySection } from "~/app/_components/activity-log";
 import { ClientContactsCard, ClientDetailsCard, DeleteClient } from "~/app/_components/client-crm";
 import { ClientContracts, ClientSalesRequests } from "~/app/_components/sales-requests";
 import { UpdateThread } from "~/app/_components/update-thread";
+import { ClientEmails } from "~/app/_components/client-emails";
 import { Card, PageHeader } from "~/app/_components/ui";
 import { clientCategoryLabels } from "~/lib/clients";
 import { auth } from "~/server/auth";
@@ -48,6 +49,12 @@ export default async function ClientPage({
               Updates
             </h2>
             <UpdateThread clientId={client.id} />
+          </Card>
+
+          {/* Every email the team has with the client's people, from connected Gmail (doc §4.10). */}
+          <Card>
+            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Emails</h2>
+            <ClientEmails clientId={client.id} contacts={client.contacts.map((contact) => ({ id: contact.id, name: contact.name, email: contact.email }))} />
           </Card>
         </div>
 

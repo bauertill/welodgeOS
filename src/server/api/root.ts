@@ -3,6 +3,7 @@ import { amenityRouter } from "~/server/api/routers/amenity";
 import { auditRouter } from "~/server/api/routers/audit";
 import { chatRouter } from "~/server/api/routers/chat";
 import { clientRouter } from "~/server/api/routers/client";
+import { emailRouter } from "~/server/api/routers/email";
 import { eventRouter } from "~/server/api/routers/event";
 import { financeRouter } from "~/server/api/routers/finance";
 import { inventoryRouter } from "~/server/api/routers/inventory";
@@ -39,6 +40,7 @@ export const appRouter = createTRPCRouter({
   amenity: amenityRouter,
   clients: clientRouter,
   sales: salesRouter,
+  email: emailRouter,
   mondayImport: mondayImportRouter,
   rateCard: rateCardRouter,
   offer: offerRouter,

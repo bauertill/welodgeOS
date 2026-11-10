@@ -142,6 +142,26 @@ export function welodgeServer(person: Person, headers: Headers) {
   );
 
   tool(
+    "list_emails",
+    "The emails the team has with a client's contacts, from their connected Gmail — for a sales request or a client (one of the two), newest first, with the text. Read-only.",
+    { salesRequestId: z.string().optional(), clientId: z.string().optional(), limit: z.number().int().min(1).max(50).default(15) },
+    read,
+    async ({ salesRequestId, clientId, limit }) => {
+      if (!salesRequestId === !clientId) throw new Error("Give a sales request or a client.");
+      const emails = salesRequestId ? await caller.email.forRequest({ id: salesRequestId }) : await caller.email.forClient({ clientId: clientId! });
+      return emails.slice(0, limit).map((e) => ({
+        sentAt: e.sentAt,
+        from: e.fromName ? `${e.fromName} <${e.fromEmail}>` : e.fromEmail,
+        to: e.to,
+        cc: e.cc,
+        subject: e.subject,
+        text: e.bodyText?.slice(0, 4000),
+        attachments: e.attachmentNames,
+      }));
+    },
+  );
+
+  tool(
     "list_tasks",
     "Tasks on the team's board. Filter by status, assignee, or a search word.",
     { status: z.enum(["BACKLOG", "TODO", "IN_PROGRESS", "DONE"]).optional(), assigneeId: z.string().optional(), query: z.string().max(200).optional() },
