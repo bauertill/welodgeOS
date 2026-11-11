@@ -24,7 +24,9 @@ import {
   contractBack,
   contractHref,
   newContractHref,
+  paymentAmount,
   percent,
+  withTaxes,
 } from "~/lib/finance";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -397,7 +399,7 @@ export function ContractsList({ eventId }: { eventId: string }) {
                     <span className="text-ink-500 block text-xs">{partyLabels[contract.party]}</span>
                   </td>
                   <td className={td}>{contract.property?.name ?? contract.client?.name ?? "—"}</td>
-                  <td className={`${td} whitespace-nowrap`}>{money(contract.totalCents, contract.currency)}</td>
+                  <td className={`${td} whitespace-nowrap`}>{money(withTaxes(contract), contract.currency)}</td>
                   <td className={td}>
                     {contract.missing.length ? (
                       <span className="font-medium text-[#c03654]">Missing {contract.missing.join(", ")}</span>
@@ -474,7 +476,7 @@ export function PropertyContracts({ propertyId, events }: { propertyId: string; 
                           </Link>
                           {contract.signedOn && <span className="text-ink-500 block text-xs">Signed {formatDate(contract.signedOn)}</span>}
                         </td>
-                        <td className={`${td} whitespace-nowrap`}>{money(contract.totalCents, contract.currency)}</td>
+                        <td className={`${td} whitespace-nowrap`}>{money(withTaxes(contract), contract.currency)}</td>
                         <td className={td}>
                           {contract.missing.length ? (
                             <span className="font-medium text-[#c03654]">Missing {contract.missing.join(", ")}</span>
@@ -721,6 +723,7 @@ function ContractDetails({ contract }: { contract: FullContract }) {
     documentUrl: contract.documentUrl ?? "",
     signedOn: dayInput(contract.signedOn),
     total: contract.totalCents !== null ? (contract.totalCents / 100).toFixed(2) : "",
+    taxes: contract.taxCents !== null ? (contract.taxCents / 100).toFixed(2) : "",
     currency: contract.currency ?? "USD",
     ownerId: contract.owner?.id ?? "",
     notes: contract.notes ?? "",
@@ -747,12 +750,15 @@ function ContractDetails({ contract }: { contract: FullContract }) {
             setProblem(null);
             const cents = parseMoney(draft.total);
             if (Number.isNaN(cents)) return setProblem("The total should be a number, like 198450.");
+            const taxCents = parseMoney(draft.taxes);
+            if (Number.isNaN(taxCents)) return setProblem("The taxes should be a number, like 80822.85.");
             update.mutate({
               id: contract.id,
               name: draft.name,
               documentUrl: draft.documentUrl,
               signedOn: draft.signedOn,
               totalCents: cents,
+              taxCents,
               currency: draft.currency,
               ownerId: draft.ownerId || null,
               notes: draft.notes,
@@ -769,7 +775,7 @@ function ContractDetails({ contract }: { contract: FullContract }) {
           <Field label="Signed on">
             <Input type="date" value={draft.signedOn} onChange={(e) => set("signedOn")(e.target.value)} />
           </Field>
-          <Field label="Total">
+          <Field label="Total — the rooms, before tax" hint="Payment shares are shares of this.">
             <div className="flex gap-2">
               <div className="min-w-0 flex-1">
                 <Input value={draft.total} onChange={(e) => set("total")(e.target.value)} inputMode="decimal" aria-label="Total" />
@@ -782,6 +788,9 @@ function ContractDetails({ contract }: { contract: FullContract }) {
                 </Select>
               </div>
             </div>
+          </Field>
+          <Field label="Taxes on top — optional" hint="Like $80,822.85: the city tax on the whole contract. A payment can take all of it.">
+            <Input value={draft.taxes} onChange={(e) => set("taxes")(e.target.value)} inputMode="decimal" placeholder="—" aria-label="Taxes on top" />
           </Field>
           <Field label="Account manager">
             <Select value={draft.ownerId} onChange={(e) => set("ownerId")(e.target.value)}>
@@ -836,7 +845,13 @@ function ContractDetails({ contract }: { contract: FullContract }) {
               }
             />
           )}
-          <Row label="Total" value={money(contract.totalCents, contract.currency)} />
+          <Row label={contract.taxCents ? "Rooms" : "Total"} value={money(contract.totalCents, contract.currency)} />
+          {contract.taxCents !== null && contract.taxCents > 0 && (
+            <>
+              <Row label="Taxes" value={money(contract.taxCents, contract.currency)} />
+              <Row label="Total payable" value={<strong className="font-medium">{money(withTaxes(contract), contract.currency)}</strong>} />
+            </>
+          )}
           <Row
             label="Signed PDF"
             value={
@@ -940,7 +955,10 @@ function PaymentsCard({ contract }: { contract: FullContract }) {
                       <DueIn on={payment.dueOn} settled={isSettled(payment.status)} />
                     </td>
                     <td className={`${td} max-w-64`}>{payment.description}</td>
-                    <td className={td}>{percent(payment.percentBasisPoints) ?? "Set amount"}</td>
+                    <td className={td}>
+                      {percent(payment.percentBasisPoints) ?? "Set amount"}
+                      {payment.plusTaxes && <span className="text-ink-500 block text-xs">+ all taxes</span>}
+                    </td>
                     <td className={`${td} whitespace-nowrap`}>{money(payment.amount, contract.currency)}</td>
                     <td className={td}>
                       <Select
@@ -992,15 +1010,16 @@ function PaymentEditor({ contract, payment, onDone }: { contract: FullContract; 
     invoiceUrl: payment?.invoiceUrl ?? "",
     proofUrl: payment?.proofUrl ?? "",
     beneficiary: payment?.beneficiary ?? "",
+    plusTaxes: payment?.plusTaxes ?? false,
   });
   const [problem, setProblem] = useState<string | null>(null);
-  const set = (key: keyof typeof draft) => (value: string) => setDraft((current) => ({ ...current, [key]: value }));
+  const set = (key: Exclude<keyof typeof draft, "plusTaxes">) => (value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const save = api.finance.savePayment.useMutation({ onSuccess: () => { saved(); onDone(); } });
   const remove = api.finance.removePayment.useMutation({ onSuccess: () => { saved(); onDone(); } });
   const share = parseShare(draft.share);
   const preview =
     share !== null && !Number.isNaN(share) && contract.totalCents !== null
-      ? money(Math.round((contract.totalCents * share) / 10_000), contract.currency)
+      ? money(paymentAmount({ percentBasisPoints: share, amountCents: null, plusTaxes: draft.plusTaxes }, contract), contract.currency)
       : null;
 
   return (
@@ -1022,6 +1041,7 @@ function PaymentEditor({ contract, payment, onDone }: { contract: FullContract; 
             dueOn: draft.dueOn,
             percentBasisPoints: share,
             amountCents: share !== null ? null : amount,
+            plusTaxes: draft.plusTaxes,
             status: draft.status,
             paidOn: draft.paidOn,
             invoiceUrl: draft.invoiceUrl,
@@ -1044,6 +1064,12 @@ function PaymentEditor({ contract, payment, onDone }: { contract: FullContract; 
         <Field label="Or a set amount" hint="Only where it is not a plain share, like a tax." className="sm:col-span-2">
           <Input value={draft.amount} onChange={(e) => set("amount")(e.target.value)} inputMode="decimal" placeholder="—" disabled={draft.share.trim() !== ""} />
         </Field>
+        {(contract.taxCents ?? 0) > 0 && (
+          <label className="text-ink-700 flex items-center gap-2 text-[13px] font-light sm:col-span-6">
+            <input type="checkbox" className="accent-brand-400 h-4 w-4" checked={draft.plusTaxes} onChange={(e) => setDraft((current) => ({ ...current, plusTaxes: e.target.checked }))} />
+            Plus all of the taxes ({money(contract.taxCents, contract.currency)}) — like &ldquo;30% + tax 100%&rdquo;
+          </label>
+        )}
         <Field label="Status" className="sm:col-span-2">
           <Select value={draft.status} onChange={(e) => set("status")(e.target.value)}>
             {paymentStatusOrder[contract.party].map((status) => (

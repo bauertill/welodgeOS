@@ -4,6 +4,8 @@ import type { BudgetBasis } from "generated/prisma";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import type { EventPeriodDays } from "~/lib/event-periods";
+import { PeriodChips } from "~/app/_components/period-chips";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { CloseToPicker, type Point } from "~/app/_components/close-to-picker";
 import { Combobox } from "~/app/_components/combobox";
@@ -154,6 +156,7 @@ export function DetailsFields({
   forClient = false,
   find,
   eventStart,
+  periods = [],
 }: {
   values: DetailsValues;
   onChange: (values: DetailsValues) => void;
@@ -163,6 +166,8 @@ export function DetailsFields({
   find: (address: string) => Promise<{ latitude: number; longitude: number; address: string | null } | null>;
   /** "2028-07-10": the event's first day — the calendars open on its month. */
   eventStart?: string | null;
+  /** The event's named periods, offered as one-click dates on each line (doc §3.10). */
+  periods?: EventPeriodDays[];
 }) {
   const set = <K extends keyof DetailsValues>(key: K, value: DetailsValues[K]) => onChange({ ...values, [key]: value });
   const setLine = (index: number, patch: Partial<LineDraft>) =>
@@ -245,6 +250,11 @@ export function DetailsFields({
                 </button>
               ) : (
                 <span />
+              )}
+              {periods.length > 0 && (
+                <div className="col-span-2 sm:col-span-6 sm:-mt-1 sm:mb-1 sm:pl-[calc(4.75rem+0.5rem)]">
+                  <PeriodChips periods={periods} checkIn={line.checkIn} checkOut={line.checkOut} onPick={(checkIn, checkOut) => setLine(index, { checkIn, checkOut })} />
+                </div>
               )}
             </div>
           ))}
@@ -402,6 +412,7 @@ export function RequestKind({ request }: { request: { detailedAt: Date | null } 
 export function RequestDetailsCard({ request }: { request: FullRequest }) {
   const saved = useSaved();
   const places = api.place.listForEvent.useQuery({ eventId: request.event?.id ?? "" }, { enabled: Boolean(request.event) });
+  const eventPeriods = api.event.periods.useQuery({ eventId: request.event?.id ?? "" }, { enabled: Boolean(request.event) });
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
   const [problem, setProblem] = useState<string | null>(null);
@@ -454,6 +465,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
             places={placeList}
             find={(address) => geocode.mutateAsync({ address })}
             eventStart={eventStay(request.event)?.checkIn}
+            periods={eventPeriods.data ?? []}
           />
           <div className="mt-4 space-y-2">
             <FormError message={problem ?? (save.error ? friendlyError(save.error) : null)} />
@@ -706,6 +718,7 @@ export function NeedsForm({ token }: { token: string }) {
             forClient
             find={(address) => geocode.mutateAsync({ token, address })}
             eventStart={form.data.stay?.checkIn}
+            periods={form.data.periods}
           />
           <div className="mt-5 space-y-2">
             <FormError message={problem ?? (submit.error ? friendlyError(submit.error) : null)} />

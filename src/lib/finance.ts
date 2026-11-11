@@ -70,13 +70,28 @@ export const percent = (basisPoints: number | null) =>
  * every share with it (doc §7.1).
  */
 export function paymentAmount(
-  payment: { percentBasisPoints: number | null; amountCents: number | null },
-  contract: { totalCents: number | null },
+  payment: { percentBasisPoints: number | null; amountCents: number | null; plusTaxes?: boolean },
+  contract: { totalCents: number | null; taxCents?: number | null },
 ): number | null {
-  if (payment.amountCents !== null) return payment.amountCents;
+  // "30% + tax 100%": a payment can also take all of the contract's taxes (doc §7.1).
+  const taxes = payment.plusTaxes ? (contract.taxCents ?? 0) : 0;
+  if (payment.amountCents !== null) return payment.amountCents + taxes;
   if (payment.percentBasisPoints === null || contract.totalCents === null) return null;
-  return Math.round((contract.totalCents * payment.percentBasisPoints) / 10_000);
+  return Math.round((contract.totalCents * payment.percentBasisPoints) / 10_000) + taxes;
 }
+
+/**
+ * The tax on one room for one night (doc §3.10): the TOT share of the rate,
+ * rounded to the cent, plus any fixed amount per night — as hotels in Los
+ * Angeles work it out: $245 at 15% + $2.30 is $39.05.
+ */
+export function taxPerNight(rateCents: number, totBasisPoints: number | null, fixedCents: number | null) {
+  return Math.round((rateCents * (totBasisPoints ?? 0)) / 10_000) + (fixedCents ?? 0);
+}
+
+/** What the payable total is: the rooms and, when there are any, the taxes on top. */
+export const withTaxes = (contract: { totalCents: number | null; taxCents?: number | null }) =>
+  contract.totalCents === null ? null : contract.totalCents + (contract.taxCents ?? 0);
 
 /**
  * What a contract is still missing: its payment terms, and its cancellation

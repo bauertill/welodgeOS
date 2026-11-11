@@ -2,7 +2,9 @@
 
 import { Input, Select } from "~/app/_components/form";
 import { addDays, dayKey, nightsBetween, parseDay } from "~/lib/dates";
+import { splitStayByPeriods } from "~/lib/event-periods";
 import { formatDay } from "~/lib/format";
+import { api } from "~/trpc/react";
 
 /**
  * A stay priced by period (doc §4.8) — a pre rate, the event rate and a post
@@ -10,7 +12,7 @@ import { formatDay } from "~/lib/format";
  * run from check-in to check-out, one after another.
  */
 
-export type RatePeriod = { checkIn: string; checkOut: string; price: string };
+export type RatePeriod = { checkIn: string; checkOut: string; price: string; /** The event period it is, when split by them (doc §3.10). */ label?: string };
 
 const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
@@ -22,7 +24,7 @@ export function splitPeriod(periods: RatePeriod[], index: number): RatePeriod[] 
   const middle = dayKey(addDays(parseDay(period.checkIn), Math.floor(nights / 2)));
   return [
     ...periods.slice(0, index),
-    { ...period, checkOut: middle },
+    { ...period, checkOut: middle, label: undefined },
     { checkIn: middle, checkOut: period.checkOut, price: "" },
     ...periods.slice(index + 1),
   ];
@@ -58,14 +60,32 @@ export function RatePeriods({
   onChange,
   currency,
   onCurrencyChange,
+  eventId,
 }: {
   periods: RatePeriod[];
   onChange: (periods: RatePeriod[]) => void;
   currency: string;
   onCurrencyChange: (currency: string) => void;
+  /** Offers to split the stay by the event's own periods, when it has some. */
+  eventId?: string;
 }) {
+  const eventPeriods = api.event.periods.useQuery({ eventId: eventId ?? "" }, { enabled: Boolean(eventId) }).data ?? [];
+  const stayIn = periods[0]?.checkIn ?? "";
+  const stayOut = periods.at(-1)?.checkOut ?? "";
+  const byEvent = eventPeriods.length ? splitStayByPeriods(stayIn, stayOut, eventPeriods) : [];
+  // Worth offering only when the stay meets a period and is not already cut that way.
+  const offerSplit =
+    byEvent.length > 1 && JSON.stringify(byEvent.map((piece) => [piece.checkIn, piece.checkOut])) !== JSON.stringify(periods.map((period) => [period.checkIn, period.checkOut]));
+  const splitByEvent = () =>
+    onChange(
+      byEvent.map((piece) => ({
+        ...piece,
+        // A price already given for exactly these nights is kept.
+        price: periods.find((period) => period.checkIn === piece.checkIn && period.checkOut === piece.checkOut)?.price ?? (periods.length === 1 ? (periods[0]?.price ?? "") : ""),
+      })),
+    );
   const set = (index: number, key: keyof RatePeriod, value: string) => {
-    const next = periods.map((period, i) => (i === index ? { ...period, [key]: value } : period));
+    const next = periods.map((period, i) => (i === index ? { ...period, [key]: value, ...(key !== "price" && { label: undefined }) } : period));
     // Moving where one period ends moves where the next begins, so they stay joined.
     if (key === "checkOut" && next[index + 1]) next[index + 1] = { ...next[index + 1]!, checkIn: value };
     if (key === "checkIn" && index > 0 && next[index - 1]) next[index - 1] = { ...next[index - 1]!, checkOut: value };
@@ -75,8 +95,8 @@ export function RatePeriods({
     if (periods.length < 2) return;
     const next = periods.filter((_, i) => i !== index);
     // The neighbour takes over the removed period's nights.
-    if (index > 0) next[index - 1] = { ...next[index - 1]!, checkOut: periods[index]!.checkOut };
-    else next[0] = { ...next[0]!, checkIn: periods[0]!.checkIn };
+    if (index > 0) next[index - 1] = { ...next[index - 1]!, checkOut: periods[index]!.checkOut, label: undefined };
+    else next[0] = { ...next[0]!, checkIn: periods[0]!.checkIn, label: undefined };
     onChange(next);
   };
   return (
@@ -93,8 +113,14 @@ export function RatePeriods({
           </Select>
         </div>
       </div>
+      {offerSplit && (
+        <button type="button" onClick={splitByEvent} className="text-brand-700 text-xs font-medium hover:underline">
+          Split by the event&rsquo;s periods ({byEvent.map((piece) => piece.label).join(" · ")})
+        </button>
+      )}
       {periods.map((period, index) => (
         <div key={index} className="border-ink-200/60 border-t pt-3 first:border-t-0 first:pt-0">
+          {period.label && <p className="text-ink-900 mb-1 text-xs font-medium">{period.label}</p>}
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6.5rem] gap-2">
             <label className="min-w-0">
               <span className="text-ink-500 mb-1 block text-[11px]">From</span>

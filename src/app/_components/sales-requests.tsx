@@ -2452,7 +2452,7 @@ function AddRooms({
         {periodsMode ? (
           <div className="sm:col-span-6">
             <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">Price per night, by period</span>
-            <RatePeriods periods={periods} onChange={setPeriods} currency={currency} onCurrencyChange={setCurrency} />
+            <RatePeriods periods={periods} onChange={setPeriods} currency={currency} onCurrencyChange={setCurrency} eventId={request.event?.id} />
           </div>
         ) : (
           <Field label={action === "REQUEST" ? "Price per night, to the client" : "Price per night — required"} className="sm:col-span-2">

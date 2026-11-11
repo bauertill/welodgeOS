@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { PeriodChips } from "~/app/_components/period-chips";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
@@ -12,7 +13,7 @@ import { RateIncludesPicker } from "~/app/_components/room-categories";
 import { checkTerms, TermsEditor, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
 import { dayKey } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
-import { contractHref, percent } from "~/lib/finance";
+import { contractHref, percent, taxPerNight } from "~/lib/finance";
 import { describeRateIncludes } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -107,7 +108,7 @@ export function QuotationsSection({
         )}
       </div>
       {editing === "new" && (
-        <QuotationEditor scoutingEntryId={scoutingEntryId} categories={categories} stay={stay} onDone={() => setEditing(null)} />
+        <QuotationEditor scoutingEntryId={scoutingEntryId} eventId={eventId} categories={categories} stay={stay} onDone={() => setEditing(null)} />
       )}
       {rows.length === 0 && editing !== "new" ? (
         <p className="text-ink-500 text-[13px] font-light">
@@ -120,6 +121,7 @@ export function QuotationsSection({
               <QuotationEditor
                 key={quotation.id}
                 scoutingEntryId={scoutingEntryId}
+                eventId={eventId}
                 categories={categories}
                 stay={stay}
                 quotation={quotation}
@@ -179,7 +181,9 @@ function QuotationCard({
   const terms = [
     [
       "Payments",
-      quotation.payments.map((payment) => `${percent(payment.percentBasisPoints)} ${payment.onSignature ? "on signature" : `on ${formatDate(payment.dueOn!)}`}`).join(" · ") || null,
+      quotation.payments
+        .map((payment) => `${percent(payment.percentBasisPoints)}${payment.plusTaxes ? " + all taxes" : ""} ${payment.onSignature ? "on signature" : `on ${formatDate(payment.dueOn!)}`}`)
+        .join(" · ") || null,
     ],
     ["Payment terms", quotation.paymentTerms],
     [
@@ -195,6 +199,7 @@ function QuotationCard({
     ["Cancellation terms", quotation.cancellationTerms],
     ["Rates include", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
     ["TOT", percent(quotation.totBasisPoints)],
+    ["Tax per room per night", quotation.taxPerNightCents !== null ? formatMoney(quotation.taxPerNightCents, quotation.currency) : null],
     ["Other taxes", quotation.otherTaxes],
   ].filter(([, value]) => value) as [string, string][];
 
@@ -236,7 +241,14 @@ function QuotationCard({
           </p>
           </div>
         </div>
-        <p className="text-ink-900 shrink-0 text-[15px] font-semibold whitespace-nowrap">{formatMoney(quotation.totalCents, quotation.currency)}</p>
+        <p className="text-ink-900 shrink-0 text-right text-[15px] font-semibold whitespace-nowrap">
+          {formatMoney(quotation.payableCents, quotation.currency)}
+          {quotation.taxCents > 0 && (
+            <span className="text-ink-500 block text-xs font-light">
+              {formatMoney(quotation.totalCents, quotation.currency)} + {formatMoney(quotation.taxCents, quotation.currency)} taxes
+            </span>
+          )}
+        </p>
       </button>
 
       {open && (
@@ -249,6 +261,7 @@ function QuotationCard({
               <th className={th}>Period</th>
               <th className={th}>Rooms</th>
               <th className={th}>Per night</th>
+              {quotation.taxCents > 0 && <th className={th}>Tax per night</th>}
               <th className={th}>Room-nights</th>
               <th className={th}>Total</th>
             </tr>
@@ -266,8 +279,12 @@ function QuotationCard({
                 </td>
                 <td className={td}>{line.rooms}</td>
                 <td className={`${td} whitespace-nowrap`}>{formatMoney(line.rateCents, quotation.currency)}</td>
+                {quotation.taxCents > 0 && <td className={`${td} whitespace-nowrap`}>{formatMoney(line.taxPerNightCents, quotation.currency)}</td>}
                 <td className={td}>{line.roomNights}</td>
-                <td className={`${td} whitespace-nowrap`}>{formatMoney(line.totalCents, quotation.currency)}</td>
+                <td className={`${td} whitespace-nowrap`}>
+                  {formatMoney(line.totalCents + line.taxCents, quotation.currency)}
+                  {line.taxCents > 0 && <span className="text-ink-500 block text-xs">incl. {formatMoney(line.taxCents, quotation.currency)} tax</span>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -319,7 +336,7 @@ function QuotationCard({
                 disabled={makeContract.isPending}
                 onClick={() =>
                   window.confirm(
-                    `Accept "${quotation.name}" and make it the supplier contract, worth ${formatMoney(quotation.totalCents, quotation.currency)}?`,
+                    `Accept "${quotation.name}" and make it the supplier contract, worth ${formatMoney(quotation.payableCents, quotation.currency)}${quotation.taxCents > 0 ? " with taxes" : ""}?`,
                   ) && makeContract.mutate({ id: quotation.id })
                 }
                 className="text-brand-700 font-medium hover:underline"
@@ -361,8 +378,11 @@ function QuotationEditor({
   quotation,
   forRequestId,
   onDone,
+  eventId,
 }: {
   scoutingEntryId: string;
+  /** For the event's named periods, one click each for a line's dates (doc §3.10). */
+  eventId?: string;
   categories: Category[];
   stay: { checkIn: string; checkOut: string };
   quotation?: Quotation;
@@ -371,6 +391,7 @@ function QuotationEditor({
   onDone: () => void;
 }) {
   const utils = api.useUtils();
+  const eventPeriods = api.event.periods.useQuery({ eventId: eventId ?? "" }, { enabled: Boolean(eventId) }).data ?? [];
   const [draft, setDraft] = useState({
     name: quotation?.name ?? "",
     receivedOn: quotation?.receivedOn ? dayKey(quotation.receivedOn) : "",
@@ -382,6 +403,7 @@ function QuotationEditor({
     rateIncludesOther: quotation?.rateIncludesOther ?? "",
     cleaningOther: quotation?.cleaningOther ?? "",
     tot: quotation?.totBasisPoints != null ? (quotation.totBasisPoints / 100).toFixed(2) : "",
+    taxPerNight: quotation?.taxPerNightCents != null ? (quotation.taxPerNightCents / 100).toFixed(2) : "",
     otherTaxes: quotation?.otherTaxes ?? "",
     documentUrl: quotation?.documentUrl ?? "",
     notes: quotation?.notes ?? "",
@@ -470,7 +492,7 @@ function QuotationEditor({
   // Payments and cancellation cut-offs, line by line (doc §3.10) — one to start, more when quoted.
   const [payments, setPayments] = useState<PaymentDraft[]>(
     quotation?.payments.length
-      ? quotation.payments.map((payment) => ({ onSignature: payment.onSignature, dueOn: payment.dueOn ? dayKey(payment.dueOn) : "", percent: toPercent(payment.percentBasisPoints) }))
+      ? quotation.payments.map((payment) => ({ onSignature: payment.onSignature, dueOn: payment.dueOn ? dayKey(payment.dueOn) : "", percent: toPercent(payment.percentBasisPoints), plusTaxes: payment.plusTaxes }))
       : [{ onSignature: true, dueOn: "", percent: "" }],
   );
   const [cancellations, setCancellations] = useState<CancellationDraft[]>(
@@ -498,12 +520,22 @@ function QuotationEditor({
     },
   });
 
-  // What the lines come to, as they are typed.
-  const total = lines.reduce((sum, line) => {
-    const nights = line.checkIn && line.checkOut ? Math.max(0, (Date.parse(line.checkOut) - Date.parse(line.checkIn)) / 86_400_000) : 0;
-    const rate = Number(line.rate.replace(",", "."));
-    return sum + (Number.isFinite(rate) ? nights * (Number(line.rooms) || 0) * rate : 0);
-  }, 0);
+  // What the lines come to, as they are typed: the rooms, and the taxes on top worked out as the hotel does (doc §3.10).
+  const typedTot = Number(draft.tot.replace(",", ".").replace("%", ""));
+  const typedFixed = Number(draft.taxPerNight.replace(",", "."));
+  const totBp = draft.tot.trim() && Number.isFinite(typedTot) ? Math.round(typedTot * 100) : null;
+  const fixedCents = draft.taxPerNight.trim() && Number.isFinite(typedFixed) ? Math.round(typedFixed * 100) : null;
+  const sums = lines.reduce(
+    (sum, line) => {
+      const nights = line.checkIn && line.checkOut ? Math.max(0, (Date.parse(line.checkOut) - Date.parse(line.checkIn)) / 86_400_000) : 0;
+      const rate = Number(line.rate.replace(",", "."));
+      if (!Number.isFinite(rate)) return sum;
+      const rateCents = Math.round(rate * 100);
+      const roomNights = nights * (Number(line.rooms) || 0);
+      return { rooms: sum.rooms + roomNights * rateCents, taxes: sum.taxes + roomNights * taxPerNight(rateCents, totBp, fixedCents) };
+    },
+    { rooms: 0, taxes: 0 },
+  );
 
   return (
     <form
@@ -529,10 +561,12 @@ function QuotationEditor({
         if (cleaningIncluded && !cleaning) return setProblem("Say how often the rooms are cleaned, or untick cleaning.");
         const tot = draft.tot.trim() ? Number(draft.tot.replace(",", ".").replace("%", "")) : null;
         if (tot !== null && (!Number.isFinite(tot) || tot < 0 || tot > 100)) return setProblem("TOT should be a percentage, like 15.");
+        const perNight = draft.taxPerNight.trim() ? Number(draft.taxPerNight.replace(",", ".")) : null;
+        if (perNight !== null && (!Number.isFinite(perNight) || perNight < 0)) return setProblem("The tax per room per night should be an amount, like 2.30.");
         const terms = checkTerms(payments, cancellations, "OTHER");
         if (typeof terms === "string") return setProblem(terms);
         const { payments: paymentsOut, cancellations: cancellationsOut } = terms;
-        const { tot: _tot, ...fields } = draft;
+        const { tot: _tot, taxPerNight: _taxPerNight, ...fields } = draft;
         save.mutate({
           scoutingEntryId,
           id: quotation?.id,
@@ -542,6 +576,7 @@ function QuotationEditor({
             rateIncludes: includes,
             cleaning: cleaningIncluded && cleaning ? cleaning : null,
             totBasisPoints: tot === null ? null : Math.round(tot * 100),
+            taxPerNightCents: perNight === null ? null : Math.round(perNight * 100),
             salesRequestId: forRequest,
             agreementOn,
             lines: parsed,
@@ -645,6 +680,16 @@ function QuotationEditor({
                   </button>
                 )}
               </span>
+              {eventPeriods.length > 0 && (
+                <div className="col-span-2 sm:col-span-7 sm:-mt-1">
+                  <PeriodChips
+                    periods={eventPeriods}
+                    checkIn={line.checkIn}
+                    checkOut={line.checkOut}
+                    onPick={(checkIn, checkOut) => setLines((current) => current.map((row, i) => (i === index ? { ...row, checkIn, checkOut } : row)))}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -667,13 +712,22 @@ function QuotationEditor({
             + Add a line — another room category, or a pre or post period
           </button>
           <span className="text-ink-700">
-            Comes to <strong className="font-semibold">{formatMoney(Math.round(total * 100), draft.currency)}</strong>
+            {sums.taxes > 0 ? (
+              <>
+                Rooms {formatMoney(sums.rooms, draft.currency)} + taxes {formatMoney(sums.taxes, draft.currency)} ={" "}
+                <strong className="font-semibold">{formatMoney(sums.rooms + sums.taxes, draft.currency)}</strong>
+              </>
+            ) : (
+              <>
+                Comes to <strong className="font-semibold">{formatMoney(sums.rooms, draft.currency)}</strong>
+              </>
+            )}
           </span>
         </div>
       </div>
 
       <div className="space-y-4">
-        <TermsEditor payments={payments} setPayments={setPayments} cancellations={cancellations} setCancellations={setCancellations} />
+        <TermsEditor payments={payments} setPayments={setPayments} cancellations={cancellations} setCancellations={setCancellations} taxes />
         <label className="flex flex-wrap items-center gap-2 text-[13px]">
           <span className="text-ink-700 font-medium">The contract will be on</span>
           <Select value={agreementOn ?? ""} onChange={(e) => setAgreementOn((e.target.value || null) as "HOTEL" | "WE_LODGE" | null)} className="w-52" aria-label="Whose agreement">
@@ -708,10 +762,13 @@ function QuotationEditor({
             onCleaningOtherChange={set("cleaningOther")}
           />
         </div>
-        <Field label="TOT (Transient Occupancy Tax), %">
+        <Field label="TOT — city / occupancy tax on the rate, %" hint="Rates are taken as before tax; the tax is added on top.">
           <Input value={draft.tot} onChange={(e) => set("tot")(e.target.value)} placeholder="15.00" inputMode="decimal" aria-label="TOT %" />
         </Field>
-        <Field label="Other applicable tax">
+        <Field label={`Fixed tax per room per night, ${draft.currency}`} hint="Added on top of the TOT — Santa Monica's $2.30, say.">
+          <Input value={draft.taxPerNight} onChange={(e) => set("taxPerNight")(e.target.value)} placeholder="2.30" inputMode="decimal" aria-label="Tax per room per night" />
+        </Field>
+        <Field label="Other applicable tax, in words">
           <Input value={draft.otherTaxes} onChange={(e) => set("otherTaxes")(e.target.value)} placeholder="TMD: 6.25 USD (ADR 200–300)" aria-label="Other applicable tax" />
         </Field>
         <Field label="The quotation — Google Drive link">
@@ -751,6 +808,7 @@ export function QuotationPopup({ scoutingEntryId, forRequestId, onClose }: { sco
         <QuotationEditor
           scoutingEntryId={scoutingEntryId}
           categories={c.property.categories}
+          eventId={c.event.id}
           stay={{ checkIn: dayKey(c.event.startDate), checkOut: dayKey(c.event.endDate) }}
           forRequestId={forRequestId}
           onDone={onClose}
@@ -856,7 +914,7 @@ export function QuotesReceived({ salesRequestId }: { salesRequestId: string }) {
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
-                <span className="text-ink-900 mt-0.5 block text-[13px] font-semibold">{formatMoney(quote.totalCents, quote.currency)}</span>
+                <span className="text-ink-900 mt-0.5 block text-[13px] font-semibold">{formatMoney(quote.payableCents, quote.currency)}</span>
               </button>
             </li>
           ))}
@@ -888,6 +946,7 @@ function QuotePopup({ quote, onClose }: { quote: RouterOutputs["quotation"]["for
           <QuotationEditor
             scoutingEntryId={quote.scoutingEntryId}
             categories={c.property.categories}
+            eventId={c.event.id}
             stay={{ checkIn: dayKey(c.event.startDate), checkOut: dayKey(c.event.endDate) }}
             quotation={quote}
             onDone={() => setEditing(false)}

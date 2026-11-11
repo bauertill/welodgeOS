@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { HistorySection } from "~/app/_components/activity-log";
 import { EventForm } from "~/app/_components/event-form";
+import { EventPeriods } from "~/app/_components/event-periods";
 import { EventTeam } from "~/app/_components/event-team";
 import { PlacesOfInterest } from "~/app/_components/places-of-interest";
 import { PageHeader } from "~/app/_components/ui";
@@ -48,6 +49,11 @@ export default async function EditEventPage({
           projectLeadId={event.projectLead?.id ?? null}
           accommodationManagerIds={event.accommodationManagers.map((person) => person.id)}
         />
+      </div>
+
+      {/* Named periods with their own rates, like LA28's Olympics and Paralympics (doc §3.10). */}
+      <div id="periods" className="mt-5 scroll-mt-6">
+        <EventPeriods eventId={event.id} eventStart={dayKey(event.startDate)} eventEnd={dayKey(event.endDate)} />
       </div>
 
       {/* Part of setting the event up (doc §3.7): the Properties tab only

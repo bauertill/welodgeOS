@@ -1,5 +1,9 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { dayKey, parseDay } from "~/lib/dates";
+import { eventPeriodProblem } from "~/lib/event-periods";
+import { formatRange } from "~/lib/format";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit, logFieldChanges } from "~/server/audit";
 
@@ -44,9 +48,55 @@ export const eventRouter = createTRPCRouter({
           },
           projectLead: { select: { id: true, name: true, email: true } },
           accommodationManagers: { select: { id: true, name: true, email: true }, orderBy: { name: "asc" } },
+          periods: { orderBy: { startDate: "asc" } },
         },
       }),
     ),
+
+  /** The event's named periods (doc §3.10), in date order, as days: none for most events. */
+  periods: protectedProcedure.input(z.object({ eventId: z.string() })).query(async ({ ctx, input }) =>
+    (await ctx.db.eventPeriod.findMany({ where: { eventId: input.eventId }, orderBy: { startDate: "asc" } })).map((period) => ({
+      id: period.id,
+      name: period.name,
+      from: dayKey(period.startDate),
+      to: dayKey(period.endDate),
+    })),
+  ),
+
+  /**
+   * Set the event's periods (doc §3.10) — the whole list at once, as edited.
+   * Named, each with its first night and check-out day; they may leave gaps,
+   * never overlap. Rates already recorded are not touched.
+   */
+  savePeriods: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+        periods: z
+          .array(z.object({ name: z.string().trim().min(1).max(80), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+          .max(20),
+      }),
+    )
+    .mutation(({ ctx, input }) => {
+      const problem = eventPeriodProblem(input.periods);
+      if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
+      return ctx.db.$transaction(async (tx) => {
+        const words = (periods: { name: string; startDate: Date; endDate: Date }[]) =>
+          periods
+            .slice()
+            .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+            .map((period) => `${period.name} ${formatRange(period.startDate, period.endDate)}`)
+            .join("; ") || "none";
+        const before = await tx.eventPeriod.findMany({ where: { eventId: input.eventId } });
+        await tx.eventPeriod.deleteMany({ where: { eventId: input.eventId } });
+        const after = input.periods.map((period) => ({ eventId: input.eventId, name: period.name.trim(), startDate: parseDay(period.from), endDate: parseDay(period.to) }));
+        if (after.length) await tx.eventPeriod.createMany({ data: after });
+        if (words(before) !== words(after)) {
+          await logAudit(tx, { actorId: ctx.session.user.id, entity: "Event", entityId: input.eventId, summary: "Periods changed", changes: `${words(before)} → ${words(after)}` });
+        }
+        return { ok: true };
+      });
+    }),
 
   /**
    * The event's team (doc §2.3): its project lead, and its accommodation
