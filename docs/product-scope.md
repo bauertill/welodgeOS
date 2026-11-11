@@ -2989,6 +2989,15 @@ kept on the rep's own computer, not a setting shared with colleagues. *Back to e
 appears beside the window whenever it differs from the event's, and choosing it forgets the
 remembered one.
 
+**The sheet scrolls on** (the owner, 2026-11-11: "we might miss dates … would be best if we
+could just scroll"). It **opens wide enough for every night with anything on it** for the
+event — bought, held, blocked, sold or asked for — with a few days either side, even where
+those nights fall outside the remembered window or the event's dates. **Scrolling sideways to
+either edge adds two more weeks there**, as often as wanted: the dates stay pinned along the
+top, what was in view stays in view, and the From and Until boxes follow. Scrolling down the
+rooms never changes the dates. The boxes, the period chips and *Back to event dates* still set
+the window directly.
+
 **Changing the dates.** A new date takes effect once it has stopped changing for half a
 second and is a whole date, and the sheet stays on screen while it reloads. So the
 browser's calendar can be used as it is meant to: its month arrows move a month at a time
@@ -3684,7 +3693,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.1 Position per night | **Built** | Counts by state, request pressure, and net short/long |
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
-| §5.4 Stock sheet | **Built** | A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
+| §5.4 Stock sheet | **Built** | A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling; the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
 | §6 Operations | **Not built** | Phase 3 |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |

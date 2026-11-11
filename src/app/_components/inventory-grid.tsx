@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { keepPreviousData } from "@tanstack/react-query";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Combobox } from "~/app/_components/combobox";
 import { Input } from "~/app/_components/form";
@@ -227,6 +227,80 @@ export function InventoryGrid({
       else next.add(id);
       return next;
     });
+
+  /*
+   * The sheet runs on as it is scrolled (the owner, 2026-11-11: "would be
+   * best if we could just scroll"). It opens wide enough for every night with
+   * anything on it, and reaching either edge adds two more weeks there — the
+   * dates stay pinned along the top, and the From/Until boxes follow.
+   */
+  const extent = api.inventory.extent.useQuery({ eventId });
+  const widened = useRef(false);
+  useEffect(() => {
+    if (!restored || widened.current || !extent.data) return;
+    widened.current = true;
+    const { first, last } = extent.data;
+    if (first) {
+      const from = dayKey(addDays(first, -3));
+      if (from < checkIn) setCheckIn(from);
+    }
+    if (last) {
+      const to = dayKey(addDays(last, 4));
+      if (to > checkOut) setCheckOut(to);
+    }
+  }, [restored, extent.data, checkIn, checkOut]);
+  const growing = useRef<"left" | "right" | null>(null);
+  const columnWidth = useRef(36);
+  const firstShown = useRef<string | null>(null);
+  const STEP = 14;
+  const lastLeft = useRef(0);
+  const onSheetScroll = () => {
+    const box = scroller.current;
+    if (!box) return;
+    // Only a sideways scroll grows the sheet — scrolling down the rooms never does.
+    const moved = box.scrollLeft - lastLeft.current;
+    lastLeft.current = box.scrollLeft;
+    if (moved === 0 || growing.current || grid.isFetching) return;
+    if (moved > 0 && box.scrollLeft + box.clientWidth > box.scrollWidth - 120) {
+      growing.current = "right";
+      setCheckOut(dayKey(addDays(parseDay(checkOut), STEP)));
+    } else if (moved < 0 && box.scrollLeft < 40) {
+      const cell = box.querySelector<HTMLElement>("thead th:nth-child(2)");
+      if (cell) columnWidth.current = cell.getBoundingClientRect().width;
+      growing.current = "left";
+      setCheckIn(dayKey(addDays(parseDay(checkIn), -STEP)));
+    }
+  };
+  // At either end there is nothing left to scroll, so no scroll happens: a sideways swipe there grows the sheet too.
+  const onSheetWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const box = scroller.current;
+    const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
+    if (!box || sideways === 0 || growing.current || grid.isFetching) return;
+    if (sideways < 0 && box.scrollLeft <= 0) {
+      const cell = box.querySelector<HTMLElement>("thead th:nth-child(2)");
+      if (cell) columnWidth.current = cell.getBoundingClientRect().width;
+      growing.current = "left";
+      setCheckIn(dayKey(addDays(parseDay(checkIn), -STEP)));
+    } else if (sideways > 0 && box.scrollLeft + box.clientWidth >= box.scrollWidth - 1) {
+      growing.current = "right";
+      setCheckOut(dayKey(addDays(parseDay(checkOut), STEP)));
+    }
+  };
+
+  // Days added on the left push the sheet right: keep what was in view where it was.
+  const firstDate = grid.data?.dates[0] ? dayKey(grid.data.dates[0]) : null;
+  useLayoutEffect(() => {
+    const box = scroller.current;
+    const before = firstShown.current;
+    firstShown.current = firstDate;
+    if (!firstDate) return;
+    if (box && before && firstDate < before) {
+      const added = Math.round((parseDay(before).getTime() - parseDay(firstDate).getTime()) / 86_400_000);
+      box.scrollLeft += added * columnWidth.current;
+      lastLeft.current = box.scrollLeft;
+    }
+    growing.current = null;
+  }, [firstDate, grid.data?.dates.length]);
 
   // The event's named periods (doc §3.10): a band over the dates, and a chip to jump to each.
   const periods = (api.event.periods.useQuery({ eventId }).data ?? []).map((period, index) => ({ ...period, colour: periodColour(index) }));
@@ -807,6 +881,8 @@ export function InventoryGrid({
         <div
           onMouseLeave={() => setHovered(null)}
           ref={scroller}
+          onScroll={onSheetScroll}
+          onWheel={onSheetWheel}
           className="border-ink-200/60 max-h-[calc(100vh-7rem)] overflow-auto overscroll-contain rounded-xl border bg-white"
         >
           <table className="w-full border-collapse text-left text-xs">
