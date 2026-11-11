@@ -1406,6 +1406,18 @@ accepted before this, or one moved onto a contract made by hand (§7.1, deleting
 contract); doing it again buys nothing more. Until 2026-11-05 accepting bought nothing, and
 the rooms were bought on the stock sheet by hand.
 
+**A quote updates the room types, once approved** (the owner, 2026-11-11: room types are
+often loaded short, or without the full picture, before the quote comes in — Hotel Carmel's
+*Suite Queen with 2 Bedrooms* had 2 rooms on the system and the quote was for 6). Where a
+quotation asks for more rooms of a room type than the hotel has on the system — lines of
+one room type that overlap add up, lines for different periods do not: the busiest night
+counts — the quotation says so, room type by room type (*has 2, the quote asks for 6*), with
+**Update the room types to match the quote**. *Accept and make the contract* and *Buy its
+rooms* ask the same in their confirmation and update them first, in the same step. Room
+types are only ever raised, never lowered, and the change is recorded in the property's
+history. A room type the hotel quoted but that is not on the system at all is still added
+from the quotation's line (*+ New room category…*).
+
 A quotation commits nothing: it creates no room-nights and changes no inventory. Rooms are
 bought on the stock sheet (§4), under the contract.
 
@@ -3615,6 +3627,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
 | §3.10 Quotations | **Built** | On the property's page, third of its tabs (Updates, Room categories, Quotations, Contracts, Log — since 2026-10-06), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract and buys the quoted rooms on the stock sheet (2026-11-05); *Buy its rooms on the stock sheet* for one already tied to a contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
 | §3.10 / §7.1 Taxes on quotations and contracts | **Built** (2026-11-11) | Fixed tax per room per night beside the TOT; taxes worked out per line and shown as rooms + taxes = total, with a tax-per-night column; *+ all taxes* on a payment; contracts keep the rooms as their total with the taxes beside it and show the total payable; a contract made from a quotation carries both |
+| §3.10 Quote updates room types | **Built** (2026-11-11) | A quotation for more rooms than a room type has on the system says so and offers *Update the room types to match the quote*; accepting or buying its rooms asks and updates them first. Raised only, recorded on the property |
 | §3.10 Event periods | **Built** (2026-11-11) | Named periods per event on its Edit page (no overlaps, gaps allowed); coloured bars and jump-to chips on the stock sheet; *Split by the event's periods* for rates on the stock sheet and in Add rooms; one-click period dates on quotation lines, request lines and the client's needs form. A rate card column per period is **not built** |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |

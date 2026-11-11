@@ -177,7 +177,17 @@ function QuotationCard({
       void utils.inventory.invalidate();
     },
   });
-  const error = setStatus.error ?? remove.error ?? makeContract.error ?? buyRooms.error;
+  // Room types loaded short of what the hotel quoted (doc §3.10): asked once, updated in one click.
+  const raise = api.quotation.raiseRoomTypes.useMutation({
+    onSuccess: () => {
+      refresh();
+      void utils.property.invalidate();
+      void utils.inventory.invalidate();
+    },
+  });
+  const short = quotation.shortfall;
+  const shortWords = short.map((room) => `${room.name} ${room.has} → ${room.quoted}`).join(", ");
+  const error = setStatus.error ?? remove.error ?? makeContract.error ?? buyRooms.error ?? raise.error;
   const terms = [
     [
       "Payments",
@@ -303,6 +313,24 @@ function QuotationCard({
       )}
       {quotation.notes && <p className="text-ink-700 mt-2 text-[13px] font-light whitespace-pre-line">{quotation.notes}</p>}
 
+      {short.length > 0 && quotation.status !== "DECLINED" && (
+        <div className="mt-3 rounded-lg bg-[#fff4e0] px-3 py-2.5 text-[13px] font-light text-[#8a5a00]">
+          <p>
+            This quote has more rooms than the hotel&rsquo;s room types on the system:{" "}
+            {short.map((room, index) => (
+              <span key={room.categoryId}>
+                {index > 0 && "; "}
+                <strong className="font-medium">{room.name}</strong> has {room.has}, the quote asks for {room.quoted}
+              </span>
+            ))}
+            .
+          </p>
+          <button type="button" disabled={raise.isPending} onClick={() => raise.mutate({ id: quotation.id })} className="mt-1.5 font-medium underline">
+            {raise.isPending ? "Updating…" : short.length === 1 ? "Update the room type to match the quote" : "Update the room types to match the quote"}
+          </button>
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         {quotation.documentUrl && (
           <a href={quotation.documentUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
@@ -323,7 +351,15 @@ function QuotationCard({
                 {buyRooms.data.bought ? `✓ ${buyRooms.data.bought} room-nights bought on the stock sheet` : "✓ Its rooms are already bought"}
               </span>
             ) : (
-              <button type="button" disabled={buyRooms.isPending} onClick={() => buyRooms.mutate({ id: quotation.id })} className="text-brand-700 font-medium hover:underline">
+              <button
+                type="button"
+                disabled={buyRooms.isPending}
+                onClick={() =>
+                  (!short.length || window.confirm(`The room types will first be updated to match the quote: ${shortWords}. Go ahead?`)) &&
+                  buyRooms.mutate({ id: quotation.id, raiseRoomTypes: short.length > 0 })
+                }
+                className="text-brand-700 font-medium hover:underline"
+              >
                 {buyRooms.isPending ? "Buying…" : "Buy its rooms on the stock sheet"}
               </button>
             )}
@@ -336,8 +372,10 @@ function QuotationCard({
                 disabled={makeContract.isPending}
                 onClick={() =>
                   window.confirm(
-                    `Accept "${quotation.name}" and make it the supplier contract, worth ${formatMoney(quotation.payableCents, quotation.currency)}${quotation.taxCents > 0 ? " with taxes" : ""}?`,
-                  ) && makeContract.mutate({ id: quotation.id })
+                    `Accept "${quotation.name}" and make it the supplier contract, worth ${formatMoney(quotation.payableCents, quotation.currency)}${quotation.taxCents > 0 ? " with taxes" : ""}?${
+                      short.length ? `\n\nThe hotel's room types will be updated to match the quote first: ${shortWords}.` : ""
+                    }`,
+                  ) && makeContract.mutate({ id: quotation.id, raiseRoomTypes: short.length > 0 })
                 }
                 className="text-brand-700 font-medium hover:underline"
               >
