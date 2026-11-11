@@ -20,7 +20,7 @@ import {
   propertyServiceFields,
 } from "~/lib/contracting";
 import { LocationPreview } from "~/app/_components/location-preview";
-import { normalizePropertyName } from "~/lib/scouting";
+import { isApartmentLike, isHotelLike, normalizePropertyName, propertyTypeLabels, propertyTypeOrder } from "~/lib/scouting";
 import { AddressSearch } from "~/app/_components/address-search";
 import { SimilarProperties, useSimilarProperties } from "~/app/_components/similar-properties";
 import { api } from "~/trpc/react";
@@ -79,7 +79,7 @@ const detailKeys = [
 export type DetailKey = (typeof detailKeys)[number];
 
 const emptyCategory = (type: PropertyType): CategoryDraft => ({
-  name: type === "APARTMENT" ? "Apartment" : "",
+  name: isApartmentLike(type) ? "Apartment" : "",
   unitCount: "",
   capacity: "2",
   bedConfiguration: "",
@@ -148,8 +148,8 @@ export function PropertyForm({
   // Hotel rooms carry a free-text bed configuration; apartments and
   // aparthotels are self-contained units, so they carry bedrooms/bathrooms
   // instead. Stars apply to anything but a plain apartment (doc §3.3).
-  const hasBedConfiguration = values.type === "HOTEL";
-  const showsStars = values.type !== "APARTMENT";
+  const hasBedConfiguration = isHotelLike(values.type);
+  const showsStars = !isApartmentLike(values.type);
 
   // A set, not a list scan, so this stays instant with thousands of properties.
   const otherPropertyNames = useMemo(
@@ -402,9 +402,11 @@ export function PropertyForm({
                   set("categories", [emptyCategory(type)]);
               }}
             >
-              <option value="HOTEL">Hotel</option>
-              <option value="APARTMENT">Apartment</option>
-              <option value="APARTHOTEL">Aparthotel</option>
+              {propertyTypeOrder.map((option) => (
+                <option key={option} value={option}>
+                  {propertyTypeLabels[option]}
+                </option>
+              ))}
             </Select>
           </Field>
 

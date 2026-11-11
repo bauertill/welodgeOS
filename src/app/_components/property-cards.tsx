@@ -19,6 +19,7 @@ import {
 } from "~/lib/contracting";
 import { formatDate, formatMoneyRange, formatRange } from "~/lib/format";
 import { api } from "~/trpc/react";
+import { isHotelLike } from "~/lib/scouting";
 
 /**
  * The cards of a property's page, each editable where it stands (doc §3.9):
@@ -680,7 +681,7 @@ function ContactsEditor({ property, onDone }: { property: PropertyForCards; onDo
 
 
 export function RoomCategoriesCard({ property, bare = false }: { property: PropertyForCards; /** In a tab: no card, no title. */ bare?: boolean }) {
-  const hotel = property.type === "HOTEL";
+  const hotel = isHotelLike(property.type);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const Frame = bare ? "div" : Card;
   return (
@@ -802,7 +803,7 @@ function CategoryEditor({
   onDone: () => void;
 }) {
   const saved = useSaved();
-  const hotel = property.type === "HOTEL";
+  const hotel = isHotelLike(property.type);
   const text = (value: number | null | undefined, scale = 1) =>
     value === null || value === undefined ? "" : String(value / scale);
   const [draft, setDraft] = useState({

@@ -7,6 +7,7 @@ import { Card } from "~/app/_components/ui";
 import { contractingFields, propertyServiceFields } from "~/lib/contracting";
 import { formatMomentInWords } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { isHotelLike } from "~/lib/scouting";
 
 type Form = RouterOutputs["property"]["detailsForm"];
 type Values = Form["values"];
@@ -97,7 +98,7 @@ export function HotelDetailsForm(mode: Mode) {
   }
   if (!values) return null;
 
-  const hotel = form.data.type === "HOTEL";
+  const hotel = isHotelLike(form.data.type);
   const set = (key: Key, value: string) => setValues({ ...values, [key]: value });
   const setCategory = (index: number, key: keyof Category, value: string) =>
     setCategories(categories.map((category, i) => (i === index ? { ...category, [key]: value } : category)));

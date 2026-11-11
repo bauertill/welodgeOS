@@ -12,6 +12,7 @@ import { diffFields, logAudit } from "~/server/audit";
 import { GET_RATE } from "~/server/get-rate";
 import { ensureHotelContactTask, HOTEL_CONTACT, hotelContactItems } from "~/server/hotel-contact";
 import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
+import { isApartmentLike } from "~/lib/scouting";
 
 /**
  * Tasks (doc §2.8): a board of work everyone can see — who asked for it, who
@@ -213,7 +214,7 @@ export const taskRouter = createTRPCRouter({
     const rates = entry?.categoryContracts ?? [];
     const categories = property.categories;
     const units = categories.reduce((sum, category) => sum + category.unitCount, 0);
-    const detailed = categories.filter((category) => (property.type === "APARTMENT" ? category.bedrooms !== null : Boolean(category.bedConfiguration?.trim()))).length;
+    const detailed = categories.filter((category) => (isApartmentLike(property.type) ? category.bedrooms !== null : Boolean(category.bedConfiguration?.trim()))).length;
     const has = (value: string | null | undefined) => Boolean(value?.trim());
     const includes = [...quotes, ...rates].some((rate) => rate.rateIncludes.length > 0 || has(rate.rateIncludesOther) || rate.cleaning !== null);
     const extras = [...quotes, ...rates].some((rate) => rate.totBasisPoints !== null || has(rate.otherTaxes));
@@ -229,7 +230,7 @@ export const taskRouter = createTRPCRouter({
       {
         key: "details",
         ok: categories.length > 0 && detailed === categories.length,
-        text: categories.length ? `${detailed} of ${categories.length} with their ${property.type === "APARTMENT" ? "bedrooms" : "beds"}` : "Once there are categories",
+        text: categories.length ? `${detailed} of ${categories.length} with their ${isApartmentLike(property.type) ? "bedrooms" : "beds"}` : "Once there are categories",
       },
       { key: "amenities", ok: property._count.amenities > 0, text: property._count.amenities ? `${property._count.amenities} recorded` : "None yet" },
       { key: "paymentTerms", ok: has(entry?.paymentTerms) || quotes.some((quote) => has(quote.paymentTerms) || quote._count.payments > 0), text: "" },

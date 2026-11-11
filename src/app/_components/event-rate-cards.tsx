@@ -71,7 +71,7 @@ export function EventRateCards({ eventId }: { eventId: string }) {
 
 function PickProperties({ eventId, onClose, onMade }: { eventId: string; onClose: () => void; onMade: (id: string) => void }) {
   const entries = api.scouting.listForEvent.useQuery({ eventId, amenityIds: [] });
-  const rows = (entries.data ?? []).filter((entry) => entry.status !== "REJECTED");
+  const rows = (entries.data ?? []).filter((entry) => entry.status !== "REJECTED" && entry.status !== "ORGANISER");
   // The contracted properties to start — what is usually put on such a card.
   const [picked, setPicked] = useState<Set<string> | null>(null);
   // Many properties on an event (the owner, 2026-10-26): find them by name, city or status.

@@ -20,6 +20,7 @@ export const scoutingStatusLabels: Record<ScoutingStatus, string> = {
   SHORTLISTED: "Shortlisted",
   REJECTED: "Rejected",
   CONTRACTED: "Contracted",
+  ORGANISER: "Organising committee",
 };
 
 /** What each status actually means, shown as help text rather than assumed. */
@@ -29,6 +30,7 @@ export const scoutingStatusHints: Record<ScoutingStatus, string> = {
   SHORTLISTED: "A serious candidate — worth taking to a client.",
   REJECTED: "Ruled out for this event. Kept so we do not re-scout it.",
   CONTRACTED: "Moved through to acquisition. Phase 2 owns it from here.",
+  ORGANISER: "Contracted by the event's organising committee — an official hotel, not available to us.",
 };
 
 /**
@@ -46,7 +48,11 @@ export const scoutingStatusOrder: SelectableScoutingStatus[] = [
   "CONTACTED",
   "SHORTLISTED",
   "REJECTED",
+  "ORGANISER",
 ];
+
+/** Out of the running for us on this event: kept on the board, never in stock or offers. */
+export const unavailableStatuses: ScoutingStatus[] = ["REJECTED", "ORGANISER"];
 
 /** Nothing started is left blank on screen, not named (owner, 2026-10-02). */
 export const categoryContractStatusLabels: Record<CategoryContractStatus, string> = {
@@ -117,7 +123,41 @@ export const propertyTypeLabels: Record<PropertyType, string> = {
   HOTEL: "Hotel",
   APARTMENT: "Apartment",
   APARTHOTEL: "Aparthotel",
+  MOTEL: "Motel",
+  HOSTEL: "Hostel",
+  BED_AND_BREAKFAST: "Bed & breakfast",
+  EXTENDED_STAY: "Extended stay",
+  STUDENT_HOUSING: "Student housing",
+  OTHER: "Other",
 };
+
+/** In the order offered in a form. */
+export const propertyTypeOrder: PropertyType[] = [
+  "HOTEL",
+  "APARTMENT",
+  "APARTHOTEL",
+  "MOTEL",
+  "EXTENDED_STAY",
+  "STUDENT_HOUSING",
+  "HOSTEL",
+  "BED_AND_BREAKFAST",
+  "OTHER",
+];
+
+/**
+ * How a type behaves (doc §3.1–§3.3): a hotel has rooms with beds and stars,
+ * an apartment has units with bedrooms and no stars, and the mixed kinds —
+ * aparthotel, extended stay — have units but are star-rated and run like a
+ * hotel. Every screen asks this, never the type itself.
+ */
+export type PropertyKind = "hotel" | "apartment" | "mixed";
+export function propertyKind(type: PropertyType): PropertyKind {
+  if (type === "APARTMENT" || type === "STUDENT_HOUSING") return "apartment";
+  if (type === "APARTHOTEL" || type === "EXTENDED_STAY") return "mixed";
+  return "hotel";
+}
+export const isHotelLike = (type: PropertyType) => propertyKind(type) === "hotel";
+export const isApartmentLike = (type: PropertyType) => propertyKind(type) === "apartment";
 
 /**
  * The places guests need to reach (doc §3.7). Venue first: it is the one every

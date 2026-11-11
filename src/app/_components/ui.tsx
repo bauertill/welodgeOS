@@ -81,6 +81,7 @@ const scoutingStatusStyles: Record<ScoutingStatus, string> = {
   SHORTLISTED: "bg-brand-400 text-white",
   REJECTED: "bg-[#db4b68]/10 text-[#c03654]",
   CONTRACTED: "bg-[#12b878]/10 text-[#0d8f5d]",
+  ORGANISER: "bg-[#6b4fa0]/10 text-[#6b4fa0]",
 };
 
 export function ScoutingStatusBadge({ status }: { status: ScoutingStatus }) {

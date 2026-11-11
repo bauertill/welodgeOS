@@ -5,10 +5,10 @@ import type { CategoryContractStatus, ContactOutcome, QuotationStatus, ScoutingS
  * set by hand: from its hotel contact tasks, its quotations and its
  * contracts. It moves on its own as the work does.
  */
-export type PropertyStage = "TO_CONTACT" | "PENDING_QUOTE" | "QUOTED" | "CONTRACTED" | "PROSPECT" | "COULDNT_HELP" | "RULED_OUT";
+export type PropertyStage = "TO_CONTACT" | "PENDING_QUOTE" | "QUOTED" | "CONTRACTED" | "PROSPECT" | "COULDNT_HELP" | "ORGANISER" | "RULED_OUT";
 
 /** The board's order: contracted at the top, then the work in hand furthest along first, the long list, and the closed ones. */
-export const stageOrder: PropertyStage[] = ["CONTRACTED", "QUOTED", "PENDING_QUOTE", "TO_CONTACT", "PROSPECT", "COULDNT_HELP", "RULED_OUT"];
+export const stageOrder: PropertyStage[] = ["CONTRACTED", "QUOTED", "PENDING_QUOTE", "TO_CONTACT", "PROSPECT", "COULDNT_HELP", "ORGANISER", "RULED_OUT"];
 
 export const stageInfo: Record<PropertyStage, { label: string; hint: string; colour: string }> = {
   TO_CONTACT: { label: "To be contacted", hint: "A contact task is open and not started yet.", colour: "#7c4dd8" },
@@ -17,6 +17,7 @@ export const stageInfo: Record<PropertyStage, { label: string; hint: string; col
   CONTRACTED: { label: "Contracted", hint: "Rooms contracted, or a supplier contract for this event.", colour: "#0a7a47" },
   PROSPECT: { label: "Prospects", hint: "On the list; nothing started yet.", colour: "#6b7280" },
   COULDNT_HELP: { label: "Couldn't help", hint: "Their last contact task closed with why they could not help.", colour: "#a3243d" },
+  ORGANISER: { label: "Organising committee", hint: "Contracted by the event's organising committee — an official hotel, not available to us.", colour: "#6b4fa0" },
   RULED_OUT: { label: "Ruled out", hint: "Marked Rejected for this event.", colour: "#9a9a9a" },
 };
 
@@ -31,6 +32,7 @@ export function stageOf(entry: {
   if (entry.hasSupplierContract || entry.status === "CONTRACTED" || entry.categoryContracts.some((contract) => contract.status === "CONTRACTED")) {
     return "CONTRACTED";
   }
+  if (entry.status === "ORGANISER") return "ORGANISER";
   if (entry.status === "REJECTED") return "RULED_OUT";
   if (entry.quotations.some((quotation) => quotation.status !== "DECLINED")) return "QUOTED";
   const open = entry.contactTasks.find((task) => task.status !== "DONE");

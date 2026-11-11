@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { Cleaning, GroupColour, RateInclusion } from "generated/prisma";
+import { Cleaning, GroupColour, PropertyType, RateInclusion } from "generated/prisma";
 import { z } from "zod";
 
 import { stageOf } from "~/lib/stages";
@@ -19,6 +19,7 @@ const SCOUTING_STATUSES = [
   "CONTACTED",
   "SHORTLISTED",
   "REJECTED",
+  "ORGANISER",
 ] as const;
 
 const CATEGORY_CONTRACT_STATUSES = [
@@ -252,7 +253,7 @@ export const scoutingRouter = createTRPCRouter({
       z.object({
         eventId: z.string(),
         status: z.enum(SCOUTING_STATUSES).optional(),
-        type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]).optional(),
+        type: z.nativeEnum(PropertyType).optional(),
         amenityIds: z.array(z.string()).default([]),
         /** One chain's properties on this event (doc §3.9). */
         providerId: z.string().optional(),
@@ -380,7 +381,7 @@ export const scoutingRouter = createTRPCRouter({
       z.object({
         eventId: z.string(),
         name: z.string().trim().min(1, "Give it a name — even a working one, like Hotel under construction on 5th").max(300),
-        type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]),
+        type: z.nativeEnum(PropertyType),
         stars: z.number().int().min(1).max(5).nullable(),
         latitude: z.number().min(-90).max(90),
         longitude: z.number().min(-180).max(180),
