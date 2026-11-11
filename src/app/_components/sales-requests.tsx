@@ -43,6 +43,7 @@ import {
   type ContractingKey,
   type InterestKey,
 } from "~/lib/sales";
+import { eventColours, type EventColour } from "~/lib/event-colours";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Request = RouterOutputs["sales"]["list"][number];
@@ -126,6 +127,8 @@ export function SalesRequestList() {
   const rows = requests.data ?? [];
   const due = rows.filter((request) => !isClosed(request.stage) && request.followUpOn && daysUntil(request.followUpOn) <= 0).length;
   const stages = show === "open" ? openStages : show === "closed" ? closedStages : salesStageOrder;
+  // Each event its own colour (2026-11-11), from every event — not only those on screen — so it never shifts.
+  const colours = eventColours((events.data ?? []).map((event) => event.id));
 
   return (
     <div className="space-y-6">
@@ -184,7 +187,7 @@ export function SalesRequestList() {
         stages.map((stage) => {
           const inStage = rows.filter((request) => request.stage === stage);
           if (inStage.length === 0) return null;
-          return <StageGroup key={stage} stage={stage} requests={inStage} />;
+          return <StageGroup key={stage} stage={stage} requests={inStage} colours={colours} />;
         })
       )}
     </div>
@@ -314,7 +317,7 @@ function initialsOf(name: string) {
   return letters.join("").toUpperCase();
 }
 
-function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: Request[] }) {
+function StageGroup({ stage, requests, colours }: { stage: SalesRequestStage; requests: Request[]; colours: Map<string, EventColour> }) {
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
   return (
@@ -339,9 +342,11 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
             </tr>
           </thead>
           <tbody>
-            {requests.map((request) => (
+            {requests.map((request) => {
+              const colour = request.event ? colours.get(request.event.id) : undefined;
+              return (
               <tr key={request.id} className="group hover:bg-ink-50/40">
-                <td className={`${td} min-w-44`}>
+                <td className={`${td} min-w-44`} style={{ boxShadow: `inset 4px 0 0 ${colour?.stripe ?? "transparent"}` }}>
                   <Link href={`/sales/${request.id}`} className="text-ink-900 hover:text-brand-700 font-medium">
                     {request.client.name}
                   </Link>{" "}
@@ -351,7 +356,18 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   {request.newAnswers > 0 && <NewAnswers count={request.newAnswers} />}
                   {request.contact && <span className="text-ink-500 block text-xs">{request.contact.name}</span>}
                 </td>
-                <td className={`${td} whitespace-nowrap`}>{request.event?.name ?? "—"}</td>
+                <td className={`${td} whitespace-nowrap`}>
+                  {request.event ? (
+                    <span
+                      className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium"
+                      style={colour ? { backgroundColor: colour.background, color: colour.text } : undefined}
+                    >
+                      {request.event.name}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className={`${td} max-w-80`}>
                   <span className="line-clamp-2">{request.description ?? request.rooms ?? "—"}</span>
                 </td>
@@ -383,7 +399,8 @@ function StageGroup({ stage, requests }: { stage: SalesRequestStage; requests: R
                   <DeleteRequest request={request} subtle />
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
