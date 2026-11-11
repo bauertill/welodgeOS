@@ -888,6 +888,16 @@ export const inventoryRouter = createTRPCRouter({
     ),
 
   /**
+   * The first and last night anything is recorded on for the event — bought,
+   * held, blocked, sold or asked for — so the stock sheet opens wide enough to
+   * show all of it (the owner, 2026-11-11: "we might miss dates").
+   */
+  extent: protectedProcedure.input(z.object({ eventId: z.string() })).query(async ({ ctx, input }) => {
+    const range = await ctx.db.roomNight.aggregate({ where: { eventId: input.eventId }, _min: { date: true }, _max: { date: true } });
+    return { first: range._min.date, last: range._max.date };
+  }),
+
+  /**
    * The date-grid: every matching room-night as a cell, keyed by slot and
    * date, with its `position` already computed via `positionOf` — so there
    * is exactly one place that decides what a room-night means (doc §4, the
