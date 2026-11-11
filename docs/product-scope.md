@@ -2376,7 +2376,17 @@ room category at the rate we sell it for.
   and under it the margin a night and as a share. A
   **markup** (15% to start) is applied to every room with a cost by *Apply to all*, then any
   rate changed by hand. A property can be taken off the card. A room left without a selling
-  rate is not offered. **Every room offered must say how many units are available and the
+  rate is not offered. **A room type we are not proposing is taken off with ×** (the owner,
+  2026-11-11: "we don't always propose all rooms at one property"): it folds into *Not
+  proposing: Queen · King — add back* under the table, is left off the client's copy, and
+  *Apply to all* passes it by; *add back* returns it with the card's markup. On opening a card,
+  a room type with no client price is folded away the same way, unless nothing at the property
+  has a price yet. **The margin counts only the rooms proposed** (2026-11-11): the client's
+  rooms are shared out over the room types on the card — each up to its units available, in
+  proportion where together they offer more than was asked — so each line's margin is on its
+  share, and a **Margin on the rooms proposed** line under each property adds them up, with the
+  share on our cost. (Until then each line reckoned the margin as if the client took the whole
+  booking in that one room type.) **Every room offered must say how many units are available and the
   minimum stay in nights** (2026-10-11): missing ones are outlined in red and the card
   cannot be saved, nor its link made, until they are given.
 - **What the client sees** — the preview, the printout (*Print or save as PDF*) and the
