@@ -1,6 +1,6 @@
 import type { PropertyType } from "generated/prisma";
 
-import { distanceKm } from "~/lib/scouting";
+import { distanceKm, propertyKind, propertyTypeLabels } from "~/lib/scouting";
 
 /**
  * How well a property we already have fits a sales request (doc §4.11) — told
@@ -59,14 +59,15 @@ export function fit(candidate: Candidate, targets: Target[], wanted: Wanted) {
   }
 
   // The kind: hotel rooms, apartments, or an aparthotel for either.
+  const kind = propertyKind(candidate.type);
   const kindOk =
-    candidate.type === "APARTHOTEL" ||
-    (wanted.apartments && candidate.type === "APARTMENT") ||
-    (wanted.hotelRooms && candidate.type === "HOTEL") ||
+    kind === "mixed" ||
+    (wanted.apartments && kind === "apartment") ||
+    (wanted.hotelRooms && kind === "hotel") ||
     (!wanted.apartments && !wanted.hotelRooms);
   checks.push({
     ok: kindOk,
-    text: candidate.type === "HOTEL" ? "Hotel" : candidate.type === "APARTMENT" ? "Apartments" : "Aparthotel",
+    text: propertyTypeLabels[candidate.type],
   });
 
   // The units: all its categories together, or its stated total.

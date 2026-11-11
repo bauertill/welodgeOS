@@ -1,4 +1,5 @@
 import type { Prisma } from "generated/prisma";
+import { PropertyType } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -12,6 +13,7 @@ import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { trimRooms } from "~/server/room-count";
 import { diffFields, logAudit, logFieldChanges } from "~/server/audit";
 import { deliverImmediate, notify } from "~/server/notify";
+import { isHotelLike } from "~/lib/scouting";
 
 /**
  * A room category. Hotels fill in `bedConfiguration`; apartments fill in
@@ -66,7 +68,7 @@ async function similarTo(db: Prisma.TransactionClient, scouted: Scouted, exclude
 
 const propertyInput = z.object({
   name: z.string().min(1, "A property needs a name"),
-  type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]),
+  type: z.nativeEnum(PropertyType),
   address: z.string().optional(),
   city: z.string().optional(),
   country: z.string().optional(),
@@ -270,7 +272,7 @@ async function applyDetails(
 
   // Room categories: those sent with an id are changed, the others added; none is removed.
   const notes: string[] = [];
-  const hotel = before.type === "HOTEL";
+  const hotel = isHotelLike(before.type);
   let order = Math.max(-1, ...before.categories.map((category) => category.sortOrder));
   for (const sent of input.categories) {
     if (!sent.name) continue;
@@ -359,7 +361,7 @@ export const propertyRouter = createTRPCRouter({
       z
         .object({
           search: z.string().optional(),
-          type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]).optional(),
+          type: z.nativeEnum(PropertyType).optional(),
         })
         .default({}),
     )

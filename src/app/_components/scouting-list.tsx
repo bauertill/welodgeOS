@@ -17,18 +17,7 @@ import {
   Td,
   Th,
 } from "~/app/_components/ui";
-import {
-  categoryContractStatusLabels,
-  categoryContractStatusOrder,
-  nearestPlace,
-  propertyTypeLabels,
-  scoutingStatusHints,
-  scoutingStatusLabels,
-  scoutingStatusOrder,
-  totalUnits,
-  type SelectableScoutingStatus,
-  measuredPlaces,
-} from "~/lib/scouting";
+import { categoryContractStatusLabels, categoryContractStatusOrder, isHotelLike, measuredPlaces, nearestPlace, propertyTypeLabels, propertyTypeOrder, scoutingStatusHints, scoutingStatusLabels, scoutingStatusOrder, type SelectableScoutingStatus, totalUnits } from "~/lib/scouting";
 import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RoomCategoryTable } from "~/app/_components/room-categories";
@@ -101,7 +90,7 @@ export function ScoutingList({
 
   const rows = entries.data ?? [];
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["stage-COULDNT_HELP", "stage-RULED_OUT"]));
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["stage-COULDNT_HELP", "stage-ORGANISER", "stage-RULED_OUT"]));
   const toggleGroup = (key: string) =>
     setCollapsedGroups((current) => {
       const next = new Set(current);
@@ -406,7 +395,7 @@ export function ScoutingList({
                         eventId={eventId}
                         categories={property.categories}
                         contracts={entry.categoryContracts}
-                        hotel={property.type === "HOTEL"}
+                        hotel={isHotelLike(property.type)}
                         available={(categoryId) => {
                           const position = availabilityByCategory.get(categoryId);
                           return position && position.slots > 0
@@ -493,9 +482,11 @@ export function ScoutingList({
           className="w-auto"
         >
           <option value="">Every type</option>
-          <option value="HOTEL">Hotels only</option>
-          <option value="APARTMENT">Apartments only</option>
-          <option value="APARTHOTEL">Aparthotels only</option>
+          {propertyTypeOrder.map((option) => (
+            <option key={option} value={option}>
+              {propertyTypeLabels[option]} only
+            </option>
+          ))}
         </Select>
 
         {(providers.data ?? []).length > 0 && (

@@ -27,6 +27,14 @@ enum PropertyType {
   /// Self-contained apartment-style units — bedrooms and bathrooms, like an
   /// apartment — but still star-rated and run like a hotel (doc §3.3).
   APARTHOTEL
+  // Added 2026-11-11 for the LA28 move from monday.com (doc §3.1). Each is
+  // treated as a hotel, an apartment or both — see propertyKind in lib/scouting.
+  MOTEL
+  HOSTEL
+  BED_AND_BREAKFAST
+  EXTENDED_STAY
+  STUDENT_HOUSING
+  OTHER
 }
 
 /// Where a property has got to in *this* event's scouting list. The same
@@ -43,6 +51,9 @@ enum ScoutingStatus {
   SHORTLISTED
   REJECTED
   CONTRACTED
+  /// Contracted by the event's organising committee (an official hotel), so
+  /// not available to us — set by hand, like Rejected (2026-11-11).
+  ORGANISER
 }
 
 /// How far along one room category's supplier contract is, for one event. A

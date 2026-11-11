@@ -10,7 +10,7 @@ import { AddressSearch } from "~/app/_components/address-search";
 import { Button, FormError, friendlyError, Input, Label, Textarea } from "~/app/_components/form";
 import { LocationPreview } from "~/app/_components/location-preview";
 import { SimilarProperties, useSimilarProperties } from "~/app/_components/similar-properties";
-import { normalizePropertyName, propertyTypeLabels } from "~/lib/scouting";
+import { isApartmentLike, isHotelLike, normalizePropertyName, propertyTypeLabels, propertyTypeOrder } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
 /**
@@ -65,6 +65,12 @@ const roomNames: Record<PropertyType, string[]> = {
   HOTEL: ["Standard", "Double", "Twin", "King", "Suite"],
   APARTMENT: ["Studio", "1 Bedroom", "2 Bedroom", "3 Bedroom"],
   APARTHOTEL: ["Studio", "1 Bedroom", "2 Bedroom"],
+  MOTEL: ["Standard", "Double", "Twin", "King"],
+  HOSTEL: ["Dorm bed", "Private room", "Twin"],
+  BED_AND_BREAKFAST: ["Double", "Twin", "Suite"],
+  EXTENDED_STAY: ["Studio", "1 Bedroom", "2 Bedroom"],
+  STUDENT_HOUSING: ["Single room", "Studio", "Shared apartment"],
+  OTHER: ["Standard", "Double", "Twin"],
 };
 
 const text = (value: string) => value.trim() || undefined;
@@ -171,7 +177,7 @@ export function QuickScout({
         confirmedDifferent: different,
         name: draft.name.trim(),
         type: draft.type,
-        stars: draft.type === "APARTMENT" ? undefined : (draft.stars ?? undefined),
+        stars: isApartmentLike(draft.type) ? undefined : (draft.stars ?? undefined),
         address: text(draft.address),
         city: text(draft.city),
         country: text(draft.country),
@@ -255,13 +261,13 @@ export function QuickScout({
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Type">
-                {(["HOTEL", "APARTMENT", "APARTHOTEL"] as const).map((type) => (
+                {propertyTypeOrder.map((type) => (
                   <button key={type} type="button" aria-pressed={draft.type === type} onClick={() => set("type", type)} className={chip(draft.type === type)}>
                     {propertyTypeLabels[type]}
                   </button>
                 ))}
               </div>
-              {draft.type !== "APARTMENT" && (
+              {!isApartmentLike(draft.type) && (
                 <div className="flex items-center gap-0.5" role="group" aria-label="Stars">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
@@ -329,13 +335,13 @@ export function QuickScout({
           {/* The rooms, as a quick list — details and prices later. */}
           <section className="border-ink-200/60 rounded-xl border bg-white p-5">
             <div className="mb-3 flex items-baseline justify-between gap-3">
-              <h2 className="text-ink-900 text-[15px] font-medium">{draft.type === "HOTEL" ? "Room types" : "Unit types"}</h2>
+              <h2 className="text-ink-900 text-[15px] font-medium">{isHotelLike(draft.type) ? "Room types" : "Unit types"}</h2>
               <span className="text-ink-500 text-xs font-light">They appear on the stock sheet once saved</span>
             </div>
             <div className="space-y-2">
               <div className="text-ink-500 grid grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_1.5rem] gap-2 px-1 text-[11px]">
                 <span>Name</span>
-                <span>{draft.type === "HOTEL" ? "Rooms" : "Units"}</span>
+                <span>{isHotelLike(draft.type) ? "Rooms" : "Units"}</span>
                 <span>Sleeps</span>
                 <span />
               </div>

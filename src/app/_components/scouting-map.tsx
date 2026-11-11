@@ -14,7 +14,7 @@ import type { PlaceCategory, PropertyType, ScoutingStatus } from "generated/pris
 import { env } from "~/env";
 import { formatDay } from "~/lib/format";
 import { placeIcon } from "~/lib/place-icons";
-import { placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
+import { isApartmentLike, placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
 import { AddPropertyForm } from "~/app/_components/add-property-on-map";
 import { LayersPanel } from "~/app/_components/map-layers";
 import { TravelTimes } from "~/app/_components/travel-times";
@@ -137,6 +137,7 @@ const pinColors: Record<ScoutingStatus, string> = {
   SHORTLISTED: "#ab6ce2",
   REJECTED: "#db4b68",
   CONTRACTED: "#12b878",
+  ORGANISER: "#6b4fa0",
 };
 
 /** What a pin with no status is drawn in. */
@@ -148,7 +149,7 @@ const NEUTRAL_PIN = "#614fc9";
  * two or fewer yellow, unknown grey.
  */
 export const propertyColor = (pin: { type?: PropertyType; stars?: number | null }) =>
-  pin.type === "APARTMENT"
+  pin.type && isApartmentLike(pin.type)
     ? "#8f5bd6"
     : !pin.stars
       ? "#8a8a8a"
@@ -612,7 +613,7 @@ export function ScoutingMap({
                     className={`flex h-7 w-7 items-center justify-center rounded-md border-2 border-white text-[14px] leading-none shadow-md transition-transform group-hover:scale-110 ${openId === pin.id ? "ring-brand-300 scale-110 ring-4" : ""}`}
                     style={{ background: propertyColor(pin) }}
                   >
-                    {pin.type === "APARTMENT" ? "🏠" : "🛏️"}
+                    {pin.type && isApartmentLike(pin.type) ? "🏠" : "🛏️"}
                   </span>
                   <span className="bg-ink-900 pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg group-hover:block">
                     {pin.name}

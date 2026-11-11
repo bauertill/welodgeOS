@@ -20,7 +20,7 @@ import { PropertyMedia } from "~/app/_components/property-media";
 import { PropertyTabs } from "~/app/_components/property-tabs";
 import { PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
-import { propertyTypeLabels, totalUnits } from "~/lib/scouting";
+import { isHotelLike, propertyTypeLabels, totalUnits } from "~/lib/scouting";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
@@ -108,7 +108,7 @@ export default async function PropertyPage({
               { key: "updates", label: "Updates", content: <UpdateThread propertyId={property.id} /> },
               {
                 key: "rooms",
-                label: property.type === "HOTEL" ? "Room categories" : "Unit types",
+                label: isHotelLike(property.type) ? "Room categories" : "Unit types",
                 count: property.categories.length,
                 content: <RoomCategoriesCard property={property} bare />,
               },

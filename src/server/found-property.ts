@@ -1,4 +1,5 @@
 import type { Prisma } from "generated/prisma";
+import { PropertyType } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -13,7 +14,7 @@ import { ensureHotelContactTask } from "~/server/hotel-contact";
  */
 export const foundPlaceInput = z.object({
   name: z.string().trim().min(1).max(300),
-  type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]),
+  type: z.nativeEnum(PropertyType),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   address: z.string().max(500).nullable(),
