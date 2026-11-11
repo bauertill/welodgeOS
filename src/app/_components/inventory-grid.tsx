@@ -922,8 +922,10 @@ export function InventoryGrid({
                     <tr className="bg-ink-50/60">
                       <td
                         colSpan={columns.length + 2}
-                        className="sticky left-0 z-10 border-b border-ink-200/60 bg-ink-50/60 px-3 py-2"
+                        className="border-b border-ink-200/60 bg-ink-50/60 px-0 py-2"
                       >
+                        {/* The cell spans every date, so it is its content that stays at the left edge while the dates scroll (2026-11-11). */}
+                        <div className="sticky left-0 z-10 w-fit px-3">
                         <button
                           type="button"
                           onClick={() => toggleSet(setExpandedProperties, property.id)}
@@ -965,6 +967,7 @@ export function InventoryGrid({
                               </button>
                             </span>
                           ))}
+                        </div>
                       </td>
                     </tr>
 
@@ -976,9 +979,9 @@ export function InventoryGrid({
                             <tr>
                               <td
                                 colSpan={columns.length + 2}
-                                className="sticky left-0 z-10 border-b border-ink-200/60 bg-white px-3 py-1.5 pl-6"
+                                className="border-b border-ink-200/60 bg-white px-0 py-1.5"
                               >
-                                <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                <span className="sticky left-0 z-10 flex w-fit flex-wrap items-center gap-x-4 gap-y-1 pr-3 pl-6">
                                 <button
                                   type="button"
                                   onClick={() => toggleSet(setExpandedCategories, category.id)}
