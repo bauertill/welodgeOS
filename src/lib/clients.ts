@@ -13,6 +13,7 @@ export const clientCategoryLabels: Record<ClientCategory, string> = {
   AGENCY: "Agency",
   CORPORATE: "Corporate",
   OTHER: "Other",
+  PRIVATE_PERSON: "Private person",
 };
 
 export const clientCategoryOrder: ClientCategory[] = [
@@ -23,6 +24,7 @@ export const clientCategoryOrder: ClientCategory[] = [
   "AGENCY",
   "CORPORATE",
   "OTHER",
+  "PRIVATE_PERSON",
 ];
 
 export const contactTypeLabels: Record<ContactType, string> = {

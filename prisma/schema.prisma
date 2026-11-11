@@ -1112,6 +1112,9 @@ enum ClientCategory {
   AGENCY
   CORPORATE
   OTHER
+  /// A person buying for themselves, with no company behind them: the client
+  /// is the person, and the person is its one contact (doc §4.10).
+  PRIVATE_PERSON
 }
 
 /// Where a person at a client stands with us (doc §4.10).
