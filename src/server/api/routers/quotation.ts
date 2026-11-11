@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { nightsBetween, parseDay, today } from "~/lib/dates";
-import { percent } from "~/lib/finance";
+import { percent, taxPerNight } from "~/lib/finance";
 import { formatDate, formatMoney } from "~/lib/format";
 import { describeRateIncludes } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -43,6 +43,8 @@ export const paymentInput = z
     onSignature: z.boolean(),
     dueOn: optionalDay,
     percentBasisPoints: z.number().int().min(1, "Each payment needs its percentage, like 20").max(10_000),
+    /** It also takes all of the taxes — "30% + tax 100%" (doc §3.10). */
+    plusTaxes: z.boolean().default(false),
   })
   .refine((payment) => payment.onSignature || payment.dueOn, "Each payment is due on signature or on a date — give the date");
 
@@ -68,6 +70,7 @@ const quotationInput = z.object({
   cleaning: z.nativeEnum(Cleaning).nullable(),
   cleaningOther: z.string().max(500),
   totBasisPoints: z.number().int().min(0).max(10_000).nullable(),
+  taxPerNightCents: z.number().int().min(0).max(10_000_000).nullable().default(null),
   otherTaxes: z.string().max(2000),
   documentUrl: z
     .string()
@@ -98,19 +101,29 @@ const include = {
 
 type Loaded = Prisma.QuotationGetPayload<{ include: typeof include }>;
 
-/** What a quotation comes to, line by line and in all — worked out, never stored. */
+/**
+ * What a quotation comes to, line by line and in all — worked out, never
+ * stored. `totalCents` is the rooms; `taxCents` the TOT and per-night tax on
+ * top, line by line as the hotel works it out; `payableCents` both (doc §3.10).
+ */
 function withTotals(quotation: Loaded) {
   const lines = quotation.lines.map((line) => {
     const nights = nightsBetween(line.checkIn, line.checkOut);
-    return { ...line, nights, roomNights: nights * line.rooms, totalCents: nights * line.rooms * line.rateCents };
+    const roomNights = nights * line.rooms;
+    const taxPerNightCents = taxPerNight(line.rateCents, quotation.totBasisPoints, quotation.taxPerNightCents);
+    return { ...line, nights, roomNights, totalCents: roomNights * line.rateCents, taxPerNightCents, taxCents: roomNights * taxPerNightCents };
   });
+  const totalCents = lines.reduce((sum, line) => sum + line.totalCents, 0);
+  const taxCents = lines.reduce((sum, line) => sum + line.taxCents, 0);
   const starts = lines.map((line) => line.checkIn.getTime());
   const ends = lines.map((line) => line.checkOut.getTime());
   return {
     ...quotation,
     lines,
     roomNights: lines.reduce((sum, line) => sum + line.roomNights, 0),
-    totalCents: lines.reduce((sum, line) => sum + line.totalCents, 0),
+    totalCents,
+    taxCents,
+    payableCents: totalCents + taxCents,
     from: starts.length ? new Date(Math.min(...starts)) : null,
     to: ends.length ? new Date(Math.max(...ends)) : null,
   };
@@ -247,6 +260,7 @@ export const quotationRouter = createTRPCRouter({
           cleaning: fields.cleaning,
           cleaningOther: fields.cleaning === "OTHER" ? blank(fields.cleaningOther) : null,
           totBasisPoints: fields.totBasisPoints,
+          taxPerNightCents: fields.taxPerNightCents,
           otherTaxes: blank(fields.otherTaxes),
           documentUrl: blank(fields.documentUrl),
           notes: blank(fields.notes),
@@ -318,6 +332,7 @@ export const quotationRouter = createTRPCRouter({
             onSignature: payment.onSignature,
             dueOn: payment.onSignature ? null : toDay(payment.dueOn),
             percentBasisPoints: payment.percentBasisPoints,
+            plusTaxes: payment.plusTaxes,
             position,
           })),
         });
@@ -433,6 +448,7 @@ export const quotationRouter = createTRPCRouter({
           return includes ? `Rates include: ${includes}` : null;
         })(),
         quotation.totBasisPoints !== null ? `TOT: ${percent(quotation.totBasisPoints)}` : null,
+        quotation.taxPerNightCents !== null ? `Tax per room per night: ${formatMoney(quotation.taxPerNightCents, quotation.currency)}` : null,
         quotation.otherTaxes ? `Other taxes: ${quotation.otherTaxes}` : null,
       ]
         .filter(Boolean)
@@ -444,6 +460,8 @@ export const quotationRouter = createTRPCRouter({
           eventId: entry.eventId,
           propertyId: entry.propertyId,
           totalCents: quotation.totalCents,
+          // The taxes on top (doc §7.1): payments stay shares of the rooms, one may take all the taxes.
+          taxCents: quotation.taxCents || null,
           currency: quotation.currency,
           documentUrl: quotation.documentUrl,
           // Tied to the client's request it was quoted for (doc §4.11): client and hotel contracts side by side.
@@ -457,9 +475,10 @@ export const quotationRouter = createTRPCRouter({
       await tx.contractPayment.createMany({
         data: quotation.payments.map((payment, index) => ({
           contractId: contract.id,
-          description: payment.onSignature ? "On signature" : `Payment ${index + 1}`,
+          description: `${payment.onSignature ? "On signature" : `Payment ${index + 1}`}${payment.plusTaxes ? " + all taxes" : ""}`,
           dueOn: payment.onSignature ? today() : payment.dueOn!,
           percentBasisPoints: payment.percentBasisPoints,
+          plusTaxes: payment.plusTaxes,
         })),
       });
       await tx.contractCancellation.createMany({

@@ -1629,7 +1629,7 @@ function TheirQuote({ propertyId, propertyName, eventId, salesRequestId }: { pro
                     .join(" · ")}
                 </span>
               </span>
-              <span className="text-ink-900 font-semibold whitespace-nowrap">{formatMoney(quote.totalCents, quote.currency)}</span>
+              <span className="text-ink-900 font-semibold whitespace-nowrap">{formatMoney(quote.payableCents ?? quote.totalCents, quote.currency)}</span>
             </li>
           ))}
         </ul>

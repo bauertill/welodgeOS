@@ -4,7 +4,7 @@ import type { CancellationKind } from "generated/prisma";
 
 import { Input, Select } from "~/app/_components/form";
 
-export type PaymentDraft = { onSignature: boolean; dueOn: string; percent: string };
+export type PaymentDraft = { onSignature: boolean; dueOn: string; percent: string; /** Also takes all of the taxes (doc §3.10). */ plusTaxes?: boolean };
 /** A cut-off's meaning: a cancellation fee from the date, or what may go — attrition, release — by it. */
 export type CutKind = "FEE" | "ATTRITION" | "RELEASE" | "OTHER";
 export type CancellationDraft = { kind: CutKind; cutoffOn: string; percent: string; remarks: string };
@@ -28,7 +28,7 @@ export function checkTerms(payments: PaymentDraft[], cancellations: Cancellation
     const share = toBasisPoints(payment.percent);
     if (share === null || share === 0) return `Payment ${i + 1}: give its percentage, like 20.`;
     if (!payment.onSignature && !payment.dueOn) return `Payment ${i + 1}: give the date it is due, or choose On signature.`;
-    paymentsOut.push({ onSignature: payment.onSignature, dueOn: payment.onSignature ? "" : payment.dueOn, percentBasisPoints: share });
+    paymentsOut.push({ onSignature: payment.onSignature, dueOn: payment.onSignature ? "" : payment.dueOn, percentBasisPoints: share, plusTaxes: Boolean(payment.plusTaxes) });
   }
   const cancellationsOut = [];
   for (const [i, cut] of cancellations.entries()) {
@@ -57,11 +57,14 @@ export function TermsEditor({
   setPayments,
   cancellations,
   setCancellations,
+  taxes = false,
 }: {
   payments: PaymentDraft[];
   setPayments: React.Dispatch<React.SetStateAction<PaymentDraft[]>>;
   cancellations: CancellationDraft[];
   setCancellations: React.Dispatch<React.SetStateAction<CancellationDraft[]>>;
+  /** Offer "+ all taxes" on a payment — a hotel's quotation, where taxes come on top (doc §3.10). */
+  taxes?: boolean;
 }) {
   const paidShare = payments.reduce((sum, payment) => sum + (toBasisPoints(payment.percent) ?? 0), 0);
   return (
@@ -103,6 +106,17 @@ export function TermsEditor({
               />
               <span className="text-ink-500 text-[13px]">%</span>
             </span>
+            {taxes && (
+              <label className="text-ink-700 flex items-center gap-1.5 text-[13px] font-light" title="This payment also takes all of the taxes — like “30% + tax 100%”">
+                <input
+                  type="checkbox"
+                  className="accent-brand-400 h-4 w-4"
+                  checked={Boolean(payment.plusTaxes)}
+                  onChange={(e) => setPayments((current) => current.map((one, i) => (i === index ? { ...one, plusTaxes: e.target.checked } : one)))}
+                />
+                + all taxes
+              </label>
+            )}
             {payments.length > 1 && (
               <button type="button" onClick={() => setPayments((current) => current.filter((_, i) => i !== index))} className="text-ink-400 text-lg leading-none hover:text-[#c03654]" aria-label={`Remove payment ${index + 1}`}>
                 ×

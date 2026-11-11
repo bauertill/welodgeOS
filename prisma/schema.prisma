@@ -594,6 +594,9 @@ model Quotation {
   /// TOT as hundredths of a percent: 15.00% is 1500.
   totBasisPoints    Int?
   otherTaxes        String?
+  /// A fixed tax per room per night on top of the TOT share — Santa Monica's
+  /// $2.30 (doc §3.10). Added to the rooms' total as the hotel does.
+  taxPerNightCents Int?
   /// The quotation as received — a Google Drive link.
   documentUrl       String?
   notes             String?
@@ -629,6 +632,8 @@ model QuotationPayment {
   dueOn              DateTime? @db.Date
   /// A share of the total, in hundredths of a percent: 20% is 2000.
   percentBasisPoints Int
+  /// This payment also takes all of the taxes — "30% + tax 100%" (doc §3.10).
+  plusTaxes Boolean @default(false)
   position           Int       @default(0)
 
   @@index([quotationId])
@@ -738,6 +743,9 @@ model Contract {
   /// What the whole contract is worth; every payment's share is of this.
   /// Minor units, with an explicit currency (§4.5).
   totalCents          Int?
+  /// Taxes on top of the total, from a quotation's TOT and per-night tax
+  /// (doc §7.1). The total stays the rooms; payments are shares of it.
+  taxCents Int?
   currency            String?
   notes               String?
   /// Said on purpose when the contract has no cancellation deadlines at all,
@@ -782,6 +790,8 @@ model ContractPayment {
   percentBasisPoints Int?
   /// A set amount instead, where the payment is not a plain share of the total.
   amountCents        Int?
+  /// This payment also takes all of the contract's taxes (doc §7.1).
+  plusTaxes Boolean @default(false)
   status             PaymentStatus @default(TO_BE_PAID)
   paidOn             DateTime?     @db.Date
   invoiceUrl         String?

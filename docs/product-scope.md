@@ -1360,7 +1360,9 @@ A quotation has:
 | Lines | **Periods × room types**: each line is rooms of one of the hotel's own room categories, for one period (check-in to check-out), at one rate per room per night, optionally with how many people per room. A pre or post period, or a second room type, is another line. At least one line |
 | Payment terms, cancellation terms | As the hotel worded them, in plain text — not yet the structured payments and cut-offs of a contract (§7.1) |
 | Rates include | The same choice as a room category's rate (§3.9): Breakfast, Wi-Fi, Taxes, Parking and Cleaning — which then asks how often: daily, weekly or other — plus anything else in words |
-| TOT, other applicable tax | The TOT as a percentage, and any other tax in words, as on a room category's rate |
+| TOT, tax per night, other applicable tax | The TOT as a percentage of the rate; a **fixed tax per room per night** on top of it (Santa Monica's $2.30 — 2026-11-11); and any other tax in words, as on a room category's rate |
+| Taxes, worked out | **Rates are taken as before tax and the taxes are added on top** (the owner, 2026-11-11, Hotel Carmel's agreement). Each line's tax per room per night is its rate × the TOT, rounded to the cent, plus the fixed tax — $245 at 15% + $2.30 is $39.05 — times its room-nights. The quotation shows *rooms + taxes = total*, as the form is typed and once saved, with a *Tax per night* column; Hotel Carmel's comes to $508,137.00 + $80,822.85 = $588,959.85. A tax in words only (*TMD: 6.25 USD*) is not added |
+| Payments | Shares of the **rooms' total**, due on signature or on a date; a payment can also take **all of the taxes** (*+ all taxes*) — Hotel Carmel's last payment is "30% + tax 100%" |
 | Link | The quotation itself, as a Google Drive link |
 | Notes | Anything else |
 
@@ -3260,6 +3262,13 @@ event, its name ("Group Sales Agreement"), the signed PDF as a Google Drive link
 was signed, its account manager, notes, and **its total** — what the whole contract is worth,
 with its currency (§4.5).
 
+**Taxes on top** (the owner, 2026-11-11): where the hotel's agreement adds taxes to the rooms,
+the contract keeps the **total as the rooms** and the **taxes** beside it, and shows *Rooms*,
+*Taxes* and *Total payable*; the contracts lists show the total payable. **Payment shares are
+shares of the rooms**, and a payment can also take **all of the taxes** — 30% + tax 100% is
+$152,441.10 + $80,822.85 at Hotel Carmel. A contract made from a quotation brings its taxes
+and its *+ all taxes* payments with it; on any contract they are set under *Edit*.
+
 **Payment terms** are the payments the contract schedules, each with a description ("1st
 deposit"), a due date, and **its share of the contract's total** — 20% of US$ 198,450 is
 US$ 39,690. The amount is worked out from the total every time it is read, never stored, so
@@ -3605,6 +3614,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
 | §3.10 Quotations | **Built** | On the property's page, third of its tabs (Updates, Room categories, Quotations, Contracts, Log — since 2026-10-06), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract and buys the quoted rooms on the stock sheet (2026-11-05); *Buy its rooms on the stock sheet* for one already tied to a contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 / §7.1 Taxes on quotations and contracts | **Built** (2026-11-11) | Fixed tax per room per night beside the TOT; taxes worked out per line and shown as rooms + taxes = total, with a tax-per-night column; *+ all taxes* on a payment; contracts keep the rooms as their total with the taxes beside it and show the total payable; a contract made from a quotation carries both |
 | §3.10 Event periods | **Built** (2026-11-11) | Named periods per event on its Edit page (no overlaps, gaps allowed); coloured bars and jump-to chips on the stock sheet; *Split by the event's periods* for rates on the stock sheet and in Add rooms; one-click period dates on quotation lines, request lines and the client's needs form. A rate card column per period is **not built** |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
