@@ -2482,7 +2482,9 @@ the client's.
 **The Sales requests page** lists open requests grouped by stage — *Initial interest*, *Specify*,
 *Proposal sent*, then *Negotiation* — each row showing the client and contact, the event, what
 they need, the period, the follow-up date and next step, the account manager and how many
-days the request has been open. Within a stage, the most pressing follow-up comes first.
+days the request has been open. **Each event has its own colour** (the owner, 2026-11-11):
+a stripe down the row's left edge and the event's name as a coloured pill, so one event's
+requests are seen together; an event keeps its colour when new ones are added. Within a stage, the most pressing follow-up comes first.
 A follow-up due today or overdue shows in red, and a note above the list counts them, with
 a way to show only those. The list can show closed requests instead, or all of them, and
 be narrowed to one event, one account manager, or a search on client, contact or what they
