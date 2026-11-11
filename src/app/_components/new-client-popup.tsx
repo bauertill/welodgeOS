@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
+import { ClientKindToggle, PrivatePersonForm, type ClientKind } from "~/app/_components/private-person";
 import { clientCategoryLabels, clientCategoryOrder } from "~/lib/clients";
 import { api } from "~/trpc/react";
 
@@ -24,6 +25,7 @@ export function NewClientPopup({
   onCreated: (client: { id: string; contactId: string | null }) => void;
   onChooseExisting: (id: string) => void;
 }) {
+  const [kind, setKind] = useState<ClientKind>("company");
   const utils = api.useUtils();
   const people = api.user.list.useQuery();
   const clients = api.clients.list.useQuery();
@@ -56,6 +58,16 @@ export function NewClientPopup({
 
   return (
     <Popup title="A new client" subtitle="Who they are and who is asking — the rest can be added on their page later." onClose={onClose}>
+      <div className="mb-5">
+        <ClientKindToggle kind={kind} onChange={setKind} />
+      </div>
+      {kind === "person" ? (
+        <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+          <h3 className="text-ink-900 text-[15px] font-medium">The person</h3>
+          <p className="text-ink-500 mb-3 text-xs font-light">Someone buying for themselves, with no company behind them.</p>
+          <PrivatePersonForm accountManagerId={accountManagerId} onCreated={onCreated} onCancel={onClose} />
+        </div>
+      ) : (
       <form
         className="space-y-5"
         onSubmit={(e) => {
@@ -155,6 +167,7 @@ export function NewClientPopup({
           </div>
         </div>
       </form>
+      )}
     </Popup>
   );
 }

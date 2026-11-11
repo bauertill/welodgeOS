@@ -196,7 +196,7 @@ export const clientRouter = createTRPCRouter({
           : undefined,
         orderBy: { name: "asc" },
         take: 300,
-        include: { client: { select: { id: true, name: true } }, accountManager: person },
+        include: { client: { select: { id: true, name: true, category: true } }, accountManager: person },
       });
     }),
 
@@ -216,8 +216,19 @@ export const clientRouter = createTRPCRouter({
   create: protectedProcedure
     // With its first contact, when one is known — both saved together.
     .input(clientInput.extend({ contact: contactInput.optional() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
+    .mutation(async ({ ctx, input }) => {
+      // Names are unique; two private people can share one, so say so plainly.
+      const taken = await ctx.db.client.findFirst({ where: { name: { equals: input.name.trim(), mode: "insensitive" } }, select: { name: true } });
+      if (taken) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            input.category === "PRIVATE_PERSON"
+              ? `There is already a client called ${taken.name}. If this is someone else, tell them apart in the name — add their city, say.`
+              : `${taken.name} is already a client — find them in the list instead.`,
+        });
+      }
+      return ctx.db.$transaction(async (tx) => {
         const client = await tx.client.create({
           data: {
             name: input.name.trim(),
@@ -240,8 +251,8 @@ export const clientRouter = createTRPCRouter({
         const contact = await tx.clientContact.create({ data: { ...contactData(input.contact), clientId: client.id } });
         await logAudit(tx, { actorId: ctx.session.user.id, entity: "Client", entityId: client.id, summary: `Contact added: ${contact.name}` });
         return { ...client, contactId: contact.id as string | null };
-      }),
-    ),
+      });
+    }),
 
   update: protectedProcedure
     .input(clientInput.extend({ id: z.string() }))

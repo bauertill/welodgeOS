@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Field, Fieldset, FormError, Input, Select, Textarea } from "~/app/_components/form";
 import { Initials } from "~/app/_components/property-groups";
+import { ClientKindToggle, PrivatePersonForm, type ClientKind } from "~/app/_components/private-person";
 import { EmptyState, Table, Td, Th } from "~/app/_components/ui";
 import { clientCategoryLabels, clientCategoryOrder, contactTypeLabels, priorityLabels } from "~/lib/clients";
 import { api } from "~/trpc/react";
@@ -189,9 +190,13 @@ function People({ q }: { q: string }) {
               </Link>
             </Td>
             <Td>
-              <Link href={`/clients/${contact.client.id}`} className="hover:text-brand-700">
-                {contact.client.name}
-              </Link>
+              {contact.client.category === "PRIVATE_PERSON" ? (
+                <span className="text-ink-500 font-light">Private person</span>
+              ) : (
+                <Link href={`/clients/${contact.client.id}`} className="hover:text-brand-700">
+                  {contact.client.name}
+                </Link>
+              )}
             </Td>
             <Td>{contact.title ?? "—"}</Td>
             <Td>
@@ -219,6 +224,24 @@ function People({ q }: { q: string }) {
 }
 
 function AddClient({ onDone }: { onDone: () => void }) {
+  const [kind, setKind] = useState<ClientKind>("company");
+  const toggle = (
+    <div className="mb-4">
+      <ClientKindToggle kind={kind} onChange={setKind} />
+    </div>
+  );
+  if (kind === "person") {
+    return (
+      <Fieldset title="Add a client" description="Someone buying for themselves, with no company behind them.">
+        {toggle}
+        <PrivatePersonForm onCreated={onDone} onCancel={onDone} />
+      </Fieldset>
+    );
+  }
+  return <AddCompany toggle={toggle} onDone={onDone} />;
+}
+
+function AddCompany({ toggle, onDone }: { toggle: React.ReactNode; onDone: () => void }) {
   const utils = api.useUtils();
   const people = api.user.list.useQuery();
   const [name, setName] = useState("");
@@ -238,6 +261,7 @@ function AddClient({ onDone }: { onDone: () => void }) {
 
   return (
     <Fieldset title="Add a client" description="A federation, broadcaster, sponsor or event team we sell to — or hope to.">
+      {toggle}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Name" className="lg:col-span-2">
           <Input
