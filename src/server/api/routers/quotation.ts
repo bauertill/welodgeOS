@@ -12,7 +12,7 @@ import { logAudit } from "~/server/audit";
 import { GET_RATE } from "~/server/get-rate";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { notify } from "~/server/notify";
-import { buyQuotedRooms } from "~/server/quoted-rooms";
+import { buyQuotedRooms, raiseRoomTypes, roomShortfall } from "~/server/quoted-rooms";
 import { taskStatusLabels } from "~/lib/tasks";
 
 /**
@@ -90,7 +90,7 @@ const quotationInput = z.object({
 const include = {
   lines: {
     orderBy: [{ position: "asc" }, { checkIn: "asc" }],
-    include: { category: { select: { id: true, name: true } } },
+    include: { category: { select: { id: true, name: true, unitCount: true } } },
   },
   payments: { orderBy: { position: "asc" } },
   cancellations: { orderBy: { position: "asc" } },
@@ -124,6 +124,8 @@ function withTotals(quotation: Loaded) {
     totalCents,
     taxCents,
     payableCents: totalCents + taxCents,
+    /** Room types with fewer rooms on the system than the quote asks for — offered to update (doc §3.10). */
+    shortfall: roomShortfall(quotation.lines),
     from: starts.length ? new Date(Math.min(...starts)) : null,
     to: ends.length ? new Date(Math.max(...ends)) : null,
   };
@@ -431,8 +433,10 @@ export const quotationRouter = createTRPCRouter({
       });
     }),
 
-  makeContract: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+  makeContract: protectedProcedure.input(z.object({ id: z.string(), raiseRoomTypes: z.boolean().default(false) })).mutation(({ ctx, input }) =>
     ctx.db.$transaction(async (tx) => {
+      // Approved with the accept: room types loaded short take the quote's numbers first (doc §3.10).
+      if (input.raiseRoomTypes) await raiseRoomTypes(tx, ctx.session.user.id, input.id);
       const quotation = withTotals(await tx.quotation.findUniqueOrThrow({ where: { id: input.id }, include }));
       if (quotation.contract) return quotation.contract;
       const entry = await tx.scoutingEntry.findUniqueOrThrow({
@@ -511,8 +515,18 @@ export const quotationRouter = createTRPCRouter({
    * for one accepted before accepting bought them, or tied to a contract made
    * by hand. Doing it again buys nothing more (doc §3.10).
    */
-  buyRooms: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+  /**
+   * Update the hotel's room types to what a quotation asks for (doc §3.10):
+   * each one with fewer rooms on the system than the quote's busiest night is
+   * raised to it. Asked first on the quotation; recorded on the property.
+   */
+  raiseRoomTypes: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction((tx) => raiseRoomTypes(tx, ctx.session.user.id, input.id)),
+  ),
+
+  buyRooms: protectedProcedure.input(z.object({ id: z.string(), raiseRoomTypes: z.boolean().default(false) })).mutation(({ ctx, input }) =>
     ctx.db.$transaction(async (tx) => {
+      if (input.raiseRoomTypes) await raiseRoomTypes(tx, ctx.session.user.id, input.id);
       const { bought } = await buyQuotedRooms(tx, ctx.session.user.id, input.id);
       const quotation = await tx.quotation.findUniqueOrThrow({ where: { id: input.id }, select: { name: true, scoutingEntryId: true } });
       if (bought) {
