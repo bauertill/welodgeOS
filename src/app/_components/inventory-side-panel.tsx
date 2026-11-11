@@ -758,7 +758,7 @@ export function InventorySidePanel({
               {periodsMode ? (
                 <div>
                   <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">We pay, per night, by period</span>
-                  <RatePeriods periods={periods} onChange={setPeriods} currency={buyCurrency} onCurrencyChange={setBuyCurrency} />
+                  <RatePeriods periods={periods} onChange={setPeriods} currency={buyCurrency} onCurrencyChange={setBuyCurrency} eventId={eventId} />
                 </div>
               ) : (
                 <Field
@@ -814,7 +814,7 @@ export function InventorySidePanel({
               {periodsMode ? (
                 <div>
                   <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">Client pays, per night, by period</span>
-                  <RatePeriods periods={periods} onChange={setPeriods} currency={sellCurrency} onCurrencyChange={setSellCurrency} />
+                  <RatePeriods periods={periods} onChange={setPeriods} currency={sellCurrency} onCurrencyChange={setSellCurrency} eventId={eventId} />
                 </div>
               ) : (
                 <Field

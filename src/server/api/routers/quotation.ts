@@ -185,7 +185,7 @@ export const quotationRouter = createTRPCRouter({
     const entry = await ctx.db.scoutingEntry.findUniqueOrThrow({
       where: { id: input.scoutingEntryId },
       select: {
-        event: { select: { name: true, startDate: true, endDate: true } },
+        event: { select: { id: true, name: true, startDate: true, endDate: true } },
         property: {
           select: {
             id: true,

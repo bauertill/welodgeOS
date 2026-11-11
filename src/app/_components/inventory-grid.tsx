@@ -9,6 +9,7 @@ import { Input } from "~/app/_components/form";
 import { InventorySidePanel, type SelectedCell } from "~/app/_components/inventory-side-panel";
 import { EmptyState, SectionHeading, SeverityBadge } from "~/app/_components/ui";
 import { addDays, dayKey, parseDay } from "~/lib/dates";
+import { periodColour, periodOfNight } from "~/lib/event-periods";
 import { formatDay, formatMoney } from "~/lib/format";
 import { acquisitionLabels, salesLabels } from "~/lib/inventory";
 import { severityHints, severityLabels, type Cause, type Severity } from "~/lib/position";
@@ -226,6 +227,9 @@ export function InventoryGrid({
       else next.add(id);
       return next;
     });
+
+  // The event's named periods (doc §3.10): a band over the dates, and a chip to jump to each.
+  const periods = (api.event.periods.useQuery({ eventId }).data ?? []).map((period, index) => ({ ...period, colour: periodColour(index) }));
 
   const allProperties = grid.data?.properties ?? [];
   const dates = grid.data?.dates ?? [];
@@ -749,6 +753,34 @@ export function InventoryGrid({
         </div>
       </div>
 
+      {periods.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+          <span className="text-ink-500 font-light">Periods:</span>
+          {periods.map((period) => {
+            const shown = checkIn === period.from && checkOut === period.to;
+            return (
+              <button
+                key={period.id}
+                type="button"
+                onClick={() => {
+                  setCheckIn(period.from);
+                  setCheckOut(period.to);
+                }}
+                aria-pressed={shown}
+                title={`Show ${period.name}: ${formatDay(parseDay(period.from))} – check-out ${formatDay(parseDay(period.to))}`}
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 transition-colors ${shown ? "border-ink-900 bg-ink-50 font-medium" : "border-ink-200 hover:border-ink-400 bg-white font-light"}`}
+              >
+                <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: period.colour }} />
+                {period.name}
+                <span className="text-ink-500 text-xs">
+                  {formatDay(parseDay(period.from))} – {formatDay(parseDay(period.to))}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {properties.length > 0 && <Legend />}
 
       {properties.length === 0 ? (
@@ -783,20 +815,24 @@ export function InventoryGrid({
                 <th className="sticky top-0 left-0 z-30 w-56 min-w-56 border-b border-r shadow-[inset_0_-1px_0_var(--color-ink-200)] border-ink-200/60 bg-white px-3 py-2 font-medium text-ink-500">
                   Hotel / room type / room
                 </th>
-                {columns.map((date, index) => (
+                {columns.map((date, index) => {
+                  const period = index < dates.length ? periodOfNight(periods, dayKey(date)) : undefined;
+                  return (
                   <th
                     key={dayKey(date)}
-                    title={index === dates.length ? "Check-out day only — the nights shown end the day before" : undefined}
+                    title={index === dates.length ? "Check-out day only — the nights shown end the day before" : period ? `${period.name} night` : undefined}
                     className={`border-ink-200/60 sticky top-0 z-20 min-w-9 border-b bg-white shadow-[inset_0_-1px_0_var(--color-ink-200)] px-1 py-2 text-center font-medium ${
                       index === dates.length ? "text-ink-500/50" : "text-ink-500"
                     }`}
                   >
+                    {period && <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: period.colour }} />}
                     {date.getUTCDate()}
                     <span className="block text-[10px] font-light">
                       {date.toLocaleString("en-CH", { month: "short", timeZone: "UTC" })}
                     </span>
                   </th>
-                ))}
+                  );
+                })}
                 {/* Takes up any spare width, so a short window neither
                     stretches the room column nor leaves the rows short. */}
                 <th aria-hidden="true" className="sticky top-0 z-20 w-full border-b border-ink-200/60 bg-white shadow-[inset_0_-1px_0_var(--color-ink-200)]" />

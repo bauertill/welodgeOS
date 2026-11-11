@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { PeriodChips } from "~/app/_components/period-chips";
 import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
@@ -107,7 +108,7 @@ export function QuotationsSection({
         )}
       </div>
       {editing === "new" && (
-        <QuotationEditor scoutingEntryId={scoutingEntryId} categories={categories} stay={stay} onDone={() => setEditing(null)} />
+        <QuotationEditor scoutingEntryId={scoutingEntryId} eventId={eventId} categories={categories} stay={stay} onDone={() => setEditing(null)} />
       )}
       {rows.length === 0 && editing !== "new" ? (
         <p className="text-ink-500 text-[13px] font-light">
@@ -120,6 +121,7 @@ export function QuotationsSection({
               <QuotationEditor
                 key={quotation.id}
                 scoutingEntryId={scoutingEntryId}
+                eventId={eventId}
                 categories={categories}
                 stay={stay}
                 quotation={quotation}
@@ -361,8 +363,11 @@ function QuotationEditor({
   quotation,
   forRequestId,
   onDone,
+  eventId,
 }: {
   scoutingEntryId: string;
+  /** For the event's named periods, one click each for a line's dates (doc §3.10). */
+  eventId?: string;
   categories: Category[];
   stay: { checkIn: string; checkOut: string };
   quotation?: Quotation;
@@ -371,6 +376,7 @@ function QuotationEditor({
   onDone: () => void;
 }) {
   const utils = api.useUtils();
+  const eventPeriods = api.event.periods.useQuery({ eventId: eventId ?? "" }, { enabled: Boolean(eventId) }).data ?? [];
   const [draft, setDraft] = useState({
     name: quotation?.name ?? "",
     receivedOn: quotation?.receivedOn ? dayKey(quotation.receivedOn) : "",
@@ -645,6 +651,16 @@ function QuotationEditor({
                   </button>
                 )}
               </span>
+              {eventPeriods.length > 0 && (
+                <div className="col-span-2 sm:col-span-7 sm:-mt-1">
+                  <PeriodChips
+                    periods={eventPeriods}
+                    checkIn={line.checkIn}
+                    checkOut={line.checkOut}
+                    onPick={(checkIn, checkOut) => setLines((current) => current.map((row, i) => (i === index ? { ...row, checkIn, checkOut } : row)))}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -751,6 +767,7 @@ export function QuotationPopup({ scoutingEntryId, forRequestId, onClose }: { sco
         <QuotationEditor
           scoutingEntryId={scoutingEntryId}
           categories={c.property.categories}
+          eventId={c.event.id}
           stay={{ checkIn: dayKey(c.event.startDate), checkOut: dayKey(c.event.endDate) }}
           forRequestId={forRequestId}
           onDone={onClose}
@@ -888,6 +905,7 @@ function QuotePopup({ quote, onClose }: { quote: RouterOutputs["quotation"]["for
           <QuotationEditor
             scoutingEntryId={quote.scoutingEntryId}
             categories={c.property.categories}
+            eventId={c.event.id}
             stay={{ checkIn: dayKey(c.event.startDate), checkOut: dayKey(c.event.endDate) }}
             quotation={quote}
             onDone={() => setEditing(false)}

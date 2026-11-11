@@ -1424,6 +1424,32 @@ Not built yet, in the order agreed: finding nearby hotels from a venue automatic
 hotel's general details from its official website; onboarding and operational forms sent
 to hotels by link; telling a property's accommodation manager when a sales request moves.
 
+#### Event periods
+
+**Some events are priced in parts** (the owner, 2026-11-11): LA28 is the Olympics, the
+days between the Games and the Paralympics, and a hotel quotes each at its own rate — the
+Courtyard Culver City at $315 for the Olympics, $229 between and $270 for the Paralympics.
+Most events are one stretch and need nothing; **with no periods, the event's own dates are
+its one period** and nothing below shows.
+
+- **Where they are set**: *Periods* on the event's Edit page. Each has a **name** (Olympics),
+  its **first night** and its **check-out day**, like a stay. Periods of one event **never
+  overlap**; **gaps between them are allowed** (the owner) — nights outside every period
+  are simply not in one. Changing them is recorded in the event's history; rates already
+  recorded on rooms or quotations are not touched.
+- **Stock sheet**: a coloured bar over each period's nights in the date row, and a chip per
+  period above the sheet that shows exactly that period's nights.
+- **Rates by period** (§4.8): where a stay can be priced in parts — on the stock sheet and in
+  a sales request's *Add rooms* — *Split by the event's periods* cuts the stay where the
+  periods begin and end, naming each part (*Olympics*, *Between Games*; nights outside them
+  read *Before …*, *Between … and …*, *After …*). A price given for the whole stay is kept on
+  each part as a starting point.
+- **Dates in one click**: each line of a quotation, and of a sales request's details —
+  including the needs form a client fills in through their link — offers the periods as
+  chips; choosing one fills in the line's check-in and check-out, which can still be typed.
+- **Not yet**: a rate card does not show a column per period — a line has one price. Until
+  it does, a room type is listed once per period (*King — Olympics*, *King — Paralympics*).
+
 
 ---
 
@@ -3579,6 +3605,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
 | §3.10 Quotations | **Built** | On the property's page, third of its tabs (Updates, Room categories, Quotations, Contracts, Log — since 2026-10-06), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract and buys the quoted rooms on the stock sheet (2026-11-05); *Buy its rooms on the stock sheet* for one already tied to a contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
+| §3.10 Event periods | **Built** (2026-11-11) | Named periods per event on its Edit page (no overlaps, gaps allowed); coloured bars and jump-to chips on the stock sheet; *Split by the event's periods* for rates on the stock sheet and in Add rooms; one-click period dates on quotation lines, request lines and the client's needs form. A rate card column per period is **not built** |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |
 | §3.9 Room category rates and taxes | **Built** | Per event, edited in place in the room category table under each property: buying rate and currency, rate include (ticked from a list, cleaning with how often, plus anything else in words), TOT, other applicable tax, applicable period. Size and notes per category on the property's form |
 | §3.9 Fill from room categories | **Built** | Drafts the property's applicable period and rates include in the side panel; asks before replacing |

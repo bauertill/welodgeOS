@@ -98,6 +98,10 @@ model Event {
   projectLead           User?           @relation("EventProjectLead", fields: [projectLeadId], references: [id], onDelete: SetNull)
   projectLeadId         String?
   accommodationManagers User[]          @relation("EventAccommodationManagers")
+  /// Named stretches of the event with their own rates, like LA28's Olympics,
+  /// the days between and the Paralympics (doc §3.10). Most events have none,
+  /// and the event's own dates are then its one period.
+  periods EventPeriod[]
   rateCards             RateCard[]
 
   @@index([startDate])
@@ -385,6 +389,24 @@ model PropertyContact {
 
 /// A property on one event's scouting list. Nothing here implies a commercial
 /// position — that starts in Phase 2.
+/// A named stretch of an event (doc §3.10): its first night and its check-out
+/// day, like a stay. Periods of one event never overlap; gaps between them are
+/// allowed.
+model EventPeriod {
+  id        String   @id @default(cuid())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId   String
+  name      String
+  /// The first night.
+  startDate DateTime @db.Date
+  /// The check-out day: the last night is the day before.
+  endDate   DateTime @db.Date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
+}
+
 model ScoutingEntry {
   id     String         @id @default(cuid())
   status ScoutingStatus @default(PROSPECT)

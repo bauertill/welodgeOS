@@ -1378,6 +1378,7 @@ export const salesRouter = createTRPCRouter({
               select: { id: true, name: true, category: true, latitude: true, longitude: true, layer: { select: { measured: true } } },
               orderBy: { name: "asc" },
             },
+            periods: { orderBy: { startDate: "asc" }, select: { name: true, startDate: true, endDate: true } },
           },
         },
       },
@@ -1389,6 +1390,8 @@ export const salesRouter = createTRPCRouter({
       // What they can choose to be close to: the places distances are measured to (doc §3.7).
       places: measuredPlaces(request.event?.placesOfInterest ?? []).map(({ id, name, latitude, longitude }) => ({ id, name, latitude, longitude })),
       currency: currencyForCountry(request.event?.country),
+      /** The event's named periods, one click each for a line's dates (doc §3.10). */
+      periods: (request.event?.periods ?? []).map((period) => ({ name: period.name, from: dayKey(period.startDate), to: dayKey(period.endDate) })),
       /** Where a first line's dates start: the event's own. */
       stay: request.event ? { checkIn: dayKey(request.event.startDate), checkOut: dayKey(request.event.endDate) } : null,
       submittedAt: request.needsSubmittedAt,
