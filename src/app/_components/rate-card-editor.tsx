@@ -16,7 +16,13 @@ type Draft = {
   name: string;
   intro: string;
   markup: string;
-  properties: { id: string; description: string; photoIds: string[]; lines: { id: string; selling: string; available: string; minNights: string }[] }[];
+  properties: {
+    id: string;
+    description: string;
+    photoIds: string[];
+    /** `off`: a room type we are not proposing at this property — kept, but not on the card (2026-11-11). */
+    lines: { id: string; selling: string; available: string; minNights: string; off: boolean }[];
+  }[];
   removed: string[];
 };
 
@@ -33,17 +39,22 @@ const draftOf = (card: Card): Draft => ({
   name: card.name,
   intro: card.intro ?? "",
   markup: card.markupBasisPoints === null ? "" : String(card.markupBasisPoints / 100),
-  properties: card.properties.map((property) => ({
-    id: property.id,
-    description: property.description ?? "",
-    photoIds: property.photoIds,
-    lines: property.lines.map((line) => ({
-      id: line.id,
-      selling: toText(line.sellingCents),
-      available: line.available === null ? "" : String(line.available),
-      minNights: line.minNights === null ? "" : String(line.minNights),
-    })),
-  })),
+  properties: card.properties.map((property) => {
+    // A room type with no client price is not offered — folded away, unless nothing at the property has a price yet.
+    const anyPriced = property.lines.some((line) => line.sellingCents !== null);
+    return {
+      id: property.id,
+      description: property.description ?? "",
+      photoIds: property.photoIds,
+      lines: property.lines.map((line) => ({
+        id: line.id,
+        selling: toText(line.sellingCents),
+        available: line.available === null ? "" : String(line.available),
+        minNights: line.minNights === null ? "" : String(line.minNights),
+        off: anyPriced && line.sellingCents === null,
+      })),
+    };
+  }),
   removed: [],
 });
 const distance = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
@@ -118,12 +129,26 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
     const rooms = lines.reduce((sum, line) => sum + line.rooms, 0);
     return { rooms, roomNights: lines.reduce((sum, line) => sum + line.rooms * line.nights, 0), single: lines.length === 1 ? lines[0]! : null };
   })();
-  const bookingOf = (available: number | null) => {
-    if (!asked) return null;
-    const share = available !== null && available < asked.rooms ? available / asked.rooms : 1;
-    const roomNights = Math.round(asked.roomNights * share);
-    const words = asked.single ? `${available !== null ? Math.min(available, asked.single.rooms) : asked.single.rooms} units × ${asked.single.nights} nights` : `${roomNights} room-nights`;
-    return { roomNights, words };
+  /**
+   * The booking reckoned on each room type offered (2026-11-11): the client's
+   * rooms shared out over the room types on the card only — each up to its
+   * units available, in proportion where together they offer more than asked
+   * — at the nights they asked for. Room types not proposed take none.
+   */
+  const bookingsOf = (lines: { id: string; available: number | null }[]) => {
+    const out = new Map<string, { roomNights: number; words: string }>();
+    if (!asked || !lines.length) return out;
+    const nightsEach = asked.roomNights / asked.rooms;
+    const caps = lines.map((line) => Math.min(line.available ?? asked.rooms, asked.rooms));
+    const offered = caps.reduce((sum, cap) => sum + cap, 0);
+    lines.forEach((line, index) => {
+      const rooms = offered > asked.rooms ? (caps[index]! * asked.rooms) / offered : caps[index]!;
+      const roomNights = Math.round(rooms * nightsEach);
+      const words =
+        asked.single && Number.isInteger(rooms) ? `${rooms} ${rooms === 1 ? "unit" : "units"} × ${asked.single.nights} nights` : `${roomNights} room-nights`;
+      out.set(line.id, { roomNights, words });
+    });
+    return out;
   };
   /** Rooms offered without how many units or the shortest stay — not saved until given (doc §4.11). */
   /** Properties with no photos or video — the card is not shared while there are any (doc §4.11). */
@@ -132,7 +157,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
     ? draft.properties
         .filter((property) => !draft.removed.includes(property.id))
         .flatMap((property) => property.lines)
-        .filter((line) => toCents(line.selling) !== null && (toCount(line.available) === null || toCount(line.minNights) === null)).length
+        .filter((line) => !line.off && toCents(line.selling) !== null && (toCount(line.available) === null || toCount(line.minNights) === null)).length
     : 0;
   const close = () => {
     if (dirty && !window.confirm("Close without saving the rate card?")) return;
@@ -151,7 +176,11 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
         id: property.id,
         description: property.description,
         photoIds: property.photoIds,
-        lines: property.lines.map((line) => ({ id: line.id, sellingCents: toCents(line.selling), available: toCount(line.available), minNights: toCount(line.minNights) })),
+        lines: property.lines.map((line) =>
+          line.off
+            ? { id: line.id, sellingCents: null, available: null, minNights: null }
+            : { id: line.id, sellingCents: toCents(line.selling), available: toCount(line.available), minNights: toCount(line.minNights) },
+        ),
       })),
       removedPropertyIds: draft.removed,
     });
@@ -173,7 +202,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
           ...property,
           lines: property.lines.map((line) => {
             const buying = source?.lines.find((one) => one.id === line.id)?.buyingCents ?? null;
-            return buying === null ? line : { ...line, selling: String(Math.round(buying * (1 + percent / 100)) / 100) };
+            return buying === null || line.off ? line : { ...line, selling: String(Math.round(buying * (1 + percent / 100)) / 100) };
           }),
         };
       }),
@@ -205,7 +234,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 ...clientMedia({ ...source, photoIds: property.photoIds }),
                 lines: property.lines
                   .map((line) => ({ line, source: source.lines.find((one) => one.id === line.id)! }))
-                  .filter(({ line }) => toCents(line.selling) !== null)
+                  .filter(({ line }) => !line.off && toCents(line.selling) !== null)
                   .map(({ line, source: lineSource }) => ({
                     id: line.id,
                     categoryId: lineSource.categoryId,
@@ -278,6 +307,27 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
             .filter((property) => !draft.removed.includes(property.id))
             .map((property) => {
               const source = c.properties.find((one) => one.id === property.id)!;
+              const shown = property.lines.filter((line) => !line.off);
+              const hidden = property.lines.filter((line) => line.off);
+              const priced = shown.filter((line) => toCents(line.selling) !== null && source.lines.find((one) => one.id === line.id)?.buyingCents);
+              const bookings = bookingsOf(priced.map((line) => ({ id: line.id, available: toCount(line.available) })));
+              const marginOf = (line: (typeof shown)[number]) => {
+                const buying = source.lines.find((one) => one.id === line.id)?.buyingCents ?? null;
+                const selling = toCents(line.selling);
+                return selling !== null && buying ? selling - buying : null;
+              };
+              const total = priced.reduce(
+                (sum, line) => {
+                  const booking = bookings.get(line.id);
+                  const margin = marginOf(line);
+                  if (!booking || margin === null) return sum;
+                  const buying = source.lines.find((one) => one.id === line.id)!.buyingCents!;
+                  return { margin: sum.margin + margin * booking.roomNights, cost: sum.cost + buying * booking.roomNights, roomNights: sum.roomNights + booking.roomNights };
+                },
+                { margin: 0, cost: 0, roomNights: 0 },
+              );
+              const setLine = (lineId: string, change: Partial<Draft["properties"][number]["lines"][number]>) =>
+                setProperty(property.id, (one) => ({ ...one, lines: one.lines.map((other) => (other.id === lineId ? { ...other, ...change } : other)) }));
               return (
                 <section key={property.id} className="border-ink-200/60 rounded-xl border bg-white p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -326,10 +376,13 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                         <th className="pb-1.5 font-medium">Units available</th>
                         <th className="pb-1.5 font-medium">Min. stay (nights)</th>
                         <th className="pb-1.5 text-right font-medium">Margin</th>
+                        <th className="pb-1.5">
+                          <span className="sr-only">Not proposing</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {property.lines.map((line) => {
+                      {shown.map((line) => {
                         const lineSource = source.lines.find((one) => one.id === line.id)!;
                         const selling = toCents(line.selling);
                         const margin = selling !== null && lineSource.buyingCents ? selling - lineSource.buyingCents : null;
@@ -381,7 +434,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                               {margin !== null && lineSource.buyingCents ? (
                                 <>
                                   {(() => {
-                                    const booking = bookingOf(toCount(line.available));
+                                    const booking = bookings.get(line.id);
                                     return booking ? (
                                       <span className={`block font-medium ${margin < 0 ? "" : "text-ink-900"}`} title="On the rooms and nights the client asked for">
                                         {formatMoney(margin * booking.roomNights, c.currency)}
@@ -397,11 +450,70 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                                 "—"
                               )}
                             </td>
+                            <td className="py-1.5 pl-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setLine(line.id, { off: true, selling: "", available: "", minNights: "" })}
+                                title={`Not proposing ${lineSource.name} — take it off this card`}
+                                aria-label={`Not proposing ${lineSource.name}`}
+                                className="text-ink-400 text-lg leading-none hover:text-[#c03654]"
+                              >
+                                ×
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
+                    {total.roomNights > 0 && (
+                      <tfoot>
+                        <tr className="border-ink-200/60 border-t">
+                          <td colSpan={6} className="text-ink-700 pt-2 text-[13px] font-medium">
+                            Margin on the rooms proposed
+                          </td>
+                          <td className={`pt-2 text-right whitespace-nowrap ${total.margin < 0 ? "text-[#c03654]" : "text-ink-900"}`}>
+                            <span className="block font-semibold">
+                              {formatMoney(total.margin, c.currency)}
+                              <span className="text-ink-500 font-light"> for {total.roomNights} room-nights</span>
+                            </span>
+                            <span className="text-ink-500 block text-[11px] font-light">{total.cost ? Math.round((total.margin / total.cost) * 100) : 0}% on our cost</span>
+                          </td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
+                  {hidden.length > 0 && (
+                    <p className="text-ink-500 mt-2 text-xs font-light">
+                      Not proposing:{" "}
+                      {hidden.map((line, index) => {
+                        const lineSource = source.lines.find((one) => one.id === line.id)!;
+                        const markup = Number(draft.markup.replace(",", "."));
+                        return (
+                          <span key={line.id}>
+                            {index > 0 && " · "}
+                            {lineSource.name}{" "}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLine(line.id, {
+                                  off: false,
+                                  // Back with the card's markup on our cost, where both are known.
+                                  selling:
+                                    lineSource.buyingCents !== null && draft.markup.trim() && Number.isFinite(markup)
+                                      ? String(Math.round(lineSource.buyingCents * (1 + markup / 100)) / 100)
+                                      : "",
+                                })
+                              }
+                              className="text-brand-700 hover:underline"
+                            >
+                              add back
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </p>
+                  )}
                   {property.lines.length === 0 && <p className="text-ink-500 mt-2 text-xs font-light">No room categories recorded for this property yet.</p>}
                 </section>
               );
