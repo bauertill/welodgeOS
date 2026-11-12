@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { clientCategoryLabels, clientCompanyFields, clientCompanyKeys, contactTypeLabels, priorityLabels } from "~/lib/clients";
+import { openStages } from "~/lib/sales";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit, logFieldChanges } from "~/server/audit";
 
@@ -228,7 +229,7 @@ export const clientRouter = createTRPCRouter({
           category: true,
           accountManager: { select: { name: true, email: true } },
           ...(["contacts", "roomNights", "requests"].includes(input.sort) && {
-            _count: { select: { roomNights: { where: { salesState: "SOLD" as const } }, requests: true, contacts: true } },
+            _count: { select: { roomNights: { where: { salesState: "SOLD" as const } }, salesRequests: { where: { stage: { in: openStages } } }, contacts: true } },
           }),
         },
       });
@@ -241,7 +242,7 @@ export const clientRouter = createTRPCRouter({
             manager: row.accountManager?.name ?? row.accountManager?.email,
             contacts: row._count?.contacts,
             roomNights: row._count?.roomNights,
-            requests: row._count?.requests,
+            requests: row._count?.salesRequests,
           })[input.sort],
         input,
       );
@@ -250,7 +251,7 @@ export const clientRouter = createTRPCRouter({
         include: {
           accountManager: person,
           // Only nights sold to the client — not blocked, not cancelled.
-          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, requests: true, contacts: true } },
+          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, salesRequests: { where: { stage: { in: openStages } } }, contacts: true } },
           contacts: q ? { where: contactMatch, orderBy: { name: "asc" }, take: 5, select: { id: true, name: true, title: true } } : false,
         },
       });
@@ -314,7 +315,7 @@ export const clientRouter = createTRPCRouter({
         include: {
           accountManager: person,
           contacts: { orderBy: { name: "asc" }, include: { accountManager: person } },
-          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, requests: true } },
+          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, salesRequests: { where: { stage: { in: openStages } } } } },
         },
       }),
     ),

@@ -330,7 +330,7 @@ function Companies({ q, filters }: { q: string; filters: Filters }) {
               </Td>
               <Td>{client._count.contacts}</Td>
               <Td>{client._count.roomNights}</Td>
-              <Td>{client._count.requests}</Td>
+              <Td>{client._count.salesRequests}</Td>
             </tr>
           ))}
         </tbody>
@@ -340,8 +340,8 @@ function Companies({ q, filters }: { q: string; filters: Filters }) {
       <p className="text-ink-500 text-xs font-light">
         A search finds a company by its name, or by anyone who works there — the people who matched are listed
         under its name. &ldquo;Room-nights sold&rdquo; counts the nights this client has bought from us — not
-        those they have only blocked, and not cancelled ones. &ldquo;Requests open&rdquo; counts soft
-        requests, which lock nothing and which several clients may hold on the same night.
+        those they have only blocked, and not cancelled ones. &ldquo;Requests open&rdquo; counts the client&rsquo;s
+        sales requests that are still open — not signed, not lost.
       </p>
     </>
   );

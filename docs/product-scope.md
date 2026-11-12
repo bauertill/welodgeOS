@@ -1902,8 +1902,9 @@ with "…" so the category sits close; the whole name shows on hover.
 
 Beside each client, the list shows its category, account manager and number of contacts,
 the **room-nights sold** — nights the client has bought from us; nights they have only
-blocked, and cancelled ones, are not counted — and the requests open. The client's own
-page shows the same two figures.
+blocked, and cancelled ones, are not counted — and the **sales requests open** (still open:
+not signed, not lost; the owner, 2026-11-12 — it used to count the stock sheet's soft room
+requests). The client's own page shows the same two figures.
 
 The category, type and priority lists are a first draft taken from the monday board; they
 are expected to change once the team has used them.

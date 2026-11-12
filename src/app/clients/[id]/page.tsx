@@ -68,7 +68,7 @@ export default async function ClientPage({
             </h2>
             <dl className="space-y-2 text-sm font-light">
               <Row label="Room-nights sold" value={String(client._count.roomNights)} />
-              <Row label="Requests open" value={String(client._count.requests)} />
+              <Row label="Sales requests open" value={String(client._count.salesRequests)} />
             </dl>
           </Card>
           <HistorySection entity="Client" entityId={client.id} className="" />
