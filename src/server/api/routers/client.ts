@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { clientCategoryLabels, clientCompanyFields, clientCompanyKeys, contactTypeLabels, priorityLabels } from "~/lib/clients";
+import { openStages } from "~/lib/sales";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit, logFieldChanges } from "~/server/audit";
 
@@ -48,12 +49,24 @@ const matching = (q: string, keys: string[]) =>
 const contactKeys = ["name", "email", "title", "mobile", "phone"];
 
 /** A client found by its own details or by anyone who works there (doc §4.10). */
-const clientWhere = (q: string): Prisma.ClientWhereInput | undefined =>
-  q ? { OR: [...matching(q, ["name", "shortName", "email", "website"]), { contacts: { some: { OR: matching(q, contactKeys) } } }] } : undefined;
+type ListFilters = { category?: ClientCategory | null; managerId?: string | null };
+/** The list's filters (the owner, 2026-11-12): a category, and an account manager — "none" is nobody yet. */
+const filters = { category: z.nativeEnum(ClientCategory).nullable().optional(), managerId: z.string().max(100).nullable().optional() };
+const managerWhere = (managerId?: string | null) => (managerId ? { accountManagerId: managerId === "none" ? null : managerId } : {});
+
+const clientWhere = (q: string, f: ListFilters = {}): Prisma.ClientWhereInput => ({
+  ...(q && { OR: [...matching(q, ["name", "shortName", "email", "website"]), { contacts: { some: { OR: matching(q, contactKeys) } } }] }),
+  ...(f.category && { category: f.category }),
+  ...managerWhere(f.managerId),
+});
 
 /** A person found by their own details or their company's name. */
-const personWhere = (q: string): Prisma.ClientContactWhereInput | undefined =>
-  q ? { OR: [...matching(q, contactKeys), { client: { OR: matching(q, ["name", "shortName"]) } }] } : undefined;
+/** On the People tab the category is the company's, and the account manager the person's own. */
+const personWhere = (q: string, f: ListFilters = {}): Prisma.ClientContactWhereInput => ({
+  ...(q && { OR: [...matching(q, contactKeys), { client: { OR: matching(q, ["name", "shortName"]) } }] }),
+  ...(f.category && { client: { category: f.category } }),
+  ...managerWhere(f.managerId),
+});
 
 /**
  * Alphabetical as people read it (the owner, 2026-11-12): "adidas" among the
@@ -61,15 +74,40 @@ const personWhere = (q: string): Prisma.ClientContactWhereInput | undefined =>
  * first, so the names are sorted here and then the one page is fetched.
  */
 const byName = new Intl.Collator("en", { sensitivity: "base", numeric: true });
-async function pageOfIds(rows: Promise<{ id: string; name: string }[]>, input: { limit: number; offset: number }) {
-  return (await rows)
-    .sort((a, b) => byName.compare(a.name.trim(), b.name.trim()))
+type SortValue = string | number | null | undefined;
+
+/**
+ * One page of the list, sorted by the column the user clicked (the owner,
+ * 2026-11-12) — text as people read it, numbers as numbers, blanks always
+ * last — and by name within a tie.
+ */
+function pageOfIds<T extends { id: string; name: string }>(rows: T[], value: (row: T) => SortValue, input: { limit: number; offset: number; dir: "asc" | "desc" }) {
+  const flip = input.dir === "desc" ? -1 : 1;
+  const compare = (a: SortValue, b: SortValue) => {
+    const blankA = a === null || a === undefined || a === "";
+    const blankB = b === null || b === undefined || b === "";
+    if (blankA || blankB) return blankA === blankB ? 0 : blankA ? 1 : -1;
+    return typeof a === "number" && typeof b === "number" ? (a - b) * flip : byName.compare(String(a).trim(), String(b).trim()) * flip;
+  };
+  return rows
+    .map((row) => ({ row, key: value(row) }))
+    .sort((a, b) => compare(a.key, b.key) || byName.compare(a.row.name.trim(), b.row.name.trim()))
     .slice(input.offset, input.offset + input.limit)
-    .map((row) => row.id);
+    .map(({ row }) => row.id);
 }
 
+const companySorts = ["name", "category", "manager", "contacts", "roomNights", "requests"] as const;
+const peopleSorts = ["name", "client", "title", "email", "mobile", "type", "priority", "manager"] as const;
+const priorityRank = { HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
+
 /** A search, a page at a time: the list asks for 50 (doc §4.10); without a limit, 300 come back. */
-const page = z.object({ q: z.string().max(200), limit: z.number().int().min(1).max(500).default(300), offset: z.number().int().min(0).default(0) });
+const page = z.object({
+  q: z.string().max(200),
+  limit: z.number().int().min(1).max(500).default(300),
+  offset: z.number().int().min(0).default(0),
+  ...filters,
+  dir: z.enum(["asc", "desc"]).default("asc"),
+});
 
 /** How a client reads in its history — labels, not stored codes. */
 const readableClient = (client: {
@@ -179,17 +217,41 @@ export const clientRouter = createTRPCRouter({
    * a person shows the company they are at.
    */
   search: protectedProcedure
-    .input(page)
+    .input(page.extend({ sort: z.enum(companySorts).default("name") }))
     .query(async ({ ctx, input }) => {
       const q = input.q.trim();
       const contactMatch: Prisma.ClientContactWhereInput = q ? { OR: matching(q, contactKeys) } : {};
-      const ids = await pageOfIds(ctx.db.client.findMany({ where: clientWhere(q), select: { id: true, name: true } }), input);
+      const all = await ctx.db.client.findMany({
+        where: clientWhere(q, input),
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          accountManager: { select: { name: true, email: true } },
+          ...(["contacts", "roomNights", "requests"].includes(input.sort) && {
+            _count: { select: { roomNights: { where: { salesState: "SOLD" as const } }, salesRequests: { where: { stage: { in: openStages } } }, contacts: true } },
+          }),
+        },
+      });
+      const ids = pageOfIds(
+        all,
+        (row) =>
+          ({
+            name: row.name,
+            category: row.category ? clientCategoryLabels[row.category] : null,
+            manager: row.accountManager?.name ?? row.accountManager?.email,
+            contacts: row._count?.contacts,
+            roomNights: row._count?.roomNights,
+            requests: row._count?.salesRequests,
+          })[input.sort],
+        input,
+      );
       const found = await ctx.db.client.findMany({
         where: { id: { in: ids } },
         include: {
           accountManager: person,
           // Only nights sold to the client — not blocked, not cancelled.
-          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, requests: true, contacts: true } },
+          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, salesRequests: { where: { stage: { in: openStages } } }, contacts: true } },
           contacts: q ? { where: contactMatch, orderBy: { name: "asc" }, take: 5, select: { id: true, name: true, title: true } } : false,
         },
       });
@@ -199,10 +261,38 @@ export const clientRouter = createTRPCRouter({
 
   /** Every person at every client, searched by name, email, title or number — or by their company's name. */
   people: protectedProcedure
-    .input(page)
+    .input(page.extend({ sort: z.enum(peopleSorts).default("name") }))
     .query(async ({ ctx, input }) => {
       const q = input.q.trim();
-      const ids = await pageOfIds(ctx.db.clientContact.findMany({ where: personWhere(q), select: { id: true, name: true } }), input);
+      const all = await ctx.db.clientContact.findMany({
+        where: personWhere(q, input),
+        select: {
+          id: true,
+          name: true,
+          title: true,
+          email: true,
+          mobile: true,
+          type: true,
+          priority: true,
+          client: { select: { name: true } },
+          accountManager: { select: { name: true, email: true } },
+        },
+      });
+      const ids = pageOfIds(
+        all,
+        (row) =>
+          ({
+            name: row.name,
+            client: row.client.name,
+            title: row.title,
+            email: row.email,
+            mobile: row.mobile,
+            type: row.type ? contactTypeLabels[row.type] : null,
+            priority: row.priority ? priorityRank[row.priority] : null,
+            manager: row.accountManager?.name ?? row.accountManager?.email,
+          })[input.sort],
+        input,
+      );
       const found = await ctx.db.clientContact.findMany({
         where: { id: { in: ids } },
         include: { client: { select: { id: true, name: true, category: true } }, accountManager: person },
@@ -211,9 +301,9 @@ export const clientRouter = createTRPCRouter({
     }),
 
   /** How many clients and people a search finds in all — the list shows them a page at a time. */
-  counts: protectedProcedure.input(z.object({ q: z.string().max(200) })).query(async ({ ctx, input }) => {
+  counts: protectedProcedure.input(z.object({ q: z.string().max(200), ...filters })).query(async ({ ctx, input }) => {
     const q = input.q.trim();
-    const [companies, people] = await Promise.all([ctx.db.client.count({ where: clientWhere(q) }), ctx.db.clientContact.count({ where: personWhere(q) })]);
+    const [companies, people] = await Promise.all([ctx.db.client.count({ where: clientWhere(q, input) }), ctx.db.clientContact.count({ where: personWhere(q, input) })]);
     return { companies, people };
   }),
 
@@ -225,7 +315,7 @@ export const clientRouter = createTRPCRouter({
         include: {
           accountManager: person,
           contacts: { orderBy: { name: "asc" }, include: { accountManager: person } },
-          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, requests: true } },
+          _count: { select: { roomNights: { where: { salesState: "SOLD" } }, salesRequests: { where: { stage: { in: openStages } } } } },
         },
       }),
     ),
@@ -321,6 +411,25 @@ export const clientRouter = createTRPCRouter({
           clientCompanyFields.map(({ key, label }) => ({ key, label })),
         );
         return after;
+      }),
+    ),
+
+  /** Hand a client to a colleague straight from the list (doc §4.10, the owner 2026-11-12), as on the sales board. */
+  setAccountManager: protectedProcedure
+    .input(z.object({ id: z.string(), accountManagerId: z.string().nullable() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const include = { accountManager: { select: { name: true, email: true } } };
+        const before = await tx.client.findUniqueOrThrow({ where: { id: input.id }, include });
+        const after = await tx.client.update({ where: { id: input.id }, data: { accountManagerId: input.accountManagerId }, include });
+        await logFieldChanges(
+          tx,
+          { actorId: ctx.session.user.id, entity: "Client", entityId: input.id, summary: "Updated" },
+          readableClient(before),
+          readableClient(after),
+          clientFields.filter((field) => field.key === "accountManager"),
+        );
+        return { id: after.id };
       }),
     ),
 
