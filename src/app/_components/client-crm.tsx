@@ -11,6 +11,8 @@ import { Card } from "~/app/_components/ui";
 import {
   clientCategoryLabels,
   clientCategoryOrder,
+  clientCompanyFields,
+  type ClientCompanyKey,
   contactTypeLabels,
   contactTypeOrder,
   priorityLabels,
@@ -165,6 +167,94 @@ function ClientEditor({ client, onDone }: { client: Client; onDone: () => void }
         <FormError message={save.error ? friendlyError(save.error) : null} />
         <div className="flex gap-2">
           <Button type="submit" disabled={save.isPending || !draft.name.trim()}>
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onDone}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Who a contract is signed with (doc §4.10). A new sales request starts from
+ * these, and what the client sends through their contracting link is kept
+ * here for next time.
+ */
+export function ClientContractingCard({ client }: { client: Client }) {
+  const [editing, setEditing] = useState(false);
+  const any = clientCompanyFields.some(({ key }) => client[key]);
+  return (
+    <Card>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-ink-900 text-[15px] font-medium">Contracting details</h2>
+        {!editing && (
+          <button type="button" onClick={() => setEditing(true)} className="text-brand-700 text-[13px] font-light hover:underline">
+            {any ? "Edit" : "Add"}
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <ContractingEditor client={client} onDone={() => setEditing(false)} />
+      ) : any ? (
+        <dl className="space-y-2 text-sm font-light">
+          {clientCompanyFields.map(({ key, label }) => (
+            <Row key={key} label={label} value={client[key]} />
+          ))}
+        </dl>
+      ) : (
+        <p className="text-ink-500 text-sm font-light">
+          None yet — the company&rsquo;s legal name, address, VAT and registration numbers, and who signs. They also arrive when the client fills in a
+          sales request&rsquo;s contracting link.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function ContractingEditor({ client, onDone }: { client: Client; onDone: () => void }) {
+  const saved = useSaved();
+  const [draft, setDraft] = useState(
+    () => Object.fromEntries(clientCompanyFields.map(({ key }) => [key, client[key] ?? ""])) as Record<ClientCompanyKey, string>,
+  );
+  const save = api.clients.updateContracting.useMutation({
+    onSuccess: () => {
+      saved();
+      onDone();
+    },
+  });
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate({ id: client.id, values: draft });
+      }}
+      className="space-y-3"
+    >
+      {clientCompanyFields.map((field) => (
+        <Field key={field.key} label={field.label}>
+          {field.key === "companyAddress" ? (
+            <Textarea
+              rows={2}
+              value={draft[field.key]}
+              placeholder={field.placeholder}
+              onChange={(e) => setDraft((current) => ({ ...current, [field.key]: e.target.value }))}
+            />
+          ) : (
+            <Input
+              value={draft[field.key]}
+              placeholder={"placeholder" in field ? field.placeholder : undefined}
+              onChange={(e) => setDraft((current) => ({ ...current, [field.key]: e.target.value }))}
+            />
+          )}
+        </Field>
+      ))}
+      <div className="space-y-2 pt-1">
+        <FormError message={save.error ? friendlyError(save.error) : null} />
+        <div className="flex gap-2">
+          <Button type="submit" disabled={save.isPending}>
             {save.isPending ? "Saving…" : "Save"}
           </Button>
           <Button type="button" variant="ghost" onClick={onDone}>

@@ -1154,6 +1154,10 @@ enum ClientCategory {
   EVENT_ORGANISER
   AGENCY
   CORPORATE
+  /// Overlay, broadcast-tech and other companies working at the event.
+  TECHNICAL_SUPPLIER
+  /// Press and other media that are not broadcasters.
+  MEDIA
   OTHER
   /// A person buying for themselves, with no company behind them: the client
   /// is the person, and the person is its one contact (doc §4.10).
@@ -1194,6 +1198,21 @@ model Client {
   email            String?
   website          String?
 
+  // Contracting details (doc §4.10): the legal entity a contract is signed
+  // with. Same names as on a sales request, which starts from these and,
+  // when the client sends their own, writes them back here.
+  tradeName             String?
+  companyAddress        String?
+  vatNumber             String?
+  registrationNumber    String?
+  signatory1Name        String?
+  signatory1Designation String?
+  signatory2Name        String?
+  signatory2Designation String?
+
+  /// The monday.com contact or deal this client was first imported from.
+  mondayRef String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1220,6 +1239,8 @@ model ClientContact {
   type     ContactType?
   priority Priority?
   comments String?
+  /// The monday.com contact this person was imported from — a second import skips them.
+  mondayId String? @unique
 
   accountManager   User?   @relation("ContactAccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
   accountManagerId String?
