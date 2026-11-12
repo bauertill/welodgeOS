@@ -142,11 +142,21 @@ function domainOf(email: string | null) {
 /** "tv2.dk" → "Tv2", "olympic.org.nz" → "Olympic" — a guess, and said to be one. */
 function nameFromDomain(domain: string) {
   const parts = domain.split(".");
-  const secondLevel = new Set(["co", "com", "org", "net", "gov", "ac", "or", "ne", "gob", "edu"]);
+  const secondLevel = new Set(["co", "com", "org", "net", "gov", "ac", "or", "ne", "gob", "edu", "tur", "uk", "us", "eu", "mil", "int", "nom"]);
   let core = parts.length >= 3 && secondLevel.has(parts[parts.length - 2]!) ? parts[parts.length - 3]! : parts[parts.length - 2]!;
   core = core.replace(/[-_]/g, " ");
-  return core.length <= 4 ? core.toUpperCase() : core.replace(/\b\w/g, (c) => c.toUpperCase());
+  const name = core.length <= 4 ? core.toUpperCase() : core.replace(/\b\w/g, (c) => c.toUpperCase());
+  // A country's domain says which country: hockey.be is not hockey.ca.
+  const tld = parts[parts.length - 1]!;
+  if (tld.length === 2 && !VANITY_TLDS.has(tld)) {
+    const country = regions.of(tld === "uk" ? "GB" : tld.toUpperCase());
+    if (country && country.toUpperCase() !== tld.toUpperCase()) return `${name} ${country}`;
+  }
+  return name;
 }
+/** Two-letter domains used for their look, not their country. */
+const VANITY_TLDS = new Set(["io", "tv", "co", "me", "ai", "fm", "gg", "to", "cc", "ws", "am"]);
+const regions = new Intl.DisplayNames(["en"], { type: "region" });
 
 // ── Building the companies ───────────────────────────────────────────────────
 
@@ -262,7 +272,7 @@ async function main() {
       priority: PRIORITY[(text("Priority") ?? "").toLowerCase()] ?? null,
       category: categoryLabel ? (CATEGORY[categoryLabel.split(",")[0]!.trim().toLowerCase()] ?? "OTHER") : null,
       categoryLabel,
-      manager: text("Account Manager")?.split(",")[0]?.trim() ?? null,
+      manager: ((name) => (name && name.toLowerCase() !== "admin" ? name : null))(text("Account Manager")?.split(",")[0]?.trim()),
       group: item.group.title,
       updatedAt: item.updated_at,
       deals: linked.flatMap((id) => (deals.has(id) ? [{ id, name: deals.get(id)!.name }] : [])),
@@ -311,10 +321,7 @@ async function main() {
 
   // What is in WeLodge OS already, to add to rather than duplicate.
   const db = new PrismaClient();
-  const [osClients, osUsers] = await Promise.all([
-    db.client.findMany({ select: { id: true, name: true, shortName: true, contacts: { select: { email: true, name: true, mondayId: true } } } }),
-    db.user.findMany({ select: { id: true, name: true, email: true } }),
-  ]);
+  const osClients = await db.client.findMany({ select: { id: true, name: true, shortName: true, contacts: { select: { email: true, name: true, mondayId: true } } } });
   await db.$disconnect();
   const osByName = new Map<string, (typeof osClients)[number]>();
   const osByDomain = new Map<string, (typeof osClients)[number]>();
@@ -330,11 +337,6 @@ async function main() {
       if (domain && !FREE_MAIL.has(domain)) osByDomain.set(domain, client);
     }
   }
-  const userFor = (name: string | null) => {
-    if (!name) return null;
-    const n = norm(name);
-    return osUsers.find((u) => u.name && (norm(u.name) === n || norm(u.name).split(" ")[0] === n || n.split(" ")[0] === norm(u.name))) ?? null;
-  };
 
   type CompanyRow = {
     company: string;
@@ -351,8 +353,13 @@ async function main() {
   };
   const companyRows: CompanyRow[] = [];
   const unplaced: Person[] = [];
-  const unmatchedManagers = new Map<string, number>();
+  const managerCounts = new Map<string, number>();
 
+  // First name each group of people; then groups that end up with the same
+  // name are one company (a name must be unique here, and the same name from
+  // two email domains is nearly always the same organisation).
+  type Named = { members: Person[]; dealNames: string[]; domains: string[]; company: string; nameFrom: string; existing: (typeof osClients)[number] | null };
+  const byName = new Map<string, Named[]>();
   for (const members of companies.values()) {
     const dealNames = members.flatMap((m) => (new Set(m.deals.map((d) => norm(d.name))).size === 1 ? m.deals.map((d) => d.name) : []));
     const domains = [...new Set(members.map(corporate).filter((d): d is string => Boolean(d)))];
@@ -360,29 +367,35 @@ async function main() {
       unplaced.push(...members);
       continue;
     }
-    const check: string[] = [];
-    let company: string;
-    let nameFrom: string;
-    if (dealNames.length) {
-      company = mostCommon(dealNames)!;
-      nameFrom = "monday deal";
-      const distinct = [...new Set(dealNames.map(norm))];
-      if (distinct.length > 1) check.push(`Deals with different names joined by email domain: ${[...new Set(dealNames)].join(" / ")}`);
-    } else {
-      company = nameFromDomain(domains[0]!);
-      nameFrom = `guessed from ${domains[0]}`;
-      check.push("Name guessed from the email domain — give it its proper name");
-    }
-    if (domains.length > 1) check.push(`Several email domains: ${domains.join(", ")}`);
+    const company = dealNames.length ? mostCommon(dealNames)! : nameFromDomain(domains[0]!);
+    const nameFrom = dealNames.length ? "monday deal" : `guessed from ${domains[0]}`;
     const existing = osByName.get(norm(company)) ?? domains.map((d) => osByDomain.get(d)).find(Boolean) ?? null;
-    if (existing && nameFrom.startsWith("guessed")) check.splice(check.indexOf("Name guessed from the email domain — give it its proper name"), 1);
+    const named: Named = { members, dealNames, domains, company, nameFrom, existing };
+    const key = norm(existing?.name ?? company);
+    byName.set(key, [...(byName.get(key) ?? []), named]);
+  }
+
+  for (const parts of byName.values()) {
+    // The part with a deal or a match in OS gives the name; a guess only when nothing better.
+    const lead = parts.find((p) => p.existing) ?? parts.find((p) => p.nameFrom === "monday deal") ?? parts[0]!;
+    const members = parts.flatMap((p) => p.members);
+    const dealNames = parts.flatMap((p) => p.dealNames);
+    const domains = [...new Set(parts.flatMap((p) => p.domains))];
+    const { company, existing } = lead;
+    const nameFrom = lead.nameFrom;
+    const check: string[] = [];
+    if (nameFrom.startsWith("guessed") && !existing) check.push("Name guessed from the email domain — give it its proper name");
+    const distinct = [...new Set(dealNames.map(norm))];
+    if (distinct.length > 1) check.push(`Deals with different names joined by email domain: ${[...new Set(dealNames)].join(" / ")}`);
+    if (parts.length > 1) check.push(`Joined because the names match — same organisation? ${domains.join(", ")}`);
+    else if (domains.length > 1) check.push(`Several email domains: ${domains.join(", ")}`);
 
     const category = mostCommon(members.map((m) => m.category).filter(Boolean));
     const categoryLabels = [...new Set(members.map((m) => m.categoryLabel).filter(Boolean))];
     if (new Set(members.map((m) => m.category).filter(Boolean)).size > 1) check.push(`People in different categories: ${categoryLabels.join(", ")}`);
+    if (!category) check.push("No category in monday — choose one");
     const managerName = mostCommon(members.map((m) => m.manager).filter(Boolean));
-    const manager = userFor(managerName);
-    if (managerName && !manager) unmatchedManagers.set(managerName, (unmatchedManagers.get(managerName) ?? 0) + 1);
+    if (managerName) managerCounts.set(managerName, (managerCounts.get(managerName) ?? 0) + 1);
 
     // Contracting details from the newest deal that has any.
     // Only this company's own deals count — not those of someone who works on several clients' deals.
@@ -398,7 +411,7 @@ async function main() {
       nameFrom: existing ? `already in OS${existing.name !== company ? ` (monday: ${company})` : ""}` : nameFrom,
       inOS: existing ? "yes — people added to it" : "no — new client",
       category: category ? category.toLowerCase().replace(/_/g, " ") : "",
-      accountManager: manager?.name ?? (managerName ? `${managerName} (no OS login — left blank)` : ""),
+      accountManager: managerName ?? "",
       people: members.length,
       newPeople,
       tradeName: contracting?.tradeName ?? "",
@@ -429,7 +442,7 @@ async function main() {
     p.phone,
     p.type ? p.type.toLowerCase().replace(/_/g, " ") : (p.typeLabel ?? ""),
     p.priority?.toLowerCase(),
-    userFor(p.manager)?.name ?? (p.manager ? `${p.manager} (no OS login)` : ""),
+    p.manager,
     p.comments,
     how,
     (p.email && osEmails.has(p.email)) || osMondayIds.has(p.mondayId) ? "already in OS — skipped" : "",
@@ -470,7 +483,8 @@ async function main() {
     `Companies: ${companyRows.length} (${companyRows.filter((r) => r.inOS.startsWith("no")).length} new, ${companyRows.filter((r) => r.inOS.startsWith("yes")).length} already in OS)`,
     `Companies with something to check: ${companyRows.filter((r) => r.check).length}`,
     `Companies with contracting details from a deal: ${companyRows.filter((r) => r.contracting).length}`,
-    `Account managers with no OS login (left blank): ${[...unmatchedManagers.entries()].map(([n, c]) => `${n} (${c})`).join(", ") || "none"}`,
+    `Companies with no category in monday: ${companyRows.filter((r) => !r.category).length}`,
+    `Account managers named in monday (matched to the team's logins at import; no login = left blank): ${[...managerCounts.entries()].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n} (${c} companies)`).join(", ")}`,
   ].join("\n");
   writeFileSync(join(outDir, "0 summary.txt"), summary + "\n");
   console.log("\n" + summary + `\n\nReview written to ${outDir}`);
