@@ -179,6 +179,7 @@ function Companies({ q }: { q: string }) {
 
   return (
     <>
+      <Pager page={page} total={counts.data?.companies} noun="clients" onPage={setPage} />
       <Table>
         <thead>
           <tr>
@@ -244,6 +245,7 @@ function People({ q }: { q: string }) {
 
   return (
     <>
+    <Pager page={page} total={counts.data?.people} noun="people" onPage={setPage} />
     <Table>
       <thead>
         <tr>
