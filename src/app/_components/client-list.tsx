@@ -37,6 +37,8 @@ export function ClientList() {
   const [typed, setTyped] = useState("");
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
+  const [filters, setFilters] = useState<Filters>({ category: "", managerId: "" });
+  const people = api.user.list.useQuery(undefined, { staleTime: 60_000 });
 
   // Searched a moment after typing stops, not on every keystroke.
   useEffect(() => {
@@ -84,9 +86,39 @@ export function ClientList() {
         )}
       </div>
 
+      {/* Filters (the owner, 2026-11-12). On People, the category is the company's and the manager the person's own. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-52">
+          <Select value={filters.category} onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value as ClientCategory | "" }))} aria-label="Category">
+            <option value="">Every category</option>
+            {clientCategoryOrder.map((option) => (
+              <option key={option} value={option}>
+                {clientCategoryLabels[option]}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="w-56">
+          <Select value={filters.managerId} onChange={(e) => setFilters((f) => ({ ...f, managerId: e.target.value }))} aria-label="Account manager">
+            <option value="">Every account manager</option>
+            <option value="none">Nobody yet</option>
+            {(people.data ?? []).map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name ?? person.email}
+              </option>
+            ))}
+          </Select>
+        </div>
+        {(filters.category || filters.managerId) && (
+          <button type="button" onClick={() => setFilters({ category: "", managerId: "" })} className="text-brand-700 text-[13px] font-light hover:underline">
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {adding && <AddClient onDone={() => setAdding(false)} />}
 
-      {view === "companies" ? <Companies q={q} /> : <People q={q} />}
+      {view === "companies" ? <Companies q={q} filters={filters} /> : <People q={q} filters={filters} />}
     </div>
   );
 }
@@ -94,14 +126,67 @@ export function ClientList() {
 /** The list shows 50 at a time, a page each (the owner, 2026-11-12); a new search starts again at page 1. */
 const PAGE = 50;
 
-function usePage(q: string) {
+type Filters = { category: ClientCategory | ""; managerId: string };
+const asInput = (f: Filters) => ({ category: f.category || null, managerId: f.managerId || null });
+
+/** Back to page 1 whenever what is shown changes — the search, a filter or the sort. */
+function usePage(key: string) {
   const [page, setPage] = useState(1);
-  const [forQ, setForQ] = useState(q);
-  if (forQ !== q) {
-    setForQ(q);
+  const [forKey, setForKey] = useState(key);
+  if (forKey !== key) {
+    setForKey(key);
     setPage(1);
   }
   return [page, setPage] as const;
+}
+
+type Sort<K extends string> = { key: K; dir: "asc" | "desc" };
+
+/** A column heading that sorts the list: a click sorts by it, a second click turns the order round. */
+function SortTh<K extends string>({ label, by, sort, onSort, className }: { label: string; by: K; sort: Sort<K>; onSort: (sort: Sort<K>) => void; className?: string }) {
+  const active = sort.key === by;
+  return (
+    <Th className={className}>
+      <button
+        type="button"
+        onClick={() => onSort({ key: by, dir: active && sort.dir === "asc" ? "desc" : "asc" })}
+        className={`inline-flex items-center gap-1 uppercase hover:text-ink-900 ${active ? "text-ink-900" : ""}`}
+        title={`Sort by ${label.toLowerCase()}`}
+      >
+        {label}
+        <span className={active ? "" : "opacity-30"}>{active && sort.dir === "desc" ? "↓" : "↑"}</span>
+      </button>
+    </Th>
+  );
+}
+
+/** The account manager, changed straight from the list (the owner, 2026-11-12), as on the sales board. */
+function ManagerPicker({ client }: { client: { id: string; name: string; accountManager: Person | null } }) {
+  const utils = api.useUtils();
+  const people = api.user.list.useQuery(undefined, { staleTime: 60_000 });
+  const save = api.clients.setAccountManager.useMutation({ onSuccess: () => void utils.clients.invalidate() });
+  return (
+    <label
+      title={client.accountManager ? "Click to hand it to someone else" : "Nobody yet — click to give it to someone"}
+      className={`hover:bg-ink-50 relative -mx-2 inline-flex cursor-pointer rounded-md px-2 py-0.5 ${save.isPending ? "opacity-50" : ""}`}
+    >
+      {client.accountManager ? <Manager person={client.accountManager} /> : <span className="text-ink-400 text-[13px] font-light">+ Assign</span>}
+      <select
+        value={client.accountManager?.id ?? ""}
+        disabled={save.isPending}
+        onChange={(e) => save.mutate({ id: client.id, accountManagerId: e.target.value || null })}
+        aria-label={`Account manager for ${client.name}`}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        <option value="">— Nobody yet</option>
+        {(people.data ?? []).map((person) => (
+          <option key={person.id} value={person.id}>
+            {person.name ?? person.email}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 /** Page numbers to offer: the first, the last, and two either side of the current one, with gaps as "…". */
@@ -181,16 +266,23 @@ function ClientLink({ id, className, onOpen, children }: { id: string; className
   );
 }
 
-function Companies({ q }: { q: string }) {
-  const [page, setPage] = usePage(q);
+type CompanySort = "name" | "category" | "manager" | "contacts" | "roomNights" | "requests";
+type PeopleSort = "name" | "client" | "title" | "email" | "mobile" | "type" | "priority" | "manager";
+
+function Companies({ q, filters }: { q: string; filters: Filters }) {
+  const [sort, setSort] = useState<Sort<CompanySort>>({ key: "name", dir: "asc" });
+  const [page, setPage] = usePage(JSON.stringify([q, filters, sort]));
   const [quick, setQuick] = useState<string | null>(null);
-  const clients = api.clients.search.useQuery({ q, limit: PAGE, offset: (page - 1) * PAGE }, { placeholderData: keepPreviousData });
-  const counts = api.clients.counts.useQuery({ q }, { placeholderData: keepPreviousData });
+  const clients = api.clients.search.useQuery(
+    { q, limit: PAGE, offset: (page - 1) * PAGE, ...asInput(filters), sort: sort.key, dir: sort.dir },
+    { placeholderData: keepPreviousData },
+  );
+  const counts = api.clients.counts.useQuery({ q, ...asInput(filters) }, { placeholderData: keepPreviousData });
   const rows = clients.data ?? [];
 
   if (rows.length === 0 && !clients.isLoading) {
-    return q.trim() ? (
-      <EmptyState title="No client matches" description={`Nothing found for "${q.trim()}", by company or by person.`} />
+    return q.trim() || filters.category || filters.managerId ? (
+      <EmptyState title="No client matches" description={q.trim() ? `Nothing found for "${q.trim()}", by company or by person, with these filters.` : "No client with these filters."} />
     ) : (
       <EmptyState
         title="No clients yet"
@@ -205,12 +297,12 @@ function Companies({ q }: { q: string }) {
       <Table>
         <thead>
           <tr>
-            <Th className="w-80">Client</Th>
-            <Th>Category</Th>
-            <Th>Account manager</Th>
-            <Th>Contacts</Th>
-            <Th>Room-nights sold</Th>
-            <Th>Requests open</Th>
+            <SortTh className="w-80" label="Client" by="name" sort={sort} onSort={setSort} />
+            <SortTh label="Category" by="category" sort={sort} onSort={setSort} />
+            <SortTh label="Account manager" by="manager" sort={sort} onSort={setSort} />
+            <SortTh label="Contacts" by="contacts" sort={sort} onSort={setSort} />
+            <SortTh label="Room-nights sold" by="roomNights" sort={sort} onSort={setSort} />
+            <SortTh label="Requests open" by="requests" sort={sort} onSort={setSort} />
           </tr>
         </thead>
         <tbody>
@@ -234,7 +326,7 @@ function Companies({ q }: { q: string }) {
               </Td>
               <Td>{client.category ? clientCategoryLabels[client.category] : "—"}</Td>
               <Td>
-                <Manager person={client.accountManager} />
+                <ManagerPicker client={client} />
               </Td>
               <Td>{client._count.contacts}</Td>
               <Td>{client._count.roomNights}</Td>
@@ -255,16 +347,20 @@ function Companies({ q }: { q: string }) {
   );
 }
 
-function People({ q }: { q: string }) {
-  const [page, setPage] = usePage(q);
+function People({ q, filters }: { q: string; filters: Filters }) {
+  const [sort, setSort] = useState<Sort<PeopleSort>>({ key: "name", dir: "asc" });
+  const [page, setPage] = usePage(JSON.stringify([q, filters, sort]));
   const [quick, setQuick] = useState<string | null>(null);
-  const people = api.clients.people.useQuery({ q, limit: PAGE, offset: (page - 1) * PAGE }, { placeholderData: keepPreviousData });
-  const counts = api.clients.counts.useQuery({ q }, { placeholderData: keepPreviousData });
+  const people = api.clients.people.useQuery(
+    { q, limit: PAGE, offset: (page - 1) * PAGE, ...asInput(filters), sort: sort.key, dir: sort.dir },
+    { placeholderData: keepPreviousData },
+  );
+  const counts = api.clients.counts.useQuery({ q, ...asInput(filters) }, { placeholderData: keepPreviousData });
   const rows = people.data ?? [];
 
   if (rows.length === 0 && !people.isLoading) {
-    return q.trim() ? (
-      <EmptyState title="Nobody matches" description={`No contact found for "${q.trim()}".`} />
+    return q.trim() || filters.category || filters.managerId ? (
+      <EmptyState title="Nobody matches" description={q.trim() ? `No contact found for "${q.trim()}" with these filters.` : "Nobody with these filters."} />
     ) : (
       <EmptyState title="No contacts yet" description="Open a client and add the people who work there." />
     );
@@ -276,14 +372,14 @@ function People({ q }: { q: string }) {
     <Table>
       <thead>
         <tr>
-          <Th>Name</Th>
-          <Th>Client</Th>
-          <Th>Title</Th>
-          <Th>Email</Th>
-          <Th>Mobile</Th>
-          <Th>Type</Th>
-          <Th>Priority</Th>
-          <Th>Account manager</Th>
+          <SortTh label="Name" by="name" sort={sort} onSort={setSort} />
+          <SortTh label="Client" by="client" sort={sort} onSort={setSort} />
+          <SortTh label="Title" by="title" sort={sort} onSort={setSort} />
+          <SortTh label="Email" by="email" sort={sort} onSort={setSort} />
+          <SortTh label="Mobile" by="mobile" sort={sort} onSort={setSort} />
+          <SortTh label="Type" by="type" sort={sort} onSort={setSort} />
+          <SortTh label="Priority" by="priority" sort={sort} onSort={setSort} />
+          <SortTh label="Account manager" by="manager" sort={sort} onSort={setSort} />
         </tr>
       </thead>
       <tbody>

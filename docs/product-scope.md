@@ -1886,6 +1886,13 @@ above and below the list, and how many there are in all ("51–100 of 1,424 clie
 page 1. (Before 2026-11-12 the list stopped at the first 300 without saying so, which hid most of the
 clients imported from monday.com.)
 
+**Filters, sorting and handing a client over (2026-11-12).** Above the list, **Every category** and
+**Every account manager** (or *Nobody yet*) narrow it; on the People tab the category is the
+company's and the account manager the person's own. **Clicking a column heading sorts by it** — a
+second click turns the order round; blanks always go last, and ties are in name order. The
+**account manager** is changed straight from the list, as on the sales board: click the name (or
+*+ Assign*) and pick a colleague; the client's history records it.
+
 **Quick view (2026-11-12).** Clicking a client's name in the list — or a person or their company on
 the People tab — opens a quick view over the page instead of leaving it: the client's category and
 account manager, its **open sales requests** (each with its stage, a click opens the request) and its
