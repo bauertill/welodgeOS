@@ -2890,10 +2890,13 @@ offer opens it as a document, as it will print.
   next step** from where things stand: get and register the hotel's quote → agree whose
   agreement → make the hotel's contract → draw up our agreement (US, our paper) → get it
   signed and press *The hotel signed* → *✓ Done — the hotel signed [contract] on [day]; the
-  rooms are bought.* When part of it is bought already, the line becomes *397 of the 400
-  room-nights … are already bought. Secure the 3 still open:* with each room type and its
-  nights; when all of it is, *All … are bought* and *nothing to acquire — this task can be
-  marked done*. After the hotel signs, room-nights still not bought are named underneath
+  rooms are bought.* **Simpler and in red when nights are missing** (the owner, 2026-11-12):
+  when some sold room-nights are not bought, the top of *What to do* is a red box — *Missing 2
+  room-nights for Swiss Olympic* — with each room type, how many room-nights and which nights,
+  and *The other 147 room-nights at [hotel] are bought*. When nothing is missing it is green:
+  *✓ Nothing missing … this task can be marked done*. **Open in the stock sheet →** opens the
+  event's stock sheet on that hotel and client, with the room type that has the missing nights
+  opened and those nights in view (outlined in red there). After the hotel signs, room-nights still not bought are named underneath
   (*Still loose: 2 room-nights … check whether the signed contract covers them*). Anything a
   colleague writes with *Edit* shows below as **Notes**.
 - **Our agreement with a hotel — US events only** (the owner, 2026-10-14: the agreement

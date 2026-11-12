@@ -19,10 +19,12 @@ export function InventoryBoard({
   eventId,
   defaultCheckIn,
   defaultCheckOut,
+  focus,
 }: {
   eventId: string;
   defaultCheckIn: string;
   defaultCheckOut: string;
+  focus?: { propertyId?: string; clientId?: string; categoryIds?: string[]; checkIn?: string; checkOut?: string };
 }) {
   const utils = api.useUtils();
   const ledger = api.inventory.ledger.useQuery({ eventId, limit: 25 });
@@ -48,6 +50,7 @@ export function InventoryBoard({
         defaultCheckIn={defaultCheckIn}
         defaultCheckOut={defaultCheckOut}
         onChanged={refresh}
+        focus={focus}
       />
 
       <div>

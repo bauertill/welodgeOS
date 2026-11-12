@@ -33,14 +33,17 @@ export function InventoryGrid({
   defaultCheckIn,
   defaultCheckOut,
   onChanged,
+  focus: opened,
 }: {
   eventId: string;
   defaultCheckIn: string;
   defaultCheckOut: string;
   onChanged: () => void;
+  /** Opened from elsewhere (an acquire task, 2026-11-12) on one hotel, one client and a few nights. */
+  focus?: { propertyId?: string; clientId?: string; categoryIds?: string[]; checkIn?: string; checkOut?: string };
 }) {
-  const [propertyId, setPropertyId] = useState("");
-  const [clientId, setClientId] = useState("");
+  const [propertyId, setPropertyId] = useState(opened?.propertyId ?? "");
+  const [clientId, setClientId] = useState(opened?.clientId ?? "");
   // Every room of every property on the list is on the sheet (doc §3.6); with
   // up to a hundred properties, the ones with nothing on them are hidden
   // until asked for — or until one property is chosen to work on.
@@ -54,7 +57,7 @@ export function InventoryGrid({
   const [checkOut, setCheckOut] = useState(defaultCheckOut);
   const [restored, setRestored] = useState(false);
   useEffect(() => {
-    const saved = readWindow(eventId);
+    const saved = opened?.checkIn && opened.checkOut ? { checkIn: opened.checkIn, checkOut: opened.checkOut } : readWindow(eventId);
     if (saved) {
       setCheckIn(saved.checkIn);
       setCheckOut(saved.checkOut);
@@ -87,8 +90,8 @@ export function InventoryGrid({
     return () => clearTimeout(timer);
   }, [checkInBox, checkOutBox, checkIn, checkOut]);
 
-  const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set());
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set(opened?.propertyId ? [opened.propertyId] : []));
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(opened?.categoryIds ?? []));
 
   const [anchor, setAnchor] = useState<CellRef | null>(null);
   const [focus, setFocus] = useState<CellRef | null>(null);
