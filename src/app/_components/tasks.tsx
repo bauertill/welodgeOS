@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { AcquirePanel } from "~/app/_components/acquire-task";
+import { AcquirePanel, AcquireWhatToDo } from "~/app/_components/acquire-task";
 import { ContractPanel } from "~/app/_components/offers";
 import { HistorySection } from "~/app/_components/activity-log";
 
@@ -930,7 +930,9 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
               Edit
             </button>
           </div>
-          {sourcing || (hotelContact && t.salesRequest) ? (
+          {acquire ? (
+            <AcquireWhatToDo taskId={t.id} propertyName={t.property!.name} notes={t.details} />
+          ) : sourcing || (hotelContact && t.salesRequest) ? (
             <ClientRequest salesRequestId={t.salesRequest!.id} />
           ) : (
             t.details &&

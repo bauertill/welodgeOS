@@ -161,6 +161,22 @@ export const acquireRouter = createTRPCRouter({
         _count: true,
       }),
     ]);
+    // The sold nights not bought yet — what this task is actually about (the team, 2026-11-12).
+    const loose = await ctx.db.roomNight.findMany({
+      where: { salesRequestId, salesState: "SOLD", acquisitionState: { not: "BOUGHT" }, slot: { category: { propertyId } } },
+      select: { date: true, slot: { select: { category: { select: { name: true } } } } },
+      orderBy: { date: "asc" },
+    });
+    const day = 86_400_000;
+    const runs: { room: string; from: Date; to: Date; roomNights: number }[] = [];
+    for (const night of loose) {
+      const room = night.slot.category.name;
+      const run = runs.find((r) => r.room === room && night.date.getTime() - r.to.getTime() <= day);
+      if (run) {
+        if (night.date > run.to) run.to = night.date;
+        run.roomNights++;
+      } else runs.push({ room, from: night.date, to: night.date, roomNights: 1 });
+    }
     const quotes = entry
       ? await ctx.db.quotation.findMany({
           where: { scoutingEntryId: entry.id, OR: [{ salesRequestId }, { salesRequestId: null }] },
@@ -180,6 +196,8 @@ export const acquireRouter = createTRPCRouter({
       // This request's hotel contracts first.
       contracts: contracts.sort((a, b) => Number(b.salesRequestId === salesRequestId) - Number(a.salesRequestId === salesRequestId)),
       nights: Object.fromEntries(nights.map((group) => [group.acquisitionState, group._count])) as Partial<Record<string, number>>,
+      /** Runs of sold nights still to buy, by room type; "to" is the last night. */
+      unbought: runs,
     };
   }),
 

@@ -1,6 +1,5 @@
 import type { Prisma } from "generated/prisma";
 
-import { formatMoney, formatRange } from "~/lib/format";
 import { logAudit } from "~/server/audit";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { notify } from "~/server/notify";
@@ -23,7 +22,7 @@ export async function ensureAcquireTask(
     propertyId: string;
     eventId: string;
     actorId: string;
-    /** What was sold at this hotel, for the task's brief. */
+    /** What was sold at this hotel (the task page reads it from the request itself). */
     lines: { room: string; rooms: number; checkIn: Date; checkOut: Date; rateCents: number }[];
     currency: string;
   },
@@ -53,19 +52,12 @@ export async function ensureAcquireTask(
     : event.accommodationManagers.length
       ? event.accommodationManagers.map((person) => person.id)
       : [input.actorId];
-  const details = [
-    `${request.client.name} has signed. Secure these rooms from ${property.name}:`,
-    ...input.lines.map((line) => `• ${line.rooms} × ${line.room}, ${formatRange(line.checkIn, line.checkOut)} — sold at ${formatMoney(line.rateCents, input.currency)} a night`),
-    "",
-    "1. Agree whose agreement it is on — the hotel's or ours.",
-    "2. Make the hotel's contract from their quote, with its payment and cancellation terms.",
-    "3. Send it, and register it once the hotel has signed — the rooms are then bought.",
-  ].join("\n");
+  // No fixed brief (the team, 2026-11-12): the task page works out what to do
+  // from where the task stands, and the details are left for a colleague's notes.
 
   const task = await tx.task.create({
     data: {
       title: `Acquire ${property.name} for ${request.client.name} — ${event.name}`,
-      details,
       status: "TODO",
       typeId: type.id,
       requestedById: request.ownerId ?? input.actorId,

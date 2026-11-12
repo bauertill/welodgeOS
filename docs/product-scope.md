@@ -2871,6 +2871,11 @@ offer opens it as a document, as it will print.
   the event's accommodation managers, asked by the account manager, tied to the request,
   the hotel and the event. The sold rooms there go **In progress** with the hotel on the
   inventory (§4.1) — *Sold, still negotiating with the supplier*.
+  **Not when we hold them already** (the owner, 2026-11-12: "we don't need to acquire that
+  which we have"): if every room-night sold at a hotel is already *Bought* from it, no acquire
+  task is made for that hotel; the request's history says so, and the account manager's
+  notice names the hotels with nothing to acquire. If only some are bought, the task is made
+  and is about the rest.
 - **The acquire task** shows what was sold at the hotel and at what rate; **1. Their quote,
   and whose agreement** — each quote with *Contract on: their agreement / our agreement /
   not known yet* and *Make the hotel's contract from this quote* (its payments and
@@ -2878,6 +2883,19 @@ offer opens it as a document, as it will print.
   **2. The hotel's contract** — *✓ The hotel signed*, with the day and a Drive link, which
   marks it signed, **buys the rooms** under it at the quote's rate per room type, and closes
   the task.
+- **What to do, worked out live (the team, 2026-11-12).** The task's *What to do* no longer
+  holds a fixed brief written when the task was made (it repeated the rooms and listed every
+  step, so it stopped matching once work had moved on). It now says what the task is in one
+  line — *Secure 8 rooms (154 room-nights) at [hotel] for [client], [dates]* — and the **one
+  next step** from where things stand: get and register the hotel's quote → agree whose
+  agreement → make the hotel's contract → draw up our agreement (US, our paper) → get it
+  signed and press *The hotel signed* → *✓ Done — the hotel signed [contract] on [day]; the
+  rooms are bought.* When part of it is bought already, the line becomes *397 of the 400
+  room-nights … are already bought. Secure the 3 still open:* with each room type and its
+  nights; when all of it is, *All … are bought* and *nothing to acquire — this task can be
+  marked done*. After the hotel signs, room-nights still not bought are named underneath
+  (*Still loose: 2 room-nights … check whether the signed contract covers them*). Anything a
+  colleague writes with *Edit* shows below as **Notes**.
 - **Our agreement with a hotel — US events only** (the owner, 2026-10-14: the agreement
   agreed with Aimbridge for the Fairfield Inn & Suites El Segundo, "exclusive for the US and
   LA project"). When a quote's contract is on *our agreement* and the event is in the United
