@@ -195,7 +195,7 @@ export const isGeneratedAcquireBrief = (details: string | null) => Boolean(detai
 export function AcquireWhatToDo({ taskId, propertyName, notes }: { taskId: string; propertyName: string; notes: string | null }) {
   const data = api.acquire.forTask.useQuery({ taskId });
   if (!data.data) return null;
-  const { request, sold, quotes, contracts, nights, inUS } = data.data;
+  const { request, sold, quotes, contracts, nights, inUS, unbought } = data.data;
   const rooms = sold.reduce((sum, line) => sum + line.rooms, 0);
   const roomNights = sold.reduce((sum, line) => sum + line.rooms * nightsBetween(line.checkIn, line.checkOut), 0);
   const first = sold.reduce<Date | null>((min, line) => (!min || line.checkIn < min ? line.checkIn : min), null);
@@ -203,8 +203,14 @@ export function AcquireWhatToDo({ taskId, propertyName, notes }: { taskId: strin
   const signed = contracts.find((contract) => contract.signedOn);
   const loose = (nights.IN_PROGRESS ?? 0) + (nights.OPTION ?? 0) + (nights.NONE ?? 0);
 
+  const bought = nights.BOUGHT ?? 0;
+  const toBuy = unbought.reduce((sum, run) => sum + run.roomNights, 0);
+  const checkOut = (last: Date) => new Date(last.getTime() + 86_400_000);
+
   let step: { done: boolean; text: string };
-  if (signed) step = { done: true, text: `Done — ${propertyName} signed ${signed.name} on ${formatDate(signed.signedOn!)}; the rooms are bought.` };
+  if (toBuy === 0 && !signed && bought > 0)
+    step = { done: true, text: "Every room sold here is already bought from the hotel — nothing to acquire. This task can be marked done." };
+  else if (signed) step = { done: true, text: `Done — ${propertyName} signed ${signed.name} on ${formatDate(signed.signedOn!)}; the rooms are bought.` };
   else if (quotes.length === 0) step = { done: false, text: `Next: get ${propertyName}'s quote and register it on the hotel's Quotations tab.` };
   else if (!quotes.some((quote) => quote.agreementOn)) step = { done: false, text: "Next: agree with the hotel whose agreement the contract is on — theirs or ours — and choose it under step 1." };
   else if (contracts.length === 0) step = { done: false, text: "Next: make the hotel's contract from their quote (step 1)." };
@@ -222,13 +228,35 @@ export function AcquireWhatToDo({ taskId, propertyName, notes }: { taskId: strin
   return (
     <div className="bg-ink-50/60 mb-4 space-y-2 rounded-lg px-3 py-2.5">
       <p className="text-ink-500 text-[11px] font-medium tracking-wider uppercase">What to do</p>
-      <p className="text-ink-900 text-sm font-light">
-        Secure {rooms} room{rooms === 1 ? "" : "s"} ({roomNights} room-nights) at <span className="font-medium">{propertyName}</span> for{" "}
-        <span className="font-medium">{request.client.name}</span>
-        {first && last ? `, ${formatRange(first, last)}` : ""}.
-      </p>
+      {bought > 0 && toBuy > 0 ? (
+        // Some of it we hold already: the task is only about the rest.
+        <div className="text-ink-900 text-sm font-light">
+          <p>
+            {bought} of the {roomNights} room-nights sold to <span className="font-medium">{request.client.name}</span> at{" "}
+            <span className="font-medium">{propertyName}</span> are already bought. Secure the {toBuy} still open:
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {unbought.map((run) => (
+              <li key={`${run.room}-${String(run.from)}`}>
+                • {run.room} — {formatRange(run.from, checkOut(run.to))} ({run.roomNights} room-night{run.roomNights === 1 ? "" : "s"})
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : bought > 0 && toBuy === 0 ? (
+        <p className="text-ink-900 text-sm font-light">
+          All {roomNights} room-nights sold to <span className="font-medium">{request.client.name}</span> at <span className="font-medium">{propertyName}</span> are
+          bought.
+        </p>
+      ) : (
+        <p className="text-ink-900 text-sm font-light">
+          Secure {rooms} room{rooms === 1 ? "" : "s"} ({roomNights} room-nights) at <span className="font-medium">{propertyName}</span> for{" "}
+          <span className="font-medium">{request.client.name}</span>
+          {first && last ? `, ${formatRange(first, last)}` : ""}.
+        </p>
+      )}
       <p className={`text-sm ${step.done ? "text-[#0a7a47]" : "text-ink-900 font-medium"}`}>{step.done ? `✓ ${step.text}` : step.text}</p>
-      {loose > 0 && (
+      {loose > 0 && signed && (
         <p className="text-sm text-[#7a5410]">
           Still loose on the inventory: {loose} room-night{loose === 1 ? "" : "s"}{" "}
           {nights.NONE && !(nights.IN_PROGRESS || nights.OPTION) ? "with nothing secured" : "not bought yet (in progress or on option with the hotel)"}

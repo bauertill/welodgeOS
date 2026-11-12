@@ -215,7 +215,10 @@ async function closeOffer(
   await moveStage(tx, actor.id, request.id, "CONTRACTED");
   await moveContractTask(tx, actor.id, request.id, "DONE", how.signed ? "the client signed" : "trust guarantee given");
 
-  // Each hotel: the sold rooms go in progress with it, and someone is to secure them.
+  // Each hotel: the sold rooms go in progress with it, and someone is to secure them —
+  // unless we hold them already (the owner, 2026-11-12: "we don't need to acquire that which we have").
+  const acquireFor: string[] = [];
+  const alreadyOurs: string[] = [];
   const byProperty = new Map<string, typeof offer.lines>();
   for (const line of offer.lines) byProperty.set(line.category.property.id, [...(byProperty.get(line.category.property.id) ?? []), line]);
   for (const [propertyId, lines] of byProperty) {
@@ -233,6 +236,21 @@ async function closeOffer(
         reason: "The client signed — securing the rooms from the hotel",
       });
     }
+    const stillToBuy = await tx.roomNight.count({
+      where: { salesRequestId: request.id, salesState: "SOLD", acquisitionState: { not: "BOUGHT" }, slot: { category: { propertyId } } },
+    });
+    const propertyName = lines[0]!.category.property.name;
+    if (stillToBuy === 0) {
+      alreadyOurs.push(propertyName);
+      await logAudit(tx, {
+        actorId: actor.id,
+        entity: "SalesRequest",
+        entityId: request.id,
+        summary: `No acquire task for ${propertyName} — every room sold there was already bought from the hotel`,
+      });
+      continue;
+    }
+    acquireFor.push(propertyName);
     await ensureAcquireTask(tx, {
       salesRequestId: request.id,
       propertyId,
@@ -247,7 +265,13 @@ async function closeOffer(
     actorId: actor.id,
     kind: "OFFER_SIGNED",
     title: how.signed ? `${request.client.name} signed the agreement — ${request.event.name}` : `${request.client.name}: trust guarantee given — ${request.event.name}`,
-    body: `${offer.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms sold, ${formatMoney(total, offer.currency)}. Acquire tasks are out to secure them from the hotels.`,
+    body: [
+      `${offer.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms sold, ${formatMoney(total, offer.currency)}.`,
+      acquireFor.length ? `Acquire task${acquireFor.length === 1 ? "" : "s"} out for ${acquireFor.join(", ")}.` : "",
+      alreadyOurs.length ? `Already bought, nothing to acquire: ${alreadyOurs.join(", ")}.` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
     link: `/sales/${request.id}`,
   });
   return contract;
