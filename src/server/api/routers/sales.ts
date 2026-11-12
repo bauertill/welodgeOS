@@ -16,6 +16,7 @@ import {
   salesStageLabels,
   waitingOnLabels,
 } from "~/lib/sales";
+import { clientCompanyFields, clientCompanyKeys, type ClientCompanyKey } from "~/lib/clients";
 import { peopleWords, wishesInWords } from "~/lib/needs";
 import { measuredPlaces } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
@@ -602,14 +603,22 @@ export const clientContractingValues = z.object(Object.fromEntries(clientContrac
 export async function clientContracting(db: Prisma.TransactionClient | PrismaClient, requestId: string) {
   const request = await db.salesRequest.findUniqueOrThrow({
     where: { id: requestId },
-    select: { ...Object.fromEntries(clientContractingKeys.map((key) => [key, true])), contractingSubmittedAt: true } as const,
+    select: {
+      ...Object.fromEntries(clientContractingKeys.map((key) => [key, true])),
+      contractingSubmittedAt: true,
+      client: { select: Object.fromEntries(clientCompanyKeys.map((key) => [key, true])) },
+    } as const,
   });
+  // Nothing on the request yet: start from what the client already gave us
+  // last time (doc §4.10), so they only check it rather than type it again.
+  const own = request as unknown as Record<string, string | null>;
+  const blankRequest = !request.contractingSubmittedAt && clientContractingKeys.every((key) => !own[key]?.trim());
+  const fromClient = (request.client ?? {}) as unknown as Record<string, string | null>;
   return {
     submittedAt: request.contractingSubmittedAt as Date | null,
-    values: Object.fromEntries(clientContractingKeys.map((key) => [key, (request as Record<string, unknown>)[key] ?? ""])) as Record<
-      (typeof clientContractingKeys)[number],
-      string
-    >,
+    values: Object.fromEntries(
+      clientContractingKeys.map((key) => [key, (blankRequest ? fromClient[key] : own[key]) ?? ""]),
+    ) as Record<(typeof clientContractingKeys)[number], string>,
   };
 }
 
@@ -635,6 +644,18 @@ export async function saveClientContracting(
     summary: `Contracting details sent by the client, ${via}`,
     changes: diffFields(readable(before), readable(after), historyFields),
   });
+  // Kept on the client too, for their next request and contract (doc §4.10).
+  const companySelect = Object.fromEntries(clientCompanyKeys.map((key) => [key, true])) as Record<ClientCompanyKey, true>;
+  const clientBefore = await tx.client.findUniqueOrThrow({ where: { id: before.clientId }, select: companySelect });
+  const clientAfter = await tx.client.update({
+    where: { id: before.clientId },
+    data: Object.fromEntries(clientCompanyKeys.map((key) => [key, blank(values[key])])),
+    select: companySelect,
+  });
+  const clientChanges = diffFields(clientBefore, clientAfter, clientCompanyFields.map(({ key, label }) => ({ key, label })));
+  if (clientChanges) {
+    await logAudit(tx, { actorId: null, entity: "Client", entityId: before.clientId, summary: `Contracting details sent by the client, ${via}`, changes: clientChanges });
+  }
   await notify(tx, {
     to: [before.ownerId],
     actorId: null,
@@ -1248,23 +1269,12 @@ export const salesRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const request = await ctx.db.salesRequest.findUnique({
         where: { contractingToken: input.token },
-        select: {
-          ...Object.fromEntries(clientContractingKeys.map((key) => [key, true])),
-          contractingSubmittedAt: true,
-          client: { select: { name: true } },
-          event: { select: { name: true } },
-        } as const,
+        select: { id: true, client: { select: { name: true } }, event: { select: { name: true } } },
       });
       if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-      return {
-        clientName: request.client.name,
-        eventName: request.event?.name ?? null,
-        submittedAt: request.contractingSubmittedAt,
-        values: Object.fromEntries(clientContractingKeys.map((key) => [key, (request as Record<string, unknown>)[key] ?? ""])) as Record<
-          (typeof clientContractingKeys)[number],
-          string
-        >,
-      };
+      // Starts from the client's details on file when the request has none yet (doc §4.10).
+      const { submittedAt, values } = await clientContracting(ctx.db, request.id);
+      return { clientName: request.client.name, eventName: request.event?.name ?? null, submittedAt, values };
     }),
 
   /** The client sends the form: it lands on the request, and the history says so. */

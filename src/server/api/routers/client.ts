@@ -2,7 +2,7 @@ import { ClientCategory, ContactType, Priority, type Prisma } from "generated/pr
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { clientCategoryLabels, contactTypeLabels, priorityLabels } from "~/lib/clients";
+import { clientCategoryLabels, clientCompanyFields, clientCompanyKeys, contactTypeLabels, priorityLabels } from "~/lib/clients";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit, logFieldChanges } from "~/server/audit";
 
@@ -281,6 +281,29 @@ export const clientRouter = createTRPCRouter({
           [...clientFields],
         );
         return updated;
+      }),
+    ),
+
+  /**
+   * The client's contracting details (doc §4.10) — who a contract is signed
+   * with. Each change is in the client's history.
+   */
+  updateContracting: protectedProcedure
+    .input(z.object({ id: z.string(), values: z.object(Object.fromEntries(clientCompanyKeys.map((key) => [key, z.string().max(2000)])) as Record<(typeof clientCompanyKeys)[number], z.ZodString>) }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const select = Object.fromEntries(clientCompanyKeys.map((key) => [key, true])) as Record<(typeof clientCompanyKeys)[number], true>;
+        const before = await tx.client.findUniqueOrThrow({ where: { id: input.id }, select });
+        const data = Object.fromEntries(clientCompanyKeys.map((key) => [key, blank(input.values[key])]));
+        const after = await tx.client.update({ where: { id: input.id }, data, select });
+        await logFieldChanges(
+          tx,
+          { actorId: ctx.session.user.id, entity: "Client", entityId: input.id, summary: "Contracting details updated" },
+          before,
+          after,
+          clientCompanyFields.map(({ key, label }) => ({ key, label })),
+        );
+        return after;
       }),
     ),
 
