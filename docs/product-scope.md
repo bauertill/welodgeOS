@@ -1880,7 +1880,8 @@ at the top, and it has a way to register a new sales request.
 - **People** lists everyone at every client, found by name, email, title or number, or by
   their company's name, each with the company they are at.
 
-The list shows **50 at a time**, a page each, with *Previous* / *Next* and page numbers
+Both lists are in alphabetical order as people read it — *adidas* among the A's, not after Z, and
+*Österreich* with the O's. The list shows **50 at a time**, a page each, with *Previous* / *Next* and page numbers
 above and below the list, and how many there are in all ("51–100 of 1,424 clients"); a new search starts again at
 page 1. (Before 2026-11-12 the list stopped at the first 300 without saying so, which hid most of the
 clients imported from monday.com.)

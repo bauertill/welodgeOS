@@ -55,6 +55,19 @@ const clientWhere = (q: string): Prisma.ClientWhereInput | undefined =>
 const personWhere = (q: string): Prisma.ClientContactWhereInput | undefined =>
   q ? { OR: [...matching(q, contactKeys), { client: { OR: matching(q, ["name", "shortName"]) } }] } : undefined;
 
+/**
+ * Alphabetical as people read it (the owner, 2026-11-12): "adidas" among the
+ * A's, not after Z, and "Österreich" with the O's. The database sorts capitals
+ * first, so the names are sorted here and then the one page is fetched.
+ */
+const byName = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+async function pageOfIds(rows: Promise<{ id: string; name: string }[]>, input: { limit: number; offset: number }) {
+  return (await rows)
+    .sort((a, b) => byName.compare(a.name.trim(), b.name.trim()))
+    .slice(input.offset, input.offset + input.limit)
+    .map((row) => row.id);
+}
+
 /** A search, a page at a time: the list asks for 50 (doc §4.10); without a limit, 300 come back. */
 const page = z.object({ q: z.string().max(200), limit: z.number().int().min(1).max(500).default(300), offset: z.number().int().min(0).default(0) });
 
@@ -170,11 +183,9 @@ export const clientRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const q = input.q.trim();
       const contactMatch: Prisma.ClientContactWhereInput = q ? { OR: matching(q, contactKeys) } : {};
-      const clients = await ctx.db.client.findMany({
-        where: clientWhere(q),
-        orderBy: { name: "asc" },
-        take: input.limit,
-        skip: input.offset,
+      const ids = await pageOfIds(ctx.db.client.findMany({ where: clientWhere(q), select: { id: true, name: true } }), input);
+      const found = await ctx.db.client.findMany({
+        where: { id: { in: ids } },
         include: {
           accountManager: person,
           // Only nights sold to the client — not blocked, not cancelled.
@@ -182,21 +193,21 @@ export const clientRouter = createTRPCRouter({
           contacts: q ? { where: contactMatch, orderBy: { name: "asc" }, take: 5, select: { id: true, name: true, title: true } } : false,
         },
       });
+      const clients = ids.flatMap((id) => found.filter((client) => client.id === id));
       return clients.map(({ contacts, ...client }) => ({ ...client, matchedContacts: contacts ?? [] }));
     }),
 
   /** Every person at every client, searched by name, email, title or number — or by their company's name. */
   people: protectedProcedure
     .input(page)
-    .query(({ ctx, input }) => {
+    .query(async ({ ctx, input }) => {
       const q = input.q.trim();
-      return ctx.db.clientContact.findMany({
-        where: personWhere(q),
-        orderBy: { name: "asc" },
-        take: input.limit,
-        skip: input.offset,
+      const ids = await pageOfIds(ctx.db.clientContact.findMany({ where: personWhere(q), select: { id: true, name: true } }), input);
+      const found = await ctx.db.clientContact.findMany({
+        where: { id: { in: ids } },
         include: { client: { select: { id: true, name: true, category: true } }, accountManager: person },
       });
+      return ids.flatMap((id) => found.filter((contact) => contact.id === id));
     }),
 
   /** How many clients and people a search finds in all — the list shows them a page at a time. */
