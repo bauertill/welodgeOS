@@ -647,9 +647,28 @@ async function apply(rows: Row[], outDir: string) {
   let peopleSkipped = 0;
 
   for (const row of rows) {
-    const fresh = row.members.filter((p) => !takenMonday.has(p.mondayId) && !(p.email && takenEmails.has(p.email)));
-    peopleSkipped += row.members.length - fresh.length;
-    const result = await db.$transaction(async (tx) => {
+    let fresh: Person[] = [];
+    let result: { clientId: string; action: string } | null = null;
+    // A hosted database drops a connection now and then: try the company again.
+    // Each company is all or nothing, and who is already there is asked afresh,
+    // so a retry never adds anyone twice.
+    for (let attempt = 1; !result; attempt++) {
+      try {
+        const already = await db.clientContact.findMany({
+          where: {
+            OR: [
+              { mondayId: { in: row.members.map((p) => p.mondayId) } },
+              { email: { in: row.members.flatMap((p) => (p.email ? [p.email] : [])), mode: "insensitive" } },
+            ],
+          },
+          select: { mondayId: true, email: true },
+        });
+        for (const c of already) {
+          if (c.mondayId) takenMonday.add(c.mondayId);
+          if (c.email) takenEmails.add(c.email.toLowerCase());
+        }
+        fresh = row.members.filter((p) => !takenMonday.has(p.mondayId) && !(p.email && takenEmails.has(p.email)));
+        result = await db.$transaction(async (tx) => {
       const found =
         (row.existingId && (await tx.client.findUnique({ where: { id: row.existingId } }))) ||
         (await tx.client.findFirst({ where: { name: { equals: row.company, mode: "insensitive" } } }));
@@ -709,6 +728,13 @@ async function apply(rows: Row[], outDir: string) {
       }
       return { clientId, action };
     }, { maxWait: 20_000, timeout: 60_000 }); // a hosted database is a round trip away
+      } catch (error) {
+        if (attempt >= 6) throw error;
+        console.log(`  ${row.company}: try ${attempt} failed (${String((error as Error).message).split("\n").filter(Boolean).pop()}) — trying again`);
+        await new Promise((resolve) => setTimeout(resolve, 5000 * attempt));
+      }
+    }
+    peopleSkipped += row.members.length - fresh.length;
     for (const p of fresh) {
       takenMonday.add(p.mondayId);
       if (p.email) takenEmails.add(p.email);
