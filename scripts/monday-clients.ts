@@ -160,7 +160,7 @@ function nameFromDomain(domain: string) {
 const VANITY_TLDS = new Set(["io", "tv", "co", "me", "ai", "fm", "gg", "to", "cc", "ws", "am"]);
 const regions = new Intl.DisplayNames(["en"], { type: "region" });
 
-type Suggestion = { name: string | null; category: ClientCategory | null; confidence: string; note: string };
+type Suggestion = { name: string | null; category: ClientCategory | null; override: ClientCategory | null; confidence: string; note: string };
 const CATEGORY_CODES: Record<string, true> = Object.fromEntries(
   ["BROADCASTER", "FEDERATION", "SPONSOR", "EVENT_ORGANISER", "AGENCY", "CORPORATE", "TECHNICAL_SUPPLIER", "MEDIA", "OTHER"].map((c) => [c, true]),
 );
@@ -266,6 +266,7 @@ async function main() {
       suggestions.set(key, {
         name: row[at("suggested name")]?.trim() || null,
         category: (row[at("suggested category")]?.trim().toUpperCase().replace(/[ /]+/g, "_") || null) as ClientCategory | null,
+        override: (at("category override") >= 0 ? row[at("category override")]?.trim() || null : null) as ClientCategory | null,
         confidence: row[at("confidence")]?.trim().toLowerCase() ?? "",
         note: row[at("note")]?.trim() ?? "",
       });
@@ -394,6 +395,10 @@ async function main() {
     inOS: string;
     category: string;
     categoryFrom: string;
+    existingId: string | null;
+    categoryCode: ClientCategory | null;
+    contractingData: Contracting | null;
+    key: string;
     accountManager: string;
     people: number;
     newPeople: number;
@@ -474,7 +479,9 @@ async function main() {
 
     const suggestedCategory = parts.map((p) => p.suggestion?.category).find((c): c is ClientCategory => Boolean(c && c in CATEGORY_CODES)) ?? null;
     const mondayCategory = mostCommon(members.map((m) => m.category).filter(Boolean));
-    const category = mondayCategory ?? suggestedCategory;
+    // A category corrected by hand (Brandon, 2026-11-12: "change the categories that are mismatched") wins over monday's.
+    const override = parts.map((p) => p.suggestion?.override).find((c): c is ClientCategory => Boolean(c && c in CATEGORY_CODES)) ?? null;
+    const category = override ?? mondayCategory ?? suggestedCategory;
     const categoryLabels = [...new Set(members.map((m) => m.categoryLabel).filter(Boolean))];
     if (new Set(members.map((m) => m.category).filter(Boolean)).size > 1) check.push(`People in different categories: ${categoryLabels.join(", ")}`);
     if (!category) check.push("No category — choose one");
@@ -495,7 +502,11 @@ async function main() {
       nameFrom: existing ? `already in OS${existing.name !== company ? ` (monday: ${company})` : ""}` : nameFrom,
       inOS: existing ? "yes — people added to it" : "no — new client",
       category: category ? category.toLowerCase().replace(/_/g, " ") : "",
-      categoryFrom: mondayCategory ? "monday" : suggestedCategory ? "suggested" : "",
+      categoryFrom: override ? `corrected (monday said ${categoryLabels.join(", ") || "nothing"})` : mondayCategory ? "monday" : suggestedCategory ? "suggested" : "",
+      existingId: existing?.id ?? null,
+      categoryCode: category,
+      contractingData: contracting ?? null,
+      key: groupKey(domains, dealNames),
       accountManager: managerName ?? "",
       people: members.length,
       newPeople,
@@ -581,6 +592,146 @@ async function main() {
   ].join("\n");
   writeFileSync(join(outDir, "0 summary.txt"), summary + "\n");
   console.log("\n" + summary + `\n\nReview written to ${outDir}`);
+
+  if (args.includes("--apply")) await apply(companyRows, outDir);
+}
+
+// ── The import ───────────────────────────────────────────────────────────────
+
+/** monday's names for colleagues who are one person here (Brandon, 2026-11-12: "Volki and Volkhard are the same person"). */
+const SAME_PERSON: string[][] = [["volki", "volkhard bauer", "volkhard"]];
+
+type Row = {
+  company: string;
+  existingId: string | null;
+  categoryCode: ClientCategory | null;
+  contractingData: Contracting | null;
+  key: string;
+  accountManager: string;
+  members: Person[];
+};
+
+/**
+ * Write the reviewed companies and their people into the database DATABASE_URL
+ * points at. Adds, never changes what is there: a client already here keeps
+ * its details and only has blanks filled; a person already here (same monday
+ * contact, or same email) is skipped. Safe to run again.
+ */
+async function apply(rows: Row[], outDir: string) {
+  const url = new URL(process.env.DATABASE_URL ?? "");
+  console.log(`\nImporting into ${url.hostname}${url.pathname} …`);
+  const db = new PrismaClient();
+  const users = await db.user.findMany({ select: { id: true, name: true, email: true } });
+  const managers = new Map<string, string | null>();
+  const managerId = (name: string | null) => {
+    if (!name) return null;
+    if (managers.has(name)) return managers.get(name)!;
+    const n = norm(name.includes("@") ? name.split("@")[0]! : name);
+    const names = SAME_PERSON.find((group) => group.includes(n)) ?? [n];
+    const user = users.find((u) => {
+      const local = norm(u.email?.split("@")[0] ?? "");
+      const full = norm(u.name ?? "");
+      return (name.includes("@") && u.email?.toLowerCase() === name.toLowerCase()) || names.some((x) => x === full || x === local || (x.includes(" ") && x === full));
+    });
+    managers.set(name, user?.id ?? null);
+    return user?.id ?? null;
+  };
+
+  const known = await db.clientContact.findMany({ select: { email: true, mondayId: true } });
+  const takenEmails = new Set(known.flatMap((c) => (c.email ? [c.email.toLowerCase()] : [])));
+  const takenMonday = new Set(known.flatMap((c) => (c.mondayId ? [c.mondayId] : [])));
+  const log: (string | number)[][] = [];
+  let clientsAdded = 0;
+  let clientsFilled = 0;
+  let peopleAdded = 0;
+  let peopleSkipped = 0;
+
+  for (const row of rows) {
+    const fresh = row.members.filter((p) => !takenMonday.has(p.mondayId) && !(p.email && takenEmails.has(p.email)));
+    peopleSkipped += row.members.length - fresh.length;
+    const result = await db.$transaction(async (tx) => {
+      const found =
+        (row.existingId && (await tx.client.findUnique({ where: { id: row.existingId } }))) ||
+        (await tx.client.findFirst({ where: { name: { equals: row.company, mode: "insensitive" } } }));
+      const companyManager = managerId(row.accountManager);
+      let clientId: string;
+      let action: string;
+      if (!found) {
+        const client = await tx.client.create({
+          data: { name: row.company, category: row.categoryCode, accountManagerId: companyManager, mondayRef: row.key, ...(row.contractingData ?? {}) },
+        });
+        clientId = client.id;
+        action = "added";
+        await tx.auditEntry.create({ data: { entity: "Client", entityId: clientId, summary: "Added — imported from monday.com" } });
+      } else {
+        clientId = found.id;
+        // Only blanks are filled: what the team has typed here stays.
+        const fill: Record<string, unknown> = {};
+        if (!found.category && row.categoryCode) fill.category = row.categoryCode;
+        if (!found.accountManagerId && companyManager) fill.accountManagerId = companyManager;
+        for (const [key, value] of Object.entries(row.contractingData ?? {})) {
+          if (value && !(found as Record<string, unknown>)[key]) fill[key] = value;
+        }
+        action = Object.keys(fill).length ? "filled in" : "kept";
+        if (Object.keys(fill).length) {
+          await tx.client.update({ where: { id: clientId }, data: fill });
+          await tx.auditEntry.create({
+            data: { entity: "Client", entityId: clientId, summary: "Details filled in from monday.com", changes: Object.keys(fill).join(", ") },
+          });
+        }
+      }
+      for (const p of fresh) {
+        await tx.clientContact.create({
+          data: {
+            clientId,
+            mondayId: p.mondayId,
+            name: p.name,
+            title: p.title,
+            email: p.email,
+            mobile: p.mobile,
+            phone: p.phone,
+            type: p.type,
+            priority: p.priority,
+            comments: p.comments,
+            accountManagerId: managerId(p.manager),
+          },
+        });
+      }
+      if (fresh.length) {
+        await tx.auditEntry.create({
+          data: {
+            entity: "Client",
+            entityId: clientId,
+            summary: `${fresh.length === 1 ? "1 person" : `${fresh.length} people`} imported from monday.com`,
+            changes: fresh.map((p) => p.name).join("\n"),
+          },
+        });
+      }
+      return { clientId, action };
+    });
+    for (const p of fresh) {
+      takenMonday.add(p.mondayId);
+      if (p.email) takenEmails.add(p.email);
+    }
+    if (result.action === "added") clientsAdded++;
+    if (result.action === "filled in") clientsFilled++;
+    peopleAdded += fresh.length;
+    log.push([row.company, result.action, fresh.length, row.members.length - fresh.length, result.clientId]);
+  }
+  await db.$disconnect();
+
+  const csv = (data: (string | number)[][]) => "\uFEFF" + data.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  writeFileSync(join(outDir, `6 import log ${url.hostname}.csv`), csv([["Company", "Client", "People added", "People already there", "OS id"], ...log]));
+  const matched = [...managers.entries()].map(([name, id]) => `${name} → ${id ? (users.find((u) => u.id === id)?.name ?? id) : "blank (no login)"}`);
+  console.log(
+    [
+      `Clients added: ${clientsAdded}`,
+      `Clients already there, blanks filled in: ${clientsFilled}`,
+      `People added: ${peopleAdded}`,
+      `People already there, skipped: ${peopleSkipped}`,
+      `Account managers: ${matched.join("; ")}`,
+    ].join("\n"),
+  );
 }
 
 main().catch((error) => {

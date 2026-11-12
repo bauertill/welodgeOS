@@ -1841,8 +1841,8 @@ into one list, since both are edited in the same place.
 
 > **Partly built.** Clients with their details and contacts, and search by company or by
 > person, exist. **The Gmail link below is built and switched on** (2026-11-10, §12). Clients' contracting
-> details are built (2026-11-12). **The import from monday.com is being prepared** — a review of what it
-> would bring in, not the import itself (see *Bringing in monday.com's clients* below).
+> details are built (2026-11-12). **The import from monday.com is built** and has run on a local copy;
+> it runs on staging and then the live site on the owner's go (see *Bringing in monday.com's clients* below).
 
 This replaces the team's monday.com CRM. **A client and a company are the same thing.**
 There is one list: a broadcaster we are still courting and a federation that has bought
@@ -1912,7 +1912,7 @@ The request keeps its own copy: a contract is drawn up from what the client conf
 *that* request, even if the client's details change later. The request's *contact persons*
 and our terms (property, payment schedule, cancellation) stay on the request only.
 
-#### Bringing in monday.com's clients (2026-11-12, being prepared)
+#### Bringing in monday.com's clients (2026-11-12)
 
 monday kept **people, not companies**: its *Contacts* board (about 2,000 people) has no
 "works at" column, whereas here a client comes first and its people hang on it. So the import
@@ -1939,12 +1939,26 @@ The owner's decisions (2026-11-12):
   Cup and Other → *Other*. In monday the category is on each person; here it is on the company,
   so the company takes its people's most common one, and a company whose people disagree is flagged.
 - **Tags are dropped.**
+- **Proper names and missing categories were suggested** for the companies monday had no deal for
+  (about 1,340, named only by an email domain — "dfb.de" becomes *Deutscher Fußball-Bund (DFB)*),
+  each with a confidence; the owner accepted the names. Where monday's category was plainly wrong —
+  a federation labelled *Broadcaster*, a dairy labelled *Federation* — it was corrected (37
+  companies); the review says "corrected (monday said …)".
+- **Account managers:** monday's *Volki* and *Volkhard Bauer* are one person. Anyone without a
+  WeLodge OS login is left blank, as is monday's "admin".
 - Type: *Customer* and *Qualified lead* carry over; priority, title, email, mobile, phone and
   comments carry over as they are. The account manager carries over where that colleague has a
   WeLodge OS login, and is left blank where not.
 - The same person twice (same email) becomes one person, the newest kept and gaps filled from the other.
 - **Contracting details** typed on a client's monday deal (trade name, VAT and registration
   numbers, address, signatories) go onto the client.
+
+**What the import does.** It only adds. A new company becomes a client with its category,
+account manager and any contracting details; a client already here keeps everything the team has
+typed and only has blanks filled in. Each person is added under their company, unless they are here
+already (the same monday contact, or the same email). The client's history says *Added — imported
+from monday.com* and lists the people imported. People nobody could place, and vendors and
+suppliers, are not imported. Running it twice adds nothing the second time.
 
 **First a review, then the import.** A dry run reads monday and the database and changes nothing.
 It writes a review: every company it would create or add to and where the name came from, who goes
@@ -3725,7 +3739,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Private person as a client | **Built** (2026-11-11) | *A company / A private person* on Add client and on the new-client popup from a sales request (the owner: "add a person's details that's not associated to a company"). The client is named after the person, category *Private person*, and they are its one contact — so requests, emails, contracts and rooms work as for a company. People list says *Private person* in the Client column. A taken name is refused in plain words |
 | §4.10 Emails from Gmail | **Built** (2026-11-10) | Connect Gmail on My profile, and a card on every page until connected (Not now = a day) (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. Google set up and the owner's mailbox connected on staging, 2026-11-10; each colleague connects theirs on the live site |
 | §4.10 Contracting details | **Built** (2026-11-12) | Card on the client's page (trade name, address, VAT, registration, two signatories), edited with Add/Edit, in the client's history. A request with no details of its own shows the client's on its contracting link and rate card; what the client sends is written back to the client |
-| §4.10 Import from monday.com | **Review only** (2026-11-12) | The dry run that works companies out from deals and email domains and writes the review is built; nothing is imported yet. Needs a monday API key to read monday. The import itself waits for the reviewed sheet and the owner's go |
+| §4.10 Import from monday.com | **Built** (2026-11-12) | Review and import built; names approved and mismatched categories corrected by the owner. Ran on a local copy: 1,388 clients added, 30 existing ones filled in, 1,780 people added; a second run added nothing. **Not yet run on staging or live.** 120 people with no company to go on are left for the team to add by hand |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates, which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09) |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
