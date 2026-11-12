@@ -90,8 +90,80 @@ export function ClientList() {
   );
 }
 
+/** The list shows 50 at a time, a page each (the owner, 2026-11-12); a new search starts again at page 1. */
+const PAGE = 50;
+
+function usePage(q: string) {
+  const [page, setPage] = useState(1);
+  const [forQ, setForQ] = useState(q);
+  if (forQ !== q) {
+    setForQ(q);
+    setPage(1);
+  }
+  return [page, setPage] as const;
+}
+
+/** Page numbers to offer: the first, the last, and two either side of the current one, with gaps as "…". */
+function pageNumbers(page: number, pages: number) {
+  const wanted = [...new Set([1, pages, page - 2, page - 1, page, page + 1, page + 2])].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
+  const out: (number | "gap")[] = [];
+  wanted.forEach((n, i) => {
+    if (i > 0 && n - wanted[i - 1]! > 1) out.push("gap");
+    out.push(n);
+  });
+  return out;
+}
+
+function Pager({ page, total, noun, onPage }: { page: number; total?: number; noun: string; onPage: (page: number) => void }) {
+  if (!total) return null;
+  const pages = Math.max(1, Math.ceil(total / PAGE));
+  const from = (page - 1) * PAGE + 1;
+  const to = Math.min(page * PAGE, total);
+  const go = (n: number) => {
+    onPage(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const button = "rounded-md px-2.5 py-1 text-xs disabled:opacity-40";
+  return (
+    <div className="text-ink-500 flex flex-wrap items-center justify-between gap-3 text-xs font-light">
+      <span>
+        {from.toLocaleString("en-GB")}–{to.toLocaleString("en-GB")} of {total.toLocaleString("en-GB")} {noun}
+      </span>
+      {pages > 1 && (
+        <nav className="flex flex-wrap items-center gap-1" aria-label="Pages">
+          <button type="button" className={`${button} hover:bg-ink-100`} disabled={page === 1} onClick={() => go(page - 1)}>
+            ← Previous
+          </button>
+          {pageNumbers(page, pages).map((n, i) =>
+            n === "gap" ? (
+              <span key={`gap-${i}`} className="px-1">
+                …
+              </span>
+            ) : (
+              <button
+                key={n}
+                type="button"
+                aria-current={n === page ? "page" : undefined}
+                className={`${button} ${n === page ? "bg-brand-600 font-medium text-white" : "hover:bg-ink-100"}`}
+                onClick={() => go(n)}
+              >
+                {n}
+              </button>
+            ),
+          )}
+          <button type="button" className={`${button} hover:bg-ink-100`} disabled={page === pages} onClick={() => go(page + 1)}>
+            Next →
+          </button>
+        </nav>
+      )}
+    </div>
+  );
+}
+
 function Companies({ q }: { q: string }) {
-  const clients = api.clients.search.useQuery({ q }, { placeholderData: keepPreviousData });
+  const [page, setPage] = usePage(q);
+  const clients = api.clients.search.useQuery({ q, limit: PAGE, offset: (page - 1) * PAGE }, { placeholderData: keepPreviousData });
+  const counts = api.clients.counts.useQuery({ q }, { placeholderData: keepPreviousData });
   const rows = clients.data ?? [];
 
   if (rows.length === 0 && !clients.isLoading) {
@@ -107,6 +179,7 @@ function Companies({ q }: { q: string }) {
 
   return (
     <>
+      <Pager page={page} total={counts.data?.companies} noun="clients" onPage={setPage} />
       <Table>
         <thead>
           <tr>
@@ -145,6 +218,7 @@ function Companies({ q }: { q: string }) {
           ))}
         </tbody>
       </Table>
+      <Pager page={page} total={counts.data?.companies} noun="clients" onPage={setPage} />
       <p className="text-ink-500 text-xs font-light">
         A search finds a company by its name, or by anyone who works there — the people who matched are listed
         under its name. &ldquo;Room-nights sold&rdquo; counts the nights this client has bought from us — not
@@ -156,7 +230,9 @@ function Companies({ q }: { q: string }) {
 }
 
 function People({ q }: { q: string }) {
-  const people = api.clients.people.useQuery({ q }, { placeholderData: keepPreviousData });
+  const [page, setPage] = usePage(q);
+  const people = api.clients.people.useQuery({ q, limit: PAGE, offset: (page - 1) * PAGE }, { placeholderData: keepPreviousData });
+  const counts = api.clients.counts.useQuery({ q }, { placeholderData: keepPreviousData });
   const rows = people.data ?? [];
 
   if (rows.length === 0 && !people.isLoading) {
@@ -168,6 +244,8 @@ function People({ q }: { q: string }) {
   }
 
   return (
+    <>
+    <Pager page={page} total={counts.data?.people} noun="people" onPage={setPage} />
     <Table>
       <thead>
         <tr>
@@ -220,6 +298,8 @@ function People({ q }: { q: string }) {
         ))}
       </tbody>
     </Table>
+    <Pager page={page} total={counts.data?.people} noun="people" onPage={setPage} />
+    </>
   );
 }
 
