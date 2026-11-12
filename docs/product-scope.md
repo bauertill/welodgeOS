@@ -1880,7 +1880,10 @@ at the top, and it has a way to register a new sales request.
 - **People** lists everyone at every client, found by name, email, title or number, or by
   their company's name, each with the company they are at.
 
-Up to 300 results show at a time; a search narrows them.
+The list shows **50 at a time**, a page each, with *Previous* / *Next* and page numbers
+underneath and how many there are in all ("51–100 of 1,424 clients"); a new search starts again at
+page 1. (Before 2026-11-12 the list stopped at the first 300 without saying so, which hid most of the
+clients imported from monday.com.)
 
 Beside each client, the list shows its category, account manager and number of contacts,
 the **room-nights sold** — nights the client has bought from us; nights they have only
@@ -3735,7 +3738,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Monday import | **Not built** | Decided later, as agreed |
 | §5.5 Client map links | **Specified, not built** | Nothing can be shared with a client today |
 | §4.10 Clients and contacts | **Built** | Category, account manager, general phone, email and website; contacts with title, email, mobile, phone, type, priority, account manager and comments, added, edited and removed on the client's page; every change in the client's history |
-| §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. Up to 300 results at a time |
+| §4.10 Search by company or person | **Built** | Companies view finds a client by its own details or any of its contacts, and names who matched; People view lists every contact with their company. 50 to a page, with page numbers and the total (2026-11-12) |
 | §4.10 Private person as a client | **Built** (2026-11-11) | *A company / A private person* on Add client and on the new-client popup from a sales request (the owner: "add a person's details that's not associated to a company"). The client is named after the person, category *Private person*, and they are its one contact — so requests, emails, contracts and rooms work as for a company. People list says *Private person* in the Client column. A taken name is refused in plain words |
 | §4.10 Emails from Gmail | **Built** (2026-11-10) | Connect Gmail on My profile, and a card on every page until connected (Not now = a day) (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. Google set up and the owner's mailbox connected on staging, 2026-11-10; each colleague connects theirs on the live site |
 | §4.10 Contracting details | **Built** (2026-11-12) | Card on the client's page (trade name, address, VAT, registration, two signatories), edited with Add/Edit, in the client's history. A request with no details of its own shows the client's on its contracting link and rate card; what the client sends is written back to the client |

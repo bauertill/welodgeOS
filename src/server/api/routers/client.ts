@@ -47,6 +47,17 @@ const matching = (q: string, keys: string[]) =>
 
 const contactKeys = ["name", "email", "title", "mobile", "phone"];
 
+/** A client found by its own details or by anyone who works there (doc §4.10). */
+const clientWhere = (q: string): Prisma.ClientWhereInput | undefined =>
+  q ? { OR: [...matching(q, ["name", "shortName", "email", "website"]), { contacts: { some: { OR: matching(q, contactKeys) } } }] } : undefined;
+
+/** A person found by their own details or their company's name. */
+const personWhere = (q: string): Prisma.ClientContactWhereInput | undefined =>
+  q ? { OR: [...matching(q, contactKeys), { client: { OR: matching(q, ["name", "shortName"]) } }] } : undefined;
+
+/** A search, a page at a time: the list asks for 50 (doc §4.10); without a limit, 300 come back. */
+const page = z.object({ q: z.string().max(200), limit: z.number().int().min(1).max(500).default(300), offset: z.number().int().min(0).default(0) });
+
 /** How a client reads in its history — labels, not stored codes. */
 const readableClient = (client: {
   name: string;
@@ -155,21 +166,15 @@ export const clientRouter = createTRPCRouter({
    * a person shows the company they are at.
    */
   search: protectedProcedure
-    .input(z.object({ q: z.string().max(200) }))
+    .input(page)
     .query(async ({ ctx, input }) => {
       const q = input.q.trim();
       const contactMatch: Prisma.ClientContactWhereInput = q ? { OR: matching(q, contactKeys) } : {};
       const clients = await ctx.db.client.findMany({
-        where: q
-          ? {
-              OR: [
-                ...matching(q, ["name", "shortName", "email", "website"]),
-                { contacts: { some: contactMatch } },
-              ],
-            }
-          : undefined,
+        where: clientWhere(q),
         orderBy: { name: "asc" },
-        take: 300,
+        take: input.limit,
+        skip: input.offset,
         include: {
           accountManager: person,
           // Only nights sold to the client — not blocked, not cancelled.
@@ -182,23 +187,24 @@ export const clientRouter = createTRPCRouter({
 
   /** Every person at every client, searched by name, email, title or number — or by their company's name. */
   people: protectedProcedure
-    .input(z.object({ q: z.string().max(200) }))
+    .input(page)
     .query(({ ctx, input }) => {
       const q = input.q.trim();
       return ctx.db.clientContact.findMany({
-        where: q
-          ? {
-              OR: [
-                ...matching(q, contactKeys),
-                { client: { OR: matching(q, ["name", "shortName"]) } },
-              ],
-            }
-          : undefined,
+        where: personWhere(q),
         orderBy: { name: "asc" },
-        take: 300,
+        take: input.limit,
+        skip: input.offset,
         include: { client: { select: { id: true, name: true, category: true } }, accountManager: person },
       });
     }),
+
+  /** How many clients and people a search finds in all — the list shows them a page at a time. */
+  counts: protectedProcedure.input(z.object({ q: z.string().max(200) })).query(async ({ ctx, input }) => {
+    const q = input.q.trim();
+    const [companies, people] = await Promise.all([ctx.db.client.count({ where: clientWhere(q) }), ctx.db.clientContact.count({ where: personWhere(q) })]);
+    return { companies, people };
+  }),
 
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
