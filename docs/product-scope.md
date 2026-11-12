@@ -2871,6 +2871,11 @@ offer opens it as a document, as it will print.
   the event's accommodation managers, asked by the account manager, tied to the request,
   the hotel and the event. The sold rooms there go **In progress** with the hotel on the
   inventory (§4.1) — *Sold, still negotiating with the supplier*.
+  **Not when we hold them already** (the owner, 2026-11-12: "we don't need to acquire that
+  which we have"): if every room-night sold at a hotel is already *Bought* from it, no acquire
+  task is made for that hotel; the request's history says so, and the account manager's
+  notice names the hotels with nothing to acquire. If only some are bought, the task is made
+  and is about the rest.
 - **The acquire task** shows what was sold at the hotel and at what rate; **1. Their quote,
   and whose agreement** — each quote with *Contract on: their agreement / our agreement /
   not known yet* and *Make the hotel's contract from this quote* (its payments and
@@ -2885,7 +2890,10 @@ offer opens it as a document, as it will print.
   next step** from where things stand: get and register the hotel's quote → agree whose
   agreement → make the hotel's contract → draw up our agreement (US, our paper) → get it
   signed and press *The hotel signed* → *✓ Done — the hotel signed [contract] on [day]; the
-  rooms are bought.* Room-nights still not bought on the inventory are named underneath
+  rooms are bought.* When part of it is bought already, the line becomes *397 of the 400
+  room-nights … are already bought. Secure the 3 still open:* with each room type and its
+  nights; when all of it is, *All … are bought* and *nothing to acquire — this task can be
+  marked done*. After the hotel signs, room-nights still not bought are named underneath
   (*Still loose: 2 room-nights … check whether the signed contract covers them*). Anything a
   colleague writes with *Edit* shows below as **Notes**.
 - **Our agreement with a hotel — US events only** (the owner, 2026-10-14: the agreement
