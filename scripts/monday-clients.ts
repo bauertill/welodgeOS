@@ -121,8 +121,10 @@ const FREE_MAIL = new Set(
   web.de t-online.de protonmail.com proton.me pm.me yandex.ru yandex.com mail.ru qq.com 163.com 126.com btinternet.com orange.fr free.fr sfr.fr
   wanadoo.fr laposte.net libero.it tiscali.it virgilio.it alice.it bigpond.com bigpond.net.au optusnet.com.au comcast.net verizon.net att.net
   sbcglobal.net bluewin.ch hispeed.ch sunrise.ch telenet.be skynet.be ziggo.nl kpnmail.nl xs4all.nl seznam.cz centrum.cz wp.pl o2.pl interia.pl
-  rediffmail.com zoho.com fastmail.com hey.com tutanota.com`.split(/\s+/),
+  rediffmail.com zoho.com fastmail.com hey.com tutanota.com vip.qq.com inbox.lv`.split(/\s+/),
 );
+/** yahoo.com.au, hotmail.es and the like: the big webmail names under any country's domain. */
+const isFreeMail = (domain: string) => FREE_MAIL.has(domain) || /^(yahoo|ymail|hotmail|outlook|live|msn|gmx|aol|icloud)\./.test(domain);
 
 const norm = (name: string) =>
   name
@@ -157,6 +159,37 @@ function nameFromDomain(domain: string) {
 /** Two-letter domains used for their look, not their country. */
 const VANITY_TLDS = new Set(["io", "tv", "co", "me", "ai", "fm", "gg", "to", "cc", "ws", "am"]);
 const regions = new Intl.DisplayNames(["en"], { type: "region" });
+
+type Suggestion = { name: string | null; category: ClientCategory | null; confidence: string; note: string };
+const CATEGORY_CODES: Record<string, true> = Object.fromEntries(
+  ["BROADCASTER", "FEDERATION", "SPONSOR", "EVENT_ORGANISER", "AGENCY", "CORPORATE", "TECHNICAL_SUPPLIER", "MEDIA", "OTHER"].map((c) => [c, true]),
+);
+
+/** Which group of people a suggestion is for: its email domains, or its deal's name. */
+const groupKey = (domains: string[], dealNames: string[]) => (domains.length ? [...domains].sort().join(" ") : `deal:${norm(dealNames[0] ?? "")}`);
+
+/** A plain CSV reader: quoted fields, doubled quotes, commas and line breaks inside quotes. */
+function parseCsv(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') (field += '"'), i++;
+      else if (ch === '"') quoted = false;
+      else field += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") row.push(field), (field = "");
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(field), rows.push(row), (row = []), (field = "");
+    } else field += ch;
+  }
+  if (field || row.length) row.push(field), rows.push(row);
+  return rows;
+}
 
 // ── Building the companies ───────────────────────────────────────────────────
 
@@ -221,6 +254,23 @@ async function main() {
     boards = [];
     for (const id of [CONTACTS_BOARD, ...DEAL_BOARDS]) boards.push(await fetchBoard(id));
     writeFileSync(cacheFile, JSON.stringify(boards));
+  }
+  const suggestionsFile = args[args.indexOf("--suggestions") + 1];
+  const suggestions = new Map<string, Suggestion>();
+  if (args.includes("--suggestions") && suggestionsFile) {
+    const [header, ...rows] = parseCsv(readFileSync(suggestionsFile, "utf8").replace(/^\uFEFF/, ""));
+    const at = (name: string) => header!.indexOf(name);
+    for (const row of rows) {
+      const key = row[at("key")]?.trim();
+      if (!key) continue;
+      suggestions.set(key, {
+        name: row[at("suggested name")]?.trim() || null,
+        category: (row[at("suggested category")]?.trim().toUpperCase().replace(/[ /]+/g, "_") || null) as ClientCategory | null,
+        confidence: row[at("confidence")]?.trim().toLowerCase() ?? "",
+        note: row[at("note")]?.trim() ?? "",
+      });
+    }
+    console.log(`Suggestions read: ${suggestions.size}`);
   }
   const contactsBoard = boards.find((b) => b.id === String(CONTACTS_BOARD))!;
   const dealBoards = boards.filter((b) => b.id !== String(CONTACTS_BOARD));
@@ -302,7 +352,7 @@ async function main() {
 
   // Join people who share a deal's client name or a work email domain.
   const groups = new Groups();
-  const corporate = (p: Person) => (p.domain && !FREE_MAIL.has(p.domain) ? p.domain : null);
+  const corporate = (p: Person) => (p.domain && !isFreeMail(p.domain) ? p.domain : null);
   for (const person of people) {
     const key = `p:${person.mondayId}`;
     groups.find(key);
@@ -334,7 +384,7 @@ async function main() {
       if (contact.email) osEmails.add(contact.email.toLowerCase());
       if (contact.mondayId) osMondayIds.add(contact.mondayId);
       const domain = domainOf(contact.email);
-      if (domain && !FREE_MAIL.has(domain)) osByDomain.set(domain, client);
+      if (domain && !isFreeMail(domain)) osByDomain.set(domain, client);
     }
   }
 
@@ -343,6 +393,7 @@ async function main() {
     nameFrom: string;
     inOS: string;
     category: string;
+    categoryFrom: string;
     accountManager: string;
     people: number;
     newPeople: number;
@@ -358,8 +409,17 @@ async function main() {
   // First name each group of people; then groups that end up with the same
   // name are one company (a name must be unique here, and the same name from
   // two email domains is nearly always the same organisation).
-  type Named = { members: Person[]; dealNames: string[]; domains: string[]; company: string; nameFrom: string; existing: (typeof osClients)[number] | null };
+  type Named = {
+    members: Person[];
+    dealNames: string[];
+    domains: string[];
+    company: string;
+    nameFrom: string;
+    existing: (typeof osClients)[number] | null;
+    suggestion: Suggestion | null;
+  };
   const byName = new Map<string, Named[]>();
+  const forSuggestions: (string | number)[][] = [];
   for (const members of companies.values()) {
     const dealNames = members.flatMap((m) => (new Set(m.deals.map((d) => norm(d.name))).size === 1 ? m.deals.map((d) => d.name) : []));
     const domains = [...new Set(members.map(corporate).filter((d): d is string => Boolean(d)))];
@@ -367,12 +427,32 @@ async function main() {
       unplaced.push(...members);
       continue;
     }
-    const company = dealNames.length ? mostCommon(dealNames)! : nameFromDomain(domains[0]!);
-    const nameFrom = dealNames.length ? "monday deal" : `guessed from ${domains[0]}`;
-    const existing = osByName.get(norm(company)) ?? domains.map((d) => osByDomain.get(d)).find(Boolean) ?? null;
-    const named: Named = { members, dealNames, domains, company, nameFrom, existing };
-    const key = norm(existing?.name ?? company);
-    byName.set(key, [...(byName.get(key) ?? []), named]);
+    const key = groupKey(domains, dealNames);
+    const suggestion = suggestions.get(key) ?? null;
+    let company = dealNames.length ? mostCommon(dealNames)! : nameFromDomain(domains[0]!);
+    let nameFrom = dealNames.length ? "monday deal" : `guessed from ${domains[0]}`;
+    const guessExisting = osByName.get(norm(company)) ?? domains.map((d) => osByDomain.get(d)).find(Boolean) ?? null;
+    if (!dealNames.length && !guessExisting && suggestion?.name) {
+      company = suggestion.name;
+      nameFrom = `suggested (${suggestion.confidence || "?"} confidence) — from ${domains.join(", ")}`;
+    }
+    const existing = guessExisting ?? osByName.get(norm(company)) ?? null;
+    const hasCategory = members.some((m) => m.category);
+    if (!existing && (!dealNames.length || !hasCategory)) {
+      forSuggestions.push([
+        key,
+        dealNames.length ? "" : company,
+        dealNames.length ? mostCommon(dealNames)! : "",
+        dealNames.length ? "category" : hasCategory ? "name" : "name and category",
+        members.length,
+        [...new Set(members.map((m) => m.categoryLabel).filter(Boolean))].join(", "),
+        [...new Set(members.map((m) => m.title).filter(Boolean))].slice(0, 4).join(" | "),
+        members.map((m) => m.comments).filter(Boolean).join(" | ").replace(/\s+/g, " ").slice(0, 200),
+      ]);
+    }
+    const named: Named = { members, dealNames, domains, company, nameFrom, existing, suggestion };
+    const nameKey = norm(existing?.name ?? company);
+    byName.set(nameKey, [...(byName.get(nameKey) ?? []), named]);
   }
 
   for (const parts of byName.values()) {
@@ -385,15 +465,19 @@ async function main() {
     const nameFrom = lead.nameFrom;
     const check: string[] = [];
     if (nameFrom.startsWith("guessed") && !existing) check.push("Name guessed from the email domain — give it its proper name");
+    if (nameFrom.startsWith("suggested") && !existing) if (lead.suggestion?.confidence === "low") check.push("Low-confidence name — check it");
+    if (lead.suggestion?.note) check.push(`Note: ${lead.suggestion.note}`);
     const distinct = [...new Set(dealNames.map(norm))];
     if (distinct.length > 1) check.push(`Deals with different names joined by email domain: ${[...new Set(dealNames)].join(" / ")}`);
     if (parts.length > 1) check.push(`Joined because the names match — same organisation? ${domains.join(", ")}`);
     else if (domains.length > 1) check.push(`Several email domains: ${domains.join(", ")}`);
 
-    const category = mostCommon(members.map((m) => m.category).filter(Boolean));
+    const suggestedCategory = parts.map((p) => p.suggestion?.category).find((c): c is ClientCategory => Boolean(c && c in CATEGORY_CODES)) ?? null;
+    const mondayCategory = mostCommon(members.map((m) => m.category).filter(Boolean));
+    const category = mondayCategory ?? suggestedCategory;
     const categoryLabels = [...new Set(members.map((m) => m.categoryLabel).filter(Boolean))];
     if (new Set(members.map((m) => m.category).filter(Boolean)).size > 1) check.push(`People in different categories: ${categoryLabels.join(", ")}`);
-    if (!category) check.push("No category in monday — choose one");
+    if (!category) check.push("No category — choose one");
     const managerName = mostCommon(members.map((m) => m.manager).filter(Boolean));
     if (managerName) managerCounts.set(managerName, (managerCounts.get(managerName) ?? 0) + 1);
 
@@ -411,6 +495,7 @@ async function main() {
       nameFrom: existing ? `already in OS${existing.name !== company ? ` (monday: ${company})` : ""}` : nameFrom,
       inOS: existing ? "yes — people added to it" : "no — new client",
       category: category ? category.toLowerCase().replace(/_/g, " ") : "",
+      categoryFrom: mondayCategory ? "monday" : suggestedCategory ? "suggested" : "",
       accountManager: managerName ?? "",
       people: members.length,
       newPeople,
@@ -429,8 +514,8 @@ async function main() {
   writeFileSync(
     join(outDir, "1 companies.csv"),
     csv([
-      ["Company", "Where the name comes from", "Already in OS?", "Category", "Account manager", "People", "New people", "Trade name", "Contracting details found", "Check"],
-      ...companyRows.map((r) => [r.company, r.nameFrom, r.inOS, r.category, r.accountManager, r.people, r.newPeople, r.tradeName, r.contracting, r.check]),
+      ["Company", "Where the name comes from", "Already in OS?", "Category", "Category from", "Account manager", "People", "New people", "Trade name", "Contracting details found", "Check"],
+      ...companyRows.map((r) => [r.company, r.nameFrom, r.inOS, r.category, r.categoryFrom, r.accountManager, r.people, r.newPeople, r.tradeName, r.contracting, r.check]),
     ]),
   );
   const personRow = (company: string, how: string, p: Person) => [
@@ -471,6 +556,13 @@ async function main() {
   writeFileSync(join(outDir, "4 left out - vendors and suppliers.csv"), csv([["Name", "Email", "monday type", "monday link"], ...leftOut.map((p) => [p.name, p.email, p.type, `https://welodge.monday.com/boards/${CONTACTS_BOARD}/pulses/${p.mondayId}`])]));
   writeFileSync(join(outDir, "5 duplicates merged.csv"), csv([["Kept", "Email", "Merged into it"], ...duplicates.map((d) => [d.kept, d.email, d.dropped])]));
 
+  if (args.includes("--list-for-suggestions")) {
+    writeFileSync(
+      join(outDir, "for-suggestions.csv"),
+      csv([["key", "guessed name", "deal name", "needs", "people", "monday categories", "titles", "comments"], ...forSuggestions]),
+    );
+    console.log(`for-suggestions.csv: ${forSuggestions.length} companies`);
+  }
   const placed = companyRows.reduce((n, r) => n + r.people, 0);
   const summary = [
     `monday contacts read: ${contactsBoard.items.length}`,
@@ -478,12 +570,13 @@ async function main() {
     `Duplicates merged (same email): ${duplicates.length}`,
     `People placed at a company: ${placed}`,
     `  by a deal: ${companyRows.filter((r) => r.nameFrom === "monday deal" || r.nameFrom.startsWith("already")).length} companies`,
-    `  name guessed from email domain: ${companyRows.filter((r) => r.nameFrom.startsWith("guessed")).length} companies`,
+    `  name suggested from email domain — high confidence: ${companyRows.filter((r) => r.nameFrom.startsWith("suggested (high")).length}, medium: ${companyRows.filter((r) => r.nameFrom.startsWith("suggested (medium")).length}, low: ${companyRows.filter((r) => r.nameFrom.startsWith("suggested (low")).length} companies`,
+    `  name only guessed from email domain: ${companyRows.filter((r) => r.nameFrom.startsWith("guessed")).length} companies`,
     `People to place by hand: ${unplaced.length}`,
     `Companies: ${companyRows.length} (${companyRows.filter((r) => r.inOS.startsWith("no")).length} new, ${companyRows.filter((r) => r.inOS.startsWith("yes")).length} already in OS)`,
     `Companies with something to check: ${companyRows.filter((r) => r.check).length}`,
     `Companies with contracting details from a deal: ${companyRows.filter((r) => r.contracting).length}`,
-    `Companies with no category in monday: ${companyRows.filter((r) => !r.category).length}`,
+    `Categories suggested (none in monday): ${companyRows.filter((r) => r.categoryFrom === "suggested").length}; still no category: ${companyRows.filter((r) => !r.category).length}`,
     `Account managers named in monday (matched to the team's logins at import; no login = left blank): ${[...managerCounts.entries()].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n} (${c} companies)`).join(", ")}`,
   ].join("\n");
   writeFileSync(join(outDir, "0 summary.txt"), summary + "\n");
