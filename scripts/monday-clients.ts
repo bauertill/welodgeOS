@@ -680,9 +680,9 @@ async function apply(rows: Row[], outDir: string) {
           });
         }
       }
-      for (const p of fresh) {
-        await tx.clientContact.create({
-          data: {
+      if (fresh.length) {
+        await tx.clientContact.createMany({
+          data: fresh.map((p) => ({
             clientId,
             mondayId: p.mondayId,
             name: p.name,
@@ -694,7 +694,7 @@ async function apply(rows: Row[], outDir: string) {
             priority: p.priority,
             comments: p.comments,
             accountManagerId: managerId(p.manager),
-          },
+          })),
         });
       }
       if (fresh.length) {
@@ -708,7 +708,7 @@ async function apply(rows: Row[], outDir: string) {
         });
       }
       return { clientId, action };
-    });
+    }, { maxWait: 20_000, timeout: 60_000 }); // a hosted database is a round trip away
     for (const p of fresh) {
       takenMonday.add(p.mondayId);
       if (p.email) takenEmails.add(p.email);
