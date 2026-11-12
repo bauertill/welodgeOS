@@ -182,3 +182,65 @@ export function AcquirePanel({ taskId, propertyId, propertyName }: { taskId: str
     </>
   );
 }
+
+/** The brief written into acquire tasks made before 2026-11-12 — replaced by the live summary below, so it is not shown. */
+export const isGeneratedAcquireBrief = (details: string | null) => Boolean(details && /has signed\. Secure these rooms from /.test(details));
+
+/**
+ * What this acquire task is and what is left to do, worked out from where it
+ * stands now (the team, 2026-11-12: the fixed brief "did not match the
+ * situation") — the rooms, the hotel and the client in one line, then the one
+ * next step, or that it is done and anything still loose.
+ */
+export function AcquireWhatToDo({ taskId, propertyName, notes }: { taskId: string; propertyName: string; notes: string | null }) {
+  const data = api.acquire.forTask.useQuery({ taskId });
+  if (!data.data) return null;
+  const { request, sold, quotes, contracts, nights, inUS } = data.data;
+  const rooms = sold.reduce((sum, line) => sum + line.rooms, 0);
+  const roomNights = sold.reduce((sum, line) => sum + line.rooms * nightsBetween(line.checkIn, line.checkOut), 0);
+  const first = sold.reduce<Date | null>((min, line) => (!min || line.checkIn < min ? line.checkIn : min), null);
+  const last = sold.reduce<Date | null>((max, line) => (!max || line.checkOut > max ? line.checkOut : max), null);
+  const signed = contracts.find((contract) => contract.signedOn);
+  const loose = (nights.IN_PROGRESS ?? 0) + (nights.OPTION ?? 0) + (nights.NONE ?? 0);
+
+  let step: { done: boolean; text: string };
+  if (signed) step = { done: true, text: `Done — ${propertyName} signed ${signed.name} on ${formatDate(signed.signedOn!)}; the rooms are bought.` };
+  else if (quotes.length === 0) step = { done: false, text: `Next: get ${propertyName}'s quote and register it on the hotel's Quotations tab.` };
+  else if (!quotes.some((quote) => quote.agreementOn)) step = { done: false, text: "Next: agree with the hotel whose agreement the contract is on — theirs or ours — and choose it under step 1." };
+  else if (contracts.length === 0) step = { done: false, text: "Next: make the hotel's contract from their quote (step 1)." };
+  else {
+    const ours = inUS && quotes.some((quote) => quote.contractId && quote.agreementOn === "WE_LODGE");
+    const sent = contracts.find((contract) => contract.agreementSentOn);
+    step = {
+      done: false,
+      text: ours && !sent
+        ? "Next: draw up our agreement for the hotel (step 2), send it, then mark it signed when it comes back."
+        : `Next: get the contract signed by ${propertyName}${sent ? ` (our agreement sent ${formatDate(sent.agreementSentOn!)})` : ""}, then press "The hotel signed" under step 2.`,
+    };
+  }
+
+  return (
+    <div className="bg-ink-50/60 mb-4 space-y-2 rounded-lg px-3 py-2.5">
+      <p className="text-ink-500 text-[11px] font-medium tracking-wider uppercase">What to do</p>
+      <p className="text-ink-900 text-sm font-light">
+        Secure {rooms} room{rooms === 1 ? "" : "s"} ({roomNights} room-nights) at <span className="font-medium">{propertyName}</span> for{" "}
+        <span className="font-medium">{request.client.name}</span>
+        {first && last ? `, ${formatRange(first, last)}` : ""}.
+      </p>
+      <p className={`text-sm ${step.done ? "text-[#0a7a47]" : "text-ink-900 font-medium"}`}>{step.done ? `✓ ${step.text}` : step.text}</p>
+      {loose > 0 && (
+        <p className="text-sm text-[#7a5410]">
+          Still loose on the inventory: {loose} room-night{loose === 1 ? "" : "s"}{" "}
+          {nights.NONE && !(nights.IN_PROGRESS || nights.OPTION) ? "with nothing secured" : "not bought yet (in progress or on option with the hotel)"}
+          {signed ? " — check whether the signed contract covers them." : "."}
+        </p>
+      )}
+      {notes?.trim() && !isGeneratedAcquireBrief(notes) && (
+        <div>
+          <p className="text-ink-500 mt-1 text-[11px] font-medium tracking-wider uppercase">Notes</p>
+          <p className="text-ink-900 text-sm font-light whitespace-pre-line">{notes}</p>
+        </div>
+      )}
+    </div>
+  );
+}

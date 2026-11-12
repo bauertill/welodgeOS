@@ -2878,6 +2878,16 @@ offer opens it as a document, as it will print.
   **2. The hotel's contract** — *✓ The hotel signed*, with the day and a Drive link, which
   marks it signed, **buys the rooms** under it at the quote's rate per room type, and closes
   the task.
+- **What to do, worked out live (the team, 2026-11-12).** The task's *What to do* no longer
+  holds a fixed brief written when the task was made (it repeated the rooms and listed every
+  step, so it stopped matching once work had moved on). It now says what the task is in one
+  line — *Secure 8 rooms (154 room-nights) at [hotel] for [client], [dates]* — and the **one
+  next step** from where things stand: get and register the hotel's quote → agree whose
+  agreement → make the hotel's contract → draw up our agreement (US, our paper) → get it
+  signed and press *The hotel signed* → *✓ Done — the hotel signed [contract] on [day]; the
+  rooms are bought.* Room-nights still not bought on the inventory are named underneath
+  (*Still loose: 2 room-nights … check whether the signed contract covers them*). Anything a
+  colleague writes with *Edit* shows below as **Notes**.
 - **Our agreement with a hotel — US events only** (the owner, 2026-10-14: the agreement
   agreed with Aimbridge for the Fairfield Inn & Suites El Segundo, "exclusive for the US and
   LA project"). When a quote's contract is on *our agreement* and the event is in the United
