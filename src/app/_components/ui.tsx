@@ -130,9 +130,9 @@ export function Table({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function Th({ children }: { children: React.ReactNode }) {
+export function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className="text-ink-500 border-ink-200/60 border-b px-5 py-3 text-[11px] font-medium tracking-wider uppercase">
+    <th className={`text-ink-500 border-ink-200/60 border-b px-5 py-3 text-[11px] font-medium tracking-wider uppercase ${className}`}>
       {children}
     </th>
   );

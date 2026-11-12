@@ -1886,6 +1886,13 @@ above and below the list, and how many there are in all ("51–100 of 1,424 clie
 page 1. (Before 2026-11-12 the list stopped at the first 300 without saying so, which hid most of the
 clients imported from monday.com.)
 
+**Quick view (2026-11-12).** Clicking a client's name in the list — or a person or their company on
+the People tab — opens a quick view over the page instead of leaving it: the client's category and
+account manager, its **open sales requests** (each with its stage, a click opens the request) and its
+**contacts** with title, email and numbers. **View full page** opens the client's own page;
+Cmd/Ctrl-click on a name still opens the full page in a new tab. Long client names are cut short
+with "…" so the category sits close; the whole name shows on hover.
+
 Beside each client, the list shows its category, account manager and number of contacts,
 the **room-nights sold** — nights the client has bought from us; nights they have only
 blocked, and cancelled ones, are not counted — and the requests open. The client's own

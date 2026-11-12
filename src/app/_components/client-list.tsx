@@ -5,6 +5,7 @@ import type { ClientCategory } from "generated/prisma";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { ClientQuickView } from "~/app/_components/client-quick-view";
 import { Button, Field, Fieldset, FormError, Input, Select, Textarea } from "~/app/_components/form";
 import { Initials } from "~/app/_components/property-groups";
 import { ClientKindToggle, PrivatePersonForm, type ClientKind } from "~/app/_components/private-person";
@@ -160,8 +161,29 @@ function Pager({ page, total, noun, onPage }: { page: number; total?: number; no
   );
 }
 
+/**
+ * A client's name opens its quick view (the owner, 2026-11-12); Cmd/Ctrl-click
+ * or a middle click still opens the full page in a new tab.
+ */
+function ClientLink({ id, className, onOpen, children }: { id: string; className: string; onOpen: (id: string) => void; children: React.ReactNode }) {
+  return (
+    <Link
+      href={`/clients/${id}`}
+      className={className}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        onOpen(id);
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+
 function Companies({ q }: { q: string }) {
   const [page, setPage] = usePage(q);
+  const [quick, setQuick] = useState<string | null>(null);
   const clients = api.clients.search.useQuery({ q, limit: PAGE, offset: (page - 1) * PAGE }, { placeholderData: keepPreviousData });
   const counts = api.clients.counts.useQuery({ q }, { placeholderData: keepPreviousData });
   const rows = clients.data ?? [];
@@ -183,7 +205,7 @@ function Companies({ q }: { q: string }) {
       <Table>
         <thead>
           <tr>
-            <Th>Client</Th>
+            <Th className="w-80">Client</Th>
             <Th>Category</Th>
             <Th>Account manager</Th>
             <Th>Contacts</Th>
@@ -195,12 +217,15 @@ function Companies({ q }: { q: string }) {
           {rows.map((client) => (
             <tr key={client.id}>
               <Td>
-                <Link href={`/clients/${client.id}`} className="hover:text-brand-700 font-medium">
-                  {client.name}
-                </Link>
-                {client.shortName && <span className="text-ink-500 ml-2 text-xs font-light">{client.shortName}</span>}
+                {/* Long names are cut short with "…"; the whole name shows on hover. */}
+                <div className="max-w-72 truncate" title={client.shortName ? `${client.name} (${client.shortName})` : client.name}>
+                  <ClientLink id={client.id} onOpen={setQuick} className="hover:text-brand-700 font-medium">
+                    {client.name}
+                  </ClientLink>
+                  {client.shortName && <span className="text-ink-500 ml-2 text-xs font-light">{client.shortName}</span>}
+                </div>
                 {client.matchedContacts.length > 0 && (
-                  <span className="text-ink-500 block text-xs font-light">
+                  <span className="text-ink-500 block max-w-72 truncate text-xs font-light">
                     {client.matchedContacts
                       .map((contact) => (contact.title ? `${contact.name}, ${contact.title}` : contact.name))
                       .join(" · ")}
@@ -219,6 +244,7 @@ function Companies({ q }: { q: string }) {
         </tbody>
       </Table>
       <Pager page={page} total={counts.data?.companies} noun="clients" onPage={setPage} />
+      {quick && <ClientQuickView clientId={quick} onClose={() => setQuick(null)} />}
       <p className="text-ink-500 text-xs font-light">
         A search finds a company by its name, or by anyone who works there — the people who matched are listed
         under its name. &ldquo;Room-nights sold&rdquo; counts the nights this client has bought from us — not
@@ -231,6 +257,7 @@ function Companies({ q }: { q: string }) {
 
 function People({ q }: { q: string }) {
   const [page, setPage] = usePage(q);
+  const [quick, setQuick] = useState<string | null>(null);
   const people = api.clients.people.useQuery({ q, limit: PAGE, offset: (page - 1) * PAGE }, { placeholderData: keepPreviousData });
   const counts = api.clients.counts.useQuery({ q }, { placeholderData: keepPreviousData });
   const rows = people.data ?? [];
@@ -263,17 +290,17 @@ function People({ q }: { q: string }) {
         {rows.map((contact) => (
           <tr key={contact.id}>
             <Td>
-              <Link href={`/clients/${contact.client.id}`} className="hover:text-brand-700 font-medium">
+              <ClientLink id={contact.client.id} onOpen={setQuick} className="hover:text-brand-700 font-medium">
                 {contact.name}
-              </Link>
+              </ClientLink>
             </Td>
             <Td>
               {contact.client.category === "PRIVATE_PERSON" ? (
                 <span className="text-ink-500 font-light">Private person</span>
               ) : (
-                <Link href={`/clients/${contact.client.id}`} className="hover:text-brand-700">
+                <ClientLink id={contact.client.id} onOpen={setQuick} className="hover:text-brand-700">
                   {contact.client.name}
-                </Link>
+                </ClientLink>
               )}
             </Td>
             <Td>{contact.title ?? "—"}</Td>
@@ -299,6 +326,7 @@ function People({ q }: { q: string }) {
       </tbody>
     </Table>
     <Pager page={page} total={counts.data?.people} noun="people" onPage={setPage} />
+    {quick && <ClientQuickView clientId={quick} onClose={() => setQuick(null)} />}
     </>
   );
 }
