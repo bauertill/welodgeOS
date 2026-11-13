@@ -135,7 +135,7 @@ export const acquireRouter = createTRPCRouter({
     const { salesRequestId, propertyId, eventId } = task;
     const event = await ctx.db.event.findUniqueOrThrow({ where: { id: eventId }, select: { country: true } });
     const [request, offers, entry, contracts, nights] = await Promise.all([
-      ctx.db.salesRequest.findUniqueOrThrow({ where: { id: salesRequestId }, select: { id: true, client: { select: { name: true } } } }),
+      ctx.db.salesRequest.findUniqueOrThrow({ where: { id: salesRequestId }, select: { id: true, clientId: true, client: { select: { name: true } } } }),
       ctx.db.offer.findMany({
         where: { salesRequestId, status: { in: ["SIGNED", "TRUSTED"] } },
         select: {
@@ -164,18 +164,18 @@ export const acquireRouter = createTRPCRouter({
     // The sold nights not bought yet — what this task is actually about (the team, 2026-11-12).
     const loose = await ctx.db.roomNight.findMany({
       where: { salesRequestId, salesState: "SOLD", acquisitionState: { not: "BOUGHT" }, slot: { category: { propertyId } } },
-      select: { date: true, slot: { select: { category: { select: { name: true } } } } },
+      select: { date: true, slot: { select: { category: { select: { id: true, name: true } } } } },
       orderBy: { date: "asc" },
     });
     const day = 86_400_000;
-    const runs: { room: string; from: Date; to: Date; roomNights: number }[] = [];
+    const runs: { room: string; categoryId: string; from: Date; to: Date; roomNights: number }[] = [];
     for (const night of loose) {
       const room = night.slot.category.name;
       const run = runs.find((r) => r.room === room && night.date.getTime() - r.to.getTime() <= day);
       if (run) {
         if (night.date > run.to) run.to = night.date;
         run.roomNights++;
-      } else runs.push({ room, from: night.date, to: night.date, roomNights: 1 });
+      } else runs.push({ room, categoryId: night.slot.category.id, from: night.date, to: night.date, roomNights: 1 });
     }
     const quotes = entry
       ? await ctx.db.quotation.findMany({
@@ -186,6 +186,8 @@ export const acquireRouter = createTRPCRouter({
       : [];
     return {
       status: task.status,
+      eventId,
+      propertyId,
       /** Our hotel agreement is for US events only so far (doc §4.11). */
       inUS: inUnitedStates(event.country),
       request,
