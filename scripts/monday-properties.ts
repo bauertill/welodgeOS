@@ -454,7 +454,7 @@ async function main() {
       // Only monday's property-wide Daily Rate (the owner, 2026-11-12: those rates are the quote).
       fromDailyRate = true;
       const room = roomsByName.size === 1 ? [...roomsByName.values()][0]!.name : "Run of house";
-      if (!roomsByName.size) roomsByName.set(norm(room), { name: room, units: 0, beds: null, size: null, notes: ["Made from monday's Daily Rate — the hotel's room types are still to be added."], mondayIds: [] });
+      if (!roomsByName.has(norm(room))) roomsByName.set(norm(room), { name: room, units: 0, beds: null, size: null, notes: ["Made from monday's Daily Rate — the hotel's room types are still to be added."], mondayIds: [] });
       if (!entryPeriod) check.push(`Daily rate with no period to read ("${text("Applicable Period") ?? ""}") — kept on the LA28 dates`);
       const dates = entryPeriod ?? { checkIn: event.startDate, checkOut: event.endDate };
       lines.push({ room, ...dates, rooms: int(text("Total # of Rooms")) && roomsByName.size === 1 ? 1 : 1, rateCents: daily, note: "monday's Daily Rate" });
@@ -782,7 +782,9 @@ async function apply(db: PrismaClient, plans: PropertyPlan[], eventId: string) {
                     notes: "Brought across from monday.com's LA28 board, 2026-11.",
                     addedById: importer.id,
                     lines: {
-                      create: p.quote.lines.map((l, i) => ({ categoryId: categories.get(norm(l.room))!, checkIn: l.checkIn, checkOut: l.checkOut, rooms: l.rooms, rateCents: l.rateCents, position: i })),
+                      create: p.quote.lines
+                        .filter((l) => categories.has(norm(l.room)))
+                        .map((l, i) => ({ categoryId: categories.get(norm(l.room))!, checkIn: l.checkIn, checkOut: l.checkOut, rooms: l.rooms, rateCents: l.rateCents, position: i })),
                     },
                   },
                 });
