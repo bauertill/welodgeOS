@@ -441,7 +441,16 @@ async function main() {
     }
     let fromDailyRate = false;
     const daily = money(text("Daily Rate"));
-    if (!lines.length && daily) {
+    const ratesReceived = (statusLabel ?? "").toLowerCase() === "rates received";
+    if (!lines.length && daily && !ratesReceived) {
+      // A Daily Rate on a hotel that has not quoted is a price seen, not a quote (the owner,
+      // 2026-11-13: the quotes are the "Rates Received" ones) — kept in the notes, so the
+      // board does not show it as Quote received.
+      const seen = `Daily rate on monday: US$ ${(daily / 100).toFixed(2)}${text("Applicable Period") ? `, ${text("Applicable Period")}` : ""} — not a quote from the hotel.`;
+      entry.notes = [entry.notes, seen].filter(Boolean).join("\n\n");
+    }
+    if (/fifa/i.test(text("Applicable Period") ?? "")) check.push(`Applicable period says "${text("Applicable Period")}" — a FIFA rate, not LA28?`);
+    if (!lines.length && daily && ratesReceived) {
       // Only monday's property-wide Daily Rate (the owner, 2026-11-12: those rates are the quote).
       fromDailyRate = true;
       const room = roomsByName.size === 1 ? [...roomsByName.values()][0]!.name : "Run of house";
@@ -450,6 +459,7 @@ async function main() {
       const dates = entryPeriod ?? { checkIn: event.startDate, checkOut: event.endDate };
       lines.push({ room, ...dates, rooms: int(text("Total # of Rooms")) && roomsByName.size === 1 ? 1 : 1, rateCents: daily, note: "monday's Daily Rate" });
     }
+    if (lines.some((l) => l.checkIn.getUTCFullYear() !== 2028)) check.push(`Rate dates not in 2028 (${lines.find((l) => l.checkIn.getUTCFullYear() !== 2028)!.note}) — check the year`);
     const quote = lines.length ? { lines, tot, otherTaxes: [...taxes].join("; ") || null, includes: [...includes].join("; ") || null, fromDailyRate } : null;
     const plan = statusOf(statusLabel);
     if (statusLabel?.toLowerCase() === "rates received" && !quote) check.push("Rates Received in monday, but no rate to bring — shows as Pending quote");
