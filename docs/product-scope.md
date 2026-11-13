@@ -1269,8 +1269,28 @@ entered (§3.2); on the Properties tab a rate always means the buying rate, as b
 
 - **Tags.** Monday's *Tags* column is not carried over: the team does not use it.
 
-- **Importing the Monday board.** Decided later. The structure above is laid out so that
-  an Excel export from Monday maps onto it column by column.
+- **Importing the Monday board** (2026-11-12/13 — review built, import to run on the owner's
+  go). LA28 only. Each monday item becomes a property (once, the same on every event) with an
+  entry on the LA28 board; its subitems become room categories — a room type listed once per
+  period ("ROH – Between Olympics & Paralympics") becomes one category, each period's rate a
+  line of a quotation *From monday — LA28 rates*. A **Rates Received** hotel with only
+  monday's *Daily Rate* gets a quotation *From monday — Daily Rate* on a *Run of house*
+  category, over its applicable period (else the LA28 dates, flagged); a Daily Rate on a hotel
+  that has not quoted is a price seen, kept in the LA28 notes, not a quote. monday's status
+  sets the entry's: blank / Initial Research → Prospect; To contact → a contact task; In
+  Progress / Rates Requested / Follow up → Reached out; Rates Received → Reached out with its
+  quotation; Not relevant / No availability → Rejected; OC Contracted → Organising committee;
+  Contracted → Contracted — so the board's stage then follows as for any property. monday's
+  groups become the LA28 board's groups; the team's **updates** come across, with replies, on
+  the property's Updates, under the author where they have a login ("Louis Smith (on monday):
+  …" where not); *Proposed Rates* and unmatched amenities go into the notes; stars only;
+  property types folded as agreed (Apartment Complex, Furnished, Luxury → Apartment; Budget
+  Hotel → Hotel; Others → Other). Properties without a map position are placed by Google and
+  flagged. The same hotel twice on monday is joined only when the names say so (or the
+  same words on the same spot); look-alikes and shared addresses are flagged, not joined. A
+  hotel the team already added keeps its room types, quotes and contracts; monday only fills
+  blanks and adds updates and contacts. Each property and update remembers its monday item,
+  so a second run adds nothing.
 - **Choosing which columns show.** The first version has a fixed set of default columns;
   the rest are in the side panel.
 - **Monday's other views** (Map, Kanban). The map already exists (§3.8).
