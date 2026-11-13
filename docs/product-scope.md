@@ -1887,7 +1887,8 @@ page 1. (Before 2026-11-12 the list stopped at the first 300 without saying so, 
 clients imported from monday.com.)
 
 **Filters, sorting and handing a client over (2026-11-12).** Above the list, **Every category** and
-**Every account manager** (or *Nobody yet*) narrow it; on the People tab the category is the
+**Every account manager** (or *Nobody yet*) narrow it — and, with the search and the tab, they
+**stay as set until *Reset filters***, in each person's browser (the team, 2026-11-12); on the People tab the category is the
 company's and the account manager the person's own. **Clicking a column heading sorts by it** — a
 second click turns the order round; blanks always go last, and ties are in name order. The
 **account manager** is changed straight from the list, as on the sales board: click the name (or
@@ -2637,7 +2638,9 @@ requests are seen together; an event keeps its colour when new ones are added. W
 A follow-up due today or overdue shows in red, and a note above the list counts them, with
 a way to show only those. The list can show closed requests instead, or all of them, and
 be narrowed to one event, one account manager, or a search on client, contact or what they
-need. A client's own page lists that client's requests, with a way to register a new one. **Delete this client**, at the foot of
+need. **These stay as set until reset** (the team, 2026-11-12): leaving the page and coming back
+finds the same choices; *Reset filters* puts them back to open requests, every event, everyone.
+They are kept in each person's own browser, so one colleague's filters never change another's. A client's own page lists that client's requests, with a way to register a new one. **Delete this client**, at the foot of
 a client's page (the owner, 2026-10-18), removes one made by mistake, twice or for a test,
 with its contacts and updates; it is refused, saying why, while the client has a sales
 request (open or closed), a contract or rooms in the inventory. Tasks about it stay, no
@@ -2997,7 +3000,9 @@ counts a room when at least half its nights are ours and unsold (§5.4).
 The familiar spreadsheet view is generated, never stored: supplier / room category / room
 down the rows, one column per night. Rows are grouped property → category → slot number,
 collapsed to the property level by default, and columns span whatever check-in/check-out
-window is currently in view, filtered by property and client. The client filter finds a client by
+window is currently in view, filtered by property and client. The property and client filters
+and *Show empty* **stay as set until reset**, per event, in each person's browser (the team,
+2026-11-12); *Reset filters* clears them, and a link from an acquire task sets them. The client filter finds a client by
 full name or by short name — "CNOSF", "OBS" — ignoring capitals and accents, lists each with
 its short name beside it, and puts the best match first, so an exact short name wins: "nos"
 is NOS before CNOSF. The panel's client list shows the short name first too.

@@ -44,6 +44,7 @@ import {
   type InterestKey,
 } from "~/lib/sales";
 import { eventColours, type EventColour } from "~/lib/event-colours";
+import { useRemembered } from "~/lib/remembered";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Request = RouterOutputs["sales"]["list"][number];
@@ -109,11 +110,20 @@ const daysOpen = (request: { createdAt: Date; closedOn: Date | null }) =>
 export function SalesRequestList() {
   const events = api.event.list.useQuery();
   const people = api.user.list.useQuery();
-  const [show, setShow] = useState<"open" | "closed" | "all">("open");
-  const [eventId, setEventId] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [dueOnly, setDueOnly] = useState(false);
-  const [typed, setTyped] = useState("");
+  // Kept as set until reset (the team, 2026-11-12).
+  const [show, setShow] = useRemembered<"open" | "closed" | "all">("sales:show", "open");
+  const [eventId, setEventId] = useRemembered("sales:event", "");
+  const [ownerId, setOwnerId] = useRemembered("sales:owner", "");
+  const [dueOnly, setDueOnly] = useRemembered("sales:due", false);
+  const [typed, setTyped] = useRemembered("sales:search", "");
+  const filtered = show !== "open" || eventId || ownerId || dueOnly || typed;
+  const reset = () => {
+    setShow("open");
+    setEventId("");
+    setOwnerId("");
+    setDueOnly(false);
+    setTyped("");
+  };
   const [q, setQ] = useState("");
   useEffect(() => {
     const timer = setTimeout(() => setQ(typed), 250);
@@ -167,6 +177,11 @@ export function SalesRequestList() {
           <input type="checkbox" className="accent-brand-400 h-4 w-4" checked={dueOnly} onChange={(e) => setDueOnly(e.target.checked)} />
           Follow-up due
         </label>
+        {filtered && (
+          <button type="button" onClick={reset} className="text-brand-700 text-[13px] font-light hover:underline">
+            Reset filters
+          </button>
+        )}
       </div>
 
       {show !== "closed" && due > 0 && !dueOnly && (
