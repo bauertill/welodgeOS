@@ -11,6 +11,7 @@ import { Initials } from "~/app/_components/property-groups";
 import { ClientKindToggle, PrivatePersonForm, type ClientKind } from "~/app/_components/private-person";
 import { EmptyState, Table, Td, Th } from "~/app/_components/ui";
 import { clientCategoryLabels, clientCategoryOrder, contactTypeLabels, priorityLabels } from "~/lib/clients";
+import { useRemembered } from "~/lib/remembered";
 import { api } from "~/trpc/react";
 
 type Person = { id: string; name: string | null; email: string | null; image: string | null };
@@ -33,11 +34,12 @@ export function Manager({ person }: { person: Person | null }) {
  * room-night points at one of these.
  */
 export function ClientList() {
-  const [view, setView] = useState<"companies" | "people">("companies");
-  const [typed, setTyped] = useState("");
+  // Kept as set until reset (the team, 2026-11-12).
+  const [view, setView] = useRemembered<"companies" | "people">("clients:view", "companies");
+  const [typed, setTyped] = useRemembered("clients:search", "");
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
-  const [filters, setFilters] = useState<Filters>({ category: "", managerId: "" });
+  const [filters, setFilters] = useRemembered<Filters>("clients:filters", { category: "", managerId: "" });
   const people = api.user.list.useQuery(undefined, { staleTime: 60_000 });
 
   // Searched a moment after typing stops, not on every keystroke.
@@ -109,9 +111,16 @@ export function ClientList() {
             ))}
           </Select>
         </div>
-        {(filters.category || filters.managerId) && (
-          <button type="button" onClick={() => setFilters({ category: "", managerId: "" })} className="text-brand-700 text-[13px] font-light hover:underline">
-            Clear filters
+        {(filters.category || filters.managerId || typed) && (
+          <button
+            type="button"
+            onClick={() => {
+              setFilters({ category: "", managerId: "" });
+              setTyped("");
+            }}
+            className="text-brand-700 text-[13px] font-light hover:underline"
+          >
+            Reset filters
           </button>
         )}
       </div>

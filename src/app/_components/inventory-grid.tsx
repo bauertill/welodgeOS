@@ -14,6 +14,7 @@ import { formatDay, formatMoney } from "~/lib/format";
 import { acquisitionLabels, salesLabels } from "~/lib/inventory";
 import { severityHints, severityLabels, type Cause, type Severity } from "~/lib/position";
 import { blockKind, buildBlocks, continuesStay, type Block, type BlockKind } from "~/lib/stock-blocks";
+import { useRemembered } from "~/lib/remembered";
 import { api } from "~/trpc/react";
 
 /** A drag-select anchor/end, addressed by position rather than id, so the
@@ -42,12 +43,13 @@ export function InventoryGrid({
   /** Opened from elsewhere (an acquire task, 2026-11-12) on one hotel, one client and a few nights. */
   focus?: { propertyId?: string; clientId?: string; categoryIds?: string[]; checkIn?: string; checkOut?: string };
 }) {
-  const [propertyId, setPropertyId] = useState(opened?.propertyId ?? "");
-  const [clientId, setClientId] = useState(opened?.clientId ?? "");
+  // Kept as set until reset, per event (the team, 2026-11-12); a link (an acquire task) sets them.
+  const [propertyId, setPropertyId] = useRemembered(`sheet:${eventId}:property`, "", opened?.propertyId);
+  const [clientId, setClientId] = useRemembered(`sheet:${eventId}:client`, "", opened?.clientId);
   // Every room of every property on the list is on the sheet (doc §3.6); with
   // up to a hundred properties, the ones with nothing on them are hidden
   // until asked for — or until one property is chosen to work on.
-  const [showEmpty, setShowEmpty] = useState(false);
+  const [showEmpty, setShowEmpty] = useRemembered(`sheet:${eventId}:empty`, false);
   // The check-in/check-out window is remembered per event, in this browser,
   // so coming back to the tab does not snap it back to the event's dates.
   // Read after mount — storage only exists in the browser — and the sheet
@@ -794,6 +796,20 @@ export function InventoryGrid({
                     .filter(Boolean)
                     .join(" · ")})`
                 : "Show empty rooms"}
+          </button>
+        )}
+
+        {(propertyId || clientId || showEmpty) && (
+          <button
+            type="button"
+            onClick={() => {
+              setPropertyId("");
+              setClientId("");
+              setShowEmpty(false);
+            }}
+            className="text-brand-700 text-[13px] font-light hover:underline"
+          >
+            Reset filters
           </button>
         )}
 
