@@ -242,7 +242,9 @@ async function main() {
   const outDir = args.find((a) => !a.startsWith("--"));
   if (!outDir) throw new Error("Give an output folder: pnpm tsx scripts/monday-clients.ts <folder>");
   mkdirSync(outDir, { recursive: true });
-  const cacheFile = join(outDir, "monday-boards.json");
+  // Kept out of sight (a hidden folder): the raw copy is for the script, not for reading.
+  mkdirSync(join(outDir, ".monday-copy"), { recursive: true });
+  const cacheFile = join(outDir, ".monday-copy", "monday-boards.json");
 
   let boards: MondayBoard[];
   if (args.includes("--cached")) {
