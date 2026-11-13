@@ -242,7 +242,9 @@ async function main() {
   const outDir = args.find((a) => !a.startsWith("--"));
   if (!outDir) throw new Error("Give an output folder: pnpm tsx scripts/monday-clients.ts <folder>");
   mkdirSync(outDir, { recursive: true });
-  const cacheFile = join(outDir, "monday-boards.json");
+  // Kept out of sight (a hidden folder): the raw copy is for the script, not for reading.
+  mkdirSync(join(outDir, ".monday-copy"), { recursive: true });
+  const cacheFile = join(outDir, ".monday-copy", "monday-boards.json");
 
   let boards: MondayBoard[];
   if (args.includes("--cached")) {
@@ -747,7 +749,8 @@ async function apply(rows: Row[], outDir: string) {
   await db.$disconnect();
 
   const csv = (data: (string | number)[][]) => "\uFEFF" + data.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  writeFileSync(join(outDir, `6 import log ${url.hostname}.csv`), csv([["Company", "Client", "People added", "People already there", "OS id"], ...log]));
+  const where = url.hostname === "localhost" ? "local copy" : process.env.DATABASE_URL === process.env.LIVE_DATABASE_URL ? "live" : process.env.DATABASE_URL === process.env.STAGING_DATABASE_URL ? "staging" : url.hostname;
+  writeFileSync(join(outDir, `6 import log - ${where}.csv`), csv([["Company", "Client", "People added", "People already there", "OS id"], ...log]));
   const matched = [...managers.entries()].map(([name, id]) => `${name} → ${id ? (users.find((u) => u.id === id)?.name ?? id) : "blank (no login)"}`);
   console.log(
     [

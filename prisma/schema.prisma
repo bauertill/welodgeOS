@@ -261,6 +261,9 @@ model Property {
   /// When the hotel last sent the form.
   contractingSubmittedAt  DateTime?
 
+  /// The monday.com item this property was imported from — a second import fills it, never duplicates it.
+  mondayId String? @unique
+
   @@index([name])
   @@index([city])
 }
@@ -1469,6 +1472,9 @@ model Update {
   /// as monday's Updates tab had them. Shown on the client's feed too.
   salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
   salesRequestId String?
+
+  /// The monday.com update this was imported from, so it is never brought in twice.
+  mondayId String? @unique
 
   @@index([propertyId])
   @@index([clientId])
