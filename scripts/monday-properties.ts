@@ -191,6 +191,37 @@ const url = (text: string | null) => /https?:\/\/\S+/.exec(text ?? "")?.[0] ?? n
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
 const stripHtml = (s: string | null) => (s ?? "").replace(/\r/g, "").trim();
 
+/** Metres between two points. */
+function metres(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const r = 6_371_000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Where a property is, from Google, for the ones monday has no map position
+ * for — asked once and kept with the copy of monday, so a second run asks
+ * Google nothing.
+ */
+async function placeOf(cache: Record<string, Place | null>, query: string): Promise<Place | null> {
+  if (query in cache) return cache[query]!;
+  const key = process.env.GOOGLE_MAPS_SERVER_KEY;
+  if (!key) return null;
+  const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location" },
+    body: JSON.stringify({ textQuery: query, locationBias: { circle: { center: { latitude: 34.05, longitude: -118.25 }, radius: 50000 } } }),
+  });
+  const body = (await response.json()) as { places?: { id: string; displayName?: { text: string }; formattedAddress?: string; location?: { latitude: number; longitude: number } }[] };
+  const hit = body.places?.[0];
+  const place = hit?.location ? { id: hit.id, name: hit.displayName?.text ?? "", address: hit.formattedAddress ?? "", lat: hit.location.latitude, lng: hit.location.longitude } : null;
+  cache[query] = place;
+  return place;
+}
+type Place = { id: string; name: string; address: string; lat: number; lng: number };
+
 const GROUP_COLOURS: GroupColour[] = ["GREEN", "TEAL", "BLUE", "PURPLE", "YELLOW", "ORANGE", "PINK", "LIME", "RED", "GREY"];
 
 // ── Planning ─────────────────────────────────────────────────────────────────
@@ -199,6 +230,11 @@ type RoomPlan = { name: string; units: number; beds: string | null; size: string
 type LinePlan = { room: string; checkIn: Date; checkOut: Date; rooms: number; rateCents: number; note: string };
 type PropertyPlan = {
   mondayId: string;
+  /** The same property already in OS (added by the team), matched by name or by place. */
+  existingId: string | null;
+  merged: string[];
+  /** The map position came from monday itself, not a Google guess. */
+  placedByMonday: boolean;
   name: string;
   group: string;
   statusLabel: string | null;
@@ -242,8 +278,14 @@ async function main() {
   const db = new PrismaClient();
   const event = await db.event.findFirst({ where: { name: { contains: "LA28", mode: "insensitive" } }, include: { periods: true } });
   if (!event) throw new Error("No LA28 event in this database.");
-  const existing = await db.property.findMany({ select: { id: true, name: true, mondayId: true } });
-  const byName = new Map(existing.map((p) => [norm(p.name), p]));
+  // Before the import's database change has reached this database, there is no monday id to read yet.
+  const placesFile = join(outDir, ".monday-copy", "google-places.json");
+  const places = (existsSync(placesFile) ? JSON.parse(readFileSync(placesFile, "utf8")) : {}) as Record<string, Place | null>;
+  const existing = await db.property
+    .findMany({ select: { id: true, name: true, mondayId: true, latitude: true, longitude: true } })
+    .catch(async () =>
+      (await db.property.findMany({ select: { id: true, name: true, latitude: true, longitude: true } })).map((p) => ({ ...p, mondayId: null as string | null })),
+    );
   const amenityRows = await db.amenity.findMany({ select: { id: true, key: true, label: true } });
 
   const plans: PropertyPlan[] = [];
@@ -266,8 +308,17 @@ async function main() {
     } catch {
       /* no position */
     }
-    const address = text("Location");
-    if (!lat) check.push("No map position in monday — place it on the map");
+    let address = text("Location");
+    const p_googled = !lat;
+    if (!lat) {
+      const found = await placeOf(places, [item.name.trim(), address ?? text("City") ?? text("Area") ?? "", "Los Angeles CA"].filter(Boolean).join(", "));
+      if (found && metres({ lat: found.lat, lng: found.lng }, { lat: 34.05, lng: -118.25 }) < 150_000) {
+        lat = found.lat;
+        lng = found.lng;
+        if (!address || address.split(",").length < 3) address = found.address;
+        check.push(`Placed on the map by Google: ${found.name}, ${found.address}`);
+      } else check.push("No map position, and Google found none — place it on the map");
+    }
     const ibanBic = text("IBAN + BIC");
     const bic = ibanBic ? /\b([A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b/.exec(ibanBic.replace(/IBAN|BIC/gi, " "))?.[1] ?? null : null;
     const iban = ibanBic ? ibanBic.replace(bic ?? "", "").replace(/IBAN|BIC|[:/,+]/gi, " ").replace(/\s+/g, " ").trim() || null : null;
@@ -418,6 +469,9 @@ async function main() {
 
     plans.push({
       mondayId: item.id,
+      existingId: null,
+      merged: [],
+      placedByMonday: !p_googled,
       name: item.name.trim(),
       group: item.group?.title ?? "",
       statusLabel,
@@ -435,6 +489,106 @@ async function main() {
     });
   }
 
+  writeFileSync(placesFile, JSON.stringify(places));
+
+  // The same hotel twice on monday ("Residence Inn LAX/El Segundo" and "Residence
+  // Inn Los Angeles LAX/El Segundo"): one property, its rooms, rates, updates and
+  // contacts together. Same place = under 60 m apart; or one name holding the other.
+  const pos = (p: PropertyPlan) => (p.property.latitude ? { lat: p.property.latitude as number, lng: p.property.longitude as number } : null);
+  // Words that say nothing about which hotel it is.
+  // Brand names (Hilton, Courtyard, Inn…) stay: they are what tells two hotels in one town apart.
+  const filler = new Set(["the", "a", "by", "at", "and", "hotel", "hotels", "suites", "suite", "los", "angeles", "la", "ihg"]);
+  const words = (name: string) =>
+    new Set(norm(name.replace(/\bESA\b/gi, "Extended Stay America")).split(" ").filter((w) => w && !filler.has(w)));
+  /** Names that say the same hotel: the same words, or one name's words all in the other's. */
+  const namesMatch = (a: string, b: string, closeBy: boolean, nextDoor = false) => {
+    const x = words(a);
+    const y = words(b);
+    const [small, big] = x.size <= y.size ? [x, y] : [y, x];
+    if (!small.size) return false;
+    const inside = [...small].every((w) => big.has(w));
+    if (!inside) return false;
+    // The same words: the same hotel. One name inside the other ("Hilton Glendale" in
+    // "Hilton Los Angeles North/Glendale") only when they also stand on the same spot.
+    return small.size === big.size || nextDoor;
+  };
+  const near = (a: PropertyPlan, b: PropertyPlan, m: number) => {
+    const pa = pos(a);
+    const pb = pos(b);
+    return Boolean(a.placedByMonday && b.placedByMonday && pa && pb && metres(pa, pb) < m);
+  };
+  // The same hotel only when the names agree — being next door is not enough (two brands often share a site).
+  const sameProperty = (a: PropertyPlan, b: PropertyPlan) => namesMatch(a.name, b.name, false, near(a, b, 150));
+  const richness = (p: PropertyPlan) => (p.quote ? 100 : 0) + p.rooms.length * 10 + p.updates.length * 5 + (p.statusLabel ? 3 : 0);
+  for (let i = 0; i < plans.length; i++) {
+    for (let j = i + 1; j < plans.length; j++) {
+      const a = plans[i]!;
+      const b = plans[j]!;
+      if (!sameProperty(a, b)) continue;
+      const [keep, drop] = richness(a) >= richness(b) ? [a, b] : [b, a];
+      for (const r of drop.rooms) if (!keep.rooms.some((k) => norm(k.name) === norm(r.name))) keep.rooms.push(r);
+      if (!keep.quote && drop.quote) keep.quote = drop.quote;
+      keep.updates.push(...drop.updates);
+      for (const c of drop.contacts) if (!keep.contacts.some((k) => norm(k.name) === norm(c.name))) keep.contacts.push(c);
+      for (const [k, v] of Object.entries(drop.property)) if (keep.property[k] == null && v != null) keep.property[k] = v;
+      for (const [k, v] of Object.entries(drop.entry)) if (keep.entry[k] == null && v != null) keep.entry[k] = v;
+      keep.merged.push(drop.mondayId, ...drop.merged);
+      keep.check.push(`Twice on monday — joined with "${drop.name}"`);
+      plans.splice(plans.indexOf(drop), 1);
+      i = -1; // start again: the list changed
+      break;
+    }
+  }
+
+  // Names that look alike but were not joined: said, for a colleague to decide.
+  for (const a of plans) {
+    const alike = plans.find((b) => {
+      if (b === a) return false;
+      const x = words(a.name);
+      const y = words(b.name);
+      const [small, big] = x.size <= y.size ? [x, y] : [y, x];
+      const pa = pos(a);
+      const pb = pos(b);
+      const close = Boolean(pa && pb && metres(pa, pb) < 400);
+      return (small.size >= 3 || (small.size === 2 && close)) && [...small].every((w) => big.has(w));
+    });
+    if (alike) a.check.push(`Name like "${alike.name}" — the same hotel? (not joined)`);
+  }
+  // Next door but differently named: said, not joined.
+  for (const a of plans) {
+    const twin = plans.find((b) => b !== a && near(a, b, 40));
+    if (twin) a.check.push(`Same address as "${twin.name}" on monday — two hotels on one site, or the same one twice?`);
+  }
+
+  // Already in OS (the team added it): matched by monday id, or by name (close by, when both are on the map).
+  for (const p of plans) {
+    const here =
+      existing.find((e) => e.mondayId === p.mondayId) ??
+      existing.find((e) => {
+        const d = e.latitude && pos(p) ? metres({ lat: e.latitude, lng: e.longitude! }, pos(p)!) : Infinity;
+        // "The Tangerine" and "The Tangerine - a Burbank Hotel", 20 m apart: the same.
+        return namesMatch(e.name, p.name, d < 400, d < 150);
+      });
+    if (here) {
+      // Two monday items for one hotel the team already has: one plan.
+      const other = plans.find((q) => q !== p && q.existingId === here.id);
+      if (other) {
+        for (const r of p.rooms) if (!other.rooms.some((k) => norm(k.name) === norm(r.name))) other.rooms.push(r);
+        other.updates.push(...p.updates);
+        for (const c of p.contacts) if (!other.contacts.some((k) => norm(k.name) === norm(c.name))) other.contacts.push(c);
+        for (const [k, v] of Object.entries(p.entry)) if (other.entry[k] == null && v != null) other.entry[k] = v;
+        other.merged.push(p.mondayId, ...p.merged);
+        other.check.push(`Twice on monday — joined with "${p.name}"`);
+        p.existingId = "MERGED";
+        continue;
+      }
+      p.existingId = here.id;
+      p.check.push(`Already in OS as "${here.name}" — its room types and quotes stay as the team entered them; monday only fills blanks and adds updates and contacts`);
+    }
+  }
+
+  for (let i = plans.length - 1; i >= 0; i--) if (plans[i]!.existingId === "MERGED") plans.splice(i, 1);
+
   // ── The review ─────────────────────────────────────────────────────────────
   const csv = (rows: (string | number | null | undefined)[][]) =>
     "﻿" + rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
@@ -445,7 +599,7 @@ async function main() {
       ["Property", "Already in OS?", "monday status", "Becomes", "Group", "Type", "Stars", "Room types", "Quote lines", "Updates", "Contacts", "Provider", "Account manager", "Check"],
       ...plans.map((p) => [
         p.name,
-        p.mondayId && existing.some((e) => e.mondayId === p.mondayId) ? "yes (imported before)" : byName.has(norm(p.name)) ? "yes — blanks filled" : "no — new",
+        p.existingId ? `yes — ${existing.find((e) => e.id === p.existingId)?.name}` : "no — new",
         p.statusLabel ?? "",
         p.plan.contactTask ? "To be contacted (task made)" : p.plan.status === "CONTACTED" ? (p.quote ? "Quote received" : "Pending quote") : p.plan.status === "REJECTED" ? "Ruled out" : p.plan.status === "ORGANISER" ? "Organising committee" : p.plan.status === "CONTRACTED" ? "Contracted" : p.quote ? "Quote received" : "Prospect",
         p.group,
@@ -470,7 +624,7 @@ async function main() {
   );
   const totals = {
     properties: plans.length,
-    existing: plans.filter((p) => byName.has(norm(p.name))).length,
+    existing: plans.filter((p) => p.existingId).length,
     rooms: plans.reduce((n, p) => n + p.rooms.length, 0),
     quotes: plans.filter((p) => p.quote).length,
     fromDaily: plans.filter((p) => p.quote?.fromDailyRate).length,
@@ -480,7 +634,7 @@ async function main() {
     checks: plans.filter((p) => p.check.length).length,
   };
   const summary = [
-    `Properties on monday's LA28 board: ${totals.properties} (${totals.existing} already in OS — blanks filled, nothing overwritten)`,
+    `Properties: ${totals.properties} after joining monday's duplicates (${plans.reduce((n, p) => n + p.merged.length, 0)} joined); ${totals.existing} already in OS — blanks filled, nothing overwritten`,
     `Room categories: ${totals.rooms}`,
     `Quotations: ${totals.quotes} (${totals.fromDaily} made from monday's Daily Rate)`,
     `Updates to bring across: ${totals.updates}`,
@@ -535,6 +689,7 @@ async function apply(db: PrismaClient, plans: PropertyPlan[], eventId: string) {
             // The property: matched by monday id, then by name; filled, never overwritten.
             let property =
               (await tx.property.findUnique({ where: { mondayId: p.mondayId } })) ??
+              (p.existingId ? await tx.property.findUnique({ where: { id: p.existingId } }) : null) ??
               (await tx.property.findFirst({ where: { name: { equals: p.name, mode: "insensitive" } } }));
             const providerId = p.provider
               ? ((await tx.provider.findUnique({ where: { name: p.provider } })) ?? (await tx.provider.create({ data: { name: p.provider } }))).id
@@ -587,12 +742,13 @@ async function apply(db: PrismaClient, plans: PropertyPlan[], eventId: string) {
               if (!entry.groupId && groups.get(norm(p.group))) fill.groupId = groups.get(norm(p.group));
               if (Object.keys(fill).length) await tx.scoutingEntry.update({ where: { id: entry.id }, data: fill });
             }
-            // Room categories — only for a property this import added, so the team's own are never doubled.
+            // Room categories and rates — only for a property this import added, so the team's own are never doubled.
+            const ours = fresh || property.mondayId === p.mondayId && !p.existingId;
             const categories = new Map<string, string>();
             const have = await tx.roomCategory.findMany({ where: { propertyId: property.id }, select: { id: true, name: true } });
             for (const c of have) categories.set(norm(c.name), c.id);
             let order = have.length;
-            for (const r of p.rooms) {
+            for (const r of ours ? p.rooms : []) {
               if (categories.has(norm(r.name))) continue;
               const c = await tx.roomCategory.create({
                 data: { propertyId: property.id, name: r.name, unitCount: r.units, bedConfiguration: r.beds, size: r.size, notes: r.notes.join("\n") || null, currency: "USD", sortOrder: order++ },
@@ -601,7 +757,7 @@ async function apply(db: PrismaClient, plans: PropertyPlan[], eventId: string) {
               stats.rooms++;
             }
             // The quoted rates, as one quotation — once.
-            if (p.quote) {
+            if (p.quote && ours) {
               const already = await tx.quotation.findFirst({ where: { scoutingEntryId: entry.id, name: { startsWith: "From monday" } } });
               if (!already) {
                 await tx.quotation.create({
