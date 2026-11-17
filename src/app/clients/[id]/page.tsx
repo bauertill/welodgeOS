@@ -4,6 +4,7 @@ import { HistorySection } from "~/app/_components/activity-log";
 import { ClientContactsCard, ClientDetailsCard, ClientContractingCard, DeleteClient } from "~/app/_components/client-crm";
 import { ClientContracts, ClientSalesRequests } from "~/app/_components/sales-requests";
 import { UpdateThread } from "~/app/_components/update-thread";
+import { RateCardList } from "~/app/_components/rate-card-list";
 import { ClientEmails } from "~/app/_components/client-emails";
 import { Card, PageHeader } from "~/app/_components/ui";
 import { clientCategoryLabels } from "~/lib/clients";
@@ -43,6 +44,12 @@ export default async function ClientPage({
         <div className="space-y-5 lg:col-span-2">
           <ClientSalesRequests clientId={client.id} />
           <ClientContracts clientId={client.id} />
+
+          {/* The rate cards sent to this client (doc §4.11, 2026-11-17). */}
+          <Card>
+            <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Rate cards</h2>
+            <RateCardList clientId={client.id} compact />
+          </Card>
 
           <Card>
             <h2 className="text-ink-900 mb-3 text-[15px] font-medium">

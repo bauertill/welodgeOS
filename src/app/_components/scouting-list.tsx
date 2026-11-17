@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
@@ -10,7 +11,6 @@ import { roomTypeGroups, roomTypeOf } from "~/lib/sales";
 import type { CategoryContractStatus, PropertyType, ScoutingDetail, ScoutingStatus } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
-import { EventRateCards } from "~/app/_components/event-rate-cards";
 import { Button, Select } from "~/app/_components/form";
 import type { MapLayer, MapPin, MapPlace } from "~/app/_components/scouting-map";
 import {
@@ -580,8 +580,12 @@ export function ScoutingList({
 
   return (
     <div className="space-y-4">
-      {/* Rate cards for any client, not tied to a sales request (doc §4.11, 2026-10-26). */}
-      <EventRateCards eventId={eventId} />
+      {/* Rate cards moved to Sales › Rate cards (the owner, 2026-11-17); this event's are a click away. */}
+      <p className="text-[13px]">
+        <Link href={`/sales/rate-cards?event=${eventId}`} className="text-brand-700 hover:underline">
+          Rate cards for this event →
+        </Link>
+      </p>
       <div className="flex flex-wrap items-center gap-3">
         <div className="border-ink-200 flex rounded-full border bg-white p-1">
           {(["list", "map"] as const).map((option) => (

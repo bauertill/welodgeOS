@@ -1253,6 +1253,7 @@ model Client {
   updates       Update[]
   contacts      ClientContact[]
   salesRequests SalesRequest[]
+  rateCards     RateCard[]
   contracts     Contract[]
   tasks         Task[]
 
@@ -1970,6 +1971,10 @@ model RateCard {
   /// from the event's properties board for any client (doc §4.11, 2026-10-26).
   salesRequest      SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
   salesRequestId    String?
+  /// The client it is sent to (the owner, 2026-11-17: "ask which client we're sending it to, so it is
+  /// remembered on that client's page") — a request's card has its request's client; empty: any client.
+  client            Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId          String?
   /// The event it is for — always set; a request's card has its request's event.
   event             Event?        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   eventId           String?
@@ -2003,6 +2008,7 @@ model RateCard {
 
   @@index([salesRequestId])
   @@index([eventId])
+  @@index([clientId])
 }
 
 model RateCardProperty {

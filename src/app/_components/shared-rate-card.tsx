@@ -97,7 +97,8 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
       return null;
     }
   });
-  const askCompany = Boolean(card.general) && !responseId;
+  // A card sent to a known client never asks which company (2026-11-17).
+  const askCompany = Boolean(card.general) && !card.forClient && !responseId;
   const contracting = api.rateCard.contracting.useQuery({ token, responseId }, { retry: false, refetchOnWindowFocus: false, enabled: canAnswer });
   const sendDetails = api.rateCard.submitContracting.useMutation({
     onSuccess: () => {
