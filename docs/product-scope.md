@@ -1121,7 +1121,19 @@ when no total is known the sum of its registered room types. The account manager
 and video columns are gone (the video is a small link under the name).
 
 **Filters**: the **type** filter takes several types at once (*Every type* when none is
-ticked), beside *Every provider* and *With quotations*.
+ticked), beside *Every provider* and *With quotations*. To narrow down to the options worth
+comparing (the team, 2026-11-17) there are also:
+- **Area** — the areas (or towns) of the properties on this list.
+- **Room type** — words in a room type's name (*suite*, *king*, *2 bedroom*), with the names on
+  this list offered as you type; a property shows when any of its room types matches.
+- **Up to … a night** — properties with a night at or under that price: a buying rate agreed, or
+  a rate in a quotation not declined, in its own currency. With a room type chosen, only that
+  room type's rates count.
+
+They work together, on the list and the map; the count says *4 of 10 properties*, and **Reset
+filters** clears them all. Every filter **stays as set until reset**, per event, in the browser
+(as on the Clients list, §4.10). The **Rooms** column also shows the lowest rate quoted or agreed,
+*from US$ 300*.
 
 **Finding hotels from the map** (2026-10-11). The Map view has a bar above the map: **Find
 hotels not on our list near** one of the event's places of interest (its first venue by

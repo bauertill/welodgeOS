@@ -295,7 +295,9 @@ export const scoutingRouter = createTRPCRouter({
           // Absent for a category means "in negotiation" — see
           // `categoryContractStatusLabels` in ~/lib/scouting (doc §3.5).
           categoryContracts: true,
-          quotations: { select: { id: true, status: true, validUntil: true, createdAt: true } },
+          quotations: {
+            select: { id: true, status: true, validUntil: true, createdAt: true, currency: true, lines: { select: { categoryId: true, rateCents: true } } },
+          },
         },
       });
       // Where each stands, worked out from its contact tasks, quotations and contracts (doc §3.9).
@@ -324,6 +326,15 @@ export const scoutingRouter = createTRPCRouter({
           hasSupplierContract,
           group: groupOf({ ...entry, hasSupplierContract }),
           autoDetail: autoDetailOf({ ...entry, contactTasks }),
+          // The cheapest night it offers — a buying rate agreed, or a rate in a quotation not declined — for the price filter (doc §3.9).
+          rates: [
+            ...entry.categoryContracts
+              .filter((contract) => contract.ratePerNightCents !== null)
+              .map((contract) => ({ categoryId: contract.categoryId, cents: contract.ratePerNightCents!, currency: contract.rateCurrency ?? "USD" })),
+            ...entry.quotations
+              .filter((quotation) => quotation.status !== "DECLINED")
+              .flatMap((quotation) => quotation.lines.map((line) => ({ categoryId: line.categoryId, cents: line.rateCents, currency: quotation.currency }))),
+          ],
           lastUpdate,
           contactTaskId: contactTasks.find((task) => task.status !== "DONE")?.id ?? contactTasks[0]?.id ?? null,
         };
