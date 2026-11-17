@@ -268,26 +268,6 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
   const setProperty = (propertyId: string, change: (property: Draft["properties"][number]) => Draft["properties"][number]) =>
     setDraft((current) => (current ? { ...current, properties: current.properties.map((property) => (property.id === propertyId ? change(property) : property)) } : current));
 
-  /** The markup, applied to every room with a buying rate. */
-  const applyMarkup = () => {
-    if (!draft || !c) return;
-    const percent = Number(draft.markup.replace(",", "."));
-    if (!Number.isFinite(percent)) return;
-    setDraft({
-      ...draft,
-      properties: draft.properties.map((property) => {
-        const source = c.properties.find((one) => one.id === property.id);
-        return {
-          ...property,
-          lines: property.lines.map((line) => {
-            const buying = source?.lines.find((one) => one.id === line.id)?.buyingCents ?? null;
-            return buying === null || line.off || line.tbc ? line : { ...line, selling: String(Math.round(buying * (1 + percent / 100)) / 100) };
-          }),
-        };
-      }),
-    });
-  };
-
   // What the client will see, from the draft as it stands.
   const clientCard: ClientRateCard | null =
     c && draft
@@ -366,22 +346,11 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       ) : (
         <div className="space-y-4 pb-20">
           <div className="border-ink-200/60 grid gap-3 rounded-xl border bg-white p-4 sm:grid-cols-[1fr_auto]">
-            <label className="block">
+            <label className="block sm:col-span-2">
               <span className="text-ink-700 mb-1 block text-[13px] font-medium">Name — for us</span>
               <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
             </label>
-            <div>
-              <span className="text-ink-700 mb-1 block text-[13px] font-medium">Markup on our buying rate</span>
-              <span className="flex items-center gap-2">
-                <span className="w-24">
-                  <Input inputMode="decimal" value={draft.markup} onChange={(e) => setDraft({ ...draft, markup: e.target.value })} aria-label="Markup %" />
-                </span>
-                <span className="text-ink-500 text-sm">%</span>
-                <Button type="button" variant="secondary" onClick={applyMarkup} disabled={!draft.markup.trim()}>
-                  Apply to all
-                </Button>
-              </span>
-            </div>
+            {/* The markup box and "Apply to all" were taken off (the owner, 2026-11-17): client rates are typed per room. */}
             <label className="block sm:col-span-2">
               <span className="text-ink-700 mb-1 block text-[13px] font-medium">A word to the client — optional, at the top of the card</span>
               <Textarea rows={2} value={draft.intro} onChange={(e) => setDraft({ ...draft, intro: e.target.value })} placeholder="Thank you for your request. Here are the properties we can offer for your stay." />
