@@ -381,6 +381,7 @@ model Provider {
 
   properties Property[]
   contacts   ProviderContact[]
+  updates    Update[]
 }
 
 model ProviderContact {
@@ -962,6 +963,7 @@ model User {
   mcpTokens          McpToken[]
   gmail              GmailConnection?
   agreementTemplates AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
+  updatesSeen        UpdateBoardSeen[]
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
@@ -1503,6 +1505,16 @@ model Update {
   /// The monday.com update this was imported from, so it is never brought in twice.
   mondayId String? @unique
 
+  /// On a hotel chain (doc §2.6, the team 2026-11-17): shown on the chain and on
+  /// each of its properties, as monday's provider-level updates were.
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId String?
+  /// A provider not kept in the system — housekeeping, furniture rental — by
+  /// name, for the Updates board's *Other providers* (doc §2.6).
+  otherProvider String?
+  /// A file that goes with it — a Google Drive link for now (doc §2.6).
+  fileUrl String?
+
   /// A reply to another update (doc §2.6, 2026-11-17): shown beneath it, on the same page.
   parent   Update?  @relation("UpdateReplies", fields: [parentId], references: [id], onDelete: Cascade)
   parentId String?
@@ -1512,6 +1524,20 @@ model Update {
   @@index([clientId])
   @@index([salesRequestId])
   @@index([parentId])
+  @@index([providerId])
+  @@index([createdAt])
+}
+
+/// When someone last looked at a tab of the Updates board, so what came in since
+/// shows with a red dot (doc §2.6). One row per person and tab.
+model UpdateBoardSeen {
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  /// CLIENT, ACCOMMODATION, OTHER or TEAM.
+  tab    String
+  seenAt DateTime
+
+  @@id([userId, tab])
 }
 
 /// Our own numbering of a countable room: `property + category + slot number`

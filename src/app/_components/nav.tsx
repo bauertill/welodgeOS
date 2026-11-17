@@ -18,6 +18,8 @@ export const navItems = [
   { href: "/events", label: "Events" },
   // The team's shared task board (doc §2.8).
   { href: "/tasks", label: "Tasks" },
+  // What the whole team should see (doc §2.6, the team 2026-11-17).
+  { href: "/updates", label: "Updates" },
 ] as const;
 
 /**
@@ -54,6 +56,9 @@ export function Nav() {
   // Requests with a client's answer nobody has opened yet — the red count on Sales (doc §4.11).
   const newAnswers = api.rateCard.newAnswers.useQuery(undefined, { refetchInterval: 30_000, enabled: !isPublicPath(pathname) && !pathname.startsWith("/signin") && !pathname.startsWith("/signout") });
   const unseen = newAnswers.data?.requests ?? 0;
+  // Updates come in since you last looked at the board — its red dot (doc §2.6).
+  const updatesNew = api.update.boardNew.useQuery(undefined, { refetchInterval: 60_000, enabled: !isPublicPath(pathname) && !pathname.startsWith("/signin") && !pathname.startsWith("/signout") });
+  const newUpdates = Object.values(updatesNew.data ?? {}).reduce((sum, tab) => sum + tab.count, 0);
 
   if (pathname.startsWith("/signin") || pathname.startsWith("/signout"))
     return null;
@@ -97,9 +102,17 @@ export function Nav() {
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className={itemStyles(active)}
+              className={`${itemStyles(active)} flex items-center justify-between gap-2`}
             >
               {item.label}
+              {item.href === "/updates" && newUpdates > 0 && (
+                <span
+                  title={`${newUpdates} new ${newUpdates === 1 ? "update" : "updates"} since you last looked`}
+                  className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#e0234e] px-1.5 text-[11px] font-medium text-white"
+                >
+                  {newUpdates}
+                </span>
+              )}
             </Link>
           );
         })}

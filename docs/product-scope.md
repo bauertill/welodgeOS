@@ -254,6 +254,44 @@ property's or a client's contacts to appear in the same feed, as on monday.com. 
 Gmail link (Gmail API with read access, set up by Till — `docs/todos.md`), which is not in
 place yet.
 
+#### The Updates board (2026-11-17)
+
+The team, 2026-11-17: when there is an update the whole team should see, or someone wants to look
+back at what was said, there should be one place for it — as on monday.com, where an update was
+posted at the provider level or against one property depending on how widely it applied.
+**Updates** is an item in the left-hand menu, beside Tasks. (Providers beyond accommodation —
+housekeeping, furniture rental — keep being handled in Excel; the board does not give them pages.)
+
+- **Four tabs: Client · Accommodation · Other providers · For the team.** *Client* holds the
+  updates on clients and their requests; *Accommodation* those on properties and on **hotel
+  chains**; *Other providers* those about a provider kept only **by name** (*Housekeeping
+  Burbank*), with names used before offered as you type; *For the team* those about nothing in
+  particular.
+- **One update, shown everywhere it belongs.** An update is the same one on the board and on the
+  page of what it is about: written on Ocean Luxury Lodge's page it is on the board, and written on
+  the board about Ocean Luxury Lodge it is on the property's Updates tab. Each update shows what it
+  is about as links — the property, the chain, the client, the request — so a click opens its full
+  history there.
+- **About several things at once.** On the board an update can be about a property, a chain, a
+  client and another provider together — any of them, or none (then it is *For the team*) — and
+  shows on each tab and page that applies; the box says where it will show before posting.
+- **Hotel chains.** An update on a chain (a provider, §3.9) shows on the chain's page and on each
+  of its properties' Updates, marked *via [chain]*; the chain's page shows its own and its
+  properties' updates.
+- **Filters** on each tab, from records already in the system: the client; the property or the
+  chain (a chain takes in its properties' updates); the provider name; and words in the text or its
+  replies, on every tab. Kept until reset.
+- **What is new.** The menu item and each tab show a red count of updates written by others since
+  you last opened that tab (the first time, the last week's); those updates are marked **New**
+  while you read them.
+- **Who wrote it and who is told.** Every update shows its writer. When posting — on the board or on
+  any page's Updates — **Notify** picks colleagues to tell: they are told in the bell and **emailed**,
+  as when @mentioned (§2.9).
+- **Files — a Google Drive link for now.** *Add a file link* attaches a link that shows as *Open the
+  file*; uploading files into the system comes later, once file storage is switched on.
+- Replies, editing one's own, and the update kinds (call summary, meeting feedback…) work as on any
+  page's Updates.
+
 ### 2.7 The team — profiles and internal chat
 
 Like Feedback, this sits outside the three phases: it is about the people at We Lodge, not
@@ -3866,6 +3904,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
+| §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
