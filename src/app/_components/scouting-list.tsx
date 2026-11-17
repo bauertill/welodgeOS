@@ -389,7 +389,7 @@ export function ScoutingList({
                     {/* Set by hand, or else what the system works out (doc §3.9). */}
                     <Select
                       value={entry.detail ?? ""}
-                      title={entry.detail ? "Set by hand — choose the first line to go back to what the system works out" : "Worked out from contact tasks and quotations — choose one to set it by hand"}
+                      title={entry.detail ? "Set by hand — choose the first line to go back to what the system works out" : "Worked out from contact tasks and quotations; the others are set by hand"}
                       onChange={(e) =>
                         setDetailMutation.mutate({ id: entry.id, detail: (e.target.value || null) as ScoutingDetail | null })
                       }
@@ -797,11 +797,11 @@ export function ScoutingStatusKey() {
         ))}
       </div>
       <p className="text-ink-500 text-xs font-light">
-        <span className="text-ink-900 font-medium">Status</span> is the detail beneath the group:{" "}
-        {scoutingDetailOrder.map((detail) => scoutingDetailLabels[detail]).join(", ")}. Marked{" "}
-        <em>auto</em>, it is worked out from the hotel&apos;s contact task and quotations — <em>To be contacted</em>,{" "}
-        <em>Quote requested</em>, <em>Quote received</em>, <em>Quote expired</em> (every quote past its <em>valid until</em>),{" "}
-        <em>No availability</em> or <em>Couldn&apos;t help</em>. Choose one by hand and it stays until changed.
+        <span className="text-ink-900 font-medium">Status</span> is the detail beneath the group. It is worked out on its own
+        (<em>auto</em>) from the hotel&apos;s contact task and quotations: <em>To be contacted</em>, <em>Quote requested</em>,{" "}
+        <em>Quote received</em>, <em>Quote expired</em> (every quote past its <em>valid until</em>), <em>No availability</em> or{" "}
+        <em>Couldn&apos;t help</em>. What only a person knows is chosen by hand —{" "}
+        {scoutingDetailOrder.map((detail) => scoutingDetailLabels[detail]).join(", ")} — and stays until changed.
       </p>
     </div>
   );

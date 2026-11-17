@@ -65,12 +65,10 @@ enum ScoutingStatus {
 }
 
 /// The detail of where a property stands, beneath its group (doc §3.9, the
-/// team 2026-11-17). Set by hand; when empty, the board shows what the system
-/// works out from contact tasks and quotations instead.
+/// team 2026-11-17), when it is something only a person knows. The quote
+/// statuses — requested, received, expired — are never set by hand: the board
+/// works them out from contact tasks and quotations (the owner, 2026-11-17).
 enum ScoutingDetail {
-  QUOTE_REQUESTED
-  QUOTE_RECEIVED
-  QUOTE_EXPIRED
   RATE_TBC
   NO_AVAILABILITY
   OFFICIAL_HOTEL

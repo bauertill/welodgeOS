@@ -747,7 +747,7 @@ a property that otherwise exists once, globally:
 | --- | --- |
 | `event`, `property` | Unique together — a property appears at most once per event |
 | `status` | The **group**, set by hand: `PROSPECT` · `CONTACTED` (*Reached out*) · `SHORTLISTED` · `CONTRACTED` · `REJECTED` (*Ruled out*) — §3.9 |
-| `detail` | The **status** beneath the group, when set by hand: *Quote requested*, *Quote received*, *Quote expired*, *Rate TBC*, *No availability*, *Official hotel*, *Under construction*. Empty means the board shows what the system works out (§3.9) |
+| `detail` | The **status** beneath the group, when it is something only a person knows: *Rate TBC*, *No availability*, *Official hotel*, *Under construction*. Empty means the board shows what the system works out — the quote statuses are only ever worked out (§3.9) |
 | `notes` | Event-specific: what this hotel said about *this* event |
 | `addedBy`, `createdAt` | |
 
@@ -1081,9 +1081,9 @@ emailing a hotel's request from its contact task puts a *Prospect* into **Reache
 and a **supplier contract or a contracted room type** shows it in **Contracted** — such a
 property cannot be dragged out, and the board says why.
 
-**The status** — the *Status* column — is chosen from a list: *Quote requested*, *Quote
-received*, *Quote expired*, *Rate TBC*, *No availability*, *Official hotel*, *Under
-construction*. Left alone, it shows what the system works out, marked **auto**:
+**The status** — the *Status* column — shows what the system works out, marked **auto**. The
+**quote statuses are always worked out, never chosen** (the owner, 2026-11-17: "this status
+must be automatically done"):
 
 | Status (auto) | When |
 | --- | --- |
@@ -1093,8 +1093,9 @@ construction*. Left alone, it shows what the system works out, marked **auto**:
 | **To be contacted** | A hotel contact task (§4.11) is open on it and not started |
 | **No availability** / **Couldn't help** | Its last contact task closed for that reason (§4.11) |
 
-A status chosen by hand stays until changed; choosing the first line (the *auto* one) goes back
-to what the system works out.
+What only a person knows is chosen from the same list: **Rate TBC**, **No availability**,
+**Official hotel**, **Under construction**. It shows instead of the worked-out one and stays
+until changed; choosing the first line (the *auto* one) goes back to what the system works out.
 
 **The columns** (the team, 2026-11-17, to keep rows compact): **Property** (its name with
 *Quick view*, the provider, the video, its quotations and rooms contracted), **Status**, **Last
@@ -3840,7 +3841,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
 | §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status and type (the amenity filter removed 2026-10-11), grouped by stage; per-category contract status (`CategoryContract`), independent of the property's own status |
 | §3.5 Organising committee | **Replaced** (2026-11-17) | Was a status of its own (2026-11-11); now *Ruled out* with the status *Official hotel* (§3.9 *Groups and statuses*) |
-| §3.9 Groups and statuses | **Built** (2026-11-17) | Groups set by hand (Contracted, Shortlisted, Reached out, Prospect, Ruled out), moved by dragging or by ticking several and *Move to*; a contract keeps a property in Contracted; a status beneath for the detail, worked out (*auto*) unless chosen; columns Property · Status · Last update · Location · Type · Rooms (total) · To venue; several types at once in the filter |
+| §3.9 Groups and statuses | **Built** (2026-11-17) | Groups set by hand (Contracted, Shortlisted, Reached out, Prospect, Ruled out), moved by dragging or by ticking several and *Move to*; a contract keeps a property in Contracted; a status beneath for the detail — the contact and quote statuses worked out (*auto*), Rate TBC, No availability, Official hotel and Under construction chosen by hand; columns Property · Status · Last update · Location · Type · Rooms (total) · To venue; several types at once in the filter |
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |

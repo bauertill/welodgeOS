@@ -51,10 +51,10 @@ export const scoutingStatusColours: Record<ScoutingStatus, string> = {
 export const unavailableStatuses: ScoutingStatus[] = ["REJECTED"];
 
 /**
- * The detail beneath the group (doc §3.9). The first ones the system also works
- * out on its own; the rest only a person knows.
+ * The detail beneath the group (doc §3.9). Contact and quote statuses the
+ * system works out on its own; the rest only a person knows, and sets.
  */
-export type ScoutingDetailShown = ScoutingDetail | "TO_CONTACT" | "COULDNT_HELP";
+export type ScoutingDetailShown = ScoutingDetail | "TO_CONTACT" | "QUOTE_REQUESTED" | "QUOTE_RECEIVED" | "QUOTE_EXPIRED" | "COULDNT_HELP";
 
 export const scoutingDetailLabels: Record<ScoutingDetailShown, string> = {
   TO_CONTACT: "To be contacted",
@@ -68,11 +68,8 @@ export const scoutingDetailLabels: Record<ScoutingDetailShown, string> = {
   UNDER_CONSTRUCTION: "Under construction",
 };
 
-/** Offered in the status menu, in this order. */
+/** Offered in the status menu, in this order — only what a person knows; the quote statuses are always worked out. */
 export const scoutingDetailOrder: ScoutingDetail[] = [
-  "QUOTE_REQUESTED",
-  "QUOTE_RECEIVED",
-  "QUOTE_EXPIRED",
   "RATE_TBC",
   "NO_AVAILABILITY",
   "OFFICIAL_HOTEL",
