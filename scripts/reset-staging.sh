@@ -74,5 +74,7 @@ if [[ -z "${STAGING_DATABASE_URL:-}" ]]; then
   exit 0
 fi
 echo "Applying the database changes that are on staging but not yet live…"
-DATABASE_URL="$STAGING_DATABASE_URL" pnpm exec prisma migrate deploy
+# Migrations go over a direct connection (schema.prisma directUrl): Neon's
+# address without "-pooler".
+DATABASE_URL="$STAGING_DATABASE_URL" DIRECT_URL="${STAGING_DATABASE_URL/-pooler/}" pnpm exec prisma migrate deploy
 echo "Staging is reset."

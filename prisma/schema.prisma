@@ -13,6 +13,10 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Migrations go over a direct connection, not the pooler: a pooled one can
+  // keep the migration lock after the build ends, and the next release then
+  // times out waiting for it (P1002, 2026-11-10 and 2026-11-17).
+  directUrl = env("DIRECT_URL")
 }
 
 enum EventStatus {
