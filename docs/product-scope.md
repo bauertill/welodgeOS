@@ -2737,35 +2737,50 @@ room category at the rate we sell it for.
   Asked when the client asks, never stored; only through a live link. Not on the printout.
 - **The client's link** (`/rate-card/…`): made on the card, opened without signing in;
   *Copy link*, *Open*, *Switch off*. It shows what is saved.
-- **The client answers from the link** (2026-10-11). Beside each room, **I'm interested**;
-  pressed, it opens how many rooms, arrival and departure (the request's dates to start, else
-  the event's) and a note, with what that comes to at the rate shown. **+ Add another
-  period** adds more dates for the same room — each period its own number of rooms, dates
-  and note, and any can be removed. More rooms than are available, or a stay shorter than
-  the minimum, is marked in red and cannot be sent. **Send to We Lodge →** sits right
-  under the rooms they chose (2026-10-13, so nobody has to scroll to find it), and again
-  under the map in **Your answer**, which sums up the rooms chosen with the total. Either
-  opens a popup over the card: their choice and its total, **"This is a request, not a
-  confirmed booking — a We Lodge agent will come back to you to confirm the rooms with an
-  agreement"** (the owner's wording, 2026-10-13; also under *Your answer* and in the thank
-  you), their name and email, a note to us, and *Send request*.
+- **The client's link is full width, the map beside the card** (the owner, 2026-11-17: "the
+  rate card is in a narrow box"). On a wide screen the card takes three fifths and the map
+  two, the map staying in view while the card scrolls; pressing a property's square on the
+  map scrolls the card to it. On a phone, the map follows the card.
+- **"I like it!" on each room** (the owner, 2026-11-17, replacing *I'm interested*): one
+  press, nothing more asked — no name, no dates. It highlights the room for us: in the card's
+  popup the room's row turns pink with *♥ The client likes this* and the property says
+  *♥ The client likes a room here*; the sourcing task's glance at the card shows a ♥. Pressed
+  again, it is taken back. On a general card, everyone with the link shares the same likes.
+- **Rates include** (2026-11-17): per property, what its rates include ("Breakfast, Wi-Fi,
+  Taxes"), shown to the client under its rooms as *Rates include: …*. A property added to a
+  card starts with what the event's agreed terms on its room types say, else its accepted
+  quote, else its latest quote not declined; on an older card, *Use what the quote says: …*
+  fills it in one click. Left empty, the client sees nothing about it.
+- **Payment & cancellation terms** (2026-11-17): the sales person chooses *The same for every
+  property* — one payment and one cancellation text for the card, shown to the client after
+  the properties — or *Each property its own*, written under each property and shown with it.
+  Words, as the client reads them; the binding terms are the proposal's (the offer, below),
+  set by the sales manager.
+- **Request a proposal, at the end of the card** (the owner, 2026-11-17). The client chooses
+  the rooms they would like — property and room type from a list (liked rooms marked ♥) —
+  with how many and their arrival and departure; **+ Add another period** adds another
+  (starting from the same room), any can be removed; a free-text message to We Lodge; their
+  name and email (and company on a general card); **Send to We Lodge →**. It starts filled
+  in with their last request, else the rooms they liked. More rooms than are available, a
+  stay under the minimum, or a departure before the arrival is marked red and cannot be
+  sent; a message alone can be sent. A rate to be confirmed is chosen like any other room and
+  left out of the total. It is a request, not a booking: "we come back to you with a proposal
+  and its terms" — the team answers it with *Make an offer →* (below), whose payment and
+  cancellation terms the sales manager sets. Each request is kept as sent and a later one does
+  not rewrite it. *End the client's link with "Request a proposal"*, on the card, is on by
+  default; off, the link is to look at only (and *I like it!*), and the server refuses an
+  answer or company details sent to it. (Until 2026-11-17 each room had *I'm interested*,
+  opening its periods beside the room, with a *Your answer* box under the map and a separate
+  *My dates have changed* popup; those are gone — new dates go in the request or its message.)
 - **Then their contracting details** (2026-10-14, the owner: "this is most important"):
-  once the request is sent, the popup does not close — it becomes *One more thing — your
-  company details*, with "✓ Your request has been sent" at the top and the same form as the
-  contracting link (below): the company, who signs, the contact persons. *Send my details*,
-  or **I'll do this later** — the details are **asked for, not required**, so no request is
-  lost to a missing VAT number. Until they are in, the card shows **Complete your
-  contracting details** with *Add company details* at the top; details already given — by
-  the link, or before — come filled in, to check. They land on the request exactly as the
-  link's do, recorded as sent "from the rate card", and the account manager is told.
-- **New dates are their own small button** (2026-10-13): *My dates have changed* under
-  *Your answer*, and *tell us if your dates have changed* at the top of the card, open a
-  separate popup — new arrival and departure, what changed, name, email, a note — and
-  *Send new dates*. It sends no rooms: "a We Lodge sales member will come back to you with
-  rates and availability". (It used to be a tick box beside the rooms being sent, which
-  made no sense once the client had already filled in their dates per room.) They can come back and send
-  again: the link shows their last answer filled in. Each answer is kept as sent — the rooms,
-  the rate at that moment and the notes — and a later one does not rewrite it.
+  once the request is sent, a popup opens — *One more thing — your company details*, with
+  "✓ Your request has been sent" at the top and the same form as the contracting link
+  (below): the company, who signs, the contact persons. *Send my details*, or **I'll do this
+  later** — the details are **asked for, not required**, so no request is lost to a missing
+  VAT number. Until they are in, the card shows **Complete your contracting details** with
+  *Add company details* at the top; details already given — by the link, or before — come
+  filled in, to check. They land on the request exactly as the link's do, recorded as sent
+  "from the rate card", and the account manager is told.
 - **Making the link is sending the proposal** (2026-10-11): a request at *Initial interest*
   or *Specify* moves to **Proposal sent** the moment a rate card's link is made, on its
   history. A request further along is left where it is.
@@ -3990,7 +4005,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Emails from Gmail | **Built** (2026-11-10) | Connect Gmail on My profile, and a card on every page until connected (Not now = a day) (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. Google set up and the owner's mailbox connected on staging, 2026-11-10; each colleague connects theirs on the live site |
 | §4.10 Contracting details | **Built** (2026-11-12) | Card on the client's page (trade name, address, VAT, registration, two signatories), edited with Add/Edit, in the client's history. A request with no details of its own shows the client's on its contracting link and rate card; what the client sends is written back to the client |
 | §4.10 Import from monday.com | **Built** (2026-11-12) | Review and import built; names approved and mismatched categories corrected by the owner. **Ran on the live site 2026-11-12:** 1,387 clients added, 33 existing ones had blanks filled in, 1,779 people added (rehearsed on staging first; a second run adds nothing). 120 people with no company to go on are left for the team to add by hand, from the review's *3 to place by hand* |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates; room types renamed or added on the card (added to the property too) properties added to a card later and put in order; rooms offered at "Rate to be confirmed" (2026-11-17), which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates; room types renamed or added on the card (added to the property too) properties added to a card later and put in order; rooms offered at "Rate to be confirmed"; the client's link full width with the map beside it, "I like it!" on each room, rates include and payment & cancellation terms, and "Request a proposal" at the end (switchable to look-only) (2026-11-17), which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09) |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |

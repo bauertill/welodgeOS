@@ -17,9 +17,19 @@ type Draft = {
   name: string;
   intro: string;
   markup: string;
+  /** The link ends with "Request a proposal"; off, it is to look at only (2026-11-17). */
+  canAnswer: boolean;
+  /** Payment and cancellation terms: one set for the card, or each property its own — the sales person decides (2026-11-17). */
+  termsPerProperty: boolean;
+  paymentTerms: string;
+  cancellationTerms: string;
   properties: {
     id: string;
     description: string;
+    /** What the rates include, as the client reads it (2026-11-17). */
+    rateIncludes: string;
+    paymentTerms: string;
+    cancellationTerms: string;
     photoIds: string[];
     /**
      * `off`: a room type we are not proposing at this property — kept, but not on the card (2026-11-11).
@@ -43,12 +53,19 @@ const draftOf = (card: Card): Draft => ({
   name: card.name,
   intro: card.intro ?? "",
   markup: card.markupBasisPoints === null ? "" : String(card.markupBasisPoints / 100),
+  canAnswer: card.clientCanAnswer,
+  termsPerProperty: card.termsPerProperty,
+  paymentTerms: card.paymentTerms ?? "",
+  cancellationTerms: card.cancellationTerms ?? "",
   properties: card.properties.map((property) => {
     // A room type with no client price is not offered — folded away, unless nothing at the property has a price yet.
     const anyPriced = property.lines.some((line) => line.sellingCents !== null || line.rateTbc);
     return {
       id: property.id,
       description: property.description ?? "",
+      rateIncludes: property.rateIncludes ?? "",
+      paymentTerms: property.paymentTerms ?? "",
+      cancellationTerms: property.cancellationTerms ?? "",
       photoIds: property.photoIds,
       lines: property.lines.map((line) => ({
         id: line.id,
@@ -205,9 +222,16 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       name: draft.name,
       intro: draft.intro,
       markupBasisPoints: draft.markup.trim() ? Math.round(Number(draft.markup.replace(",", ".")) * 100) : null,
+      clientCanAnswer: draft.canAnswer,
+      termsPerProperty: draft.termsPerProperty,
+      paymentTerms: draft.paymentTerms,
+      cancellationTerms: draft.cancellationTerms,
       properties: draft.properties.map((property) => ({
         id: property.id,
         description: property.description,
+        rateIncludes: property.rateIncludes,
+        paymentTerms: property.paymentTerms,
+        cancellationTerms: property.cancellationTerms,
         photoIds: property.photoIds,
         lines: property.lines
           .filter((line) => !line.added)
@@ -264,6 +288,9 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
           name: draft.name,
           currency: c.currency,
           intro: draft.intro.trim() || null,
+          termsPerProperty: draft.termsPerProperty,
+          paymentTerms: draft.paymentTerms.trim() || null,
+          cancellationTerms: draft.cancellationTerms.trim() || null,
           clientName: c.clientName,
           event: c.event,
           asked: c.asked,
@@ -279,6 +306,9 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 where: source.where,
                 nearest: source.nearest,
                 description: property.description.trim() || null,
+                rateIncludes: property.rateIncludes.trim() || null,
+                paymentTerms: property.paymentTerms.trim() || null,
+                cancellationTerms: property.cancellationTerms.trim() || null,
                 ...clientMedia({ ...source, photoIds: property.photoIds }),
                 lines: property.lines
                   .map((line) => ({ line, source: source.lines.find((one) => one.id === line.id) }))
@@ -349,6 +379,41 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
               <span className="text-ink-700 mb-1 block text-[13px] font-medium">A word to the client — optional, at the top of the card</span>
               <Textarea rows={2} value={draft.intro} onChange={(e) => setDraft({ ...draft, intro: e.target.value })} placeholder="Thank you for your request. Here are the properties we can offer for your stay." />
             </label>
+            <div className="border-ink-200/60 border-t pt-3 sm:col-span-2">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="text-ink-700 text-[13px] font-medium">Payment &amp; cancellation terms</span>
+                {(
+                  [
+                    [false, "The same for every property"],
+                    [true, "Each property its own"],
+                  ] as const
+                ).map(([perProperty, label]) => (
+                  <label key={label} className="text-ink-700 flex items-center gap-1.5 text-[13px] font-light">
+                    <input type="radio" name={`terms-${id}`} checked={draft.termsPerProperty === perProperty} onChange={() => setDraft({ ...draft, termsPerProperty: perProperty })} className="accent-brand-500" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {draft.termsPerProperty ? (
+                <p className="text-ink-500 mt-1 text-xs font-light">Written under each property below; the client sees them with that property.</p>
+              ) : (
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <Textarea rows={2} value={draft.paymentTerms} onChange={(e) => setDraft({ ...draft, paymentTerms: e.target.value })} placeholder="Payment terms — e.g. 30% on signature, the balance 60 days before arrival" aria-label="Payment terms" />
+                  <Textarea rows={2} value={draft.cancellationTerms} onChange={(e) => setDraft({ ...draft, cancellationTerms: e.target.value })} placeholder="Cancellation terms — e.g. free until 90 days before arrival, then 100%" aria-label="Cancellation terms" />
+                </div>
+              )}
+            </div>
+            <label className="border-ink-200/60 flex items-start gap-2 border-t pt-3 text-[13px] sm:col-span-2">
+              <input type="checkbox" checked={draft.canAnswer} onChange={(e) => setDraft({ ...draft, canAnswer: e.target.checked })} className="accent-brand-500 mt-0.5 h-4 w-4" />
+              <span>
+                <span className="text-ink-900 font-medium">End the client&apos;s link with &ldquo;Request a proposal&rdquo;</span>
+                <span className="text-ink-500 block text-xs font-light">
+                  {draft.canAnswer
+                    ? "They choose the rooms they want with dates and how many — as many periods as they need — add a note and send it to us. “I like it!” is always there."
+                    : "Off: the link is to look at only — the rooms, rates, photos and map, and “I like it!” on each room."}
+                </span>
+              </span>
+            </label>
           </div>
 
           {draft.properties
@@ -382,6 +447,9 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                     <h3 className="text-ink-900 text-[15px] font-semibold">
                       {source.name}
                       {source.stars ? <span className="text-brand-700 ml-1.5 text-xs">{"★".repeat(source.stars)}</span> : null}
+                      {source.lines.some((one) => one.likedAt) && (
+                        <span className="ml-2 rounded-full bg-[#fde8ec] px-2 py-px text-[11px] font-medium text-[#c03654]">♥ The client likes {source.lines.filter((one) => one.likedAt).length === 1 ? "a room" : `${source.lines.filter((one) => one.likedAt).length} rooms`} here</span>
+                      )}
                       <span className="text-ink-500 ml-2 text-xs font-light">
                         {source.nearest ? `${distance(source.nearest.km)} from ${source.nearest.name}` : "No distance — no coordinates or venue"}
                       </span>
@@ -433,6 +501,35 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                       placeholder="Two or three sentences for the client — the area, the style, what makes it suit them."
                     />
                   </div>
+                  <div className="mt-2">
+                    <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="text-ink-700 text-[13px] font-medium">Rates include</span>
+                      {/* What the agreed terms or quote say, in one click (2026-11-17). */}
+                      {source.knownIncludes && source.knownIncludes !== property.rateIncludes.trim() && (
+                        <button type="button" onClick={() => setProperty(property.id, (one) => ({ ...one, rateIncludes: source.knownIncludes! }))} className="text-brand-700 text-xs hover:underline">
+                          Use what the quote says: {source.knownIncludes}
+                        </button>
+                      )}
+                    </div>
+                    <Input
+                      value={property.rateIncludes}
+                      onChange={(e) => setProperty(property.id, (one) => ({ ...one, rateIncludes: e.target.value }))}
+                      placeholder="Breakfast, Wi-Fi, taxes — left empty, the client sees nothing about it"
+                      aria-label={`Rates include — ${source.name}`}
+                    />
+                  </div>
+                  {draft.termsPerProperty && (
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-ink-700 mb-1 block text-[13px] font-medium">Payment terms</span>
+                        <Textarea rows={2} value={property.paymentTerms} onChange={(e) => setProperty(property.id, (one) => ({ ...one, paymentTerms: e.target.value }))} placeholder="For this property" />
+                      </label>
+                      <label className="block">
+                        <span className="text-ink-700 mb-1 block text-[13px] font-medium">Cancellation terms</span>
+                        <Textarea rows={2} value={property.cancellationTerms} onChange={(e) => setProperty(property.id, (one) => ({ ...one, cancellationTerms: e.target.value }))} placeholder="For this property" />
+                      </label>
+                    </div>
+                  )}
                   <CardPhotos
                     propertyId={source.propertyId}
                     photos={source.allPhotos}
@@ -463,7 +560,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                         const selling = line.tbc ? null : toCents(line.selling);
                         const margin = selling !== null && lineSource.buyingCents ? selling - lineSource.buyingCents : null;
                         return (
-                          <tr key={line.id} className="border-ink-200/40 border-b last:border-0">
+                          <tr key={line.id} className={`border-ink-200/40 border-b last:border-0 ${source.lines.find((one) => one.id === line.id)?.likedAt ? "bg-[#fdf2f4]" : ""}`}>
                             <td className="py-1.5 pr-2">
                               <span className={`block min-w-36 rounded-lg ${line.name.trim() ? "" : "ring-2 ring-[#c03654]/50"}`}>
                                 <Input
@@ -475,6 +572,10 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                                 />
                               </span>
                               {line.added && <span className="text-brand-700 mt-0.5 block text-[11px] font-light">New — added to the property on save</span>}
+                              {/* The client pressed "I like it!" on the link (2026-11-17). */}
+                              {source.lines.find((one) => one.id === line.id)?.likedAt && (
+                                <span className="mt-0.5 inline-block rounded-full bg-[#fde8ec] px-2 py-px text-[11px] font-medium text-[#c03654]">♥ The client likes this</span>
+                              )}
                             </td>
                             <td className="py-1.5 pr-2">
                               <span className="block w-14">

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { env } from "~/env";
 import { nightsBetween, parseDay, today } from "~/lib/dates";
 import { clientMedia, photoSrc } from "~/lib/media";
-import { measuredPlaces, nearestPlace } from "~/lib/scouting";
+import { describeRateIncludes, measuredPlaces, nearestPlace } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { clientContracting, clientContractingValues, moveStage, saveClientContracting } from "~/server/api/routers/sales";
 import { legsForMode } from "~/server/api/routers/travel";
@@ -98,6 +98,10 @@ function shape(card: LoadedCard) {
     markupBasisPoints: card.markupBasisPoints,
     intro: card.intro,
     shareToken: card.shareToken,
+    clientCanAnswer: card.clientCanAnswer,
+    termsPerProperty: card.termsPerProperty,
+    paymentTerms: card.paymentTerms,
+    cancellationTerms: card.cancellationTerms,
     updatedAt: card.updatedAt,
     /** Empty for a general card — for any client (doc §4.11, 2026-10-26). */
     clientName: card.salesRequest?.client.name ?? null,
@@ -157,6 +161,9 @@ function shape(card: LoadedCard) {
         longitude: entry.property.longitude,
         nearest: nearest ? { name: nearest.place.name, km: nearest.km } : null,
         description: entry.description,
+        rateIncludes: entry.rateIncludes,
+        paymentTerms: entry.paymentTerms,
+        cancellationTerms: entry.cancellationTerms,
         videoUrl: entry.property.videoUrl,
         photosUrl: entry.property.photosUrl,
         /** Every photo picked for clients on the property (doc §3.9, Media) … */
@@ -182,6 +189,7 @@ function shape(card: LoadedCard) {
           buyingCents: line.buyingCents,
           sellingCents: line.sellingCents,
           rateTbc: line.rateTbc,
+          likedAt: line.likedAt,
           available: line.available,
           minNights: line.minNights,
         })),
@@ -193,6 +201,37 @@ function shape(card: LoadedCard) {
 async function loadCard(db: Db, where: Prisma.RateCardWhereUniqueInput) {
   const card = await db.rateCard.findUnique({ where, include: cardInclude });
   return card ? shape(card) : null;
+}
+
+/**
+ * What the rates at each property include on this event, as we know it (doc
+ * §4.11, 2026-11-17): the terms agreed on its room types — else its accepted
+ * quote, else its latest one not declined — in words: "Breakfast, Wi-Fi, Taxes".
+ */
+async function knownIncludes(tx: Db, eventId: string | null, propertyIds: string[]) {
+  const out = new Map<string, string>();
+  if (!eventId || !propertyIds.length) return out;
+  const entries = await tx.scoutingEntry.findMany({
+    where: { eventId, propertyId: { in: propertyIds } },
+    select: {
+      propertyId: true,
+      categoryContracts: { select: { rateIncludes: true, rateIncludesOther: true, cleaning: true, cleaningOther: true } },
+      quotations: {
+        where: { status: { not: "DECLINED" } },
+        orderBy: { createdAt: "desc" },
+        select: { status: true, rateIncludes: true, rateIncludesOther: true, cleaning: true, cleaningOther: true },
+      },
+    },
+  });
+  type Terms = { rateIncludes: Parameters<typeof describeRateIncludes>[0]; rateIncludesOther: string | null; cleaning: Parameters<typeof describeRateIncludes>[2]; cleaningOther: string | null };
+  const say = (terms: Terms) => describeRateIncludes(terms.rateIncludes, terms.rateIncludesOther, terms.cleaning, terms.cleaningOther);
+  for (const entry of entries) {
+    const agreed = [...new Set(entry.categoryContracts.map(say).filter((text): text is string => Boolean(text)))];
+    const quote = [...entry.quotations.filter((one) => one.status === "ACCEPTED"), ...entry.quotations].map(say).find(Boolean);
+    const text = agreed.length ? agreed.join(" / ") : quote;
+    if (text) out.set(entry.propertyId, text);
+  }
+  return out;
 }
 
 /**
@@ -222,12 +261,14 @@ async function propertyEntries(
       ? (await tx.scoutingEntry.findMany({ where: { eventId: options.eventId, propertyId: { in: options.propertyIds }, detail: "RATE_TBC" }, select: { propertyId: true } })).map((entry) => entry.propertyId)
       : [],
   );
+  const includes = await knownIncludes(tx, options.eventId, options.propertyIds);
   const creates = options.propertyIds
     .map((id) => properties.find((property) => property.id === id))
     .filter((property): property is (typeof properties)[number] => Boolean(property))
     .map((property, index) => ({
       propertyId: property.id,
       position: options.firstPosition + index,
+      rateIncludes: includes.get(property.id) ?? null,
       // The property's first photos to start; the team changes the choice on the card.
       photos: { create: property.photos.map((photo, at) => ({ photoId: photo.id, position: at })) },
       lines: {
@@ -457,7 +498,9 @@ export const rateCardRouter = createTRPCRouter({
   byId: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     const card = await loadCard(ctx.db, { id: input.id });
     if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card no longer exists." });
-    return card;
+    // What the agreed terms or quotes say each property's rates include — offered to use in one click (2026-11-17).
+    const known = await knownIncludes(ctx.db, card.eventId, card.properties.map((property) => property.propertyId));
+    return { ...card, properties: card.properties.map((property) => ({ ...property, knownIncludes: known.get(property.propertyId) ?? null })) };
   }),
 
   /** The card as edited: its name and word to the client, the markup last applied, each property's description and each selling rate. */
@@ -468,11 +511,20 @@ export const rateCardRouter = createTRPCRouter({
         name: z.string().trim().min(1, "Give the rate card a name.").max(200),
         intro: z.string().max(3000),
         markupBasisPoints: z.number().int().min(-10_000).max(100_000).nullable(),
+        clientCanAnswer: z.boolean().optional(),
+        /** Payment and cancellation terms: the card's, or each property's own — the sales person decides (2026-11-17). */
+        termsPerProperty: z.boolean().optional(),
+        paymentTerms: z.string().max(3000).optional(),
+        cancellationTerms: z.string().max(3000).optional(),
         properties: z
           .array(
             z.object({
               id: z.string(),
               description: z.string().max(3000),
+              /** What the rates include, as the client reads it (2026-11-17). */
+              rateIncludes: z.string().max(1000).optional(),
+              paymentTerms: z.string().max(3000).optional(),
+              cancellationTerms: z.string().max(3000).optional(),
               /** The property's photos this card shows, in order. */
               photoIds: z.array(z.string()).max(60).optional(),
               lines: z
@@ -543,14 +595,31 @@ export const rateCardRouter = createTRPCRouter({
         const note = (propertyId: string, text: string) => propertyNotes.set(propertyId, [...(propertyNotes.get(propertyId) ?? []), text]);
         await tx.rateCard.update({
           where: { id: card.id },
-          data: { name: input.name, intro: input.intro.trim() || null, markupBasisPoints: input.markupBasisPoints },
+          data: {
+            name: input.name,
+            intro: input.intro.trim() || null,
+            markupBasisPoints: input.markupBasisPoints,
+            ...(input.clientCanAnswer !== undefined ? { clientCanAnswer: input.clientCanAnswer } : {}),
+            ...(input.termsPerProperty !== undefined ? { termsPerProperty: input.termsPerProperty } : {}),
+            ...(input.paymentTerms !== undefined ? { paymentTerms: input.paymentTerms.trim() || null } : {}),
+            ...(input.cancellationTerms !== undefined ? { cancellationTerms: input.cancellationTerms.trim() || null } : {}),
+          },
         });
         if (input.removedPropertyIds.length) {
           await tx.rateCardProperty.deleteMany({ where: { id: { in: input.removedPropertyIds.filter((id) => ownProperties.has(id)) } } });
         }
         for (const [position, property] of input.properties.entries()) {
           if (!ownProperties.has(property.id) || input.removedPropertyIds.includes(property.id)) continue;
-          await tx.rateCardProperty.update({ where: { id: property.id }, data: { description: property.description.trim() || null, position } });
+          await tx.rateCardProperty.update({
+            where: { id: property.id },
+            data: {
+              description: property.description.trim() || null,
+              position,
+              ...(property.rateIncludes !== undefined ? { rateIncludes: property.rateIncludes.trim() || null } : {}),
+              ...(property.paymentTerms !== undefined ? { paymentTerms: property.paymentTerms.trim() || null } : {}),
+              ...(property.cancellationTerms !== undefined ? { cancellationTerms: property.cancellationTerms.trim() || null } : {}),
+            },
+          });
           if (property.photoIds) {
             const entry = await tx.rateCardProperty.findUniqueOrThrow({ where: { id: property.id }, select: { property: { select: { photos: { select: { id: true } } } } } });
             const own = new Set(entry.property.photos.map((photo) => photo.id));
@@ -702,6 +771,19 @@ export const rateCardRouter = createTRPCRouter({
       return requestId ? { general: false, ...(await clientContracting(ctx.db, requestId)) } : { general: true, submittedAt: null, values: null };
     }),
 
+  /**
+   * "I like it!" on a room, from the link (the owner, 2026-11-17): no name, no
+   * dates — it only highlights the room on our side. Pressed again, it is taken back.
+   */
+  like: publicProcedure
+    .input(z.object({ token: z.string().min(20).max(100), lineId: z.string().max(40), liked: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const line = await ctx.db.rateCardLine.findFirst({ where: { id: input.lineId, rateCardProperty: { rateCard: { shareToken: input.token } } }, select: { id: true } });
+      if (!line) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
+      await ctx.db.rateCardLine.update({ where: { id: line.id }, data: { likedAt: input.liked ? new Date() : null } });
+      return { liked: input.liked };
+    }),
+
   submitContracting: publicProcedure
     .input(z.object({ token: z.string().min(20).max(100), responseId: z.string().nullable().default(null), values: clientContractingValues }))
     .mutation(async ({ ctx, input }) => {
@@ -763,11 +845,13 @@ export const rateCardRouter = createTRPCRouter({
             currency: true,
             createdById: true,
             eventId: true,
+            clientCanAnswer: true,
             salesRequest: { select: { id: true, ownerId: true, client: { select: { name: true } } } },
             properties: { select: { property: { select: { name: true } }, lines: { select: { id: true, name: true, sellingCents: true, available: true, minNights: true } } } },
           },
         });
         if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
+        if (!card.clientCanAnswer) throw new TRPCError({ code: "FORBIDDEN", message: "This rate card is to look at only — please reply to your contact at We Lodge." });
         const lines = new Map(card.properties.flatMap((property) => property.lines.map((line) => [line.id, { ...line, propertyName: property.property.name }] as const)));
         const items = input.items.filter((item) => lines.has(item.lineId));
         for (const item of items) {
@@ -993,8 +1077,9 @@ async function requestFromAnswer(
  * only they were given (doc §4.11). Null on a general card before they answer.
  */
 async function answeringRequest(db: PrismaClient, token: string, responseId: string | null) {
-  const card = await db.rateCard.findUnique({ where: { shareToken: token }, select: { id: true, salesRequestId: true } });
+  const card = await db.rateCard.findUnique({ where: { shareToken: token }, select: { id: true, salesRequestId: true, clientCanAnswer: true } });
   if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "This rate card is not shared any more." });
+  if (!card.clientCanAnswer) throw new TRPCError({ code: "FORBIDDEN", message: "This rate card is to look at only — please reply to your contact at We Lodge." });
   if (card.salesRequestId) return card.salesRequestId;
   if (!responseId) return null;
   const answer = await db.rateCardResponse.findFirst({ where: { id: responseId, rateCardId: card.id }, select: { salesRequestId: true } });
@@ -1010,6 +1095,11 @@ export function clientCopy(card: ReturnType<typeof shape>) {
     /** Their last answer, to change and send again. */
     /** A general card's link is for anyone: no one is shown another's answer (doc §4.11). */
     general: card.salesRequestId === null,
+    /** Off: no "Request a proposal" — the link is to look at (and "I like it!") only (2026-11-17). */
+    canAnswer: card.clientCanAnswer,
+    termsPerProperty: card.termsPerProperty,
+    paymentTerms: card.paymentTerms,
+    cancellationTerms: card.cancellationTerms,
     lastAnswer: card.salesRequestId && card.answers[0] ? (({ isNew: _isNew, company: _company, ...answer }) => answer)(card.answers[0]) : null,
     event: card.event,
     asked: card.asked,
@@ -1026,6 +1116,9 @@ export function clientCopy(card: ReturnType<typeof shape>) {
         where: property.where,
         nearest: property.nearest,
         description: property.description,
+        rateIncludes: property.rateIncludes,
+        paymentTerms: property.paymentTerms,
+        cancellationTerms: property.cancellationTerms,
         ...clientMedia(property),
         lines: property.lines
           // Offered: a price, or the rate to be confirmed — then no price (2026-11-17).
@@ -1036,6 +1129,7 @@ export function clientCopy(card: ReturnType<typeof shape>) {
             name: line.name,
             sleeps: line.sleeps,
             sellingCents: line.rateTbc ? null : line.sellingCents,
+            liked: line.likedAt !== null,
             available: line.available,
             minNights: line.minNights,
           })),

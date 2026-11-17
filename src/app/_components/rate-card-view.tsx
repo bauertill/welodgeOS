@@ -16,6 +16,10 @@ export type ClientRateCard = {
   name: string;
   currency: string;
   intro: string | null;
+  /** Payment and cancellation terms (2026-11-17): the card's, or — per property — each property's own. */
+  termsPerProperty?: boolean;
+  paymentTerms?: string | null;
+  cancellationTerms?: string | null;
   /** Empty on a general card — for any client. */
   clientName: string | null;
   event: { name: string; startDate: Date; endDate: Date } | null;
@@ -28,6 +32,10 @@ export type ClientRateCard = {
     where: string | null;
     nearest: { name: string; km: number } | null;
     description: string | null;
+    /** What the rates include — "Breakfast, Wi-Fi, Taxes" (2026-11-17). */
+    rateIncludes?: string | null;
+    paymentTerms?: string | null;
+    cancellationTerms?: string | null;
     /** Its media (doc §3.10): the video to play, the Dropbox folder, the photos chosen for this card. */
     video: string | null;
     videoUrl: string | null;
@@ -35,7 +43,7 @@ export type ClientRateCard = {
     photos: (CardPhoto & { categoryId: string | null })[];
     /** Every photo and video picked for clients — "See all", opened on the card. */
     allMedia?: CardPhoto[];
-    lines: { id: string; categoryId: string | null; name: string; sleeps: number | null; /** Empty: the rate is to be confirmed (2026-11-17). */ sellingCents: number | null; available: number | null; minNights: number | null }[];
+    lines: { id: string; categoryId: string | null; name: string; sleeps: number | null; /** Empty: the rate is to be confirmed (2026-11-17). */ sellingCents: number | null; /** The client pressed "I like it!" (2026-11-17). */ liked?: boolean; available: number | null; minNights: number | null }[];
   }[];
 };
 
@@ -48,15 +56,21 @@ export function RateCardView({
   card,
   lineAction,
   lineExtra,
+  wide = false,
+  after,
 }: {
   card: ClientRateCard;
+  /** On the client's link: the card takes the width it is given, the map beside it (2026-11-17). */
+  wide?: boolean;
+  /** Inside the card, after the properties and terms: the client's "Request a proposal" (2026-11-17). Not printed. */
+  after?: React.ReactNode;
   /** On the client's link: a button per room — "I'm interested" (doc §4.11). Not printed. */
   lineAction?: (line: Line, property: Property) => React.ReactNode;
   /** Beneath a room, once chosen: how many, which nights, a note. */
   lineExtra?: (line: Line, property: Property) => React.ReactNode;
 }) {
   return (
-    <article className="rate-card mx-auto max-w-3xl rounded-2xl bg-white px-8 py-9 shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:max-w-none print:rounded-none print:px-0 print:py-0 print:shadow-none">
+    <article className={`rate-card mx-auto ${wide ? "max-w-none" : "max-w-3xl"} rounded-2xl bg-white px-8 py-9 shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:max-w-none print:rounded-none print:px-0 print:py-0 print:shadow-none`}>
       <header className="border-ink-200/70 flex items-start justify-between gap-6 border-b pb-6">
         <div>
           <p className="text-brand-700 text-[11px] font-medium tracking-[0.18em] uppercase">Rate card</p>
@@ -94,7 +108,7 @@ export function RateCardView({
 
       <div className="mt-6 space-y-5">
         {card.properties.map((property, index) => (
-          <section key={property.id} className="border-ink-200/70 break-inside-avoid rounded-xl border px-5 py-5">
+          <section key={property.id} id={`card-property-${property.id}`} className="border-ink-200/70 scroll-mt-6 break-inside-avoid rounded-xl border px-5 py-5">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h2 className="text-ink-900 flex items-center gap-2 text-lg font-semibold">
                 {/* Numbered as on the map below it (doc §4.11). */}
@@ -189,13 +203,49 @@ export function RateCardView({
                 })}
               </tbody>
             </table>
+            {property.rateIncludes && (
+              <p className="text-ink-700 mt-3 text-sm font-light">
+                <span className="text-ink-900 font-medium">Rates include:</span> {property.rateIncludes}
+              </p>
+            )}
+            {card.termsPerProperty && <Terms payment={property.paymentTerms ?? null} cancellation={property.cancellationTerms ?? null} />}
           </section>
         ))}
       </div>
+
+      {!card.termsPerProperty && (card.paymentTerms ?? card.cancellationTerms) && (
+        <section className="border-ink-200/70 mt-6 break-inside-avoid rounded-xl border px-5 py-4">
+          <h2 className="text-ink-900 text-[15px] font-semibold">Payment &amp; cancellation terms</h2>
+          <Terms payment={card.paymentTerms ?? null} cancellation={card.cancellationTerms ?? null} />
+        </section>
+      )}
+
+      {after && <div className="print:hidden">{after}</div>}
 
       <footer className="text-ink-500 border-ink-200/70 mt-8 border-t pt-4 text-xs font-light">
         Rates are per room per night, in {card.currency}, and subject to availability until confirmed. We Lodge · welodge.net
       </footer>
     </article>
+  );
+}
+
+/** Payment and cancellation terms as the client reads them (doc §4.11, 2026-11-17); nothing when neither is given. */
+function Terms({ payment, cancellation }: { payment: string | null; cancellation: string | null }) {
+  if (!payment?.trim() && !cancellation?.trim()) return null;
+  return (
+    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+      {payment?.trim() && (
+        <div>
+          <dt className="text-ink-500 text-[11px] font-medium tracking-wider uppercase">Payment terms</dt>
+          <dd className="text-ink-700 mt-0.5 font-light whitespace-pre-line">{payment.trim()}</dd>
+        </div>
+      )}
+      {cancellation?.trim() && (
+        <div>
+          <dt className="text-ink-500 text-[11px] font-medium tracking-wider uppercase">Cancellation terms</dt>
+          <dd className="text-ink-700 mt-0.5 font-light whitespace-pre-line">{cancellation.trim()}</dd>
+        </div>
+      )}
+    </dl>
   );
 }
