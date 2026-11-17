@@ -972,7 +972,7 @@ export const salesRouter = createTRPCRouter({
       const categories = await ctx.db.roomCategory.findMany({
         where: {
           OR: [
-            { unitCount: { gt: 0 }, property: { scoutingEntries: { some: { eventId: request.eventId, status: { notIn: ["REJECTED", "ORGANISER"] } } } } },
+            { unitCount: { gt: 0 }, property: { scoutingEntries: { some: { eventId: request.eventId, status: { not: "REJECTED" } } } } },
             { slots: { some: { id: { in: slots.map((slot) => slot.slotId) } } } },
           ],
         },

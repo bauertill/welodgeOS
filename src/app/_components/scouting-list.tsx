@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
-import type { CategoryContractStatus, PropertyType } from "generated/prisma";
+import type { CategoryContractStatus, PropertyType, ScoutingDetail, ScoutingStatus } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
 import { EventRateCards } from "~/app/_components/event-rate-cards";
@@ -11,18 +11,31 @@ import { Button, Select } from "~/app/_components/form";
 import type { MapLayer, MapPin, MapPlace } from "~/app/_components/scouting-map";
 import {
   EmptyState,
-  Pill,
   ScoutingStatusBadge,
   Table,
   Td,
   Th,
 } from "~/app/_components/ui";
-import { categoryContractStatusLabels, categoryContractStatusOrder, isHotelLike, measuredPlaces, nearestPlace, propertyTypeLabels, propertyTypeOrder, scoutingStatusHints, scoutingStatusLabels, scoutingStatusOrder, type SelectableScoutingStatus, totalUnits } from "~/lib/scouting";
+import {
+  categoryContractStatusLabels,
+  categoryContractStatusOrder,
+  isHotelLike,
+  measuredPlaces,
+  nearestPlace,
+  propertyTypeLabels,
+  propertyTypeOrder,
+  scoutingDetailLabels,
+  scoutingDetailOrder,
+  scoutingStatusColours,
+  scoutingStatusHints,
+  scoutingStatusLabels,
+  scoutingStatusOrder,
+  totalUnits,
+} from "~/lib/scouting";
 import { PendingLink } from "~/app/_components/pending-link";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RoomCategoryTable } from "~/app/_components/room-categories";
-import { Initials } from "~/app/_components/property-groups";
-import { stageInfo, stageOrder } from "~/lib/stages";
+import { contractedByContract } from "~/lib/stages";
 import { api } from "~/trpc/react";
 
 // Google Maps only exists in the browser, so the map never renders on the server.
@@ -51,8 +64,13 @@ export function ScoutingList({
 }) {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("list");
-  const [status, setStatus] = useState<SelectableScoutingStatus | "">("");
-  const [type, setType] = useState<PropertyType | "">("");
+  const [types, setTypes] = useState<PropertyType[]>([]);
+  /** Ticked rows, to move several into a group at once (doc §3.9). */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** The rows being dragged, and the group they hover over. */
+  const [dragging, setDragging] = useState<string[] | null>(null);
+  const [dropOn, setDropOn] = useState<ScoutingStatus | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [providerId, setProviderId] = useState("");
   const providers = api.provider.list.useQuery();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -60,14 +78,19 @@ export function ScoutingList({
 
   const entries = api.scouting.listForEvent.useQuery({
     eventId,
-    status: status || undefined,
-    type: type || undefined,
+    types,
     amenityIds: [],
     providerId: providerId || undefined,
     hasQuotations,
   });
 
   const setStatusMutation = api.scouting.setStatus.useMutation({
+    onSuccess: () => {
+      setSelected(new Set());
+      void entries.refetch();
+    },
+  });
+  const setDetailMutation = api.scouting.setDetail.useMutation({
     onSuccess: () => void entries.refetch(),
   });
   const removeMutation = api.scouting.remove.useMutation({
@@ -90,7 +113,33 @@ export function ScoutingList({
 
   const rows = entries.data ?? [];
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["stage-COULDNT_HELP", "stage-ORGANISER", "stage-RULED_OUT"]));
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["group-REJECTED"]));
+
+  /**
+   * Into a group, by drag or "Move to". One held at Contracted by a contract
+   * stays there — saying so, rather than moving and still showing it there.
+   */
+  const moveTo = (ids: string[], group: ScoutingStatus) => {
+    const chosen = rows.filter((entry) => ids.includes(entry.id));
+    const held = group === "CONTRACTED" ? [] : chosen.filter((entry) => contractedByContract(entry));
+    const moving = chosen.filter((entry) => !held.includes(entry) && entry.group !== group);
+    setNotice(
+      held.length
+        ? `${held.map((entry) => entry.property.name).join(", ")} ${held.length === 1 ? "stays" : "stay"} in Contracted — ${held.length === 1 ? "it has" : "they have"} a contract or contracted rooms on this event.`
+        : null,
+    );
+    if (moving.length) setStatusMutation.mutate({ ids: moving.map((entry) => entry.id), status: group });
+    else setSelected(new Set());
+  };
+  const toggleSelected = (ids: string[], on: boolean) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
   const toggleGroup = (key: string) =>
     setCollapsedGroups((current) => {
       const next = new Set(current);
@@ -140,7 +189,7 @@ export function ScoutingList({
           name: entry.property.name,
           latitude: entry.property.latitude!,
           longitude: entry.property.longitude!,
-          status: entry.status,
+          status: entry.group,
           stars: entry.property.stars,
           type: entry.property.type,
           subtitle: [
@@ -156,32 +205,46 @@ export function ScoutingList({
 
   const withoutCoordinates = rows.length - pins.length;
 
-  // One section's table, the same whichever way the board is grouped.
-  const renderTable = (sectionRows: typeof rows, colour: string) => (
-    <div className="border-l-4 pl-0" style={{ borderColor: colour }}>
-      <Table>
-        <thead>
-          <tr>
-            <Th>Property</Th>
-            <Th>Account manager</Th>
-            <Th>Location</Th>
-            <Th>Rooms</Th>
-            {venues.length > 0 && <Th>To venue</Th>}
-            <Th>Amenities</Th>
-            <Th>Video</Th>
-            <Th>Status</Th>
-            <Th>{""}</Th>
-          </tr>
-        </thead>
-        <tbody>{sectionRows.map((entry) => renderEntry(entry))}</tbody>
-      </Table>
-    </div>
-  );
+  const columns = venues.length > 0 ? 9 : 8;
+
+  // One group's table.
+  const renderTable = (sectionRows: typeof rows, colour: string) => {
+    const allTicked = sectionRows.length > 0 && sectionRows.every((entry) => selected.has(entry.id));
+    return (
+      <div className="border-l-4 pl-0" style={{ borderColor: colour }}>
+        <Table>
+          <thead>
+            <tr>
+              <Th className="w-8 pr-0">
+                <input
+                  type="checkbox"
+                  aria-label="Tick every property in this group"
+                  checked={allTicked}
+                  onChange={(e) => toggleSelected(sectionRows.map((entry) => entry.id), e.target.checked)}
+                  className="accent-brand-400 h-4 w-4 align-middle"
+                />
+              </Th>
+              <Th>Property</Th>
+              <Th>Status</Th>
+              <Th>Last update</Th>
+              <Th>Location</Th>
+              <Th>Type</Th>
+              <Th>Rooms</Th>
+              {venues.length > 0 && <Th>To venue</Th>}
+              <Th>{""}</Th>
+            </tr>
+          </thead>
+          <tbody>{sectionRows.map((entry) => renderEntry(entry))}</tbody>
+        </Table>
+      </div>
+    );
+  };
 
   const renderEntry = (entry: (typeof rows)[number]) => {
               const property = entry.property;
-              const units =
-                totalUnits(property.categories) || property.totalRooms || 0;
+              // The property's own total is the basis for judging capacity; the
+              // registered room types only stand in when no total is known.
+              const units = property.totalRooms || totalUnits(property.categories) || 0;
               const nearest = nearestPlace(
                 property.latitude !== null && property.longitude !== null
                   ? {
@@ -218,10 +281,33 @@ export function ScoutingList({
                   (status) =>
                     `${roomsByStatus.get(status)} rooms ${categoryContractStatusLabels[status].toLowerCase()}`,
                 );
+              const ticked = selected.has(entry.id);
 
               return (
                 <Fragment key={entry.id}>
-                <tr>
+                <tr
+                  draggable
+                  onDragStart={(e) => {
+                    const ids = ticked ? [...selected] : [entry.id];
+                    setDragging(ids);
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", ids.join(","));
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null);
+                    setDropOn(null);
+                  }}
+                  className={`${ticked ? "bg-brand-50/60" : ""} ${dragging?.includes(entry.id) ? "opacity-50" : ""}`}
+                >
+                  <td className="border-ink-200/40 w-8 cursor-grab border-b py-3.5 pr-0 pl-5 align-top" title="Drag to another group">
+                    <input
+                      type="checkbox"
+                      aria-label={`Tick ${property.name}`}
+                      checked={ticked}
+                      onChange={(e) => toggleSelected([entry.id], e.target.checked)}
+                      className="accent-brand-400 mt-0.5 h-4 w-4"
+                    />
+                  </td>
                   <Td>
                     <div className="flex min-w-52 items-start gap-1.5">
                       <button
@@ -265,21 +351,20 @@ export function ScoutingList({
                             Quick view
                           </button>
                         </span>
-                        <span className="text-ink-500 block text-xs font-light">
-                          {property.provider && (
-                            <>
+                        {(property.provider ?? property.videoUrl) && (
+                          <span className="text-ink-500 block text-xs font-light">
+                            {property.provider && (
                               <PendingLink
                                 href={`/providers/${property.provider.id}?back=${encodeURIComponent(`/events/${eventId}`)}`}
                                 className="hover:text-brand-700 hover:underline"
                               >
                                 {property.provider.name}
                               </PendingLink>
-                              {" · "}
-                            </>
-                          )}
-                          {propertyTypeLabels[property.type]}
-                          {property.stars ? ` · ${property.stars}-star` : ""}
-                        </span>
+                            )}
+                            {property.provider && property.videoUrl && " · "}
+                            {property.videoUrl && <VideoLink url={property.videoUrl} />}
+                          </span>
+                        )}
                         {entry.quotations.length > 0 && (
                           <PendingLink
                             href={`/properties/${property.id}?back=${encodeURIComponent(`/events/${eventId}`)}#quotations`}
@@ -301,16 +386,27 @@ export function ScoutingList({
                     </div>
                   </Td>
                   <Td>
-                    {entry.accountManager ? (
-                      <span className="flex items-center gap-2 whitespace-nowrap">
-                        <Initials person={entry.accountManager} />
-                        <span className="text-[13px] font-light">
-                          {(entry.accountManager.name ?? entry.accountManager.email ?? "").split(" ")[0]}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-ink-500">—</span>
-                    )}
+                    {/* Set by hand, or else what the system works out (doc §3.9). */}
+                    <Select
+                      value={entry.detail ?? ""}
+                      title={entry.detail ? "Set by hand — choose the first line to go back to what the system works out" : "Worked out from contact tasks and quotations — choose one to set it by hand"}
+                      onChange={(e) =>
+                        setDetailMutation.mutate({ id: entry.id, detail: (e.target.value || null) as ScoutingDetail | null })
+                      }
+                      className={`w-48 min-w-48 py-1.5 text-[13px] ${entry.detail ? "" : "text-ink-500"}`}
+                    >
+                      <option value="">{entry.autoDetail ? `${scoutingDetailLabels[entry.autoDetail]} · auto` : "—"}</option>
+                      {scoutingDetailOrder.map((option) => (
+                        <option key={option} value={option}>
+                          {scoutingDetailLabels[option]}
+                        </option>
+                      ))}
+                    </Select>
+                  </Td>
+                  <Td>
+                    <span className="whitespace-nowrap" title={entry.lastUpdate.toLocaleString("en-GB")}>
+                      {shortDate(entry.lastUpdate)}
+                    </span>
                   </Td>
                   <Td>
                     {/* An event is in one country, so the country is left out
@@ -320,6 +416,10 @@ export function ScoutingList({
                       <span className={property.area ? "text-ink-500 text-xs font-light" : ""}>{property.city}</span>
                     )}
                     {!property.area && !property.city && "—"}
+                  </Td>
+                  <Td>
+                    <span className="whitespace-nowrap">{propertyTypeLabels[property.type]}</span>
+                    {property.stars ? <span className="text-ink-500 block text-xs font-light whitespace-nowrap">{property.stars}-star</span> : null}
                   </Td>
                   <Td>{units || "—"}</Td>
                   {venues.length > 0 && (
@@ -341,39 +441,6 @@ export function ScoutingList({
                     </Td>
                   )}
                   <Td>
-                    <div className="flex max-w-56 flex-wrap gap-1">
-                      {property.amenities.slice(0, 3).map((amenity) => (
-                        <Pill key={amenity.id}>{amenity.label}</Pill>
-                      ))}
-                      {property.amenities.length > 3 && (
-                        <Pill>+{property.amenities.length - 3}</Pill>
-                      )}
-                      {property.amenities.length === 0 && "—"}
-                    </div>
-                  </Td>
-                  <Td>
-                    <VideoLink url={property.videoUrl} />
-                  </Td>
-                  <Td>
-                    <Select
-                      value={entry.status}
-                      title={scoutingStatusHints[entry.status]}
-                      onChange={(e) =>
-                        setStatusMutation.mutate({
-                          id: entry.id,
-                          status: e.target.value as SelectableScoutingStatus,
-                        })
-                      }
-                      className="w-36 min-w-36 py-1.5 text-[13px]"
-                    >
-                      {scoutingStatusOrder.map((option) => (
-                        <option key={option} value={option}>
-                          {scoutingStatusLabels[option]}
-                        </option>
-                      ))}
-                    </Select>
-                  </Td>
-                  <Td>
                     <Button
                       type="button"
                       variant="ghost"
@@ -388,7 +455,7 @@ export function ScoutingList({
 
                 {categoryOpen && hasCategories && (
                   <tr>
-                    <Td colSpan={venues.length > 0 ? 10 : 9}>
+                    <Td colSpan={columns}>
                       <RoomCategoryTable
                         scoutingEntryId={entry.id}
                         propertyId={property.id}
@@ -463,31 +530,7 @@ export function ScoutingList({
           ))}
         </div>
 
-        <Select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as SelectableScoutingStatus | "")}
-          className="w-auto"
-        >
-          <option value="">Any status</option>
-          {scoutingStatusOrder.map((option) => (
-            <option key={option} value={option}>
-              {scoutingStatusLabels[option]}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={type}
-          onChange={(e) => setType(e.target.value as PropertyType | "")}
-          className="w-auto"
-        >
-          <option value="">Every type</option>
-          {propertyTypeOrder.map((option) => (
-            <option key={option} value={option}>
-              {propertyTypeLabels[option]} only
-            </option>
-          ))}
-        </Select>
+        <TypePicker value={types} onChange={setTypes} />
 
         {(providers.data ?? []).length > 0 && (
           <Select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="w-auto" aria-label="Provider">
@@ -557,39 +600,96 @@ export function ScoutingList({
         </>
       ) : (
         <div className="space-y-6">
-          {stageOrder
-            .map((stage) => ({ stage, entries: rows.filter((entry) => entry.stage === stage) }))
-            .filter((section) => section.entries.length > 0)
-            .map(({ stage, entries: sectionRows }) => {
-              const key = `stage-${stage}`;
-              const collapsed = collapsedGroups.has(key);
-              const info = stageInfo[stage];
-              return (
-                <section key={key}>
-                  <div className="mb-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                    <button type="button" onClick={() => toggleGroup(key)} aria-expanded={!collapsed} className="flex min-w-0 items-center gap-2 text-left">
-                      <svg
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        aria-hidden="true"
-                        className={`h-4 w-4 shrink-0 self-center transition-transform ${collapsed ? "" : "rotate-90"}`}
-                        style={{ color: info.colour }}
-                      >
-                        <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <span className="truncate text-[17px] font-semibold" style={{ color: info.colour }}>
-                        {info.label}
-                      </span>
-                    </button>
-                    <span className="text-ink-500 text-[13px] font-light">
-                      {sectionRows.length} {sectionRows.length === 1 ? "property" : "properties"}
+          {selected.size > 0 && (
+            // Several at once: tick them, then choose the group (doc §3.9).
+            <div className="border-ink-200/60 sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border bg-white/95 px-4 py-2.5 shadow-sm backdrop-blur">
+              <span className="text-[13px] font-medium">
+                {selected.size} {selected.size === 1 ? "property" : "properties"} ticked
+              </span>
+              <span className="text-ink-500 text-[13px] font-light">Move to</span>
+              {scoutingStatusOrder.map((group) => (
+                <button
+                  key={group}
+                  type="button"
+                  disabled={setStatusMutation.isPending}
+                  onClick={() => moveTo([...selected], group)}
+                  className="rounded-full border px-3 py-1 text-[13px] font-light transition-colors hover:bg-ink-50"
+                  style={{ borderColor: scoutingStatusColours[group], color: scoutingStatusColours[group] }}
+                >
+                  {scoutingStatusLabels[group]}
+                </button>
+              ))}
+              <button type="button" onClick={() => setSelected(new Set())} className="text-ink-500 hover:text-ink-900 ml-auto text-[13px] font-light">
+                Clear
+              </button>
+            </div>
+          )}
+          {notice && (
+            <p className="flex items-start justify-between gap-3 rounded-lg bg-[#fff8e6] px-4 py-2.5 text-[13px] text-[#7a5200]">
+              {notice}
+              <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="text-lg leading-none">
+                ×
+              </button>
+            </p>
+          )}
+          {scoutingStatusOrder.map((group) => {
+            const sectionRows = rows.filter((entry) => entry.group === group);
+            const key = `group-${group}`;
+            const collapsed = collapsedGroups.has(key);
+            const colour = scoutingStatusColours[group];
+            const target = dropOn === group;
+            return (
+              // Each group is where rows are dropped, open or folded.
+              <section
+                key={key}
+                onDragOver={(e) => {
+                  if (!dragging) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (dropOn !== group) setDropOn(group);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropOn(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragging) moveTo(dragging, group);
+                  setDragging(null);
+                  setDropOn(null);
+                }}
+                className={`rounded-xl transition-colors ${target ? "bg-brand-50 ring-brand-400 ring-2 ring-offset-4" : ""}`}
+              >
+                <div className="mb-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                  <button type="button" onClick={() => toggleGroup(key)} aria-expanded={!collapsed} className="flex min-w-0 items-center gap-2 text-left">
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      aria-hidden="true"
+                      className={`h-4 w-4 shrink-0 self-center transition-transform ${collapsed ? "" : "rotate-90"}`}
+                      style={{ color: colour }}
+                    >
+                      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="truncate text-[17px] font-semibold" style={{ color: colour }}>
+                      {scoutingStatusLabels[group]}
                     </span>
-                    <span className="text-ink-500 text-xs font-light">{info.hint}</span>
-                  </div>
-                  {!collapsed && renderTable(sectionRows, info.colour)}
-                </section>
-              );
-            })}
+                  </button>
+                  <span className="text-ink-500 text-[13px] font-light">
+                    {sectionRows.length} {sectionRows.length === 1 ? "property" : "properties"}
+                  </span>
+                  <span className="text-ink-500 text-xs font-light">{scoutingStatusHints[group]}</span>
+                </div>
+                {!collapsed &&
+                  (sectionRows.length > 0 ? (
+                    renderTable(sectionRows, colour)
+                  ) : (
+                    <div className="border-ink-200 text-ink-500 rounded-xl border border-dashed px-5 py-4 text-[13px] font-light">
+                      None yet{dragging ? " — drop here" : " — drag a property here, or tick several and use Move to"}.
+                    </div>
+                  ))}
+              </section>
+            );
+          })}
         </div>
       )}
 
@@ -607,15 +707,14 @@ export function ScoutingList({
  * A property's video, which the team sends to clients often (doc §3.9): open
  * it, or copy its link to paste into an email.
  */
-function VideoLink({ url }: { url: string | null }) {
+function VideoLink({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
-  if (!url) return <span className="text-ink-500">—</span>;
   const href = /^https?:\/\//.test(url) ? url : `https://${url}`;
   return (
-    <span className="flex flex-col items-start gap-1 whitespace-nowrap">
-      <a href={href} target="_blank" rel="noreferrer" className="text-brand-700 text-[13px] font-light hover:underline">
-        Open ↗
-      </a>
+    <span className="whitespace-nowrap">
+      <a href={href} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+        Video ↗
+      </a>{" "}
       <button
         type="button"
         onClick={() => {
@@ -624,26 +723,86 @@ function VideoLink({ url }: { url: string | null }) {
             setTimeout(() => setCopied(false), 2000);
           });
         }}
-        className="text-ink-500 hover:text-brand-700 text-[11px] font-light"
+        className="hover:text-brand-700"
       >
-        {copied ? "Copied" : "Copy link"}
+        {copied ? "copied" : "copy link"}
       </button>
     </span>
   );
 }
 
-/** Kept beside the list so status wording lives in one file. */
+/** "17 Nov", with the year only when it is not this year's. */
+function shortDate(date: Date) {
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+/** Any of several types at once (doc §3.9); none ticked means every type. */
+function TypePicker({ value, onChange }: { value: PropertyType[]; onChange: (types: PropertyType[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const label =
+    value.length === 0 ? "Every type" : value.length <= 2 ? value.map((type) => propertyTypeLabels[type]).join(", ") : `${value.length} types`;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        className={`rounded-full border px-4 py-2 text-[13px] font-light transition-colors ${
+          value.length ? "border-brand-400 bg-brand-50 text-brand-800" : "border-ink-200 text-ink-700 bg-white"
+        }`}
+      >
+        {label} ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="border-ink-200/60 absolute left-0 z-40 mt-1 w-60 rounded-xl border bg-white p-2 shadow-lg">
+            {propertyTypeOrder.map((type) => {
+              const checked = value.includes(type);
+              return (
+                <label key={type} className="hover:bg-ink-50 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-light">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => onChange(checked ? value.filter((entry) => entry !== type) : [...value, type])}
+                    className="accent-brand-400 h-4 w-4"
+                  />
+                  {propertyTypeLabels[type]}
+                </label>
+              );
+            })}
+            {value.length > 0 && (
+              <button type="button" onClick={() => onChange([])} className="text-brand-700 mt-1 w-full px-2 py-1 text-left text-[13px] font-light hover:underline">
+                Every type
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Kept beside the list so the wording lives in one file: the groups, then the statuses beneath them. */
 export function ScoutingStatusKey() {
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {scoutingStatusOrder.map((status) => (
-        <div key={status} className="flex items-start gap-2">
-          <ScoutingStatusBadge status={status} />
-          <span className="text-ink-500 text-xs font-light">
-            {scoutingStatusHints[status]}
-          </span>
-        </div>
-      ))}
+    <div className="space-y-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {scoutingStatusOrder.map((status) => (
+          <div key={status} className="flex items-start gap-2">
+            <ScoutingStatusBadge status={status} />
+            <span className="text-ink-500 text-xs font-light">{scoutingStatusHints[status]}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-ink-500 text-xs font-light">
+        <span className="text-ink-900 font-medium">Status</span> is the detail beneath the group:{" "}
+        {scoutingDetailOrder.map((detail) => scoutingDetailLabels[detail]).join(", ")}. Marked{" "}
+        <em>auto</em>, it is worked out from the hotel&apos;s contact task and quotations — <em>To be contacted</em>,{" "}
+        <em>Quote requested</em>, <em>Quote received</em>, <em>Quote expired</em> (every quote past its <em>valid until</em>),{" "}
+        <em>No availability</em> or <em>Couldn&apos;t help</em>. Choose one by hand and it stays until changed.
+      </p>
     </div>
   );
 }

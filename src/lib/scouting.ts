@@ -5,6 +5,7 @@ import type {
   PlaceCategory,
   PropertyType,
   RateInclusion,
+  ScoutingDetail,
   ScoutingStatus,
 } from "generated/prisma";
 
@@ -14,45 +15,69 @@ import type {
  * consistent with docs/product-scope.md.
  */
 
-export const scoutingStatusLabels: Record<ScoutingStatus, string> = {
-  PROSPECT: "Prospect",
-  CONTACTED: "Reached out",
-  SHORTLISTED: "Shortlisted",
-  REJECTED: "Rejected",
-  CONTRACTED: "Contracted",
-  ORGANISER: "Organising committee",
-};
-
-/** What each status actually means, shown as help text rather than assumed. */
-export const scoutingStatusHints: Record<ScoutingStatus, string> = {
-  PROSPECT: "On the long list. Nobody has spoken to them yet.",
-  CONTACTED: "We have reached out and are waiting to hear back.",
-  SHORTLISTED: "A serious candidate — worth taking to a client.",
-  REJECTED: "Ruled out for this event. Kept so we do not re-scout it.",
-  CONTRACTED: "Moved through to acquisition. Phase 2 owns it from here.",
-  ORGANISER: "Contracted by the event's organising committee — an official hotel, not available to us.",
-};
-
 /**
- * `CONTRACTED` is deliberately excluded — a property has no single contract
- * status of its own any more, that fact lives per room category on
- * `CategoryContract` (doc §3.5, §3.6). The label and hint above stay defined
- * for `CONTRACTED` regardless, so any historical row still reads correctly
- * wherever it is displayed.
+ * The groups of an event's list (doc §3.9, the team 2026-11-17), set by hand.
+ * Group headings and the labels anywhere else use these same words.
  */
-export type SelectableScoutingStatus = Exclude<ScoutingStatus, "CONTRACTED">;
+export const scoutingStatusLabels: Record<ScoutingStatus, string> = {
+  CONTRACTED: "Contracted",
+  SHORTLISTED: "Shortlisted",
+  CONTACTED: "Reached out",
+  PROSPECT: "Prospect",
+  REJECTED: "Ruled out",
+};
 
-/** Selectable from the UI, in funnel order. */
-export const scoutingStatusOrder: SelectableScoutingStatus[] = [
-  "PROSPECT",
-  "CONTACTED",
-  "SHORTLISTED",
-  "REJECTED",
-  "ORGANISER",
-];
+/** What each group means, shown as help text rather than assumed. */
+export const scoutingStatusHints: Record<ScoutingStatus, string> = {
+  CONTRACTED: "Rooms contracted, or about to be. A supplier contract or a contracted room type puts it here on its own.",
+  SHORTLISTED: "A serious candidate — worth taking to a client.",
+  CONTACTED: "We have reached out and are waiting to hear back.",
+  PROSPECT: "On the long list. Nobody has spoken to them yet.",
+  REJECTED: "Not for us on this event — kept so we do not scout it again.",
+};
+
+/** The board's order, top to bottom. */
+export const scoutingStatusOrder: ScoutingStatus[] = ["CONTRACTED", "SHORTLISTED", "CONTACTED", "PROSPECT", "REJECTED"];
+
+export const scoutingStatusColours: Record<ScoutingStatus, string> = {
+  CONTRACTED: "#0a7a47",
+  SHORTLISTED: "#b07800",
+  CONTACTED: "#1d5fa8",
+  PROSPECT: "#6b7280",
+  REJECTED: "#9a9a9a",
+};
 
 /** Out of the running for us on this event: kept on the board, never in stock or offers. */
-export const unavailableStatuses: ScoutingStatus[] = ["REJECTED", "ORGANISER"];
+export const unavailableStatuses: ScoutingStatus[] = ["REJECTED"];
+
+/**
+ * The detail beneath the group (doc §3.9). The first ones the system also works
+ * out on its own; the rest only a person knows.
+ */
+export type ScoutingDetailShown = ScoutingDetail | "TO_CONTACT" | "COULDNT_HELP";
+
+export const scoutingDetailLabels: Record<ScoutingDetailShown, string> = {
+  TO_CONTACT: "To be contacted",
+  QUOTE_REQUESTED: "Quote requested",
+  QUOTE_RECEIVED: "Quote received",
+  QUOTE_EXPIRED: "Quote expired",
+  COULDNT_HELP: "Couldn't help",
+  RATE_TBC: "Rate TBC",
+  NO_AVAILABILITY: "No availability",
+  OFFICIAL_HOTEL: "Official hotel",
+  UNDER_CONSTRUCTION: "Under construction",
+};
+
+/** Offered in the status menu, in this order. */
+export const scoutingDetailOrder: ScoutingDetail[] = [
+  "QUOTE_REQUESTED",
+  "QUOTE_RECEIVED",
+  "QUOTE_EXPIRED",
+  "RATE_TBC",
+  "NO_AVAILABILITY",
+  "OFFICIAL_HOTEL",
+  "UNDER_CONSTRUCTION",
+];
 
 /** Nothing started is left blank on screen, not named (owner, 2026-10-02). */
 export const categoryContractStatusLabels: Record<CategoryContractStatus, string> = {
@@ -121,7 +146,12 @@ export function describeRateIncludes(
 
 export const propertyTypeLabels: Record<PropertyType, string> = {
   HOTEL: "Hotel",
-  APARTMENT: "Apartment",
+  APARTMENT: "Apartment (to sort)",
+  FURNISHED_APARTMENT: "Furnished apartment",
+  UNFURNISHED_APARTMENT: "Unfurnished apartment",
+  GUEST_HOUSE: "Guest house",
+  INDIVIDUAL_HOME: "Individual home",
+  RESORT_LODGE: "Resort / lodge",
   APARTHOTEL: "Aparthotel",
   MOTEL: "Motel",
   HOSTEL: "Hostel",
@@ -134,14 +164,20 @@ export const propertyTypeLabels: Record<PropertyType, string> = {
 /** In the order offered in a form. */
 export const propertyTypeOrder: PropertyType[] = [
   "HOTEL",
-  "APARTMENT",
   "APARTHOTEL",
+  "FURNISHED_APARTMENT",
+  "UNFURNISHED_APARTMENT",
+  "GUEST_HOUSE",
+  "INDIVIDUAL_HOME",
+  "RESORT_LODGE",
   "MOTEL",
   "EXTENDED_STAY",
   "STUDENT_HOUSING",
   "HOSTEL",
   "BED_AND_BREAKFAST",
   "OTHER",
+  // Last: only for the ones not sorted yet.
+  "APARTMENT",
 ];
 
 /**
@@ -152,7 +188,14 @@ export const propertyTypeOrder: PropertyType[] = [
  */
 export type PropertyKind = "hotel" | "apartment" | "mixed";
 export function propertyKind(type: PropertyType): PropertyKind {
-  if (type === "APARTMENT" || type === "STUDENT_HOUSING") return "apartment";
+  if (
+    type === "APARTMENT" ||
+    type === "FURNISHED_APARTMENT" ||
+    type === "UNFURNISHED_APARTMENT" ||
+    type === "INDIVIDUAL_HOME" ||
+    type === "STUDENT_HOUSING"
+  )
+    return "apartment";
   if (type === "APARTHOTEL" || type === "EXTENDED_STAY") return "mixed";
   return "hotel";
 }

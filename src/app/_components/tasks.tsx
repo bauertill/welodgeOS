@@ -1373,7 +1373,7 @@ function EmailTheHotel({
   useEffect(() => setOrigin(window.location.origin), []);
   const make = api.property.makeContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
   const off = api.property.switchOffContractingLink.useMutation({ onSuccess: () => void utils.property.invalidate() });
-  // Sending it starts the task: it moves to In progress, the hotel to Pending quote.
+  // Sending it starts the task: it moves to In progress, the hotel to Reached out (Quote requested).
   const emailed = api.task.requestEmailed.useMutation({
     onSuccess: (result) => {
       if (!result.moved) return;

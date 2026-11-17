@@ -1,10 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { Cleaning, GroupColour, PropertyType, RateInclusion } from "generated/prisma";
+import { Cleaning, GroupColour, PropertyType, RateInclusion, ScoutingDetail } from "generated/prisma";
 import { z } from "zod";
 
-import { stageOf } from "~/lib/stages";
+import { autoDetailOf, groupOf } from "~/lib/stages";
 
-import { categoryContractStatusLabels, distanceKm, scoutingStatusLabels } from "~/lib/scouting";
+import { categoryContractStatusLabels, distanceKm, scoutingDetailLabels, scoutingStatusLabels } from "~/lib/scouting";
 import { reverseGeocode } from "~/server/places";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
@@ -12,14 +12,13 @@ import { findNearby, knownAlready } from "~/server/discover";
 import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
 import { deliverImmediate } from "~/server/notify";
 
-// `CONTRACTED` is deliberately excluded — a property has no single contract
-// status of its own any more; that lives per room category (doc §3.5, §3.6).
+// The groups of an event's list, set by hand (doc §3.9, the team 2026-11-17).
 const SCOUTING_STATUSES = [
   "PROSPECT",
   "CONTACTED",
   "SHORTLISTED",
   "REJECTED",
-  "ORGANISER",
+  "CONTRACTED",
 ] as const;
 
 const CATEGORY_CONTRACT_STATUSES = [
@@ -253,7 +252,8 @@ export const scoutingRouter = createTRPCRouter({
       z.object({
         eventId: z.string(),
         status: z.enum(SCOUTING_STATUSES).optional(),
-        type: z.nativeEnum(PropertyType).optional(),
+        /** Any of these types; none chosen means every type (doc §3.9). */
+        types: z.array(z.nativeEnum(PropertyType)).default([]),
         amenityIds: z.array(z.string()).default([]),
         /** One chain's properties on this event (doc §3.9). */
         providerId: z.string().optional(),
@@ -268,7 +268,7 @@ export const scoutingRouter = createTRPCRouter({
           status: input.status,
           ...(input.hasQuotations && { quotations: { some: {} } }),
           property: {
-            type: input.type,
+            ...(input.types.length ? { type: { in: input.types } } : {}),
             providerId: input.providerId,
             // Every selected amenity must be present, not just one of them —
             // the filter narrows the list rather than widening it.
@@ -295,25 +295,36 @@ export const scoutingRouter = createTRPCRouter({
           // Absent for a category means "in negotiation" — see
           // `categoryContractStatusLabels` in ~/lib/scouting (doc §3.5).
           categoryContracts: true,
-          quotations: { select: { id: true, status: true } },
+          quotations: { select: { id: true, status: true, validUntil: true, createdAt: true } },
         },
       });
       // Where each stands, worked out from its contact tasks, quotations and contracts (doc §3.9).
       const propertyIds = entries.map((entry) => entry.propertyId);
-      const [tasks, contracts] = await Promise.all([
+      const [tasks, contracts, lastUpdates] = await Promise.all([
         ctx.db.task.findMany({
           where: { eventId: input.eventId, propertyId: { in: propertyIds }, type: { name: "Hotel contact" } },
           orderBy: { createdAt: "desc" },
           select: { id: true, propertyId: true, status: true, outcome: true },
         }),
         ctx.db.contract.findMany({ where: { eventId: input.eventId, party: "SUPPLIER", propertyId: { in: propertyIds } }, select: { propertyId: true } }),
+        // The newest update written on each property, for "Last update".
+        ctx.db.update.groupBy({ by: ["propertyId"], where: { propertyId: { in: propertyIds } }, _max: { createdAt: true } }),
       ]);
+      const lastUpdateOf = new Map(lastUpdates.map((row) => [row.propertyId, row._max.createdAt]));
       const contracted = new Set(contracts.map((contract) => contract.propertyId));
       return entries.map((entry) => {
         const contactTasks = tasks.filter((task) => task.propertyId === entry.propertyId);
+        const hasSupplierContract = contracted.has(entry.propertyId);
+        // The latest of: an update on the property, a quotation in, a change on this event's entry.
+        const lastUpdate = [lastUpdateOf.get(entry.propertyId), entry.updatedAt, ...entry.quotations.map((quotation) => quotation.createdAt)]
+          .filter((date): date is Date => Boolean(date))
+          .reduce((latest, date) => (date > latest ? date : latest));
         return {
           ...entry,
-          stage: stageOf({ ...entry, contactTasks, hasSupplierContract: contracted.has(entry.propertyId) }),
+          hasSupplierContract,
+          group: groupOf({ ...entry, hasSupplierContract }),
+          autoDetail: autoDetailOf({ ...entry, contactTasks }),
+          lastUpdate,
           contactTaskId: contactTasks.find((task) => task.status !== "DONE")?.id ?? contactTasks[0]?.id ?? null,
         };
       });
@@ -459,23 +470,39 @@ export const scoutingRouter = createTRPCRouter({
       }),
     ),
 
+  /** Move one property, or several at once, into a group (doc §3.9). */
   setStatus: protectedProcedure
-    .input(z.object({ id: z.string(), status: z.enum(SCOUTING_STATUSES) }))
+    .input(z.object({ ids: z.array(z.string()).min(1).max(500), status: z.enum(SCOUTING_STATUSES) }))
     .mutation(({ ctx, input }) =>
       ctx.db.$transaction(async (tx) => {
-        const before = await tx.scoutingEntry.findUniqueOrThrow({
-          where: { id: input.id },
-        });
-        const updated = await tx.scoutingEntry.update({
-          where: { id: input.id },
-          data: { status: input.status },
-        });
-        if (before.status !== input.status) {
+        const before = await tx.scoutingEntry.findMany({ where: { id: { in: input.ids } }, select: { id: true, status: true } });
+        await tx.scoutingEntry.updateMany({ where: { id: { in: input.ids } }, data: { status: input.status } });
+        for (const entry of before) {
+          if (entry.status === input.status) continue;
+          await logAudit(tx, {
+            actorId: ctx.session.user.id,
+            entity: "ScoutingEntry",
+            entityId: entry.id,
+            summary: `Group: ${scoutingStatusLabels[entry.status]} → ${scoutingStatusLabels[input.status]}`,
+          });
+        }
+        return { moved: before.length };
+      }),
+    ),
+
+  /** The status beneath the group, set by hand — or back to what the system works out, with null. */
+  setDetail: protectedProcedure
+    .input(z.object({ id: z.string(), detail: z.nativeEnum(ScoutingDetail).nullable() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const before = await tx.scoutingEntry.findUniqueOrThrow({ where: { id: input.id }, select: { detail: true } });
+        const updated = await tx.scoutingEntry.update({ where: { id: input.id }, data: { detail: input.detail } });
+        if (before.detail !== input.detail) {
           await logAudit(tx, {
             actorId: ctx.session.user.id,
             entity: "ScoutingEntry",
             entityId: input.id,
-            summary: `Status: ${scoutingStatusLabels[before.status]} → ${scoutingStatusLabels[input.status]}`,
+            summary: `Status: ${before.detail ? scoutingDetailLabels[before.detail] : "worked out"} → ${input.detail ? scoutingDetailLabels[input.detail] : "worked out"}`,
           });
         }
         return updated;

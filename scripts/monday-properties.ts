@@ -116,7 +116,7 @@ const TYPE: Record<string, PropertyType> = {
 };
 
 /** monday's hand-set status → the entry's status; the board's stage then follows from tasks and quotes. */
-function statusOf(label: string | null): { status: ScoutingStatus; contactTask: boolean; contacted: boolean } {
+function statusOf(label: string | null): { status: ScoutingStatus; contactTask: boolean; contacted: boolean; detail?: "OFFICIAL_HOTEL" } {
   switch ((label ?? "").toLowerCase()) {
     case "to contact":
       return { status: "PROSPECT", contactTask: true, contacted: false };
@@ -131,7 +131,8 @@ function statusOf(label: string | null): { status: ScoutingStatus; contactTask: 
     case "block not possible":
       return { status: "REJECTED", contactTask: false, contacted: false };
     case "oc contracted":
-      return { status: "ORGANISER", contactTask: false, contacted: false };
+      // An official hotel: ruled out for us, with that as its status (doc §3.9, 2026-11-17).
+      return { status: "REJECTED", contactTask: false, contacted: false, detail: "OFFICIAL_HOTEL" };
     case "contracted":
       return { status: "CONTRACTED", contactTask: false, contacted: true };
     default:
@@ -611,7 +612,7 @@ async function main() {
         p.name,
         p.existingId ? `yes — ${existing.find((e) => e.id === p.existingId)?.name}` : "no — new",
         p.statusLabel ?? "",
-        p.plan.contactTask ? "To be contacted (task made)" : p.plan.status === "CONTACTED" ? (p.quote ? "Quote received" : "Pending quote") : p.plan.status === "REJECTED" ? "Ruled out" : p.plan.status === "ORGANISER" ? "Organising committee" : p.plan.status === "CONTRACTED" ? "Contracted" : p.quote ? "Quote received" : "Prospect",
+        p.plan.contactTask ? "To be contacted (task made)" : p.plan.status === "CONTACTED" ? (p.quote ? "Quote received" : "Pending quote") : p.plan.detail === "OFFICIAL_HOTEL" ? "Ruled out — official hotel" : p.plan.status === "REJECTED" ? "Ruled out" : p.plan.status === "CONTRACTED" ? "Contracted" : p.quote ? "Quote received" : "Prospect",
         p.group,
         String(p.property.type).toLowerCase().replace(/_/g, " "),
         (p.property.stars as number | null) ?? "",
@@ -739,6 +740,7 @@ async function apply(db: PrismaClient, plans: PropertyPlan[], eventId: string) {
                   eventId,
                   propertyId: property.id,
                   status: p.plan.status,
+                  detail: p.plan.detail ?? null,
                   groupId: groups.get(norm(p.group)) ?? null,
                   accountManagerId: managerId,
                   addedById: importer.id,
