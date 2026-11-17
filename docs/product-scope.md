@@ -1180,6 +1180,8 @@ history.
 **Filters**: the **type** filter takes several types at once (*Every type* when none is
 ticked), beside *Every provider* and *With quotations*. To narrow down to the options worth
 comparing (the team, 2026-11-17) there are also:
+- **Search** — free text (the owner, 2026-11-17): every word typed must be found in the
+  property's name, its chain, area, town or address, capitals and accents ignored.
 - **Area** — the areas (or towns) of the properties on this list.
 - **Room type** — only the few types a client asks for (§4.11): *Single, Double, Twin, Triple,
   Suite* for hotel rooms, *Studio, 1–4 bedrooms* for apartments (the owner, 2026-11-17 — every
