@@ -1981,6 +1981,14 @@ model RateCard {
   intro             String?
   /// The unguessable part of the client's link; empty means not shared, or switched off.
   shareToken        String?       @unique
+  /// Whether the link ends with "Request a proposal" — the rooms, dates and a note the client sends us
+  /// (doc §4.11, 2026-11-17). Off, the link is to look at only (and "I like it!").
+  clientCanAnswer   Boolean       @default(true)
+  /// Payment and cancellation terms for the client (doc §4.11, 2026-11-17): one set for the whole card,
+  /// or — when the sales person chooses — each property its own (on RateCardProperty).
+  termsPerProperty  Boolean       @default(false)
+  paymentTerms      String?
+  cancellationTerms String?
   createdBy         User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById       String?
   createdAt         DateTime      @default(now())
@@ -2002,6 +2010,12 @@ model RateCardProperty {
   position    Int      @default(0)
   /// A short description for the client — written by the team, with help if wanted.
   description String?
+  /// What the rates at this property include, as the client reads it — "Breakfast, Wi-Fi, Taxes"
+  /// (doc §4.11, 2026-11-17). Filled from the event's agreed terms or quote when added; changed by hand.
+  rateIncludes String?
+  /// This property's own terms, used when the card has terms per property (doc §4.11, 2026-11-17).
+  paymentTerms      String?
+  cancellationTerms String?
 
   lines  RateCardLine[]
   photos RateCardPhoto[]
@@ -2025,6 +2039,9 @@ model RateCardLine {
   sellingCents       Int?
   /// Offered with the rate to be confirmed: the client sees "Rate to be confirmed" instead of a price (doc §4.11, 2026-11-17).
   rateTbc            Boolean                @default(false)
+  /// When the client pressed "I like it!" on this room from the link — nothing more is asked of them;
+  /// it highlights the room for us (doc §4.11, 2026-11-17). Empty: not liked, or unliked.
+  likedAt            DateTime?
   /// How many of these units we can offer on this card — asked of us before a rate is offered.
   available          Int?
   /// The shortest stay, in nights, we accept for these units on this card.

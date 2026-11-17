@@ -8,52 +8,85 @@ import { Popup } from "~/app/_components/popup";
 import { PrintButton } from "~/app/_components/print-button";
 import { RateCardMap } from "~/app/_components/rate-card-map";
 import { RateCardView } from "~/app/_components/rate-card-view";
+import { env } from "~/env";
 import { dayKey, nightsBetween, parseDay } from "~/lib/dates";
-import { formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
+import { formatMoney, formatMomentInWords } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Card = RouterOutputs["rateCard"]["shared"];
 type Line = Card["properties"][number]["lines"][number];
-type Period = { rooms: string; checkIn: string; checkOut: string; note: string };
+/** One period the client asks for: a room at a property, how many, which nights. */
+type Row = { key: number; lineId: string; rooms: string; checkIn: string; checkOut: string };
 
 /**
- * A rate card on the client's link (doc §4.11), answerable: "I'm interested"
- * on a room opens how many, which nights and a note — as many periods as
- * they need; "Our dates have changed"
- * — a small button of its own — opens a popup for the new dates; Send to We
- * Lodge — beside the rooms chosen and at the foot — opens a popup with what
- * they chose, saying plainly it is a request and not a booking. Both can be
- * sent again.
+ * A rate card on the client's link (doc §4.11, reworked 2026-11-17). Full
+ * width with the map beside it. On each room, **I like it!** — nothing more is
+ * asked; it highlights the room for us. At the end, unless the card is to look
+ * at only, **Request a proposal**: the rooms they want, each with dates and how
+ * many, as many periods as they need, a note, and Send. A request, not a
+ * booking: we come back with a proposal, its payment and cancellation terms
+ * set by the sales manager.
  */
 export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   const first = card.asked.find((line) => line.checkIn && line.checkOut);
   const defaultIn = first?.checkIn ? dayKey(first.checkIn) : card.event ? dayKey(card.event.startDate) : "";
   const defaultOut = first?.checkOut ? dayKey(first.checkOut) : card.event ? dayKey(card.event.endDate) : "";
   const last = card.lastAnswer;
+  const canAnswer = card.canAnswer;
+  const hasMap = Boolean(env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) && card.properties.some((property) => property.latitude !== null && property.longitude !== null);
 
-  const [picks, setPicks] = useState<Record<string, Period[]>>(() => {
-    const start: Record<string, Period[]> = {};
-    for (const item of last?.items ?? []) {
-      if (!item.lineId) continue;
-      (start[item.lineId] ??= []).push({
+  const lines = new Map(card.properties.flatMap((property) => property.lines.map((line) => [line.id, { line, property }] as const)));
+
+  // "I like it!" — kept on our side straight away, no name asked (2026-11-17).
+  const [likes, setLikes] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(card.properties.flatMap((property) => property.lines.map((line) => [line.id, Boolean(line.liked)]))),
+  );
+  const like = api.rateCard.like.useMutation();
+  const toggleLike = (lineId: string) => {
+    const next = !likes[lineId];
+    setLikes((current) => ({ ...current, [lineId]: next }));
+    like.mutate({ token, lineId, liked: next }, { onError: () => setLikes((current) => ({ ...current, [lineId]: !next })) });
+  };
+
+  // The proposal they ask for: their last request filled in, else the rooms they liked, else one empty period.
+  const [nextKey, setNextKey] = useState(1000);
+  const newRow = (lineId: string, key: number): Row => {
+    const found = lines.get(lineId)?.line;
+    const asked = first?.rooms ?? 1;
+    return { key, lineId, rooms: lineId ? String(found?.available ? Math.min(asked, found.available) : asked) : "", checkIn: defaultIn, checkOut: defaultOut };
+  };
+  const [rows, setRows] = useState<Row[]>(() => {
+    const fromLast = (last?.items ?? [])
+      .filter((item) => item.lineId && lines.has(item.lineId))
+      .map((item, index) => ({
+        key: index,
+        lineId: item.lineId!,
         rooms: String(item.rooms),
         checkIn: item.checkIn ? dayKey(item.checkIn) : defaultIn,
         checkOut: item.checkOut ? dayKey(item.checkOut) : defaultOut,
-        note: item.note ?? "",
-      });
-    }
-    return start;
+      }));
+    if (fromLast.length) return fromLast;
+    const liked = card.properties.flatMap((property) => property.lines.filter((line) => line.liked)).map((line, index) => newRow(line.id, index));
+    return liked.length ? liked : [newRow("", 0)];
   });
+  const setRow = (key: number, change: Partial<Row>) => setRows((current) => current.map((row) => (row.key === key ? { ...row, ...change } : row)));
+  const addRow = () => {
+    // A new period starts from the room of the last one: the same room at other dates is the usual case.
+    setRows((current) => [...current, { ...newRow(current.at(-1)?.lineId ?? "", nextKey) }]);
+    setNextKey((key) => key + 1);
+  };
+  const removeRow = (key: number) => setRows((current) => (current.length > 1 ? current.filter((row) => row.key !== key) : [newRow("", nextKey)]));
+
+  const [note, setNote] = useState("");
   const [name, setName] = useState(last?.name ?? "");
   const [email, setEmail] = useState(last?.email ?? "");
-  const [note, setNote] = useState("");
-  const [newDates, setNewDates] = useState({ checkIn: defaultIn, checkOut: defaultOut, note: "" });
-  /** What was last sent from this page: the rooms chosen, or new dates. */
-  const [sent, setSent] = useState<"rooms" | "dates" | null>(null);
-  /** The popup open: sending the rooms chosen, new dates, or their contracting details. */
-  const [sending, setSending] = useState<"rooms" | "dates" | "contracting" | null>(null);
-  /** The contracting popup opened straight after sending the rooms. */
+  const [company, setCompany] = useState("");
+  const [sent, setSent] = useState(false);
+  /** The contracting popup: straight after sending, or from the reminder. */
+  const [contractingOpen, setContractingOpen] = useState(false);
   const [justSent, setJustSent] = useState(false);
+  const [detailsSent, setDetailsSent] = useState(false);
+
   // On a general card, this browser's own answer — what its contracting details and a resend go onto (doc §4.11).
   const answerKey = `rate-card-answer:${token}`;
   const [responseId, setResponseId] = useState<string | null>(() => {
@@ -64,22 +97,18 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
       return null;
     }
   });
-  const [company, setCompany] = useState("");
-  // A general card asks who is answering, until their first answer is in.
   const askCompany = Boolean(card.general) && !responseId;
-  const contracting = api.rateCard.contracting.useQuery({ token, responseId }, { retry: false, refetchOnWindowFocus: false });
-  const [detailsSent, setDetailsSent] = useState(false);
+  const contracting = api.rateCard.contracting.useQuery({ token, responseId }, { retry: false, refetchOnWindowFocus: false, enabled: canAnswer });
   const sendDetails = api.rateCard.submitContracting.useMutation({
     onSuccess: () => {
       setDetailsSent(true);
-      setSending(null);
+      setContractingOpen(false);
       void contracting.refetch();
-      window.scrollTo({ top: 0, behavior: "smooth" });
     },
   });
   const answer = api.rateCard.answer.useMutation({
     onSuccess: (result) => {
-      setSent(sending === "dates" ? "dates" : "rooms");
+      setSent(true);
       if (card.general) {
         setResponseId(result.id);
         try {
@@ -88,364 +117,229 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
           // A private window: they can still send their details now.
         }
       }
-      // The rooms are in: now the details the agreement needs (doc §4.11, 2026-10-14).
-      setJustSent(sending === "rooms");
-      setSending(sending === "rooms" ? "contracting" : null);
       setNote("");
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // The request is in: now the details the agreement needs (doc §4.11, 2026-10-14) — asked, not required.
+      setJustSent(true);
+      setContractingOpen(true);
     },
   });
 
-  const lines = new Map(card.properties.flatMap((property) => property.lines.map((line) => [line.id, { line, property }] as const)));
-  const chosen = Object.entries(picks);
-  const newPeriod = (line: Line): Period => {
-    const asked = first?.rooms ?? 1;
-    return { rooms: String(line.available ? Math.min(asked, line.available) : asked), checkIn: defaultIn, checkOut: defaultOut, note: "" };
-  };
-  const setPeriod = (lineId: string, index: number, change: Partial<Period>) =>
-    setPicks((current) => ({ ...current, [lineId]: current[lineId]!.map((period, i) => (i === index ? { ...period, ...change } : period)) }));
-  const addPeriod = (lineId: string) => setPicks((current) => ({ ...current, [lineId]: [...current[lineId]!, newPeriod(lines.get(lineId)!.line)] }));
-  const removePeriod = (lineId: string, index: number) =>
-    setPicks((current) => {
-      const left = current[lineId]!.filter((_, i) => i !== index);
-      const next = { ...current };
-      if (left.length) next[lineId] = left;
-      else delete next[lineId];
-      return next;
-    });
-  const nights = (pick: Period) => (pick.checkIn && pick.checkOut && pick.checkOut > pick.checkIn ? nightsBetween(parseDay(pick.checkIn), parseDay(pick.checkOut)) : null);
+  const nights = (row: Row) => (row.checkIn && row.checkOut && row.checkOut > row.checkIn ? nightsBetween(parseDay(row.checkIn), parseDay(row.checkOut)) : null);
   /** What stands in the way of a period: more rooms than there are, or a stay under the minimum. */
-  const problem = (line: Line, pick: Period) => {
-    const n = nights(pick);
-    if (line.available !== null && Number(pick.rooms) > line.available) return `${line.available} available at most`;
+  const problem = (row: Row) => {
+    const line = lines.get(row.lineId)?.line;
+    if (!line) return null;
+    const n = nights(row);
+    if (row.checkIn && row.checkOut && row.checkOut <= row.checkIn) return "The departure has to be after the arrival";
+    if (line.available !== null && Number(row.rooms) > line.available) return `${line.available} available at most`;
     if (line.minNights !== null && n !== null && n < line.minNights) return `The minimum stay is ${line.minNights} nights`;
     return null;
   };
-  const total = chosen.reduce((sum, [lineId, periods]) => {
-    const found = lines.get(lineId);
-    return found ? sum + periods.reduce((part, pick) => part + (found.line.sellingCents ?? 0) * (Number(pick.rooms) || 0) * (nights(pick) ?? 0), 0) : sum;
-  }, 0);
-  const tbcChosen = chosen.some(([lineId]) => lines.get(lineId)?.line.sellingCents === null);
-  const blocked = Object.entries(picks).some(([lineId, periods]) => {
-    const found = lines.get(lineId);
-    return found ? periods.some((pick) => problem(found.line, pick)) : false;
-  });
+  const chosen = rows.filter((row) => row.lineId && Number(row.rooms) > 0);
+  const total = chosen.reduce((sum, row) => sum + (lines.get(row.lineId)?.line.sellingCents ?? 0) * Number(row.rooms) * (nights(row) ?? 0), 0);
+  const tbcChosen = chosen.some((row) => lines.get(row.lineId)?.line.sellingCents === null);
+  const blocked = rows.some((row) => problem(row));
+
+  const send = () =>
+    answer.mutate({
+      token,
+      name,
+      email,
+      company,
+      previousResponseId: responseId,
+      note,
+      dateChange: null,
+      items: chosen.map((row) => ({ lineId: row.lineId, rooms: Math.max(1, Math.round(Number(row.rooms) || 1)), checkIn: row.checkIn, checkOut: row.checkOut, note: "" })),
+    });
+
+  const roomLabel = (line: Line) => `${line.name} — ${line.sellingCents !== null ? `${formatMoney(line.sellingCents, card.currency)} a night` : "rate to be confirmed"}`;
+
+  const requestProposal = canAnswer ? (
+    <section id="request-proposal" className="border-brand-200 bg-brand-50/40 mt-8 scroll-mt-6 rounded-xl border px-5 py-5">
+      <h2 className="text-ink-900 text-lg font-semibold">Request a proposal</h2>
+      <p className="text-ink-500 mt-0.5 text-sm font-light">
+        Choose the rooms you would like, with your dates and how many — add as many periods as you need — and send it to us. We come back to you with a proposal.
+      </p>
+
+      {sent && (
+        <p className="mt-3 rounded-lg bg-[#e3f8ee] px-4 py-2.5 text-sm text-[#0a7a47]">
+          Thank you — your request has been sent to We Lodge. A We Lodge agent will come back to you with a proposal. You can change it and send again.
+        </p>
+      )}
+      {!sent && last && (
+        <p className="text-brand-800 mt-3 rounded-lg bg-white px-4 py-2.5 text-sm font-light">
+          You sent a request on {last.at.toLocaleDateString("en-GB", { day: "numeric", month: "long" })} — it is filled in below. Change anything and send again.
+        </p>
+      )}
+
+      <ul className="mt-4 space-y-3">
+        {rows.map((row) => {
+          const n = nights(row);
+          const found = lines.get(row.lineId);
+          const issue = problem(row);
+          return (
+            <li key={row.key} className="rounded-lg bg-white px-4 py-3">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_5rem_9.5rem_9.5rem_auto] sm:items-end">
+                <Field label="Property and room">
+                  <select
+                    value={row.lineId}
+                    onChange={(e) => setRow(row.key, { lineId: e.target.value })}
+                    className="border-ink-200 focus:border-brand-400 w-full rounded-lg border bg-white px-3 py-2 text-sm font-light outline-none"
+                  >
+                    <option value="">Choose…</option>
+                    {card.properties.map((property, index) => (
+                      <optgroup key={property.id} label={`${index + 1}. ${property.name}`}>
+                        {property.lines.map((line) => (
+                          <option key={line.id} value={line.id}>
+                            {likes[line.id] ? "♥ " : ""}
+                            {roomLabel(line)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Rooms">
+                  <Input inputMode="numeric" value={row.rooms} onChange={(e) => setRow(row.key, { rooms: e.target.value })} />
+                </Field>
+                <Field label="Arrival">
+                  <Input type="date" value={row.checkIn} onChange={(e) => setRow(row.key, { checkIn: e.target.value })} />
+                </Field>
+                <Field label="Departure">
+                  <Input type="date" value={row.checkOut} onChange={(e) => setRow(row.key, { checkOut: e.target.value })} />
+                </Field>
+                <button type="button" onClick={() => removeRow(row.key)} aria-label="Remove this period" title="Remove this period" className="text-ink-400 pb-2 text-lg leading-none hover:text-[#c03654]">
+                  ×
+                </button>
+              </div>
+              <p className="text-ink-500 mt-1.5 text-xs font-light">
+                {issue ? (
+                  <span className="font-normal text-[#c03654]">{issue}</span>
+                ) : found && n !== null && Number(row.rooms) > 0 ? (
+                  found.line.sellingCents === null ? (
+                    <>
+                      {row.rooms} {Number(row.rooms) === 1 ? "room" : "rooms"} × {n} nights — the rate is to be confirmed by We Lodge
+                    </>
+                  ) : (
+                    <>
+                      {row.rooms} {Number(row.rooms) === 1 ? "room" : "rooms"} × {n} nights × {formatMoney(found.line.sellingCents, card.currency)} ={" "}
+                      <span className="text-ink-900 font-medium">{formatMoney(found.line.sellingCents * Number(row.rooms) * n, card.currency)}</span>
+                    </>
+                  )
+                ) : null}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+      <button type="button" onClick={addRow} className="text-brand-700 mt-3 text-sm font-medium hover:underline">
+        + Add another period
+      </button>
+      {total > 0 && (
+        <p className="text-ink-900 border-ink-200/70 mt-3 border-t pt-3 text-sm">
+          Total <span className="font-semibold">{formatMoney(total, card.currency)}</span>
+          <span className="text-ink-500 font-light">
+            {" "}
+            — subject to availability until confirmed{tbcChosen ? "; rooms with a rate to be confirmed are not included" : ""}
+          </span>
+        </p>
+      )}
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Field label="Your message to We Lodge — optional" className="sm:col-span-2">
+          <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything we should know — other dates, who the rooms are for, questions." />
+        </Field>
+        {askCompany && (
+          <Field label="Your company" className="sm:col-span-2">
+            <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="The organisation you are booking for" />
+          </Field>
+        )}
+        <Field label="Your name">
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Your email">
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Field>
+      </div>
+      <div className="mt-4 space-y-2">
+        <FormError message={answer.error ? friendlyError(answer.error) : null} />
+        {blocked && <p className="text-xs text-[#c03654]">Please check the periods marked in red — the number of rooms or the dates.</p>}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Button type="button" disabled={answer.isPending || blocked || (chosen.length === 0 && !note.trim()) || (askCompany && !company.trim())} onClick={send}>
+            {answer.isPending ? "Sending…" : sent || last ? "Send again to We Lodge →" : "Send to We Lodge →"}
+          </Button>
+          <span className="text-ink-500 text-xs font-light">This is a request, not a booking — we come back to you with a proposal and its terms.</span>
+        </div>
+      </div>
+    </section>
+  ) : null;
 
   return (
-    <div className="space-y-4 pb-10">
-      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 print:hidden">
-        <p className="text-ink-500 text-sm font-light">
-          Choose the rooms you are interested in, or{" "}
-          <button type="button" onClick={() => setSending("dates")} className="text-brand-700 hover:underline">
-            tell us if your dates have changed
-          </button>
-          .
-        </p>
+    <div className="mx-auto max-w-[1600px] space-y-4 pb-10">
+      <div className="flex items-center justify-end gap-4 print:hidden">
+        {canAnswer && (
+          <a href="#request-proposal" className="text-brand-700 text-sm font-medium hover:underline">
+            Request a proposal ↓
+          </a>
+        )}
         <PrintButton />
       </div>
 
-      {sent && (
-        <p className="mx-auto max-w-3xl rounded-xl bg-[#e3f8ee] px-5 py-3 text-sm text-[#0a7a47] print:hidden">
-          {sent === "dates"
-            ? "Thank you — your new dates have been sent. A We Lodge sales member will come back to you with rates and availability."
-            : "Thank you — your request has been sent to We Lodge. It is not a confirmed booking yet: a We Lodge agent will come back to you to confirm it with an agreement. You can change it below and send again."}
-        </p>
-      )}
-      {detailsSent && (
-        <p className="mx-auto max-w-3xl rounded-xl bg-[#e3f8ee] px-5 py-3 text-sm text-[#0a7a47] print:hidden">
-          Thank you — your company details have been sent. We have what we need to prepare your agreement.
-        </p>
-      )}
-      {contracting.data && !contracting.data.general && !contracting.data.submittedAt && (
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 print:hidden">
+      {detailsSent && <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-sm text-[#0a7a47] print:hidden">Thank you — your company details have been sent.</p>}
+      {canAnswer && sent && contracting.data && !contracting.data.general && !contracting.data.submittedAt && !contractingOpen && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 print:hidden">
           <p className="text-sm text-[#7a5410]">
             <span className="font-semibold">Complete your contracting details</span> — your company and who signs — so we can prepare your agreement.
           </p>
-          <Button type="button" onClick={() => setSending("contracting")}>
+          <Button type="button" onClick={() => setContractingOpen(true)}>
             Add company details
           </Button>
         </div>
       )}
-      {!sent && last && (
-        <p className="bg-brand-50 text-brand-800 mx-auto max-w-3xl rounded-xl px-5 py-3 text-sm font-light print:hidden">
-          You answered this rate card on {last.at.toLocaleDateString("en-GB", { day: "numeric", month: "long" })} — your choices are filled in below. Change anything and send again.
-        </p>
-      )}
 
-      <RateCardView
-        card={card}
-        lineAction={(line) => {
-          const on = Boolean(picks[line.id]);
-          return (
-            <button
-              type="button"
-              aria-pressed={on}
-              onClick={() =>
-                setPicks((current) => {
-                  const next = { ...current };
-                  if (on) delete next[line.id];
-                  else next[line.id] = [newPeriod(line)];
-                  return next;
-                })
-              }
-              className={`rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors ${
-                on ? "border-brand-500 bg-brand-500 text-white" : "border-brand-300 text-brand-700 hover:bg-brand-50"
-              }`}
-            >
-              {on ? "✓ Interested" : "I'm interested"}
-            </button>
-          );
-        }}
-        lineExtra={(line) => {
-          const periods = picks[line.id];
-          if (!periods) return null;
-          return (
-            <div className="bg-brand-50/60 space-y-3 rounded-lg px-3 py-3">
-              {periods.map((pick, index) => {
-                const n = nights(pick);
-                return (
-                  <div key={index} className={index > 0 ? "border-brand-200/70 border-t pt-3" : ""}>
-                    <div className="grid gap-3 sm:grid-cols-[5.5rem_9.5rem_9.5rem_1fr]">
-                      <Field label="Rooms">
-                        <Input inputMode="numeric" value={pick.rooms} onChange={(e) => setPeriod(line.id, index, { rooms: e.target.value })} />
-                      </Field>
-                      <Field label="Arrival">
-                        <Input type="date" value={pick.checkIn} onChange={(e) => setPeriod(line.id, index, { checkIn: e.target.value })} />
-                      </Field>
-                      <Field label="Departure">
-                        <Input type="date" value={pick.checkOut} onChange={(e) => setPeriod(line.id, index, { checkOut: e.target.value })} />
-                      </Field>
-                      <Field label="Note — optional">
-                        <Input value={pick.note} onChange={(e) => setPeriod(line.id, index, { note: e.target.value })} placeholder="For the coaches, close to each other" />
-                      </Field>
-                    </div>
-                    <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs">
-                      <p className="text-ink-500 font-light">
-                        {problem(line, pick) ? (
-                          <span className="font-normal text-[#c03654]">{problem(line, pick)}</span>
-                        ) : n !== null && Number(pick.rooms) > 0 && line.sellingCents === null ? (
-                          <>
-                            {pick.rooms} {Number(pick.rooms) === 1 ? "room" : "rooms"} × {n} nights — the rate is to be confirmed by We Lodge
-                          </>
-                        ) : n !== null && Number(pick.rooms) > 0 && line.sellingCents !== null && (
-                          <>
-                            {pick.rooms} {Number(pick.rooms) === 1 ? "room" : "rooms"} × {n} nights × {formatMoney(line.sellingCents, card.currency)} ={" "}
-                            <span className="text-ink-900 font-medium">{formatMoney(line.sellingCents * Number(pick.rooms) * n, card.currency)}</span>
-                          </>
-                        )}
-                      </p>
-                      {periods.length > 1 && (
-                        <button type="button" onClick={() => removePeriod(line.id, index)} className="shrink-0 font-light text-[#c03654] hover:underline">
-                          Remove this period
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <button type="button" onClick={() => addPeriod(line.id)} className="text-brand-700 text-xs font-medium hover:underline">
-                  + Add another period
-                </button>
-                <Button type="button" onClick={() => setSending("rooms")}>
-                  {sent || last ? "Send again to We Lodge →" : "Send to We Lodge →"}
-                </Button>
-              </div>
-            </div>
-          );
-        }}
-      />
-
-      <RateCardMap
-        token={token}
-        properties={card.properties.map((property) => ({ id: property.id, rateCardPropertyId: property.id, name: property.name, latitude: property.latitude, longitude: property.longitude }))}
-        venues={card.venues}
-      />
-
-      <section className="mx-auto max-w-3xl rounded-2xl bg-white px-8 py-7 shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:hidden">
-        <h2 className="text-ink-900 text-lg font-semibold">Your answer</h2>
-        {chosen.length === 0 ? (
-          <p className="text-ink-500 mt-1 text-sm font-light">No rooms chosen yet — press &ldquo;I&apos;m interested&rdquo; on the rooms you would like.</p>
-        ) : (
-          <ul className="mt-2 space-y-1 text-sm">
-            {chosen.flatMap(([lineId, periods]) => {
-              const found = lines.get(lineId);
-              if (!found) return [];
-              return periods.map((pick, index) => (
-                <li key={`${lineId}-${index}`} className="text-ink-700 font-light">
-                  <span className="text-ink-900 font-medium">
-                    {pick.rooms} × {found.line.name}
-                  </span>{" "}
-                  at {found.property.name}
-                  {pick.checkIn && pick.checkOut && pick.checkOut > pick.checkIn
-                    ? ` · ${formatRange(parseDay(pick.checkIn), parseDay(pick.checkOut))} · ${nights(pick)} nights`
-                    : ""}
-                </li>
-              ));
-            })}
-          </ul>
-        )}
-        {total > 0 && (
-          <p className="text-ink-900 border-ink-200/70 mt-2 border-t pt-2 text-sm">
-            Total <span className="font-semibold">{formatMoney(total, card.currency)}</span>
-            <span className="text-ink-500 font-light"> — subject to availability until confirmed{tbcChosen ? "; rooms with a rate to be confirmed are not included" : ""}</span>
-          </p>
-        )}
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Button type="button" onClick={() => setSending("rooms")} disabled={chosen.length === 0}>
-            {sent || last ? "Send again to We Lodge →" : "Send to We Lodge →"}
-          </Button>
-          <button type="button" onClick={() => setSending("dates")} className="border-ink-200 text-ink-700 hover:border-brand-400 rounded-full border px-3 py-1 text-xs">
-            My dates have changed
-          </button>
-        </div>
-        <p className="text-ink-500 mt-3 text-xs font-light">Sending is a request, not a confirmed booking — a We Lodge agent confirms it with an agreement.</p>
-      </section>
-
-      {sending === "rooms" && (
-        <Popup size="medium" title="Send your request to We Lodge" subtitle="Check your choice, tell us who you are, and send." onClose={() => setSending(null)}>
-          <div className="space-y-4">
-            <div className="rounded-xl bg-white px-5 py-4">
-              <h3 className="text-ink-900 text-[15px] font-semibold">Your choice</h3>
-              {chosen.length === 0 ? (
-                <p className="text-ink-500 mt-1 text-sm font-light">No rooms chosen yet — press &ldquo;I&apos;m interested&rdquo; on the rooms you would like.</p>
-              ) : (
-                <ul className="mt-2 space-y-1 text-sm">
-                  {chosen.flatMap(([lineId, periods]) => {
-                    const found = lines.get(lineId);
-                    if (!found) return [];
-                    return periods.map((pick, index) => (
-                      <li key={`${lineId}-${index}`} className="text-ink-700 font-light">
-                        <span className="text-ink-900 font-medium">
-                          {pick.rooms} × {found.line.name}
-                        </span>{" "}
-                        at {found.property.name}
-                        {pick.checkIn && pick.checkOut && pick.checkOut > pick.checkIn
-                          ? ` · ${formatRange(parseDay(pick.checkIn), parseDay(pick.checkOut))} · ${nights(pick)} nights`
-                          : ""}
-                      </li>
-                    ));
-                  })}
-                </ul>
-              )}
-              {total > 0 && (
-                <p className="text-ink-900 border-ink-200/70 mt-2 border-t pt-2 text-sm">
-                  Total <span className="font-semibold">{formatMoney(total, card.currency)}</span>
-                  <span className="text-ink-500 font-light"> — subject to availability until confirmed{tbcChosen ? "; rooms with a rate to be confirmed are not included" : ""}</span>
-                </p>
-              )}
-            </div>
-            <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 text-sm text-[#7a5410]">
-              <span className="font-semibold">This is a request, not a confirmed booking.</span> A We Lodge agent will come back to you to confirm the rooms with an
-              agreement.
-            </p>
-            <div className="rounded-xl bg-white px-5 py-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {askCompany && (
-                  <Field label="Your company" className="sm:col-span-2">
-                    <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="The organisation you are booking for" />
-                  </Field>
-                )}
-                <Field label="Your name">
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
-                </Field>
-                <Field label="Your email">
-                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                </Field>
-                <Field label="A note for We Lodge — optional" className="sm:col-span-2">
-                  <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-                </Field>
-              </div>
-              <div className="mt-4 space-y-2">
-                <FormError message={answer.error ? friendlyError(answer.error) : null} />
-                {blocked && <p className="text-xs text-[#c03654]">Please check the rooms marked in red on the card — the number of rooms or the length of stay.</p>}
-                <Button
+      <div className={`grid items-start gap-5 ${hasMap ? "lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : ""}`}>
+        <div className="min-w-0">
+          <RateCardView
+            card={card}
+            wide={hasMap}
+            lineAction={(line) => {
+              const on = Boolean(likes[line.id]);
+              return (
+                <button
                   type="button"
-                  disabled={answer.isPending || blocked || chosen.length === 0 || (askCompany && !company.trim())}
-                  onClick={() =>
-                    answer.mutate({
-                      token,
-                      name,
-                      email,
-                      company,
-                      previousResponseId: responseId,
-                      note,
-                      dateChange: null,
-                      items: chosen.flatMap(([lineId, periods]) =>
-                        periods.map((pick) => ({
-                          lineId,
-                          rooms: Math.max(1, Math.round(Number(pick.rooms) || 1)),
-                          checkIn: pick.checkIn,
-                          checkOut: pick.checkOut,
-                          note: pick.note,
-                        })),
-                      ),
-                    })
-                  }
+                  aria-pressed={on}
+                  onClick={() => toggleLike(line.id)}
+                  title={on ? "Press again to take it back" : "Let us know you like this room"}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors ${
+                    on ? "border-[#e0234e] bg-[#e0234e] text-white" : "border-brand-300 text-brand-700 hover:bg-brand-50"
+                  }`}
                 >
-                  {answer.isPending ? "Sending…" : "Send request"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Popup>
-      )}
+                  {on ? "♥ I like it!" : "♡ I like it!"}
+                </button>
+              );
+            }}
+            after={requestProposal}
+          />
+        </div>
+        {/* The map beside the card on a wide screen, staying in view while the card scrolls (2026-11-17). */}
+        {hasMap && (
+          <aside className="min-w-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
+            <RateCardMap
+              token={token}
+              side
+              properties={card.properties.map((property) => ({ id: property.id, rateCardPropertyId: property.id, name: property.name, latitude: property.latitude, longitude: property.longitude }))}
+              venues={card.venues}
+            />
+          </aside>
+        )}
+      </div>
 
-      {sending === "dates" && (
-        <Popup
-          size="medium"
-          title="Our dates have changed"
-          subtitle="Tell us your new dates — a We Lodge sales member will come back to you with rates and availability."
-          onClose={() => setSending(null)}
-        >
-          <div className="space-y-4 rounded-xl bg-white px-5 py-4">
-              <div className="grid gap-3 sm:grid-cols-[9.5rem_9.5rem_1fr]">
-                <Field label="New arrival">
-                  <Input type="date" value={newDates.checkIn} onChange={(e) => setNewDates({ ...newDates, checkIn: e.target.value })} />
-                </Field>
-                <Field label="New departure">
-                  <Input type="date" value={newDates.checkOut} onChange={(e) => setNewDates({ ...newDates, checkOut: e.target.value })} />
-                </Field>
-                <Field label="What changed — optional">
-                  <Input value={newDates.note} onChange={(e) => setNewDates({ ...newDates, note: e.target.value })} placeholder="The team now arrives two days earlier" />
-                </Field>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {askCompany && (
-                  <Field label="Your company" className="sm:col-span-2">
-                    <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="The organisation you are booking for" />
-                  </Field>
-                )}
-                <Field label="Your name">
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
-                </Field>
-                <Field label="Your email">
-                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                </Field>
-                <Field label="A note for We Lodge — optional" className="sm:col-span-2">
-                  <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-                </Field>
-              </div>
-            <div className="space-y-2">
-              <FormError message={answer.error ? friendlyError(answer.error) : null} />
-              <Button
-                type="button"
-                disabled={answer.isPending || !newDates.checkIn || !newDates.checkOut || newDates.checkOut <= newDates.checkIn || (askCompany && !company.trim())}
-                onClick={() => answer.mutate({ token, name, email, company, previousResponseId: responseId, note, dateChange: newDates, items: [] })}
-              >
-                {answer.isPending ? "Sending…" : "Send new dates"}
-              </Button>
-            </div>
-          </div>
-        </Popup>
-      )}
-      {sending === "contracting" && (
+      {contractingOpen && (
         <Popup
           size="medium"
           title={justSent ? "One more thing — your company details" : "Your company details"}
           subtitle="We need these to prepare your agreement. They come straight to your contact at We Lodge."
-          onClose={() => setSending(null)}
+          onClose={() => setContractingOpen(false)}
         >
           <div className="space-y-4">
             {justSent && <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-sm text-[#0a7a47]">✓ Your request has been sent to We Lodge.</p>}
@@ -462,7 +356,7 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                 onSubmit={(values) => sendDetails.mutate({ token, responseId, values })}
                 submitLabel="Send my details"
                 after={
-                  <button type="button" onClick={() => setSending(null)} className="text-ink-500 text-sm hover:underline">
+                  <button type="button" onClick={() => setContractingOpen(false)} className="text-ink-500 text-sm hover:underline">
                     I&apos;ll do this later
                   </button>
                 }

@@ -50,7 +50,18 @@ function Transit({ on }: { on: boolean }) {
  * long it takes on foot, by car and by public transport, with Google's
  * directions a click away.
  */
-export function RateCardMap({ token, properties, venues }: { token: string; properties: (Property & { rateCardPropertyId: string })[]; venues: Venue[] }) {
+export function RateCardMap({
+  token,
+  properties,
+  venues,
+  side = false,
+}: {
+  token: string;
+  properties: (Property & { rateCardPropertyId: string })[];
+  venues: Venue[];
+  /** Beside the card on a wide screen: taller, and a property's square takes the card to it (2026-11-17). */
+  side?: boolean;
+}) {
   const located = properties.filter((property) => property.latitude !== null && property.longitude !== null);
   const [propertyId, setPropertyId] = useState(located[0]?.rateCardPropertyId ?? "");
   const [venueId, setVenueId] = useState("");
@@ -88,7 +99,7 @@ export function RateCardMap({ token, properties, venues }: { token: string; prop
       : "#";
 
   return (
-    <section className="mx-auto max-w-3xl rounded-2xl bg-white px-8 py-7 shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:hidden">
+    <section className={`mx-auto rounded-2xl bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:hidden ${side ? "max-w-none px-5 py-5" : "max-w-3xl px-8 py-7"}`}>
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-ink-900 text-lg font-semibold">On the map</h2>
         <label className="text-ink-700 flex items-center gap-2 text-[13px]">
@@ -98,7 +109,7 @@ export function RateCardMap({ token, properties, venues }: { token: string; prop
       </div>
       <div className="overflow-hidden rounded-xl border border-ink-200/70">
         <APIProvider apiKey={apiKey}>
-          <GoogleMap mapId={mapId} defaultCenter={points[0] ?? { lat: 0, lng: 0 }} defaultZoom={12} gestureHandling="cooperative" clickableIcons={false} style={{ height: "26rem", width: "100%" }}>
+          <GoogleMap mapId={mapId} defaultCenter={points[0] ?? { lat: 0, lng: 0 }} defaultZoom={12} gestureHandling="cooperative" clickableIcons={false} style={{ height: side ? "max(24rem, calc(100vh - 22rem))" : "26rem", width: "100%" }}>
             <Frame points={points} />
             <Transit on={metro} />
             {venues.map((venue) => (
@@ -122,7 +133,10 @@ export function RateCardMap({ token, properties, venues }: { token: string; prop
                 position={{ lat: property.latitude!, lng: property.longitude! }}
                 title={property.name}
                 zIndex={1000}
-                onClick={() => setPropertyId(property.rateCardPropertyId)}
+                onClick={() => {
+                  setPropertyId(property.rateCardPropertyId);
+                  if (side) document.getElementById(`card-property-${property.rateCardPropertyId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
               >
                 <span className="group relative block translate-y-1/2">
                   <span
