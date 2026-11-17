@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PropertyType } from "generated/prisma";
 
 import {
   Button,
   Field,
-  Fieldset,
   FormError,
+  friendlyError,
   Input,
   Label,
   Select,
@@ -124,25 +124,56 @@ const num = (value: string) => {
 
 const text = (value: string) => value.trim() || undefined;
 
+/** The form's sections, one tab each (doc §3.1): everything at hand, nothing to scroll past. */
+type TabKey = "property" | "rooms" | "amenities" | "details" | "services" | "contracting" | "contacts" | "notes";
+
+/** Empties the form for the next property, keeping the type that was just used. */
+const freshProperty = (type: PropertyType): PropertyFormValues => ({
+  ...emptyProperty,
+  type,
+  categories: [emptyCategory(type)],
+});
+
 export function PropertyForm({
   initial,
   amenities,
   existingNames,
   /** When set, the new property is added straight to this event's list. */
   addToEventId,
+  addToEventName,
   /** Where to go after saving, when the form was opened from somewhere else. */
   returnTo,
+  onSaved,
+  onCancel,
+  onDirtyChange,
 }: {
   initial: PropertyFormValues;
   amenities: { id: string; label: string }[];
   /** Every property's name, for real-time duplicate detection (doc §3.1). */
   existingNames: { id: string; name: string }[];
   addToEventId?: string;
+  addToEventName?: string;
   returnTo?: string;
+  /** In the pop-up: called once saved, instead of going to another page. */
+  onSaved?: () => void;
+  onCancel?: () => void;
+  /** In the pop-up: whether anything has been typed, so closing can ask first. */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
+  const inPopup = Boolean(onSaved);
   const [values, setValues] = useState(initial);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabKey>("property");
+  /** The tab holding what stopped the save, marked in red until it is put right. */
+  const [problemTab, setProblemTab] = useState<TabKey | null>(null);
+  /** After "Save and scout another": the one just saved. */
+  const [added, setAdded] = useState<string | null>(null);
+  /** Which save button was pressed: the plain one, or "Save and scout another". */
+  const another = useRef(false);
+
+  const dirty = JSON.stringify(values) !== JSON.stringify(initial);
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const isEdit = Boolean(initial.id);
   // Hotel rooms carry a free-text bed configuration; apartments and
@@ -193,36 +224,51 @@ export function PropertyForm({
   const addToList = api.scouting.add.useMutation();
   const utils = api.useUtils();
 
-  const onDone = (propertyId: string) => {
+  const finish = (property: { id: string; name: string }) => {
     // The Properties tab keeps its own copy of every property on the list; a
     // saved edit must show there straight away, not after the next reload.
     void utils.scouting.invalidate();
     void utils.property.invalidate();
     void utils.provider.invalidate();
-    if (addToEventId) {
+    if (another.current) {
+      // Saved; the form is emptied for the next one.
+      setAdded(property.name);
+      setValues(freshProperty(values.type));
+      setDifferent(false);
+      setTab("property");
+      setProblemTab(null);
+      return;
+    }
+    if (onSaved) {
+      router.refresh();
+      onSaved();
+      return;
+    }
+    router.push(addToEventId ? `/events/${addToEventId}` : (returnTo ?? `/properties/${property.id}`));
+    router.refresh();
+  };
+
+  const onDone = (property: { id: string; name: string }) => {
+    if (addToEventId && !isEdit) {
       addToList.mutate(
-        { eventId: addToEventId, propertyId },
+        { eventId: addToEventId, propertyId: property.id },
         {
-          onSuccess: () => {
-            router.push(`/events/${addToEventId}`);
-            router.refresh();
-          },
+          onSuccess: () => finish(property),
           onError: (e) => setError(e.message),
         },
       );
       return;
     }
-    router.push(returnTo ?? `/properties/${propertyId}`);
-    router.refresh();
+    finish(property);
   };
 
   const create = api.property.create.useMutation({
-    onSuccess: (property) => onDone(property.id),
-    onError: (e) => setError(e.message),
+    onSuccess: (property) => onDone(property),
+    onError: (e) => setError(friendlyError(e as Parameters<typeof friendlyError>[0])),
   });
   const update = api.property.update.useMutation({
-    onSuccess: (property) => onDone(property.id),
-    onError: (e) => setError(e.message),
+    onSuccess: (property) => onDone(property),
+    onError: (e) => setError(friendlyError(e as Parameters<typeof friendlyError>[0])),
   });
 
   const saving = create.isPending || update.isPending || addToList.isPending;
@@ -248,9 +294,18 @@ export function PropertyForm({
       ),
     );
 
+  /** Stops the save, opens the tab where the problem is and marks it. */
+  const stop = (message: string, where: TabKey) => {
+    setError(message);
+    setProblemTab(where);
+    setTab(where);
+  };
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    setProblemTab(null);
+    setAdded(null);
 
     const categories = values.categories
       .filter((category) => category.name.trim())
@@ -305,23 +360,19 @@ export function PropertyForm({
     };
 
     if (!payload.name) {
-      setError("A property needs a name.");
+      stop("A property needs a name.", "property");
       return;
     }
     if (isDuplicateProperty) {
-      setError(
-        "Cannot add duplicate property — a property with this name already exists.",
-      );
+      stop("Cannot add duplicate property — a property with this name already exists.", "property");
       return;
     }
     if (similar.length && !different) {
-      setError("This looks like a property we already have — use that one, or tick that it is a different property.");
+      stop("This looks like a property we already have — use that one, or tick that it is a different property.", "property");
       return;
     }
     if ((payload.latitude === undefined) !== (payload.longitude === undefined)) {
-      setError(
-        "Give both a latitude and a longitude, or neither — one on its own cannot be put on the map.",
-      );
+      stop("Give both a latitude and a longitude, or neither — one on its own cannot be put on the map.", "property");
       return;
     }
 
@@ -329,12 +380,62 @@ export function PropertyForm({
     else create.mutate({ ...payload, confirmedDifferent: different });
   };
 
-  return (
-    <form onSubmit={submit} className="max-w-3xl space-y-5">
-      <FormError message={error} />
+  const namedCategories = values.categories.filter((category) => category.name.trim()).length;
+  const namedContacts = values.contacts.filter((contact) => contact.name.trim()).length;
+  const tabs: { key: TabKey; label: string; count?: number }[] = [
+    { key: "property", label: "Property" },
+    { key: "rooms", label: hasBedConfiguration ? "Room categories" : "Unit types", count: namedCategories },
+    { key: "amenities", label: "Amenities", count: values.amenityIds.length },
+    { key: "details", label: "Details" },
+    { key: "services", label: "Services" },
+    { key: "contracting", label: "Contracting" },
+    { key: "contacts", label: "Contacts", count: namedContacts },
+    { key: "notes", label: "Notes" },
+  ];
+  const at = tabs.findIndex((entry) => entry.key === tab);
+  const next = tabs[at + 1];
 
-      <Fieldset
-        title="The property"
+  return (
+    // Checked here rather than by the browser, which cannot point at a field on a hidden tab.
+    <form onSubmit={submit} noValidate className={inPopup ? "" : "max-w-3xl"}>
+      {added && (
+        <p className="mb-4 rounded-lg bg-[#e3f8ee] px-4 py-2.5 text-[13px] text-[#0a7a47]">
+          <strong className="font-medium">{added}</strong> was saved{addToEventName ? ` and added to ${addToEventName}` : ""}. On to the next one.
+        </p>
+      )}
+
+      <div className="border-ink-200/60 rounded-xl border bg-white">
+        <div role="tablist" aria-label="Sections" className="border-ink-200/60 flex gap-1 overflow-x-auto border-b px-3 pt-3">
+          {tabs.map((entry) => {
+            const selected = entry.key === tab;
+            const flagged = entry.key === problemTab;
+            return (
+              <button
+                key={entry.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setTab(entry.key)}
+                className={`-mb-px flex items-center gap-1.5 rounded-t-lg border-b-2 px-3 pt-1.5 pb-2.5 text-[13px] whitespace-nowrap transition-colors ${
+                  flagged
+                    ? `border-[#db4b68] text-[#c03654] ${selected ? "font-medium" : "font-light"}`
+                    : selected
+                      ? "border-ink-900 text-ink-900 font-medium"
+                      : "text-ink-500 hover:text-ink-900 border-transparent font-light"
+                }`}
+              >
+                {entry.label}
+                {flagged && <span aria-label="needs attention">•</span>}
+                {entry.count != null && entry.count > 0 && (
+                  <span className="bg-ink-50 text-ink-500 rounded-full px-1.5 text-[11px] leading-[18px]">{entry.count}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+      <Panel
+        active={tab === "property"}
         description="What it is and where it is. Coordinates are optional — with them, it appears on the map."
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -344,7 +445,7 @@ export function PropertyForm({
                 value={values.name}
                 onChange={(e) => set("name", e.target.value)}
                 placeholder="Hotel Carmel"
-                required
+                autoFocus={!isEdit}
                 invalid={isDuplicateProperty}
                 className={isDuplicateProperty ? "pr-9" : undefined}
                 aria-invalid={isDuplicateProperty}
@@ -377,10 +478,15 @@ export function PropertyForm({
             <div className="sm:col-span-2">
               <SimilarProperties
                 matches={similar}
-                event={addToEventId ? { id: addToEventId, name: "this event" } : null}
+                event={addToEventId ? { id: addToEventId, name: addToEventName ?? "this event" } : null}
                 confirmed={different}
                 onConfirmedChange={setDifferent}
                 onUsed={() => {
+                  if (onSaved) {
+                    router.refresh();
+                    onSaved();
+                    return;
+                  }
                   router.push(addToEventId ? `/events/${addToEventId}` : "/events");
                   router.refresh();
                 }}
@@ -540,10 +646,10 @@ export function PropertyForm({
             />
           </Field>
         </div>
-      </Fieldset>
+      </Panel>
 
-      <Fieldset
-        title={hasBedConfiguration ? "Room categories" : "Unit types"}
+      <Panel
+        active={tab === "rooms"}
         description={
           hasBedConfiguration
             ? "One row per room type, with how many the hotel has. Rates come from its quotations."
@@ -680,10 +786,10 @@ export function PropertyForm({
             Add {hasBedConfiguration ? "category" : "unit type"}
           </Button>
         </div>
-      </Fieldset>
+      </Panel>
 
-      <Fieldset
-        title="Amenities"
+      <Panel
+        active={tab === "amenities"}
         description="A fixed list, so these stay searchable rather than becoming free text."
       >
         <div className="grid gap-2 sm:grid-cols-3">
@@ -712,10 +818,10 @@ export function PropertyForm({
             );
           })}
         </div>
-      </Fieldset>
+      </Panel>
 
-      <Fieldset
-        title="More about the property"
+      <Panel
+        active={tab === "details"}
         description="The same on every event. What was agreed for a particular event — rates, deposit, terms — is kept on that event's Properties tab."
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -740,9 +846,9 @@ export function PropertyForm({
             </Field>
           ))}
         </div>
-      </Fieldset>
+      </Panel>
 
-      <Fieldset title="Services" description="Short answers, as the hotel gives them.">
+      <Panel active={tab === "services"} description="Short answers, as the hotel gives them.">
         <div className="grid gap-4 sm:grid-cols-2">
           {propertyServiceFields.map((field) => (
             <Field key={field.key} label={field.label}>
@@ -754,10 +860,10 @@ export function PropertyForm({
             </Field>
           ))}
         </div>
-      </Fieldset>
+      </Panel>
 
-      <Fieldset
-        title="Contracting details"
+      <Panel
+        active={tab === "contracting"}
         description="The legal entity we sign with. Leave these empty if the property's provider signs for it — its provider's details are used instead. Visible to every colleague."
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -771,10 +877,10 @@ export function PropertyForm({
             </Field>
           ))}
         </div>
-      </Fieldset>
+      </Panel>
 
-      <Fieldset
-        title="Contacts"
+      <Panel
+        active={tab === "contacts"}
         description="Who we speak to at the property."
         action={
           <Button
@@ -848,38 +954,79 @@ export function PropertyForm({
             <p className="text-ink-500 text-sm font-light">No contacts yet.</p>
           )}
         </div>
-      </Fieldset>
+      </Panel>
 
-      <Fieldset title="Notes">
+      <Panel active={tab === "notes"}>
         <Label>Notes</Label>
         <Textarea
           value={values.notes}
           onChange={(e) => set("notes", e.target.value)}
-          rows={4}
+          rows={6}
           placeholder="Anything a colleague would want to know before calling them."
         />
-      </Fieldset>
+      </Panel>
+      </div>
 
-      <div className="border-ink-200/60 sticky bottom-0 -mx-1 flex items-center gap-3 border-t bg-white/95 px-1 py-3 backdrop-blur">
-        <Button type="submit" disabled={saving || isDuplicateProperty}>
+      {/* Saving works from any tab: nothing has to be visited first. */}
+      <div
+        className={`border-ink-200/60 sticky z-20 mt-5 flex flex-wrap items-center gap-2 border-t bg-white/95 py-3 backdrop-blur ${
+          inPopup ? "-bottom-6 -mx-6 px-6" : "bottom-0 -mx-1 px-1"
+        }`}
+      >
+        <Button type="submit" disabled={saving || isDuplicateProperty} onClick={() => (another.current = false)}>
           {saving
             ? "Saving…"
             : isEdit
               ? "Save changes"
               : addToEventId
-                ? "Save and add to list"
+                ? `Save and add to ${addToEventName ?? "the list"}`
                 : "Save property"}
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => router.back()}
-          disabled={saving}
-        >
+        {!isEdit && (
+          <Button type="submit" variant="secondary" disabled={saving || isDuplicateProperty} onClick={() => (another.current = true)}>
+            Save and scout another
+          </Button>
+        )}
+        {next && (
+          <Button type="button" variant="ghost" onClick={() => setTab(next.key)}>
+            Next: {next.label} →
+          </Button>
+        )}
+        <Button type="button" variant="ghost" onClick={() => (onCancel ? onCancel() : router.back())} disabled={saving}>
           Cancel
         </Button>
+        {error && (
+          <span className="min-w-0 basis-full">
+            <FormError message={error} />
+          </span>
+        )}
       </div>
     </form>
+  );
+}
+
+/** One tab's contents; kept mounted while hidden, so nothing typed is lost on a look elsewhere. */
+function Panel({
+  active,
+  description,
+  action,
+  children,
+}: {
+  active: boolean;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div role="tabpanel" hidden={!active} className="p-5">
+      {(description ?? action) && (
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          {description && <p className="text-ink-500 max-w-xl text-xs font-light">{description}</p>}
+          {action}
+        </div>
+      )}
+      {children}
+    </div>
   );
 }
 
