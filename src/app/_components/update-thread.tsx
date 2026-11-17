@@ -7,10 +7,11 @@ import { useState } from "react";
 import { Button, Input } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
 import { Popup } from "~/app/_components/popup";
+import { Initials } from "~/app/_components/property-groups";
 import { dayKey, today } from "~/lib/dates";
 import { formatDate, formatDay, formatMomentInWords } from "~/lib/format";
 import { composeBody, isHeading, updateKindOrder, updateKinds } from "~/lib/update-kinds";
-import { MENTION_PATTERN, renderUpdateBody } from "~/lib/updates";
+import { renderUpdateBody } from "~/lib/updates";
 import { api } from "~/trpc/react";
 
 type Scope =
@@ -25,9 +26,6 @@ type Scope =
  * its kind, who, when and how it begins — opened on its own with Read more. An author can edit their
  * own post, which then says it was edited, and when.
  */
-/** A body's mentions as a reader sees them: "@[Ami Rossi]" → "@Ami Rossi". */
-const plainMentions = (text: string) => text.replace(MENTION_PATTERN, "@$1");
-
 export function UpdateThread(scope: Scope) {
   const utils = api.useUtils();
   const updates = api.update.list.useQuery(scope);
@@ -158,43 +156,32 @@ export function UpdateThread(scope: Scope) {
       )}
 
       {updates.data && updates.data.length > 0 ? (
-        <ul className="space-y-1.5">
+        <ul className="space-y-3">
           {shown!.map((entry) => {
             const isOpen = open.has(entry.id) || editing?.id === entry.id;
-            const lines = entry.body.split("\n").filter((line) => line.trim() && !isHeading(entry.kind, line));
-            const preview = plainMentions(lines[0] ?? "");
-            const longer = lines.length > 1 || preview.length > 90;
+            const textLines = entry.body.split("\n").filter((line) => line.trim() && !isHeading(entry.kind, line));
+            // Easy to read at a glance (the team, 2026-11-17): the text shows, a long one cut to a few lines.
+            const longer = textLines.length > 5 || textLines.join(" ").length > 420;
+            const clipped = longer && !isOpen;
+            const author = entry.author?.name ?? entry.author?.email ?? "—";
             return (
-            <li key={entry.id} className="border-ink-200/60 rounded-lg border px-3 py-2.5">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="flex min-w-0 flex-1 items-baseline gap-x-2">
+            <li key={entry.id} className="border-ink-200/60 flex gap-3 rounded-xl border bg-white px-4 py-3">
+              {entry.author ? <Initials person={entry.author} /> : <span className="bg-ink-100 h-7 w-7 shrink-0 rounded-full" />}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="text-ink-900 text-[13px] font-semibold">{author}</span>
                   {entry.kind !== "NOTE" && (
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${updateKinds[entry.kind].badge}`}>{updateKinds[entry.kind].label}</span>
                   )}
-                  <span className="text-ink-900 text-[13px] font-medium">{entry.author?.name ?? entry.author?.email ?? "—"}</span>
+                  <span className="text-ink-500 text-xs font-light" title={entry.createdAt.toLocaleString("en-CH")}>
+                    {formatDay(entry.createdAt)}
+                    {entry.happenedOn ? ` · ${updateKinds[entry.kind].short} on ${formatDate(entry.happenedOn)}` : ""}
+                  </span>
                   {/* On a client's feed, an update written on one of its sales requests says which (doc §2.6). */}
                   {entry.salesRequest && !scope.salesRequestId && (
-                    <Link href={`/sales/${entry.salesRequest.id}`} className="text-brand-700 shrink-0 text-xs font-light whitespace-nowrap hover:underline">
+                    <Link href={`/sales/${entry.salesRequest.id}`} className="text-brand-700 text-xs font-light hover:underline">
                       on the {entry.salesRequest.event?.name ?? "sales"} request
                     </Link>
-                  )}
-                  {entry.happenedOn && (
-                    <span className="text-ink-500 shrink-0 text-xs font-light whitespace-nowrap">
-                      {updateKinds[entry.kind].short} on {formatDate(entry.happenedOn)}
-                    </span>
-                  )}
-                  {!isOpen && (
-                    <span className="text-ink-700 min-w-0 truncate text-[13px] font-light" title={preview}>
-                      {entry.kind !== "NOTE" || entry.happenedOn ? "— " : ""}
-                      {preview}
-                    </span>
-                  )}
-                </span>
-                <span className="text-ink-500 flex shrink-0 items-baseline gap-3 text-xs font-light whitespace-nowrap">
-                  {(longer || isOpen) && editing?.id !== entry.id && (
-                    <button type="button" onClick={() => toggle(entry.id)} className="text-brand-700 hover:underline">
-                      {isOpen ? "Show less" : "Read more"}
-                    </button>
                   )}
                   {entry.author?.id === me.data?.id && editing?.id !== entry.id && (
                     <button
@@ -203,71 +190,71 @@ export function UpdateThread(scope: Scope) {
                         edit.reset();
                         setEditing({ id: entry.id, body: entry.body });
                       }}
-                      className="hover:text-brand-700 transition-colors"
+                      className="text-ink-500 hover:text-brand-700 ml-auto text-xs font-light transition-colors"
                     >
                       Edit
                     </button>
                   )}
-                  {formatDay(entry.createdAt)}
-                </span>
-              </div>
-
-              {editing?.id === entry.id ? (
-                <div className="mt-2">
-                  <MentionTextarea
-                    value={editing.body}
-                    onChange={(value) => setEditing({ id: entry.id, body: value })}
-                    people={people.data ?? []}
-                    rows={3}
-                  />
-                  <div className="mt-2 flex items-center justify-end gap-2">
-                    {edit.error && (
-                      <p className="mr-auto text-xs text-[#c03654]">{edit.error.message}</p>
-                    )}
-                    <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      disabled={!editing.body.trim() || edit.isPending}
-                      onClick={() => edit.mutate(editing)}
-                    >
-                      {edit.isPending ? "Saving…" : "Save"}
-                    </Button>
-                  </div>
                 </div>
-              ) : (
-                isOpen && (
-                <>
-                  {entry.kind === "NOTE" ? (
-                    <p className="text-ink-700 mt-1 text-sm font-light whitespace-pre-line">{renderUpdateBody(entry.body)}</p>
-                  ) : (
-                    // A template: each heading shown as one, its answer beneath.
-                    <div className="mt-1.5 space-y-0.5 text-sm font-light">
-                      {entry.body.split("\n").map((line, index) =>
-                        isHeading(entry.kind, line) ? (
-                          <p key={index} className="text-ink-900 pt-1.5 text-[12px] font-medium first:pt-0">
-                            {line}
-                          </p>
-                        ) : (
-                          <p key={index} className="text-ink-700 min-h-[0.5rem] whitespace-pre-line">
-                            {renderUpdateBody(line)}
-                          </p>
-                        ),
+
+                {editing?.id === entry.id ? (
+                  <div className="mt-2">
+                    <MentionTextarea
+                      value={editing.body}
+                      onChange={(value) => setEditing({ id: entry.id, body: value })}
+                      people={people.data ?? []}
+                      rows={4}
+                    />
+                    <div className="mt-2 flex items-center justify-end gap-2">
+                      {edit.error && <p className="mr-auto text-xs text-[#c03654]">{edit.error.message}</p>}
+                      <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                        Cancel
+                      </Button>
+                      <Button type="button" disabled={!editing.body.trim() || edit.isPending} onClick={() => edit.mutate(editing)}>
+                        {edit.isPending ? "Saving…" : "Save"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      className={`mt-1 ${clipped ? "max-h-[7.25rem] overflow-hidden [mask-image:linear-gradient(to_bottom,black_55%,transparent)]" : ""}`}
+                    >
+                      {entry.kind === "NOTE" ? (
+                        <p className="text-ink-800 text-sm leading-relaxed font-light whitespace-pre-line">{renderUpdateBody(entry.body)}</p>
+                      ) : (
+                        // A template: each heading shown as one, its answer beneath.
+                        <div className="space-y-0.5 text-sm leading-relaxed font-light">
+                          {entry.body.split("\n").map((line, index) =>
+                            isHeading(entry.kind, line) ? (
+                              <p key={index} className="text-ink-900 pt-1.5 text-[12px] font-medium first:pt-0">
+                                {line}
+                              </p>
+                            ) : (
+                              <p key={index} className="text-ink-800 min-h-[0.5rem] whitespace-pre-line">
+                                {renderUpdateBody(line)}
+                              </p>
+                            ),
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                  {entry.editedAt && (
-                    <p
-                      className="text-ink-500 mt-1 text-[11px] font-light italic"
-                      title={entry.editedAt.toLocaleString("en-CH")}
-                    >
-                      Edited {formatMomentInWords(entry.editedAt)}
-                    </p>
-                  )}
-                </>
-                )
-              )}
+                    {textLines.length === 0 && <p className="text-ink-500 mt-1 text-sm font-light italic">(empty)</p>}
+                    <div className="mt-1 flex items-center gap-3">
+                      {longer && (
+                        <button type="button" onClick={() => toggle(entry.id)} className="text-brand-700 text-xs font-medium hover:underline">
+                          {isOpen ? "Show less" : "Read more"}
+                        </button>
+                      )}
+                      {entry.editedAt && (
+                        <span className="text-ink-500 text-[11px] font-light italic" title={entry.editedAt.toLocaleString("en-CH")}>
+                          Edited {formatMomentInWords(entry.editedAt)}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </li>
             );
           })}

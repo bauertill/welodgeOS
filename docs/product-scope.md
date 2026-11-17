@@ -211,12 +211,15 @@ is replaced, so nothing that was said is lost, and the "Edited" note means a rea
 knows the text is not what was first posted. The earlier wordings are not shown anywhere yet
 — there is no "see previous versions" — but they are there if they are ever needed.
 
-**Every update shows, as one line** (2026-10-06; until then only the latest showed, the
-rest behind *View more*). Newest first, each update is a single line — its kind, who wrote
-it, the day it took place and how it begins — so all the activity can be seen at a glance;
-**Read more** opens that one in full, and *Show less* folds it again. A short note that fits
-on its line has nothing more to open. Ten show at first; *Show 10 older* adds more. This
-holds on a property's page and on a client's.
+**Every update shows, readable as it stands** (2026-11-17; from 2026-10-06 to then each was
+folded to one line behind *Read more*, which the team found hard to read). Newest first, each
+update is a small card: the writer's initials and name, its kind, the day it was written (and
+the day a meeting or call took place), then **its text in full**, line breaks kept and
+mentions highlighted. Only a long one — more than five lines, or a long paragraph — is cut to
+its first few lines, fading out, with **Read more** to open it and *Show less* to fold it
+again. A meeting or call summary shows each heading with its answer beneath. *Edit* sits on
+the writer's own updates. Ten show at first; *Show 10 older* adds more. This holds on a
+property's page, a client's and a sales request's.
 
 **Kinds of update, each with its template** (2026-10-06), as the team had them on
 monday.com, **all in the one feed**, newest first. The box is a **note**, as before; beneath it,
