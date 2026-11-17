@@ -154,6 +154,7 @@ export function RateCardMap({
         </APIProvider>
       </div>
 
+      {venues.length > 0 && (
       <div className="mt-5">
         <h3 className="text-ink-900 text-[15px] font-semibold">Getting there</h3>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -227,6 +228,7 @@ export function RateCardMap({
           )
         )}
       </div>
+      )}
     </section>
   );
 }

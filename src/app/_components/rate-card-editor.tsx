@@ -21,6 +21,9 @@ type Draft = {
   canAnswer: boolean;
   /** Payment and cancellation terms: one set for the card, or each property its own — the sales person decides (2026-11-17). */
   termsPerProperty: boolean;
+  /** What the client's map shows besides the properties: whole layers and single places (2026-11-17). */
+  mapLayerIds: string[];
+  mapPlaceIds: string[];
   paymentTerms: string;
   cancellationTerms: string;
   properties: {
@@ -55,6 +58,8 @@ const draftOf = (card: Card): Draft => ({
   markup: card.markupBasisPoints === null ? "" : String(card.markupBasisPoints / 100),
   canAnswer: card.clientCanAnswer,
   termsPerProperty: card.termsPerProperty,
+  mapLayerIds: card.mapLayerIds,
+  mapPlaceIds: card.mapPlaceIds,
   paymentTerms: card.paymentTerms ?? "",
   cancellationTerms: card.cancellationTerms ?? "",
   properties: card.properties.map((property) => {
@@ -224,6 +229,8 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       markupBasisPoints: draft.markup.trim() ? Math.round(Number(draft.markup.replace(",", ".")) * 100) : null,
       clientCanAnswer: draft.canAnswer,
       termsPerProperty: draft.termsPerProperty,
+      mapLayerIds: draft.mapLayerIds,
+      mapPlaceIds: draft.mapPlaceIds,
       paymentTerms: draft.paymentTerms,
       cancellationTerms: draft.cancellationTerms,
       properties: draft.properties.map((property) => ({
@@ -403,6 +410,12 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 </div>
               )}
             </div>
+            <MapChoice
+              options={c.mapOptions}
+              layerIds={draft.mapLayerIds}
+              placeIds={draft.mapPlaceIds}
+              onChange={(mapLayerIds, mapPlaceIds) => setDraft({ ...draft, mapLayerIds, mapPlaceIds })}
+            />
             <label className="border-ink-200/60 flex items-start gap-2 border-t pt-3 text-[13px] sm:col-span-2">
               <input type="checkbox" checked={draft.canAnswer} onChange={(e) => setDraft({ ...draft, canAnswer: e.target.checked })} className="accent-brand-500 mt-0.5 h-4 w-4" />
               <span>
@@ -961,6 +974,75 @@ function CardPhotos({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * What the client's map shows besides the properties (the owner, 2026-11-17:
+ * "ideally we just see the property and then any points of interest we
+ * decide"): whole layers of the event's places — Venues, say — and single
+ * places picked by name. Nothing chosen: the properties only.
+ */
+function MapChoice({
+  options,
+  layerIds,
+  placeIds,
+  onChange,
+}: {
+  options: Card["mapOptions"];
+  layerIds: string[];
+  placeIds: string[];
+  onChange: (layerIds: string[], placeIds: string[]) => void;
+}) {
+  const [adding, setAdding] = useState("");
+  const inLayer = (place: Card["mapOptions"]["places"][number]) => Boolean(place.layerId && layerIds.includes(place.layerId));
+  const picked = options.places.filter((place) => placeIds.includes(place.id));
+  return (
+    <div className="border-ink-200/60 border-t pt-3 sm:col-span-2">
+      <span className="text-ink-700 text-[13px] font-medium">On the client&apos;s map</span>
+      <span className="text-ink-500 ml-2 text-xs font-light">the properties, and only what is ticked or added here</span>
+      {options.places.length === 0 ? (
+        <p className="text-ink-500 mt-1 text-xs font-light">The event has no places of interest yet — its map page is where they are added.</p>
+      ) : (
+        <>
+          <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1">
+            {options.layers.map((layer) => (
+              <label key={layer.id} className="text-ink-700 flex items-center gap-1.5 text-[13px] font-light">
+                <input
+                  type="checkbox"
+                  checked={layerIds.includes(layer.id)}
+                  onChange={(e) => onChange(e.target.checked ? [...layerIds, layer.id] : layerIds.filter((id) => id !== layer.id), placeIds)}
+                  className="accent-brand-500"
+                />
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: layer.color }} />
+                All {layer.name} ({layer.count})
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {picked.map((place) => (
+              <span key={place.id} className="bg-brand-50 text-brand-800 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs">
+                {place.name}
+                <button type="button" aria-label={`Take ${place.name} off the map`} onClick={() => onChange(layerIds, placeIds.filter((id) => id !== place.id))} className="hover:text-[#c03654]">
+                  ×
+                </button>
+              </span>
+            ))}
+            <span className="min-w-64 flex-1">
+              <Combobox
+                value={adding}
+                onChange={(id) => {
+                  if (id && !placeIds.includes(id)) onChange(layerIds, [...placeIds, id]);
+                  setAdding("");
+                }}
+                options={options.places.filter((place) => !placeIds.includes(place.id) && !inLayer(place)).map((place) => ({ id: place.id, label: place.name, detail: place.layerName }))}
+                placeholder="Add a single place — type to search"
+              />
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

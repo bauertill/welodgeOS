@@ -42,8 +42,9 @@ const cardInclude = {
       startDate: true,
       endDate: true,
       placesOfInterest: {
-        select: { id: true, name: true, category: true, notes: true, latitude: true, longitude: true, layer: { select: { measured: true, name: true, color: true } } },
+        select: { id: true, name: true, category: true, notes: true, latitude: true, longitude: true, layerId: true, layer: { select: { measured: true, name: true, color: true } } },
       },
+      mapLayers: { orderBy: { position: "asc" }, select: { id: true, name: true, color: true } },
     },
   },
   salesRequest: {
@@ -91,6 +92,8 @@ const cardHistory = (card: { id: string; salesRequestId: string | null; eventId:
 function shape(card: LoadedCard) {
   const places = card.event?.placesOfInterest ?? [];
   const venues = measuredPlaces(places);
+  /** What the client's map shows besides the properties: the layers and places the team chose (2026-11-17). */
+  const onMap = places.filter((place) => (place.layerId && card.mapLayerIds.includes(place.layerId)) || card.mapPlaceIds.includes(place.id));
   return {
     id: card.id,
     name: card.name,
@@ -136,7 +139,15 @@ function shape(card: LoadedCard) {
     eventId: card.eventId,
     event: card.event ? { name: card.event.name, startDate: card.event.startDate, endDate: card.event.endDate } : null,
     asked: (card.salesRequest?.lines ?? []).map((line) => ({ rooms: line.rooms, roomType: line.roomType, checkIn: line.checkIn, checkOut: line.checkOut })),
-    venues: venues.map((place) => ({
+    mapLayerIds: card.mapLayerIds,
+    mapPlaceIds: card.mapPlaceIds,
+    /** For the team choosing what the client's map shows (2026-11-17). */
+    mapOptions: {
+      layers: (card.event?.mapLayers ?? []).map((layer) => ({ ...layer, count: places.filter((place) => place.layerId === layer.id).length })),
+      places: places.map((place) => ({ id: place.id, name: place.name, layerId: place.layerId, layerName: place.layer?.name ?? null })),
+    },
+    /** The places on the client's map — only those chosen (2026-11-17; until then every venue, or every place when none was a venue). */
+    venues: onMap.map((place) => ({
       id: place.id,
       name: place.name,
       category: place.category,
@@ -514,6 +525,9 @@ export const rateCardRouter = createTRPCRouter({
         clientCanAnswer: z.boolean().optional(),
         /** Payment and cancellation terms: the card's, or each property's own — the sales person decides (2026-11-17). */
         termsPerProperty: z.boolean().optional(),
+        /** What the client's map shows besides the properties (2026-11-17). */
+        mapLayerIds: z.array(z.string().max(40)).max(50).optional(),
+        mapPlaceIds: z.array(z.string().max(40)).max(500).optional(),
         paymentTerms: z.string().max(3000).optional(),
         cancellationTerms: z.string().max(3000).optional(),
         properties: z
@@ -601,6 +615,8 @@ export const rateCardRouter = createTRPCRouter({
             markupBasisPoints: input.markupBasisPoints,
             ...(input.clientCanAnswer !== undefined ? { clientCanAnswer: input.clientCanAnswer } : {}),
             ...(input.termsPerProperty !== undefined ? { termsPerProperty: input.termsPerProperty } : {}),
+            ...(input.mapLayerIds !== undefined ? { mapLayerIds: input.mapLayerIds } : {}),
+            ...(input.mapPlaceIds !== undefined ? { mapPlaceIds: input.mapPlaceIds } : {}),
             ...(input.paymentTerms !== undefined ? { paymentTerms: input.paymentTerms.trim() || null } : {}),
             ...(input.cancellationTerms !== undefined ? { cancellationTerms: input.cancellationTerms.trim() || null } : {}),
           },
@@ -735,12 +751,15 @@ export const rateCardRouter = createTRPCRouter({
         where: { shareToken: input.token },
         select: {
           eventId: true,
+          mapLayerIds: true,
+          mapPlaceIds: true,
           properties: { where: { id: input.rateCardPropertyId }, select: { property: { select: { latitude: true, longitude: true } } } },
         },
       });
       const from = card?.properties[0]?.property;
+      // Only to a place the card's map shows (2026-11-17).
       const place = await ctx.db.placeOfInterest.findFirst({
-        where: { id: input.placeId, eventId: card?.eventId ?? "none" },
+        where: { id: input.placeId, eventId: card?.eventId ?? "none", OR: [{ id: { in: card?.mapPlaceIds ?? [] } }, { layerId: { in: card?.mapLayerIds ?? [] } }] },
         select: { latitude: true, longitude: true },
       });
       if (!from?.latitude || !from.longitude || !place) throw new TRPCError({ code: "NOT_FOUND", message: "That journey cannot be worked out." });

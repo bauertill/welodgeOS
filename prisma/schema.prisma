@@ -1987,6 +1987,10 @@ model RateCard {
   /// Payment and cancellation terms for the client (doc §4.11, 2026-11-17): one set for the whole card,
   /// or — when the sales person chooses — each property its own (on RateCardProperty).
   termsPerProperty  Boolean       @default(false)
+  /// What the client's map shows besides the properties (doc §4.11, 2026-11-17): whole layers of the
+  /// event's places (Venues…) and single places, chosen by the team. Both empty: the properties only.
+  mapLayerIds       String[]      @default([])
+  mapPlaceIds       String[]      @default([])
   paymentTerms      String?
   cancellationTerms String?
   createdBy         User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
