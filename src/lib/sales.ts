@@ -193,3 +193,35 @@ export function currencyForCountry(country: string | null | undefined) {
   };
   return byCountry[name] ?? "EUR";
 }
+
+export type RoomTypeShort = (typeof roomTypeGroups)[number]["types"][number]["short"];
+
+/**
+ * Which of the few room types above a hotel's own room category is (doc §3.9,
+ * the owner 2026-11-17: filters "should only be a few") — read from its name,
+ * its beds and its bedrooms, since every hotel names its rooms its own way.
+ * Null when it cannot be told (a bare room number, say).
+ */
+export function roomTypeOf(category: {
+  name: string;
+  bedrooms?: number | null;
+  bedConfiguration?: string | null;
+  capacity?: number | null;
+}): RoomTypeShort | null {
+  const name = category.name.toLowerCase();
+  const beds = (category.bedConfiguration ?? "").toLowerCase();
+  const words = `${name} ${beds}`;
+  if (/\bstudio\b/.test(words)) return "Studio";
+  const bedroomsInName = /(\d)\s*[- ]?\s*(?:bed ?rooms?|br)\b/.exec(name)?.[1];
+  const bedrooms = category.bedrooms ?? (bedroomsInName ? Number(bedroomsInName) : null);
+  const apartment = /\b(apartments?|apts?|condos?|residences?|homes?|houses?|villas?)\b/.test(name) || (category.bedrooms != null && !/\bsuite\b/.test(name));
+  if (apartment && bedrooms) return bedrooms >= 4 ? "4 bedrooms" : bedrooms === 3 ? "3 bedrooms" : bedrooms === 2 ? "2 bedrooms" : "1 bedroom";
+  if (/\bsuites?\b/.test(name)) return "Suite";
+  if (/\btriple\b/.test(words)) return "Triple";
+  // Two beds — twin, double-double, two queens — is a twin.
+  if (/\btwin\b|\bdouble (queen|double|full)\b|\b(two|2) (queen|double|full|king|beds?)\b|\bqueen[- ]queen\b|\bqq\b/.test(words)) return "Twin";
+  if (/\bsingle\b/.test(words)) return "Single";
+  if (/\b(king|queen|double|full|standard|deluxe|superior|classic|room|run of house|roh)\b/.test(words)) return "Double";
+  if (apartment) return "1 bedroom";
+  return null;
+}

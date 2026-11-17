@@ -6,6 +6,7 @@ import { Fragment, useMemo, useState } from "react";
 
 import { useRemembered } from "~/lib/remembered";
 import { formatMoney } from "~/lib/format";
+import { roomTypeGroups, roomTypeOf } from "~/lib/sales";
 import type { CategoryContractStatus, PropertyType, ScoutingDetail, ScoutingStatus } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
@@ -69,7 +70,7 @@ export function ScoutingList({
   const [view, setView] = useState<"list" | "map">("list");
   // Filters stay as set until reset, per event (the team, 2026-11-12).
   const [types, setTypes] = useRemembered<PropertyType[]>(`scouting:${eventId}:types`, []);
-  const [roomType, setRoomType] = useRemembered(`scouting:${eventId}:roomType`, "");
+  const [roomType, setRoomType] = useRemembered(`scouting:${eventId}:roomKind`, "");
   const [area, setArea] = useRemembered(`scouting:${eventId}:area`, "");
   const [maxRate, setMaxRate] = useRemembered(`scouting:${eventId}:maxRate`, "");
   /** Ticked rows, to move several into a group at once (doc §3.9). */
@@ -125,15 +126,12 @@ export function ScoutingList({
     () => [...new Set(allRows.map((entry) => areaOf(entry.property)).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [allRows],
   );
-  const roomTypeNames = useMemo(
-    () => [...new Set(allRows.flatMap((entry) => entry.property.categories.map((category) => category.name.trim())))].sort((a, b) => a.localeCompare(b)),
-    [allRows],
-  );
-  const roomWords = roomType.trim().toLowerCase();
+  // The few room types a client asks for (doc §4.11), each hotel's own names read into them.
+  const roomWords = roomType;
   const ceiling = Number(maxRate.replace(",", "."));
   const rows = allRows.filter((entry) => {
     if (area && areaOf(entry.property) !== area) return false;
-    const matching = roomWords ? entry.property.categories.filter((category) => category.name.toLowerCase().includes(roomWords)) : null;
+    const matching = roomWords ? entry.property.categories.filter((category) => roomTypeOf(category) === roomWords) : null;
     if (matching && matching.length === 0) return false;
     if (maxRate.trim() && Number.isFinite(ceiling)) {
       // A night at or under the price — for the room type chosen, when one is.
@@ -611,19 +609,18 @@ export function ScoutingList({
           ))}
         </Select>
 
-        <input
-          list={`room-types-${eventId}`}
-          value={roomType}
-          onChange={(e) => setRoomType(e.target.value)}
-          placeholder="Room type — suite, king…"
-          aria-label="Room type"
-          className={`w-48 rounded-full border px-4 py-2 text-[13px] font-light outline-none ${roomType ? "border-brand-400 bg-brand-50" : "border-ink-200 bg-white"}`}
-        />
-        <datalist id={`room-types-${eventId}`}>
-          {roomTypeNames.map((name) => (
-            <option key={name} value={name} />
+        <Select value={roomType} onChange={(e) => setRoomType(e.target.value)} className="w-auto" aria-label="Room type">
+          <option value="">Every room type</option>
+          {roomTypeGroups.map((group) => (
+            <optgroup key={group.kind} label={group.label}>
+              {group.types.map((type) => (
+                <option key={type.short} value={type.short}>
+                  {type.short}
+                </option>
+              ))}
+            </optgroup>
           ))}
-        </datalist>
+        </Select>
 
         <label className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-light ${maxRate ? "border-brand-400 bg-brand-50" : "border-ink-200 bg-white"}`}>
           <span className="text-ink-500">Up to</span>

@@ -1124,8 +1124,13 @@ and video columns are gone (the video is a small link under the name).
 ticked), beside *Every provider* and *With quotations*. To narrow down to the options worth
 comparing (the team, 2026-11-17) there are also:
 - **Area** — the areas (or towns) of the properties on this list.
-- **Room type** — words in a room type's name (*suite*, *king*, *2 bedroom*), with the names on
-  this list offered as you type; a property shows when any of its room types matches.
+- **Room type** — only the few types a client asks for (§4.11): *Single, Double, Twin, Triple,
+  Suite* for hotel rooms, *Studio, 1–4 bedrooms* for apartments (the owner, 2026-11-17 — every
+  hotel's own room names offered at once were far too many). Each hotel's room categories are read
+  into these from their name, beds and bedrooms: a *suite* is a Suite, two beds (*Double Queen*,
+  *Twin*, *2 Queen*) a Twin, *King*, *Queen*, *Double* or *Run of house* a Double, *Studio* a
+  Studio, an apartment by its bedrooms. One that cannot be told (a bare room number) matches none.
+  A property shows when any of its room categories is of the type chosen.
 - **Up to … a night** — properties with a night at or under that price: a buying rate agreed, or
   a rate in a quotation not declined, in its own currency. With a room type chosen, only that
   room type's rates count.
