@@ -123,8 +123,9 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
   };
   const total = chosen.reduce((sum, [lineId, periods]) => {
     const found = lines.get(lineId);
-    return found ? sum + periods.reduce((part, pick) => part + found.line.sellingCents * (Number(pick.rooms) || 0) * (nights(pick) ?? 0), 0) : sum;
+    return found ? sum + periods.reduce((part, pick) => part + (found.line.sellingCents ?? 0) * (Number(pick.rooms) || 0) * (nights(pick) ?? 0), 0) : sum;
   }, 0);
+  const tbcChosen = chosen.some(([lineId]) => lines.get(lineId)?.line.sellingCents === null);
   const blocked = Object.entries(picks).some(([lineId, periods]) => {
     const found = lines.get(lineId);
     return found ? periods.some((pick) => problem(found.line, pick)) : false;
@@ -222,7 +223,11 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
                       <p className="text-ink-500 font-light">
                         {problem(line, pick) ? (
                           <span className="font-normal text-[#c03654]">{problem(line, pick)}</span>
-                        ) : n !== null && Number(pick.rooms) > 0 && (
+                        ) : n !== null && Number(pick.rooms) > 0 && line.sellingCents === null ? (
+                          <>
+                            {pick.rooms} {Number(pick.rooms) === 1 ? "room" : "rooms"} × {n} nights — the rate is to be confirmed by We Lodge
+                          </>
+                        ) : n !== null && Number(pick.rooms) > 0 && line.sellingCents !== null && (
                           <>
                             {pick.rooms} {Number(pick.rooms) === 1 ? "room" : "rooms"} × {n} nights × {formatMoney(line.sellingCents, card.currency)} ={" "}
                             <span className="text-ink-900 font-medium">{formatMoney(line.sellingCents * Number(pick.rooms) * n, card.currency)}</span>
@@ -283,7 +288,7 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
         {total > 0 && (
           <p className="text-ink-900 border-ink-200/70 mt-2 border-t pt-2 text-sm">
             Total <span className="font-semibold">{formatMoney(total, card.currency)}</span>
-            <span className="text-ink-500 font-light"> — subject to availability until confirmed</span>
+            <span className="text-ink-500 font-light"> — subject to availability until confirmed{tbcChosen ? "; rooms with a rate to be confirmed are not included" : ""}</span>
           </p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -326,7 +331,7 @@ export function SharedRateCard({ token, card }: { token: string; card: Card }) {
               {total > 0 && (
                 <p className="text-ink-900 border-ink-200/70 mt-2 border-t pt-2 text-sm">
                   Total <span className="font-semibold">{formatMoney(total, card.currency)}</span>
-                  <span className="text-ink-500 font-light"> — subject to availability until confirmed</span>
+                  <span className="text-ink-500 font-light"> — subject to availability until confirmed{tbcChosen ? "; rooms with a rate to be confirmed are not included" : ""}</span>
                 </p>
               )}
             </div>

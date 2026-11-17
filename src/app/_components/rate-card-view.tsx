@@ -35,7 +35,7 @@ export type ClientRateCard = {
     photos: (CardPhoto & { categoryId: string | null })[];
     /** Every photo and video picked for clients — "See all", opened on the card. */
     allMedia?: CardPhoto[];
-    lines: { id: string; categoryId: string | null; name: string; sleeps: number | null; sellingCents: number; available: number | null; minNights: number | null }[];
+    lines: { id: string; categoryId: string | null; name: string; sleeps: number | null; /** Empty: the rate is to be confirmed (2026-11-17). */ sellingCents: number | null; available: number | null; minNights: number | null }[];
   }[];
 };
 
@@ -174,7 +174,7 @@ export function RateCardView({
                         <td className="text-ink-500 py-2.5 font-light">{line.sleeps ?? "—"}</td>
                         <td className="text-ink-500 py-2.5 font-light">{line.available ?? "—"}</td>
                         <td className="text-ink-500 py-2.5 font-light">{line.minNights ? `${line.minNights} ${line.minNights === 1 ? "night" : "nights"}` : "—"}</td>
-                        <td className="text-ink-900 py-2.5 text-right font-medium whitespace-nowrap">{formatMoney(line.sellingCents, card.currency)}</td>
+                        <td className="text-ink-900 py-2.5 text-right font-medium whitespace-nowrap">{line.sellingCents !== null ? formatMoney(line.sellingCents, card.currency) : <span className="text-ink-500 font-light italic">Rate to be confirmed</span>}</td>
                         {lineAction && <td className="py-2.5 pl-3 text-right print:hidden">{lineAction(line, property)}</td>}
                       </tr>
                       {extra && (

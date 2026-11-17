@@ -181,6 +181,7 @@ function shape(card: LoadedCard) {
           sleeps: line.sleeps,
           buyingCents: line.buyingCents,
           sellingCents: line.sellingCents,
+          rateTbc: line.rateTbc,
           available: line.available,
           minNights: line.minNights,
         })),
@@ -215,6 +216,12 @@ async function propertyEntries(
   });
   const rates = options.eventId ? (await eventRates(tx, { propertyIds: options.propertyIds, eventId: options.eventId })).get(options.eventId) : undefined;
   const currency = options.currency ?? [...(rates?.values() ?? [])][0]?.currency ?? "USD";
+  // A property marked "Rate TBC" on the event's board: its rooms with no rate come onto the card as rate to be confirmed (2026-11-17).
+  const tbc = new Set(
+    options.eventId
+      ? (await tx.scoutingEntry.findMany({ where: { eventId: options.eventId, propertyId: { in: options.propertyIds }, detail: "RATE_TBC" }, select: { propertyId: true } })).map((entry) => entry.propertyId)
+      : [],
+  );
   const creates = options.propertyIds
     .map((id) => properties.find((property) => property.id === id))
     .filter((property): property is (typeof properties)[number] => Boolean(property))
@@ -233,6 +240,7 @@ async function propertyEntries(
             sleeps: category.capacity,
             buyingCents: buying,
             sellingCents: buying === null ? null : withMarkup(buying, options.markupBasisPoints),
+            rateTbc: buying === null && tbc.has(property.id),
             position: at,
           };
         }),
@@ -475,6 +483,8 @@ export const rateCardRouter = createTRPCRouter({
                     name: z.string().trim().min(1, "Every room type needs a name.").max(120).optional(),
                     sleeps: z.number().int().min(1, "A room sleeps at least 1.").max(50).nullable().optional(),
                     sellingCents: z.number().int().min(0).nullable(),
+                    /** Offered with the rate to be confirmed (2026-11-17). */
+                    rateTbc: z.boolean().default(false),
                     available: z.number().int().min(1, "Units available has to be at least 1.").max(10_000).nullable(),
                     minNights: z.number().int().min(1, "The minimum stay has to be at least 1 night.").max(365).nullable(),
                   }),
@@ -487,6 +497,7 @@ export const rateCardRouter = createTRPCRouter({
                     name: z.string().trim().min(1, "Every room type needs a name.").max(120),
                     sleeps: z.number().int().min(1, "A room sleeps at least 1.").max(50).nullable(),
                     sellingCents: z.number().int().min(0).nullable(),
+                    rateTbc: z.boolean().default(false),
                     available: z.number().int().min(1, "Units available has to be at least 1.").max(10_000).nullable(),
                     minNights: z.number().int().min(1, "The minimum stay has to be at least 1 night.").max(365).nullable(),
                   }),
@@ -554,7 +565,7 @@ export const rateCardRouter = createTRPCRouter({
             if (!own) continue;
             const name = line.name ?? own.name;
             const sleeps = line.sleeps === undefined ? own.sleeps : line.sleeps;
-            await tx.rateCardLine.update({ where: { id: line.id }, data: { name, sleeps, sellingCents: line.sellingCents, available: line.available, minNights: line.minNights } });
+            await tx.rateCardLine.update({ where: { id: line.id }, data: { name, sleeps, sellingCents: line.rateTbc ? null : line.sellingCents, rateTbc: line.rateTbc, available: line.available, minNights: line.minNights } });
             // The card and the property describe the same room: a new name or occupancy here is the property's too.
             if (own.category && (own.category.name !== name || (sleeps !== null && own.category.capacity !== sleeps))) {
               await tx.roomCategory.update({ where: { id: own.category.id }, data: { name, ...(sleeps !== null ? { capacity: sleeps } : {}) } });
@@ -581,7 +592,8 @@ export const rateCardRouter = createTRPCRouter({
                   categoryId: category.id,
                   name: added.name,
                   sleeps: added.sleeps ?? 2,
-                  sellingCents: added.sellingCents,
+                  sellingCents: added.rateTbc ? null : added.sellingCents,
+                  rateTbc: added.rateTbc,
                   available: added.available,
                   minNights: added.minNights,
                   position,
@@ -1016,13 +1028,14 @@ export function clientCopy(card: ReturnType<typeof shape>) {
         description: property.description,
         ...clientMedia(property),
         lines: property.lines
-          .filter((line) => line.sellingCents !== null)
+          // Offered: a price, or the rate to be confirmed — then no price (2026-11-17).
+          .filter((line) => line.sellingCents !== null || line.rateTbc)
           .map((line) => ({
             id: line.id,
             categoryId: line.categoryId,
             name: line.name,
             sleeps: line.sleeps,
-            sellingCents: line.sellingCents!,
+            sellingCents: line.rateTbc ? null : line.sellingCents,
             available: line.available,
             minNights: line.minNights,
           })),
