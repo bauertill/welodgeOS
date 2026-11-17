@@ -395,12 +395,28 @@ export const rateCardRouter = createTRPCRouter({
                 .array(
                   z.object({
                     id: z.string(),
+                    /** The room type's name and how many it sleeps — changed here, changed on the property too (2026-11-17). */
+                    name: z.string().trim().min(1, "Every room type needs a name.").max(120).optional(),
+                    sleeps: z.number().int().min(1, "A room sleeps at least 1.").max(50).nullable().optional(),
                     sellingCents: z.number().int().min(0).nullable(),
                     available: z.number().int().min(1, "Units available has to be at least 1.").max(10_000).nullable(),
                     minNights: z.number().int().min(1, "The minimum stay has to be at least 1 night.").max(365).nullable(),
                   }),
                 )
                 .max(60),
+              /** Room types added on the card — each becomes a room type of the property as well (2026-11-17). */
+              added: z
+                .array(
+                  z.object({
+                    name: z.string().trim().min(1, "Every room type needs a name.").max(120),
+                    sleeps: z.number().int().min(1, "A room sleeps at least 1.").max(50).nullable(),
+                    sellingCents: z.number().int().min(0).nullable(),
+                    available: z.number().int().min(1, "Units available has to be at least 1.").max(10_000).nullable(),
+                    minNights: z.number().int().min(1, "The minimum stay has to be at least 1 night.").max(365).nullable(),
+                  }),
+                )
+                .max(30)
+                .default([]),
             }),
           )
           .max(30),
@@ -412,14 +428,32 @@ export const rateCardRouter = createTRPCRouter({
       // A room is only offered with how many units there are and the shortest stay (doc §4.11).
       for (const property of input.properties) {
         if (input.removedPropertyIds.includes(property.id)) continue;
-        if (property.lines.some((line) => line.sellingCents !== null && (line.available === null || line.minNights === null))) {
+        if ([...property.lines, ...property.added].some((line) => line.sellingCents !== null && (line.available === null || line.minNights === null))) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "For every room offered, say how many units are available and the minimum stay." });
         }
       }
       await ctx.db.$transaction(async (tx) => {
-        const card = await tx.rateCard.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, salesRequestId: true, eventId: true, properties: { select: { id: true, lines: { select: { id: true } } } } } });
+        const card = await tx.rateCard.findUniqueOrThrow({
+          where: { id: input.id },
+          select: {
+            id: true,
+            name: true,
+            salesRequestId: true,
+            eventId: true,
+            properties: {
+              select: {
+                id: true,
+                propertyId: true,
+                lines: { select: { id: true, name: true, sleeps: true, categoryId: true, position: true, category: { select: { id: true, name: true, capacity: true } } } },
+              },
+            },
+          },
+        });
         const ownProperties = new Set(card.properties.map((property) => property.id));
-        const ownLines = new Set(card.properties.flatMap((property) => property.lines.map((line) => line.id)));
+        const ownLines = new Map(card.properties.flatMap((property) => property.lines.map((line) => [line.id, line] as const)));
+        /** What changed on each property's own room types, for its history. */
+        const propertyNotes = new Map<string, string[]>();
+        const note = (propertyId: string, text: string) => propertyNotes.set(propertyId, [...(propertyNotes.get(propertyId) ?? []), text]);
         await tx.rateCard.update({
           where: { id: card.id },
           data: { name: input.name, intro: input.intro.trim() || null, markupBasisPoints: input.markupBasisPoints },
@@ -438,10 +472,51 @@ export const rateCardRouter = createTRPCRouter({
               data: property.photoIds.filter((id) => own.has(id)).map((photoId, index) => ({ rateCardPropertyId: property.id, photoId, position: index })),
             });
           }
+          const entry = card.properties.find((one) => one.id === property.id)!;
           for (const line of property.lines) {
-            if (!ownLines.has(line.id)) continue;
-            await tx.rateCardLine.update({ where: { id: line.id }, data: { sellingCents: line.sellingCents, available: line.available, minNights: line.minNights } });
+            const own = ownLines.get(line.id);
+            if (!own) continue;
+            const name = line.name ?? own.name;
+            const sleeps = line.sleeps === undefined ? own.sleeps : line.sleeps;
+            await tx.rateCardLine.update({ where: { id: line.id }, data: { name, sleeps, sellingCents: line.sellingCents, available: line.available, minNights: line.minNights } });
+            // The card and the property describe the same room: a new name or occupancy here is the property's too.
+            if (own.category && (own.category.name !== name || (sleeps !== null && own.category.capacity !== sleeps))) {
+              await tx.roomCategory.update({ where: { id: own.category.id }, data: { name, ...(sleeps !== null ? { capacity: sleeps } : {}) } });
+              note(
+                entry.propertyId,
+                own.category.name !== name ? `Room type renamed: ${own.category.name} → ${name}` : `${name} now sleeps ${sleeps}`,
+              );
+            }
           }
+          if (property.added.length) {
+            const highest = await tx.roomCategory.aggregate({ where: { propertyId: entry.propertyId }, _max: { sortOrder: true } });
+            let order = highest._max.sortOrder ?? -1;
+            let position = Math.max(-1, ...entry.lines.map((line) => line.position));
+            for (const added of property.added) {
+              order += 1;
+              position += 1;
+              // A room type the property did not have: it is added to the property, with the units offered as its count.
+              const category = await tx.roomCategory.create({
+                data: { propertyId: entry.propertyId, name: added.name, capacity: added.sleeps ?? 2, unitCount: added.available ?? 0, sortOrder: order },
+              });
+              await tx.rateCardLine.create({
+                data: {
+                  rateCardPropertyId: property.id,
+                  categoryId: category.id,
+                  name: added.name,
+                  sleeps: added.sleeps ?? 2,
+                  sellingCents: added.sellingCents,
+                  available: added.available,
+                  minNights: added.minNights,
+                  position,
+                },
+              });
+              note(entry.propertyId, `Room type added: ${added.name} (${added.available ?? 0} ${added.available === 1 ? "unit" : "units"})`);
+            }
+          }
+        }
+        for (const [propertyId, notes] of propertyNotes) {
+          await logAudit(tx, { actorId: ctx.session.user.id, entity: "Property", entityId: propertyId, summary: `Room types changed from the rate card "${input.name}"`, changes: notes.join("\n") });
         }
         await logAudit(tx, { actorId: ctx.session.user.id, ...cardHistory(card), summary: `Rate card saved: ${input.name}` });
       });

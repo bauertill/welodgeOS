@@ -20,8 +20,11 @@ type Draft = {
     id: string;
     description: string;
     photoIds: string[];
-    /** `off`: a room type we are not proposing at this property — kept, but not on the card (2026-11-11). */
-    lines: { id: string; selling: string; available: string; minNights: string; off: boolean }[];
+    /**
+     * `off`: a room type we are not proposing at this property — kept, but not on the card (2026-11-11).
+     * `added`: typed in on the card and not saved yet — saving adds it to the property's room types too (2026-11-17).
+     */
+    lines: { id: string; name: string; sleeps: string; selling: string; available: string; minNights: string; off: boolean; added?: boolean }[];
   }[];
   removed: string[];
 };
@@ -48,6 +51,8 @@ const draftOf = (card: Card): Draft => ({
       photoIds: property.photoIds,
       lines: property.lines.map((line) => ({
         id: line.id,
+        name: line.name,
+        sleeps: line.sleeps === null ? "" : String(line.sleeps),
         selling: toText(line.sellingCents),
         available: line.available === null ? "" : String(line.available),
         minNights: line.minNights === null ? "" : String(line.minNights),
@@ -95,9 +100,14 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
   }, [hasNew, id, markSeen]);
 
   const save = api.rateCard.save.useMutation({
-    onSuccess: () => {
-      setSaved(JSON.stringify(draft));
-      void utils.rateCard.invalidate();
+    onSuccess: async () => {
+      await utils.rateCard.invalidate();
+      // Fresh from the database: room types added on the card now have their own ids.
+      const fresh = await utils.rateCard.byId.fetch({ id });
+      const next = draftOf(fresh);
+      setDraft(next);
+      setSaved(JSON.stringify(next));
+      void utils.property.invalidate();
     },
   });
   const share = api.rateCard.share.useMutation({
@@ -159,6 +169,10 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
         .flatMap((property) => property.lines)
         .filter((line) => !line.off && toCents(line.selling) !== null && (toCount(line.available) === null || toCount(line.minNights) === null)).length
     : 0;
+  /** Room types left without a name — every room on the card, and on the property, needs one. */
+  const unnamed = draft
+    ? draft.properties.filter((property) => !draft.removed.includes(property.id)).flatMap((property) => property.lines).filter((line) => !line.name.trim()).length
+    : 0;
   const close = () => {
     if (dirty && !window.confirm("Close without saving the rate card?")) return;
     onClose();
@@ -176,11 +190,25 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
         id: property.id,
         description: property.description,
         photoIds: property.photoIds,
-        lines: property.lines.map((line) =>
-          line.off
-            ? { id: line.id, sellingCents: null, available: null, minNights: null }
-            : { id: line.id, sellingCents: toCents(line.selling), available: toCount(line.available), minNights: toCount(line.minNights) },
-        ),
+        lines: property.lines
+          .filter((line) => !line.added)
+          .map((line) => ({
+            id: line.id,
+            name: line.name.trim(),
+            sleeps: toCount(line.sleeps),
+            ...(line.off
+              ? { sellingCents: null, available: null, minNights: null }
+              : { sellingCents: toCents(line.selling), available: toCount(line.available), minNights: toCount(line.minNights) }),
+          })),
+        added: property.lines
+          .filter((line) => line.added && !line.off)
+          .map((line) => ({
+            name: line.name.trim(),
+            sleeps: toCount(line.sleeps),
+            sellingCents: toCents(line.selling),
+            available: toCount(line.available),
+            minNights: toCount(line.minNights),
+          })),
       })),
       removedPropertyIds: draft.removed,
     });
@@ -233,13 +261,13 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 description: property.description.trim() || null,
                 ...clientMedia({ ...source, photoIds: property.photoIds }),
                 lines: property.lines
-                  .map((line) => ({ line, source: source.lines.find((one) => one.id === line.id)! }))
+                  .map((line) => ({ line, source: source.lines.find((one) => one.id === line.id) }))
                   .filter(({ line }) => !line.off && toCents(line.selling) !== null)
                   .map(({ line, source: lineSource }) => ({
                     id: line.id,
-                    categoryId: lineSource.categoryId,
-                    name: lineSource.name,
-                    sleeps: lineSource.sleeps,
+                    categoryId: lineSource?.categoryId ?? null,
+                    name: line.name.trim() || lineSource?.name || "Room",
+                    sleeps: toCount(line.sleeps),
                     sellingCents: toCents(line.selling)!,
                     available: toCount(line.available),
                     minNights: toCount(line.minNights),
@@ -338,13 +366,41 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                         {source.nearest ? `${distance(source.nearest.km)} from ${source.nearest.name}` : "No distance — no coordinates or venue"}
                       </span>
                     </h3>
-                    <button
-                      type="button"
-                      onClick={() => setDraft({ ...draft, removed: [...draft.removed, property.id] })}
-                      className="text-xs font-light text-[#c03654] hover:underline"
-                    >
-                      Take off the card
-                    </button>
+                    <span className="flex items-center gap-3">
+                      {/* The order the client sees the properties in (2026-11-17). */}
+                      {(["up", "down"] as const).map((way) => {
+                        const onCard = draft.properties.filter((one) => !draft.removed.includes(one.id));
+                        const at = onCard.findIndex((one) => one.id === property.id);
+                        const swapWith = onCard[way === "up" ? at - 1 : at + 1];
+                        return (
+                          <button
+                            key={way}
+                            type="button"
+                            disabled={!swapWith}
+                            onClick={() => {
+                              if (!swapWith) return;
+                              const list = [...draft.properties];
+                              const i = list.findIndex((one) => one.id === property.id);
+                              const j = list.findIndex((one) => one.id === swapWith.id);
+                              [list[i], list[j]] = [list[j]!, list[i]!];
+                              setDraft({ ...draft, properties: list });
+                            }}
+                            title={way === "up" ? "Move up — the client sees it earlier" : "Move down — the client sees it later"}
+                            aria-label={`Move ${source.name} ${way}`}
+                            className="text-ink-500 hover:text-brand-700 text-xs disabled:opacity-30"
+                          >
+                            {way === "up" ? "↑ Up" : "↓ Down"}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setDraft({ ...draft, removed: [...draft.removed, property.id] })}
+                        className="text-xs font-light text-[#c03654] hover:underline"
+                      >
+                        Take off the card
+                      </button>
+                    </span>
                   </div>
                   <div className="mt-2">
                     <div className="mb-1">
@@ -383,13 +439,28 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                     </thead>
                     <tbody>
                       {shown.map((line) => {
-                        const lineSource = source.lines.find((one) => one.id === line.id)!;
+                        const lineSource = { name: line.name.trim() || "this room", buyingCents: source.lines.find((one) => one.id === line.id)?.buyingCents ?? null };
                         const selling = toCents(line.selling);
                         const margin = selling !== null && lineSource.buyingCents ? selling - lineSource.buyingCents : null;
                         return (
                           <tr key={line.id} className="border-ink-200/40 border-b last:border-0">
-                            <td className="text-ink-900 py-1.5">{lineSource.name}</td>
-                            <td className="text-ink-500 py-1.5 font-light">{lineSource.sleeps ?? "—"}</td>
+                            <td className="py-1.5 pr-2">
+                              <span className={`block min-w-36 rounded-lg ${line.name.trim() ? "" : "ring-2 ring-[#c03654]/50"}`}>
+                                <Input
+                                  value={line.name}
+                                  placeholder="Room type, e.g. Double"
+                                  aria-label="Room type name"
+                                  title={line.added ? "New — saving adds it to the property's room types too" : "Changing the name here changes it on the property too"}
+                                  onChange={(e) => setLine(line.id, { name: e.target.value })}
+                                />
+                              </span>
+                              {line.added && <span className="text-brand-700 mt-0.5 block text-[11px] font-light">New — added to the property on save</span>}
+                            </td>
+                            <td className="py-1.5 pr-2">
+                              <span className="block w-14">
+                                <Input inputMode="numeric" value={line.sleeps} aria-label={`Sleeps — ${lineSource.name}`} onChange={(e) => setLine(line.id, { sleeps: e.target.value })} />
+                              </span>
+                            </td>
                             <td className="text-ink-500 py-1.5 font-light">
                               {lineSource.buyingCents !== null ? formatMoney(lineSource.buyingCents, c.currency) : <span className="text-ink-500/60">No rate yet</span>}
                             </td>
@@ -453,7 +524,11 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                             <td className="py-1.5 pl-2 text-right">
                               <button
                                 type="button"
-                                onClick={() => setLine(line.id, { off: true, selling: "", available: "", minNights: "" })}
+                                onClick={() =>
+                                  line.added
+                                    ? setProperty(property.id, (one) => ({ ...one, lines: one.lines.filter((other) => other.id !== line.id) }))
+                                    : setLine(line.id, { off: true, selling: "", available: "", minNights: "" })
+                                }
                                 title={`Not proposing ${lineSource.name} — take it off this card`}
                                 aria-label={`Not proposing ${lineSource.name}`}
                                 className="text-ink-400 text-lg leading-none hover:text-[#c03654]"
@@ -487,7 +562,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                     <p className="text-ink-500 mt-2 text-xs font-light">
                       Not proposing:{" "}
                       {hidden.map((line, index) => {
-                        const lineSource = source.lines.find((one) => one.id === line.id)!;
+                        const lineSource = { name: line.name, buyingCents: source.lines.find((one) => one.id === line.id)?.buyingCents ?? null };
                         const markup = Number(draft.markup.replace(",", "."));
                         return (
                           <span key={line.id}>
@@ -514,7 +589,20 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                       })}
                     </p>
                   )}
-                  {property.lines.length === 0 && <p className="text-ink-500 mt-2 text-xs font-light">No room categories recorded for this property yet.</p>}
+                  {property.lines.length === 0 && <p className="text-ink-500 mt-2 text-xs font-light">No room types recorded for this property yet.</p>}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setProperty(property.id, (one) => ({
+                        ...one,
+                        lines: [...one.lines, { id: `new-${Date.now()}`, name: "", sleeps: "2", selling: "", available: "", minNights: "", off: false, added: true }],
+                      }))
+                    }
+                    className="text-brand-700 mt-2 text-xs font-medium hover:underline"
+                    title="A room type this property did not have — saving adds it to the property's room types, with the units available as its count"
+                  >
+                    + Add a room type
+                  </button>
                 </section>
               );
             })}
@@ -573,14 +661,18 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
           >
             Delete rate card
           </button>
-          {incomplete > 0 ? (
+          {unnamed > 0 ? (
+            <span className="ml-auto text-xs text-[#c03654]">
+              A name needed for {unnamed} {unnamed === 1 ? "room type" : "room types"}
+            </span>
+          ) : incomplete > 0 ? (
             <span className="ml-auto text-xs text-[#c03654]">
               Units available and minimum stay needed for {incomplete} {incomplete === 1 ? "room" : "rooms"}
             </span>
           ) : (
             <span className="text-ink-500 ml-auto text-xs font-light">{dirty ? "Not saved yet" : "Saved"}</span>
           )}
-          <Button type="button" disabled={save.isPending || !dirty || incomplete > 0} onClick={doSave}>
+          <Button type="button" disabled={save.isPending || !dirty || incomplete > 0 || unnamed > 0} onClick={doSave}>
             {save.isPending ? "Saving…" : "Save"}
           </Button>
         </div>
