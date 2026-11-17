@@ -346,7 +346,7 @@ export function ScoutingList({
                             type="button"
                             onClick={() => setOpenEntry(entry.id)}
                             className="border-ink-200 text-ink-500 hover:border-brand-400 hover:text-brand-700 rounded-full border px-2 py-0.5 text-[11px] font-light whitespace-nowrap transition-colors"
-                            title="This event's terms, contracting details and contacts, without leaving the page"
+                            title="Its room breakdown, quotations, this event's terms, contracting details and contacts, without leaving the page"
                           >
                             Quick view
                           </button>

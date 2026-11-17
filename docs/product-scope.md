@@ -1045,10 +1045,25 @@ paste into an email (a column of its own until 2026-11-17).
 
 **Opening a property.** On the Properties tab, a property's name opens its full page, and
 the page's back link returns to this event's tab. Beside the name, **Quick view** opens a
-side panel instead, without leaving the tab: the terms agreed for this event at the top, editable and saved on
-this event only, then the contracting details that apply (the property's own, or its
-provider's, said so), its contacts and its provider's, and the rest of what is known about
-it, with a link to edit the property or open its full page. Editing the property from the
+side panel instead, without leaving the tab, **in sections** (the team, 2026-11-17):
+- **Room breakdown** (first) — each room type with its rooms, sleeps, beds (or bedrooms and
+  bathrooms), size, where its contract stands on this event, the buying rate agreed, and the
+  **lowest rate quoted** for it in any quotation not declined (*Not quoted* otherwise); above,
+  the rooms across the types and the property's own total when it differs.
+- **Quotations** — every quotation received for this event, each showing **who it was for**
+  (*For [client]*, or *General enquiry*), received and valid-until dates, and its lines by
+  **period, room type, rooms** and rate per night — what matters most when several quotes are
+  held at once (different dates, room counts, room types, a buyout). The total, room-nights,
+  payment and cancellation terms, what the rates include, taxes and notes open on **Terms,
+  taxes and total**. Editing, accepting and declining stay on the property's page, a link away.
+- **Agreed terms** — the terms agreed for this event, editable and saved on this event only.
+- **Contracting & contacts** — the contracting details that apply (the property's own, or its
+  provider's, said so), its contacts and its provider's.
+- **About** — getting around, and the rest of what is known about it, with a link to edit
+  the property or open its full page.
+
+On the property's own Quotations tab, each quotation's one-line summary now also names its room
+types and says *General enquiry* when it was not for a client. Editing the property from the
 panel brings the rep back to the event's Properties tab when they save, not to the
 property's own page; and a link says "Opening…" the moment it is clicked, so a page that
 takes a moment to load never looks as though the click did nothing. The row itself shows the
