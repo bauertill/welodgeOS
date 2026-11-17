@@ -32,6 +32,27 @@ export const notificationRouter = createTRPCRouter({
     return me.emailNotifications;
   }),
 
+  /** The morning summary: on or off, and the time zone it follows (doc §2.9). */
+  summary: protectedProcedure.query(async ({ ctx }) => {
+    const me = await ctx.db.user.findUniqueOrThrow({ where: { id: ctx.session.user.id }, select: { dailySummary: true, timeZone: true } });
+    return me;
+  }),
+
+  setSummary: protectedProcedure.input(z.object({ on: z.boolean() })).mutation(({ ctx, input }) =>
+    ctx.db.user.update({ where: { id: ctx.session.user.id }, data: { dailySummary: input.on }, select: { dailySummary: true } }),
+  ),
+
+  /** Their browser's time zone, kept so the summary comes at 7:00 their time. */
+  setTimeZone: protectedProcedure.input(z.object({ timeZone: z.string().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: input.timeZone });
+    } catch {
+      return { ok: false };
+    }
+    await ctx.db.user.update({ where: { id: ctx.session.user.id }, data: { timeZone: input.timeZone } });
+    return { ok: true };
+  }),
+
   /** Your own link for clients to book a call with you (doc §4.11). */
   bookingLink: protectedProcedure.query(async ({ ctx }) => {
     const me = await ctx.db.user.findUniqueOrThrow({ where: { id: ctx.session.user.id }, select: { bookingLink: true } });

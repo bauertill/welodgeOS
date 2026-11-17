@@ -487,25 +487,37 @@ about what they did themselves.
 | A task is due tomorrow | Whoever completes it — or, with nobody on it, whoever asked. Once |
 | A task becomes overdue | The same people. Once |
 | A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card |
+| Someone is `@mentioned` in an update or a reply (§2.6, 2026-11-17) | Each person mentioned — **emailed** |
+| Someone replies to an update (§2.6) | Whoever wrote the update and whoever replied before, apart from those mentioned |
 
 **The bell** in the header shows how many are unread and the latest thirty, newest first;
 opening one marks it read and goes to the task; *Mark all read* clears the count. It checks
 for new ones every half minute.
 
-**By email, as each person chooses** on *My profile*: **At once** (an email for each, as it
-happens), **Daily summary** (one email each morning with everything since the last — the
-default, so nobody is flooded), or **No email** (the bell only). The bell shows everything
-whichever is chosen. Emails link straight to the task.
+**By email: only mentions** (the owner, 2026-11-17: "I don't want to overwhelm the team with
+an email every time — when they're tagged or mentioned, yes"). Being `@mentioned` — in a task
+or its comments, an update or a reply — sends an email **at once**, linking to the page.
+Everything else (a task given to you, comments, replies, status changes, deadlines, rate card
+answers) is in the bell — **and in the morning summary**. On *My profile* each person chooses
+**Email me when I'm mentioned** (everyone, to start with) or **No email**.
 
-**The morning run.** Each day at 06:00 UTC (08:00 in Switzerland in summer) the system
-writes the *due tomorrow* and *overdue* notifications, then sends each person who chose the
-daily summary their email. Run twice, it sends nothing twice.
+**The morning summary at 7:00 their own time** (the owner, 2026-11-17). Each morning at 7:00
+— in each person's own time zone, as their browser reports it (someone in Los Angeles gets it
+at 7:00 there, someone in Switzerland at 7:00 there; before their browser has said, Swiss
+time) — one email with **what is still unread in their bell since the day before**. Nothing
+is sent on a quiet day, and never twice in a day. A tick on *My profile*, *A morning summary
+at 7:00*, turns it off (on for everyone to start with); it shows the time zone it follows. An email that fails is tried again on
+the next change within the hour; nothing older is ever sent in a pile. (Until 2026-11-17 the
+choice was *At once* / *Daily summary* / *No email*, for every kind of notification.)
+
+**The scheduled run.** Every hour the system sends the morning summaries due at that hour.
+Once a day, at 06:00 UTC, it also writes the *due tomorrow* and *overdue* notifications into
+the bell (before the summaries of that hour) and catches up the connected Gmail. Run twice, it
+sends and writes nothing twice.
 
 **Emails are sent through Resend**, from **notifications@os.welodge.net** (the domain
-verified in Resend, 2026-10-21). **On the live site emails are switched off for now** (the owner,
-2026-10-23: the system goes live, the emails later): nothing is emailed there, the bell
-works as usual, and what would have gone counts as sent, so switching on later sends only
-what comes after. Staging and a computer still email the test addresses below. **Off the live site — staging,
+verified in Resend, 2026-10-21). **On the live site emails are on since 2026-11-17, for mentions only** (they were off from
+going live on 2026-10-23 until then). Staging and a computer still email the test addresses below. **Off the live site — staging,
 or a computer — only these are ever emailed** (the owner, 2026-10-13): brandon@, ami@,
 till@ and volki@welodge.net, and britz.brandon@gmail.com, their subjects starting *[Test]*. Staging runs on a
 copy of the live data, every real address included, so anyone else is skipped there (the

@@ -48,12 +48,25 @@ export async function mentionedIn(db: Db, body: string) {
 export const plainMentions = (body: string) => body.replace(MENTION_PATTERN, "@$1");
 
 /**
- * Email what is waiting for the people who want it at once. Run after every
- * change that notifies; what fails to send stays waiting and goes next time.
+ * Only being mentioned (or tagged) is emailed (the owner, 2026-11-17: "I don't
+ * want to overwhelm the team with an email every time — when they're tagged or
+ * mentioned, yes"). Everything else stays in the bell.
+ */
+export const EMAILED_KINDS: NotificationKind[] = ["TASK_MENTION", "UPDATE_MENTION"];
+
+/**
+ * Email the mentions waiting, at once, to everyone who has not turned email
+ * off. Run after every change that notifies; what fails to send is tried again
+ * on the next run within the hour — never an old pile at once.
  */
 export async function deliverImmediate(db: PrismaClient) {
   const waiting = await db.notification.findMany({
-    where: { emailedAt: null, user: { emailNotifications: "IMMEDIATE" }, createdAt: { gte: addDays(new Date(), -2) } },
+    where: {
+      emailedAt: null,
+      kind: { in: EMAILED_KINDS },
+      user: { emailNotifications: { not: "NONE" } },
+      createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+    },
     include: { user: { select: { email: true } } },
     orderBy: { createdAt: "asc" },
     take: 50,
@@ -64,6 +77,55 @@ export async function deliverImmediate(db: PrismaClient) {
     const sent = await sendEmail({ to: notification.user.email, subject: notification.title, text, html });
     if (sent) await db.notification.update({ where: { id: notification.id }, data: { emailedAt: new Date() } });
   }
+}
+
+/** Where nobody's browser has told us yet: the office's time. */
+export const DEFAULT_TIME_ZONE = "Europe/Zurich";
+export const SUMMARY_HOUR = 7;
+
+/** The hour (0–23) and the day ("2026-11-17") it is now in a time zone. */
+function localNow(timeZone: string, at = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(at);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return { hour: Number(get("hour")), day: `${get("year")}-${get("month")}-${get("day")}` };
+}
+
+/**
+ * The morning summary (the owner, 2026-11-17): at 7:00 in each person's own
+ * time, one email with what is still unread in their bell since the last one.
+ * Run every hour; each person gets it once a day, and nothing when nothing is
+ * waiting.
+ */
+export async function sendSummaries(db: PrismaClient, at = new Date()) {
+  const people = await db.user.findMany({
+    where: { dailySummary: true, email: { not: null } },
+    select: { id: true, email: true, name: true, timeZone: true, summarySentAt: true },
+  });
+  let sent = 0;
+  for (const person of people) {
+    let zone = person.timeZone ?? DEFAULT_TIME_ZONE;
+    try {
+      localNow(zone, at);
+    } catch {
+      zone = DEFAULT_TIME_ZONE;
+    }
+    const now = localNow(zone, at);
+    if (now.hour !== SUMMARY_HOUR) continue;
+    if (person.summarySentAt && localNow(zone, person.summarySentAt).day === now.day) continue;
+    const since = person.summarySentAt ?? new Date(at.getTime() - 24 * 60 * 60 * 1000);
+    const items = await db.notification.findMany({
+      where: { userId: person.id, readAt: null, createdAt: { gte: since } },
+      orderBy: { createdAt: "asc" },
+      take: 40,
+    });
+    // Marked as done for today either way, so a quiet day sends nothing and a busy hour sends once.
+    await db.user.update({ where: { id: person.id }, data: { summarySentAt: at } });
+    if (!items.length) continue;
+    const subject = `${items.length} ${items.length === 1 ? "thing" : "things"} for you on We Lodge OS`;
+    const { text, html } = layoutEmail(`Good morning${person.name ? `, ${person.name.split(" ")[0]}` : ""} — waiting for you since yesterday:`, items);
+    if (await sendEmail({ to: person.email!, subject, text, html })) sent += 1;
+  }
+  return sent;
 }
 
 /**
@@ -124,23 +186,6 @@ export async function runDaily(db: PrismaClient) {
   }
   await deliverImmediate(db);
 
-  const waiting = await db.notification.findMany({
-    where: { emailedAt: null, user: { emailNotifications: "DAILY" } },
-    include: { user: { select: { id: true, email: true, name: true } } },
-    orderBy: { createdAt: "asc" },
-  });
-  const byPerson = new Map<string, typeof waiting>();
-  for (const notification of waiting) byPerson.set(notification.userId, [...(byPerson.get(notification.userId) ?? []), notification]);
-  let summaries = 0;
-  for (const items of byPerson.values()) {
-    const person = items[0]!.user;
-    if (!person.email) continue;
-    const subject = `${items.length} ${items.length === 1 ? "thing" : "things"} for you on We Lodge OS`;
-    const { text, html } = layoutEmail(`Good morning${person.name ? `, ${person.name.split(" ")[0]}` : ""} — since yesterday:`, items);
-    if (await sendEmail({ to: person.email, subject, text, html })) {
-      await db.notification.updateMany({ where: { id: { in: items.map((item) => item.id) } }, data: { emailedAt: new Date() } });
-      summaries += 1;
-    }
-  }
+  const summaries = await sendSummaries(db);
   return { reminders, summaries };
 }

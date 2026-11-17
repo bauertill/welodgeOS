@@ -5,7 +5,7 @@ import { z } from "zod";
 import { parseDay } from "~/lib/dates";
 import { updateKinds } from "~/lib/update-kinds";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { mentionedIn, notify } from "~/server/notify";
+import { deliverImmediate, mentionedIn, notify } from "~/server/notify";
 
 /**
  * Updates: a chronological, append-only history of meeting notes, call
@@ -56,7 +56,7 @@ export const updateRouter = createTRPCRouter({
         }),
       ),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const body = input.body.trim();
       if (!body) {
         throw new TRPCError({
@@ -67,7 +67,7 @@ export const updateRouter = createTRPCRouter({
       if (updateKinds[input.kind].propertyOnly && !input.propertyId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `${updateKinds[input.kind].label} is for a property.` });
       }
-      return ctx.db.update.create({
+      const created = await ctx.db.update.create({
         data: {
           body,
           kind: input.kind,
@@ -79,8 +79,26 @@ export const updateRouter = createTRPCRouter({
         },
         include: {
           author: { select: { id: true, name: true, email: true, image: true } },
+          property: { select: { name: true } },
+          client: { select: { name: true } },
+          salesRequest: { select: { client: { select: { name: true } } } },
         },
       });
+      // Anyone @mentioned is told — and emailed (doc §2.9, 2026-11-17).
+      const mentioned = await mentionedIn(ctx.db, body);
+      if (mentioned.length) {
+        const where = created.property?.name ?? created.client?.name ?? created.salesRequest?.client.name ?? "an update";
+        await notify(ctx.db, {
+          to: mentioned,
+          actorId: ctx.session.user.id,
+          kind: "UPDATE_MENTION",
+          title: `${ctx.session.user.name ?? "A colleague"} mentioned you on ${where}`,
+          body: body.length > 300 ? `${body.slice(0, 297)}…` : body,
+          link: input.propertyId ? `/properties/${input.propertyId}` : input.clientId ? `/clients/${input.clientId}` : `/sales/${input.salesRequestId}`,
+        });
+        await deliverImmediate(ctx.db);
+      }
+      return created;
     }),
 
   /**
@@ -122,14 +140,19 @@ export const updateRouter = createTRPCRouter({
       });
       const where = parent.property?.name ?? parent.client?.name ?? parent.salesRequest?.client.name ?? "an update";
       const mentioned = await mentionedIn(ctx.db, body);
+      const link = parent.propertyId ? `/properties/${parent.propertyId}` : parent.clientId ? `/clients/${parent.clientId}` : `/sales/${parent.salesRequestId}`;
+      const short = body.length > 300 ? `${body.slice(0, 297)}…` : body;
+      // Mentioned: told and emailed. The writer and earlier repliers: told in the bell.
+      await notify(ctx.db, { to: mentioned, actorId: ctx.session.user.id, kind: "UPDATE_MENTION", title: `${ctx.session.user.name ?? "A colleague"} mentioned you on ${where}`, body: short, link });
       await notify(ctx.db, {
-        to: [parent.authorId, ...parent.replies.map((r) => r.authorId), ...mentioned],
+        to: [parent.authorId, ...parent.replies.map((r) => r.authorId)].filter((id) => id && !mentioned.includes(id)),
         actorId: ctx.session.user.id,
         kind: "UPDATE_REPLY",
         title: `${ctx.session.user.name ?? "A colleague"} replied on ${where}`,
-        body: body.length > 160 ? `${body.slice(0, 157)}…` : body,
-        link: parent.propertyId ? `/properties/${parent.propertyId}` : parent.clientId ? `/clients/${parent.clientId}` : `/sales/${parent.salesRequestId}`,
+        body: short,
+        link,
       });
+      if (mentioned.length) await deliverImmediate(ctx.db);
       return reply;
     }),
 

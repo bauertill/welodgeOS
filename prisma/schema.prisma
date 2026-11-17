@@ -920,6 +920,12 @@ model User {
   /// How this person wants notifications by email (doc §2.9); the bell in the
   /// app always shows them.
   emailNotifications EmailPreference      @default(DAILY)
+  /// The morning summary email, at 7:00 in their own time (the owner, 2026-11-17).
+  dailySummary       Boolean              @default(true)
+  /// Their time zone, as their browser reports it ("Europe/Zurich", "America/Los_Angeles").
+  timeZone           String?
+  /// When their last morning summary went — so it goes once a day.
+  summarySentAt      DateTime?
   notifications      Notification[]       @relation("NotificationFor")
   notificationsSent  Notification[]       @relation("NotificationBy")
   /// Their own link for booking a call (Google Calendar appointment page,
@@ -1822,6 +1828,8 @@ enum NotificationKind {
   TASK_OVERDUE
   /// Someone replied to an update you wrote or replied to, or mentioned you in a reply (doc §2.6).
   UPDATE_REPLY
+  /// Someone @mentioned you in an update or a reply — emailed (doc §2.9, 2026-11-17).
+  UPDATE_MENTION
 }
 
 /// By email: each one as it happens, one summary a day, or none.
