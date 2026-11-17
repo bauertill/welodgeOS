@@ -159,7 +159,8 @@ function shape(card: LoadedCard) {
     })),
     properties: card.properties.map((entry) => {
       const from = entry.property.latitude !== null && entry.property.longitude !== null ? { latitude: entry.property.latitude, longitude: entry.property.longitude } : null;
-      const nearest = nearestPlace(from, venues.length ? venues : places);
+      // The distance beside a property: to the nearest place on this card's map, when the team chose any (2026-11-17); else to the event's venues.
+      const nearest = nearestPlace(from, onMap.length ? onMap : venues.length ? venues : places);
       return {
         id: entry.id,
         propertyId: entry.property.id,
@@ -273,6 +274,23 @@ async function propertyEntries(
       : [],
   );
   const includes = await knownIncludes(tx, options.eventId, options.propertyIds);
+  // What the team wrote on the latest card before (the owner, 2026-11-17: "the description and the sales rate must be
+  // remembered"): each property's description from its latest card, and each room's client rate from the latest card
+  // for the same event in the same currency — a rate to be confirmed stays one.
+  const earlier = await tx.rateCardProperty.findMany({
+    where: { propertyId: { in: options.propertyIds } },
+    orderBy: { rateCard: { updatedAt: "desc" } },
+    select: { propertyId: true, description: true, rateCard: { select: { eventId: true, currency: true } }, lines: { select: { categoryId: true, sellingCents: true, rateTbc: true } } },
+  });
+  const description = (propertyId: string) => earlier.find((entry) => entry.propertyId === propertyId && entry.description?.trim())?.description ?? null;
+  const lastRate = (propertyId: string, categoryId: string) => {
+    for (const entry of earlier) {
+      if (entry.propertyId !== propertyId || entry.rateCard.eventId !== options.eventId || entry.rateCard.currency !== currency) continue;
+      const line = entry.lines.find((one) => one.categoryId === categoryId && (one.sellingCents !== null || one.rateTbc));
+      if (line) return line;
+    }
+    return null;
+  };
   const creates = options.propertyIds
     .map((id) => properties.find((property) => property.id === id))
     .filter((property): property is (typeof properties)[number] => Boolean(property))
@@ -280,19 +298,21 @@ async function propertyEntries(
       propertyId: property.id,
       position: options.firstPosition + index,
       rateIncludes: includes.get(property.id) ?? null,
+      description: description(property.id),
       // The property's first photos to start; the team changes the choice on the card.
       photos: { create: property.photos.map((photo, at) => ({ photoId: photo.id, position: at })) },
       lines: {
         create: property.categories.map((category, at) => {
           const rate = rates?.get(category.id);
           const buying = rate && rate.currency === currency ? rate.minCents : null;
+          const remembered = lastRate(property.id, category.id);
           return {
             categoryId: category.id,
             name: category.name,
             sleeps: category.capacity,
             buyingCents: buying,
-            sellingCents: buying === null ? null : withMarkup(buying, options.markupBasisPoints),
-            rateTbc: buying === null && tbc.has(property.id),
+            sellingCents: remembered ? remembered.sellingCents : buying === null ? null : withMarkup(buying, options.markupBasisPoints),
+            rateTbc: remembered ? remembered.rateTbc : buying === null && tbc.has(property.id),
             position: at,
           };
         }),
