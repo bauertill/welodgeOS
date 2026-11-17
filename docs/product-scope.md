@@ -2739,8 +2739,9 @@ room category at the rate we sell it for.
   "2 photos" of that room. The printout keeps the photos and gives the video's and folder's links instead.
 - **On the map, for the client** (2026-10-13): under the card on the client's link, a map
   with the suggested properties as purple squares numbered as on the card (each property's
-  name on the card carries its number), the event's venues as their sport icons, and *Show the
-  metro and public transport* (Google's). **Getting there**: from one of the properties to a
+  name on the card carries its number), the event's venues as their sport icons (since 2026-11-17 only the places
+  chosen for the card, below; Google's *Show the metro and public transport* was taken off
+  the same day). **Getting there**: from one of the properties to a
   venue searched for by name — or one of the five nearest, offered as buttons — the distance
   as the crow flies and, from Google, the time **on foot, by car and by public transport**
   (an ordinary weekday morning), each with *Directions ↗* opening the route in Google Maps.
@@ -2753,8 +2754,8 @@ room category at the rate we sell it for.
   × to take one off). Only those appear on the map and in *Getting there*, which is left
   out when nothing is chosen; a journey can only be asked to a place the map shows. Google's
   public transport layer is no longer offered (the owner, 2026-11-17: "remove this thing"). The
-  "… km from" distance beside each property is unchanged — still to the event's measured
-  places. (Until then the map showed the event's venues, or every place when no layer was
+  "… km from" distance beside each property is to the nearest of the chosen places (above),
+  or, with none chosen, to the event's measured places. (Until then the map showed the event's venues, or every place when no layer was
   marked as measured, which is why LA28 showed them all.)
 - **The client's link** (`/rate-card/…`): made on the card, opened without signing in;
   *Copy link*, *Open*, *Switch off*. It shows what is saved.
