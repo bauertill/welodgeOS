@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { Combobox } from "~/app/_components/combobox";
 import { Button, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { RateCardView, type ClientRateCard } from "~/app/_components/rate-card-view";
@@ -24,7 +25,7 @@ type Draft = {
      * `off`: a room type we are not proposing at this property — kept, but not on the card (2026-11-11).
      * `added`: typed in on the card and not saved yet — saving adds it to the property's room types too (2026-11-17).
      */
-    lines: { id: string; name: string; sleeps: string; selling: string; available: string; minNights: string; off: boolean; added?: boolean }[];
+    lines: { id: string; name: string; sleeps: string; selling: string; tbc: boolean; available: string; minNights: string; off: boolean; added?: boolean }[];
   }[];
   removed: string[];
 };
@@ -44,7 +45,7 @@ const draftOf = (card: Card): Draft => ({
   markup: card.markupBasisPoints === null ? "" : String(card.markupBasisPoints / 100),
   properties: card.properties.map((property) => {
     // A room type with no client price is not offered — folded away, unless nothing at the property has a price yet.
-    const anyPriced = property.lines.some((line) => line.sellingCents !== null);
+    const anyPriced = property.lines.some((line) => line.sellingCents !== null || line.rateTbc);
     return {
       id: property.id,
       description: property.description ?? "",
@@ -54,9 +55,10 @@ const draftOf = (card: Card): Draft => ({
         name: line.name,
         sleeps: line.sleeps === null ? "" : String(line.sleeps),
         selling: toText(line.sellingCents),
+        tbc: line.rateTbc,
         available: line.available === null ? "" : String(line.available),
         minNights: line.minNights === null ? "" : String(line.minNights),
-        off: anyPriced && line.sellingCents === null,
+        off: anyPriced && line.sellingCents === null && !line.rateTbc,
       })),
     };
   }),
@@ -108,6 +110,23 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       setDraft(next);
       setSaved(JSON.stringify(next));
       void utils.property.invalidate();
+    },
+  });
+  // Properties added after the card was made (2026-11-17): they join the draft at the end, unsaved changes kept.
+  const [adding, setAdding] = useState("");
+  const addable = api.rateCard.addable.useQuery({ id }, { refetchOnWindowFocus: false });
+  const addProperties = api.rateCard.addProperties.useMutation({
+    onSuccess: async ({ added }) => {
+      setAdding("");
+      await utils.rateCard.invalidate();
+      const fresh = await utils.rateCard.byId.fetch({ id });
+      const extra = draftOf(fresh).properties.filter((property) => added.includes(property.id));
+      setDraft((current) => (current ? { ...current, properties: [...current.properties, ...extra] } : current));
+      setSaved((current) => {
+        if (!current) return current;
+        const before = JSON.parse(current) as Draft;
+        return JSON.stringify({ ...before, properties: [...before.properties, ...extra] });
+      });
     },
   });
   const share = api.rateCard.share.useMutation({
@@ -197,15 +216,16 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
             name: line.name.trim(),
             sleeps: toCount(line.sleeps),
             ...(line.off
-              ? { sellingCents: null, available: null, minNights: null }
-              : { sellingCents: toCents(line.selling), available: toCount(line.available), minNights: toCount(line.minNights) }),
+              ? { sellingCents: null, rateTbc: false, available: null, minNights: null }
+              : { sellingCents: line.tbc ? null : toCents(line.selling), rateTbc: line.tbc, available: toCount(line.available), minNights: toCount(line.minNights) }),
           })),
         added: property.lines
           .filter((line) => line.added && !line.off)
           .map((line) => ({
             name: line.name.trim(),
             sleeps: toCount(line.sleeps),
-            sellingCents: toCents(line.selling),
+            sellingCents: line.tbc ? null : toCents(line.selling),
+            rateTbc: line.tbc,
             available: toCount(line.available),
             minNights: toCount(line.minNights),
           })),
@@ -230,7 +250,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
           ...property,
           lines: property.lines.map((line) => {
             const buying = source?.lines.find((one) => one.id === line.id)?.buyingCents ?? null;
-            return buying === null || line.off ? line : { ...line, selling: String(Math.round(buying * (1 + percent / 100)) / 100) };
+            return buying === null || line.off || line.tbc ? line : { ...line, selling: String(Math.round(buying * (1 + percent / 100)) / 100) };
           }),
         };
       }),
@@ -262,13 +282,13 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 ...clientMedia({ ...source, photoIds: property.photoIds }),
                 lines: property.lines
                   .map((line) => ({ line, source: source.lines.find((one) => one.id === line.id) }))
-                  .filter(({ line }) => !line.off && toCents(line.selling) !== null)
+                  .filter(({ line }) => !line.off && (line.tbc || toCents(line.selling) !== null))
                   .map(({ line, source: lineSource }) => ({
                     id: line.id,
                     categoryId: lineSource?.categoryId ?? null,
                     name: line.name.trim() || lineSource?.name || "Room",
                     sleeps: toCount(line.sleeps),
-                    sellingCents: toCents(line.selling)!,
+                    sellingCents: line.tbc ? null : toCents(line.selling),
                     available: toCount(line.available),
                     minNights: toCount(line.minNights),
                   })),
@@ -337,7 +357,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
               const source = c.properties.find((one) => one.id === property.id)!;
               const shown = property.lines.filter((line) => !line.off);
               const hidden = property.lines.filter((line) => line.off);
-              const priced = shown.filter((line) => toCents(line.selling) !== null && source.lines.find((one) => one.id === line.id)?.buyingCents);
+              const priced = shown.filter((line) => !line.tbc && toCents(line.selling) !== null && source.lines.find((one) => one.id === line.id)?.buyingCents);
               const bookings = bookingsOf(priced.map((line) => ({ id: line.id, available: toCount(line.available) })));
               const marginOf = (line: (typeof shown)[number]) => {
                 const buying = source.lines.find((one) => one.id === line.id)?.buyingCents ?? null;
@@ -440,7 +460,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                     <tbody>
                       {shown.map((line) => {
                         const lineSource = { name: line.name.trim() || "this room", buyingCents: source.lines.find((one) => one.id === line.id)?.buyingCents ?? null };
-                        const selling = toCents(line.selling);
+                        const selling = line.tbc ? null : toCents(line.selling);
                         const margin = selling !== null && lineSource.buyingCents ? selling - lineSource.buyingCents : null;
                         return (
                           <tr key={line.id} className="border-ink-200/40 border-b last:border-0">
@@ -468,8 +488,9 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                               <span className="block w-32">
                                 <Input
                                   inputMode="decimal"
-                                  value={line.selling}
-                                  placeholder="Not offered"
+                                  value={line.tbc ? "" : line.selling}
+                                  disabled={line.tbc}
+                                  placeholder={line.tbc ? "Rate TBC" : "Not offered"}
                                   aria-label={`Selling rate for ${lineSource.name}`}
                                   onChange={(e) =>
                                     setProperty(property.id, (one) => ({
@@ -479,6 +500,11 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                                   }
                                 />
                               </span>
+                              {/* Offered without a price yet: the client sees "Rate to be confirmed" (2026-11-17). */}
+                              <label className="text-ink-500 mt-1 flex items-center gap-1 text-[11px] font-light" title="The client sees “Rate to be confirmed” instead of a price">
+                                <input type="checkbox" checked={line.tbc} onChange={(e) => setLine(line.id, { tbc: e.target.checked })} aria-label={`Rate TBC for ${lineSource.name}`} />
+                                Rate TBC
+                              </label>
                             </td>
                             {(["available", "minNights"] as const).map((field) => {
                               const missing = selling !== null && toCount(line[field]) === null;
@@ -527,7 +553,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                                 onClick={() =>
                                   line.added
                                     ? setProperty(property.id, (one) => ({ ...one, lines: one.lines.filter((other) => other.id !== line.id) }))
-                                    : setLine(line.id, { off: true, selling: "", available: "", minNights: "" })
+                                    : setLine(line.id, { off: true, selling: "", tbc: false, available: "", minNights: "" })
                                 }
                                 title={`Not proposing ${lineSource.name} — take it off this card`}
                                 aria-label={`Not proposing ${lineSource.name}`}
@@ -595,7 +621,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                     onClick={() =>
                       setProperty(property.id, (one) => ({
                         ...one,
-                        lines: [...one.lines, { id: `new-${Date.now()}`, name: "", sleeps: "2", selling: "", available: "", minNights: "", off: false, added: true }],
+                        lines: [...one.lines, { id: `new-${Date.now()}`, name: "", sleeps: "2", selling: "", tbc: false, available: "", minNights: "", off: false, added: true }],
                       }))
                     }
                     className="text-brand-700 mt-2 text-xs font-medium hover:underline"
@@ -606,6 +632,24 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 </section>
               );
             })}
+
+          <div className="border-ink-200/60 rounded-xl border border-dashed bg-white p-4 text-[13px]">
+            <p className="text-ink-900 font-medium">Add a property</p>
+            <p className="text-ink-500 mb-2 text-xs font-light">From the event&apos;s properties not on this card — its room types come with it at our cost plus the markup, as on a new card.</p>
+            <span className="flex flex-wrap items-center gap-2">
+              <Combobox
+                value={adding}
+                onChange={setAdding}
+                options={addable.data ?? []}
+                placeholder={addable.data && addable.data.length === 0 ? "Every property of the event is on the card" : "Choose a property…"}
+                className="min-w-72 flex-1"
+              />
+              <Button type="button" variant="secondary" disabled={!adding || addProperties.isPending} onClick={() => addProperties.mutate({ id, propertyIds: [adding] })}>
+                {addProperties.isPending ? "Adding…" : "Add to the card"}
+              </Button>
+            </span>
+            {addProperties.error && <p className="mt-2 text-xs text-[#c03654]">{friendlyError(addProperties.error)}</p>}
+          </div>
 
           {c.answers.length > 0 && <ClientAnswers answers={c.answers} currency={c.currency} />}
 

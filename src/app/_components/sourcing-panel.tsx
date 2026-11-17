@@ -663,7 +663,7 @@ export function RateCardsBox({ salesRequestId }: { salesRequestId: string }) {
                             {line.available ? ` · ${line.available} available` : ""}
                             {line.minNights ? ` · min ${line.minNights} nights` : ""}
                           </span>
-                          <span className="text-ink-900 shrink-0">{line.sellingCents !== null ? formatMoney(line.sellingCents, c.currency) : "Not offered"}</span>
+                          <span className="text-ink-900 shrink-0">{line.sellingCents !== null ? formatMoney(line.sellingCents, c.currency) : line.rateTbc ? "Rate TBC" : "Not offered"}</span>
                         </p>
                       ))}
                     </li>

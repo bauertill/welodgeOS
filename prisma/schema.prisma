@@ -2021,8 +2021,10 @@ model RateCardLine {
   sleeps             Int?
   /// Our cost per night, from the event rate when the card was made; for us only.
   buyingCents        Int?
-  /// What the client pays per night; empty means not offered on this card.
+  /// What the client pays per night; empty means not offered on this card — unless the rate is to be confirmed.
   sellingCents       Int?
+  /// Offered with the rate to be confirmed: the client sees "Rate to be confirmed" instead of a price (doc §4.11, 2026-11-17).
+  rateTbc            Boolean                @default(false)
   /// How many of these units we can offer on this card — asked of us before a rate is offered.
   available          Int?
   /// The shortest stay, in nights, we accept for these units on this card.
