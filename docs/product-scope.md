@@ -2752,7 +2752,7 @@ room category at the rate we sell it for.
   layers of the event's places (*All Venues (42)*) and adds single places by name (chips,
   × to take one off). Only those appear on the map and in *Getting there*, which is left
   out when nothing is chosen; a journey can only be asked to a place the map shows. Google's
-  public transport stays behind *Show the metro and public transport*, off to start. The
+  public transport layer is no longer offered (the owner, 2026-11-17: "remove this thing"). The
   "… km from" distance beside each property is unchanged — still to the event's measured
   places. (Until then the map showed the event's venues, or every place when no layer was
   marked as measured, which is why LA28 showed them all.)
