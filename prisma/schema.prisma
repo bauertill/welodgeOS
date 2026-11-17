@@ -1476,9 +1476,15 @@ model Update {
   /// The monday.com update this was imported from, so it is never brought in twice.
   mondayId String? @unique
 
+  /// A reply to another update (doc §2.6, 2026-11-17): shown beneath it, on the same page.
+  parent   Update?  @relation("UpdateReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId String?
+  replies  Update[] @relation("UpdateReplies")
+
   @@index([propertyId])
   @@index([clientId])
   @@index([salesRequestId])
+  @@index([parentId])
 }
 
 /// Our own numbering of a countable room: `property + category + slot number`
@@ -1814,6 +1820,8 @@ enum NotificationKind {
   TASK_STATUS
   TASK_DUE_SOON
   TASK_OVERDUE
+  /// Someone replied to an update you wrote or replied to, or mentioned you in a reply (doc §2.6).
+  UPDATE_REPLY
 }
 
 /// By email: each one as it happens, one summary a day, or none.

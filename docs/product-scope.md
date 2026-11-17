@@ -221,6 +221,15 @@ again. A meeting or call summary shows each heading with its answer beneath. *Ed
 the writer's own updates. Ten show at first; *Show 10 older* adds more. This holds on a
 property's page, a client's and a sales request's.
 
+**Replies** (the team, 2026-11-17). Under every update, **Reply** opens a box beneath it
+(@mentions work as in an update); *Post reply* puts the reply under that update, oldest
+first, slightly indented, with the writer and the day — so a question and its answer stay
+together. The button says how many replies there are (*Reply · 2 replies*). A reply is
+answered by replying to the update again, not to the reply. Its writer can edit it, as an
+update. **Whoever wrote the update, whoever replied before, and anyone @mentioned in the reply
+is told** (§2.9), with a link to the page. Replies live on the same property, client or sales
+request as the update they answer, and show wherever it shows.
+
 **Kinds of update, each with its template** (2026-10-06), as the team had them on
 monday.com, **all in the one feed**, newest first. The box is a **note**, as before; beneath it,
 **+ Meeting feedback**, **+ Call summary** and, on a property only, **+ Site inspection
