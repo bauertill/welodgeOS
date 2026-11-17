@@ -498,14 +498,22 @@ for new ones every half minute.
 an email every time — when they're tagged or mentioned, yes"). Being `@mentioned` — in a task
 or its comments, an update or a reply — sends an email **at once**, linking to the page.
 Everything else (a task given to you, comments, replies, status changes, deadlines, rate card
-answers) is **in the bell only**. On *My profile* each person chooses **Email me when I'm
-mentioned** (everyone, to start with) or **No email**. An email that fails is tried again on
+answers) is in the bell — **and in the morning summary**. On *My profile* each person chooses
+**Email me when I'm mentioned** (everyone, to start with) or **No email**.
+
+**The morning summary at 7:00 their own time** (the owner, 2026-11-17). Each morning at 7:00
+— in each person's own time zone, as their browser reports it (someone in Los Angeles gets it
+at 7:00 there, someone in Switzerland at 7:00 there; before their browser has said, Swiss
+time) — one email with **what is still unread in their bell since the day before**. Nothing
+is sent on a quiet day, and never twice in a day. A tick on *My profile*, *A morning summary
+at 7:00*, turns it off (on for everyone to start with); it shows the time zone it follows. An email that fails is tried again on
 the next change within the hour; nothing older is ever sent in a pile. (Until 2026-11-17 the
 choice was *At once* / *Daily summary* / *No email*, for every kind of notification.)
 
-**The morning run.** Each day at 06:00 UTC (08:00 in Switzerland in summer) the system
-writes the *due tomorrow* and *overdue* notifications into the bell. It no longer sends a
-morning summary email. Run twice, it writes nothing twice.
+**The scheduled run.** Every hour the system sends the morning summaries due at that hour.
+Once a day, at 06:00 UTC, it also writes the *due tomorrow* and *overdue* notifications into
+the bell (before the summaries of that hour) and catches up the connected Gmail. Run twice, it
+sends and writes nothing twice.
 
 **Emails are sent through Resend**, from **notifications@os.welodge.net** (the domain
 verified in Resend, 2026-10-21). **On the live site emails are on since 2026-11-17, for mentions only** (they were off from

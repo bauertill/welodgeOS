@@ -15,6 +15,13 @@ export function NotificationBell() {
   const router = useRouter();
   const utils = api.useUtils();
   const mine = api.notification.mine.useQuery(undefined, { refetchInterval: 30_000 });
+  // Keep their time zone as the browser reports it, so the morning summary comes at 7:00 their time.
+  const summary = api.notification.summary.useQuery(undefined, { staleTime: 10 * 60_000 });
+  const setZone = api.notification.setTimeZone.useMutation();
+  useEffect(() => {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (summary.data && zone && summary.data.timeZone !== zone && !setZone.isPending && !setZone.isSuccess) setZone.mutate({ timeZone: zone });
+  }, [summary.data, setZone]);
   const markRead = api.notification.markRead.useMutation({ onSuccess: () => void utils.notification.invalidate() });
   const markAll = api.notification.markAllRead.useMutation({ onSuccess: () => void utils.notification.invalidate() });
   const [open, setOpen] = useState(false);
@@ -115,8 +122,8 @@ export function EmailPreferenceCard() {
     <div className="border-ink-200/60 mb-8 rounded-xl border bg-white p-5">
       <h2 className="text-ink-900 text-[15px] font-medium">Notifications by email</h2>
       <p className="text-ink-500 mt-1 mb-3 text-sm font-light">
-        Only when someone @mentions you is there an email — everything else (tasks given to you, comments, replies, deadlines) is in the bell
-        at the top.
+        When someone @mentions you, an email at once. Everything else — tasks given to you, comments, replies, deadlines — is in the bell at
+        the top, and in the morning summary below.
       </p>
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Notifications by email">
         {preferences.map((option) => {
@@ -139,6 +146,32 @@ export function EmailPreferenceCard() {
           );
         })}
       </div>
+      <SummaryChoice />
     </div>
+  );
+}
+
+/** The morning summary at 7:00 their own time (the owner, 2026-11-17). */
+function SummaryChoice() {
+  const utils = api.useUtils();
+  const summary = api.notification.summary.useQuery();
+  const save = api.notification.setSummary.useMutation({ onSuccess: () => void utils.notification.summary.invalidate() });
+  const zone = summary.data?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return (
+    <label className="border-ink-200/60 mt-4 flex cursor-pointer items-start gap-3 border-t pt-4">
+      <input
+        type="checkbox"
+        className="accent-brand-500 mt-0.5 h-4 w-4"
+        checked={summary.data?.dailySummary ?? true}
+        disabled={!summary.data || save.isPending}
+        onChange={(e) => save.mutate({ on: e.target.checked })}
+      />
+      <span>
+        <span className="text-ink-900 block text-[13px] font-medium">A morning summary at 7:00</span>
+        <span className="text-ink-500 block text-xs font-light">
+          One email each morning with what is still unread in your bell since the day before — nothing on a quiet day. At 7:00 your time ({zone.replace(/_/g, " ")}).
+        </span>
+      </span>
+    </label>
   );
 }
