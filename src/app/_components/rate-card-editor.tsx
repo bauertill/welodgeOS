@@ -268,26 +268,6 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
   const setProperty = (propertyId: string, change: (property: Draft["properties"][number]) => Draft["properties"][number]) =>
     setDraft((current) => (current ? { ...current, properties: current.properties.map((property) => (property.id === propertyId ? change(property) : property)) } : current));
 
-  /** The markup, applied to every room with a buying rate. */
-  const applyMarkup = () => {
-    if (!draft || !c) return;
-    const percent = Number(draft.markup.replace(",", "."));
-    if (!Number.isFinite(percent)) return;
-    setDraft({
-      ...draft,
-      properties: draft.properties.map((property) => {
-        const source = c.properties.find((one) => one.id === property.id);
-        return {
-          ...property,
-          lines: property.lines.map((line) => {
-            const buying = source?.lines.find((one) => one.id === line.id)?.buyingCents ?? null;
-            return buying === null || line.off || line.tbc ? line : { ...line, selling: String(Math.round(buying * (1 + percent / 100)) / 100) };
-          }),
-        };
-      }),
-    });
-  };
-
   // What the client will see, from the draft as it stands.
   const clientCard: ClientRateCard | null =
     c && draft
@@ -366,22 +346,11 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       ) : (
         <div className="space-y-4 pb-20">
           <div className="border-ink-200/60 grid gap-3 rounded-xl border bg-white p-4 sm:grid-cols-[1fr_auto]">
-            <label className="block">
+            <label className="block sm:col-span-2">
               <span className="text-ink-700 mb-1 block text-[13px] font-medium">Name — for us</span>
               <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
             </label>
-            <div>
-              <span className="text-ink-700 mb-1 block text-[13px] font-medium">Markup on our buying rate</span>
-              <span className="flex items-center gap-2">
-                <span className="w-24">
-                  <Input inputMode="decimal" value={draft.markup} onChange={(e) => setDraft({ ...draft, markup: e.target.value })} aria-label="Markup %" />
-                </span>
-                <span className="text-ink-500 text-sm">%</span>
-                <Button type="button" variant="secondary" onClick={applyMarkup} disabled={!draft.markup.trim()}>
-                  Apply to all
-                </Button>
-              </span>
-            </div>
+            {/* The markup box and "Apply to all" were taken off (the owner, 2026-11-17): client rates are typed per room. */}
             <label className="block sm:col-span-2">
               <span className="text-ink-700 mb-1 block text-[13px] font-medium">A word to the client — optional, at the top of the card</span>
               <Textarea rows={2} value={draft.intro} onChange={(e) => setDraft({ ...draft, intro: e.target.value })} placeholder="Thank you for your request. Here are the properties we can offer for your stay." />
@@ -410,23 +379,6 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 </div>
               )}
             </div>
-            <MapChoice
-              options={c.mapOptions}
-              layerIds={draft.mapLayerIds}
-              placeIds={draft.mapPlaceIds}
-              onChange={(mapLayerIds, mapPlaceIds) => setDraft({ ...draft, mapLayerIds, mapPlaceIds })}
-            />
-            <label className="border-ink-200/60 flex items-start gap-2 border-t pt-3 text-[13px] sm:col-span-2">
-              <input type="checkbox" checked={draft.canAnswer} onChange={(e) => setDraft({ ...draft, canAnswer: e.target.checked })} className="accent-brand-500 mt-0.5 h-4 w-4" />
-              <span>
-                <span className="text-ink-900 font-medium">End the client&apos;s link with &ldquo;Request a proposal&rdquo;</span>
-                <span className="text-ink-500 block text-xs font-light">
-                  {draft.canAnswer
-                    ? "They choose the rooms they want with dates and how many — as many periods as they need — add a note and send it to us. “I like it!” is always there."
-                    : "Off: the link is to look at only — the rooms, rates, photos and map, and “I like it!” on each room."}
-                </span>
-              </span>
-            </label>
           </div>
 
           {draft.properties
@@ -749,7 +701,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
 
           <div className="border-ink-200/60 rounded-xl border border-dashed bg-white p-4 text-[13px]">
             <p className="text-ink-900 font-medium">Add a property</p>
-            <p className="text-ink-500 mb-2 text-xs font-light">From the event&apos;s properties not on this card — its room types come with it at our cost plus the markup, as on a new card.</p>
+            <p className="text-ink-500 mb-2 text-xs font-light">From the event&apos;s properties not on this card — its room types come with it at our cost plus 15% to start, as on a new card.</p>
             <span className="flex flex-wrap items-center gap-2">
               <Combobox
                 value={adding}
@@ -763,6 +715,27 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
               </Button>
             </span>
             {addProperties.error && <p className="mt-2 text-xs text-[#c03654]">{friendlyError(addProperties.error)}</p>}
+          </div>
+
+          {/* What the client's link shows besides the card: the map's places, and whether it ends with Request a proposal (moved to the bottom, 2026-11-17). */}
+          <div className="border-ink-200/60 grid gap-3 rounded-xl border bg-white p-4">
+            <MapChoice
+              options={c.mapOptions}
+              layerIds={draft.mapLayerIds}
+              placeIds={draft.mapPlaceIds}
+              onChange={(mapLayerIds, mapPlaceIds) => setDraft({ ...draft, mapLayerIds, mapPlaceIds })}
+            />
+            <label className="border-ink-200/60 flex items-start gap-2 border-t pt-3 text-[13px] ">
+              <input type="checkbox" checked={draft.canAnswer} onChange={(e) => setDraft({ ...draft, canAnswer: e.target.checked })} className="accent-brand-500 mt-0.5 h-4 w-4" />
+              <span>
+                <span className="text-ink-900 font-medium">End the client&apos;s link with &ldquo;Request a proposal&rdquo;</span>
+                <span className="text-ink-500 block text-xs font-light">
+                  {draft.canAnswer
+                    ? "They choose the rooms they want with dates and how many — as many periods as they need — add a note and send it to us. “I like it!” is always there."
+                    : "Off: the link is to look at only — the rooms, rates, photos and map, and “I like it!” on each room."}
+                </span>
+              </span>
+            </label>
           </div>
 
           {c.answers.length > 0 && <ClientAnswers answers={c.answers} currency={c.currency} />}
@@ -999,7 +972,7 @@ function MapChoice({
   const inLayer = (place: Card["mapOptions"]["places"][number]) => Boolean(place.layerId && layerIds.includes(place.layerId));
   const picked = options.places.filter((place) => placeIds.includes(place.id));
   return (
-    <div className="border-ink-200/60 border-t pt-3 sm:col-span-2">
+    <div>
       <span className="text-ink-700 text-[13px] font-medium">On the client&apos;s map</span>
       <span className="text-ink-500 ml-2 text-xs font-light">the properties, and only what is ticked or added here</span>
       {options.places.length === 0 ? (
