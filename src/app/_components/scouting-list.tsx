@@ -92,9 +92,20 @@ export function ScoutingList({
     hasQuotations,
   });
 
+  // What came through from a quotation when something was marked Contracted (doc §3.9).
+  const sayCarried = (result: { carried: string[]; undecided: string[] }) => {
+    const parts = [
+      result.carried.length ? `Rates carried from the quotation: ${result.carried.join("; ")}.` : null,
+      result.undecided.length
+        ? `${result.undecided.join(", ")}: several quotations, none accepted — accept one on the property's page and its rates come through.`
+        : null,
+    ].filter(Boolean);
+    if (parts.length) setNotice(parts.join(" "));
+  };
   const setStatusMutation = api.scouting.setStatus.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       setSelected(new Set());
+      sayCarried(result);
       void entries.refetch();
     },
   });
@@ -107,8 +118,14 @@ export function ScoutingList({
       router.refresh();
     },
   });
+  const utils = api.useUtils();
   const setCategoryStatusMutation = api.scouting.setCategoryContractStatus.useMutation({
-    onSuccess: () => void entries.refetch(),
+    onSuccess: (result) => {
+      sayCarried(result);
+      void entries.refetch();
+      void utils.reporting.availability.invalidate();
+      void utils.inventory.invalidate();
+    },
   });
 
   const toggleExpanded = (id: string) =>

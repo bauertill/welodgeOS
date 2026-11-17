@@ -11,6 +11,10 @@ import { logAudit } from "~/server/audit";
 import { findNearby, knownAlready } from "~/server/discover";
 import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
 import { deliverImmediate } from "~/server/notify";
+import { carryQuotedRates } from "~/server/quoted-rooms";
+
+/** Pricing bought nights writes a ledger entry per run — the stock sheet's own time, not five seconds. */
+const CARRYING = { timeout: 60_000, maxWait: 10_000 };
 
 // The groups of an event's list, set by hand (doc §3.9, the team 2026-11-17).
 const SCOUTING_STATUSES = [
@@ -488,6 +492,8 @@ export const scoutingRouter = createTRPCRouter({
       ctx.db.$transaction(async (tx) => {
         const before = await tx.scoutingEntry.findMany({ where: { id: { in: input.ids } }, select: { id: true, status: true } });
         await tx.scoutingEntry.updateMany({ where: { id: { in: input.ids } }, data: { status: input.status } });
+        const carried: string[] = [];
+        const undecided: string[] = [];
         for (const entry of before) {
           if (entry.status === input.status) continue;
           await logAudit(tx, {
@@ -496,9 +502,15 @@ export const scoutingRouter = createTRPCRouter({
             entityId: entry.id,
             summary: `Group: ${scoutingStatusLabels[entry.status]} → ${scoutingStatusLabels[input.status]}`,
           });
+          // Into Contracted: the rates of the quotation on record come with it (doc §3.9).
+          if (input.status === "CONTRACTED") {
+            const result = await carryQuotedRates(tx, ctx.session.user.id, entry.id, null);
+            carried.push(...result.carried);
+            undecided.push(...result.undecided);
+          }
         }
-        return { moved: before.length };
-      }),
+        return { moved: before.length, carried, undecided };
+      }, CARRYING),
     ),
 
   /** The status beneath the group, set by hand — or back to what the system works out, with null. */
@@ -566,8 +578,13 @@ export const scoutingRouter = createTRPCRouter({
             summary: `Contract status: ${categoryContractStatusLabels[beforeStatus] || "—"} → ${categoryContractStatusLabels[input.status] || "—"}`,
           });
         }
-        return contract;
-      }),
+        // Marked Contracted: the quotation's rates come through (doc §3.9, the team 2026-11-17).
+        const result =
+          input.status === "CONTRACTED" && beforeStatus !== "CONTRACTED"
+            ? await carryQuotedRates(tx, ctx.session.user.id, input.scoutingEntryId, [input.categoryId])
+            : { carried: [], undecided: [] };
+        return { ...contract, ...result };
+      }, CARRYING),
     ),
 
   setNotes: protectedProcedure

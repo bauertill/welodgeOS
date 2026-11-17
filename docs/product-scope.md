@@ -1120,6 +1120,25 @@ on this event's entry), **Location**, **Type** (with the stars), **Rooms** and *
 when no total is known the sum of its registered room types. The account manager, amenities
 and video columns are gone (the video is a small link under the name).
 
+**Rates from the quotation** (the team, 2026-11-17: "when a property's status is set to
+Contracted, and the contract follows a quote already on record, could those rates feed through
+to the inventory automatically?"). When a **room type is marked Contracted** — or the
+**property is moved into Contracted** — the quotation on record gives its rates: the quotation
+**accepted**, or else the **only one not declined** that quotes that room type. Where nothing is
+set yet, it fills:
+- the room type's **buying rate** on this event, with what the rate includes, the TOT, other
+  taxes and the period — the rate of the line with the most room-nights, every line's period
+  and rate written in *Applicable period* when there are several;
+- the **price of the nights already bought** on the stock sheet for that room type within the
+  quoted periods, each at its own line's rate — through the stock sheet's *Change the buy
+  price*, so each change is in the ledger and can be undone (§4.7).
+
+Nothing already priced is overwritten, and **nothing is bought**: buying stays a decision
+(*Accept and make the contract* on the quotation, §3.10, or on the stock sheet). When several
+quotations cover a room type and none is accepted, nothing is guessed: the board says so and
+asks for one to be accepted. What came through is said on the board and in the property's
+history.
+
 **Filters**: the **type** filter takes several types at once (*Every type* when none is
 ticked), beside *Every provider* and *With quotations*. To narrow down to the options worth
 comparing (the team, 2026-11-17) there are also:
@@ -3660,7 +3679,8 @@ payments and its deadlines is in the contract's history.
    buying rate per event, on the Properties tab (§3.9). But the nights do not use it yet:
    the stock sheet's buy price is still entered per night, and the financials (§7) read
    only that. Open: should a night with no buy price of its own take its category's buying
-   rate?*
+   rate? Partly answered 2026-11-17: marking a room type Contracted prices its bought nights
+   from the quotation on record (§3.9, *Rates from the quotation*).*
 4. **Roles and permissions.** Is the "We Lodge Rep" an accountability label only, or does
    it gate who may sell/buy/release?
 5. **Overbooking policy.** Do we ever deliberately sell more than we hold at a category
@@ -3873,6 +3893,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
 | §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status and type (the amenity filter removed 2026-10-11), grouped by stage; per-category contract status (`CategoryContract`), independent of the property's own status |
 | §3.5 Organising committee | **Replaced** (2026-11-17) | Was a status of its own (2026-11-11); now *Ruled out* with the status *Official hotel* (§3.9 *Groups and statuses*) |
+| §3.9 Rates from the quotation | **Built** (2026-11-17) | Marking a room type Contracted, or moving a property into Contracted, fills the empty buying rate (with includes, TOT, period) and prices the bought nights without a price, from the accepted quotation or the only one not declined; several and none accepted → asked, not guessed; nothing bought, nothing overwritten |
 | §3.9 Groups and statuses | **Built** (2026-11-17) | Groups set by hand (Contracted, Shortlisted, Reached out, Prospect, Ruled out), moved by dragging or by ticking several and *Move to*; a contract keeps a property in Contracted; a status beneath for the detail — the contact and quote statuses worked out (*auto*), Rate TBC, No availability, Official hotel and Under construction chosen by hand; columns Property · Status · Last update · Location · Type · Rooms (total) · To venue; several types at once in the filter |
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
