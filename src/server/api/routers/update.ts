@@ -5,6 +5,7 @@ import { z } from "zod";
 import { parseDay } from "~/lib/dates";
 import { updateKinds } from "~/lib/update-kinds";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { mentionedIn, notify } from "~/server/notify";
 
 /**
  * Updates: a chronological, append-only history of meeting notes, call
@@ -27,14 +28,19 @@ const scope = z
 export const updateRouter = createTRPCRouter({
   list: protectedProcedure.input(scope).query(({ ctx, input }) =>
     ctx.db.update.findMany({
-      where: input.clientId
-        ? // The client's own, and those on its sales requests (doc §2.6, 2026-11-10).
-          { OR: [{ clientId: input.clientId }, { salesRequest: { clientId: input.clientId } }] }
-        : { propertyId: input.propertyId, salesRequestId: input.salesRequestId },
+      where: {
+        parentId: null,
+        ...(input.clientId
+          ? // The client's own, and those on its sales requests (doc §2.6, 2026-11-10).
+            { OR: [{ clientId: input.clientId }, { salesRequest: { clientId: input.clientId } }] }
+          : { propertyId: input.propertyId, salesRequestId: input.salesRequestId }),
+      },
+      // Replies show beneath the update they answer, oldest first (2026-11-17).
       orderBy: { createdAt: "desc" },
       include: {
         author: { select: { id: true, name: true, email: true, image: true } },
         salesRequest: { select: { id: true, event: { select: { name: true } } } },
+        replies: { orderBy: { createdAt: "asc" }, include: { author: { select: { id: true, name: true, email: true, image: true } } } },
       },
     }),
   ),
@@ -75,6 +81,56 @@ export const updateRouter = createTRPCRouter({
           author: { select: { id: true, name: true, email: true, image: true } },
         },
       });
+    }),
+
+  /**
+   * Reply to an update (doc §2.6, the team 2026-11-17): kept on the same
+   * page as the update, beneath it. Whoever wrote the update, whoever replied
+   * before, and anyone @mentioned is told.
+   */
+  reply: protectedProcedure
+    .input(z.object({ parentId: z.string(), body: z.string().max(20_000) }))
+    .mutation(async ({ ctx, input }) => {
+      const body = input.body.trim();
+      if (!body) throw new TRPCError({ code: "BAD_REQUEST", message: "A reply needs some text." });
+      const parent = await ctx.db.update.findUnique({
+        where: { id: input.parentId },
+        select: {
+          id: true,
+          parentId: true,
+          authorId: true,
+          propertyId: true,
+          clientId: true,
+          salesRequestId: true,
+          replies: { select: { authorId: true } },
+          property: { select: { name: true } },
+          client: { select: { name: true } },
+          salesRequest: { select: { client: { select: { name: true } } } },
+        },
+      });
+      if (!parent) throw new TRPCError({ code: "NOT_FOUND", message: "This update no longer exists." });
+      if (parent.parentId) throw new TRPCError({ code: "BAD_REQUEST", message: "Reply to the update itself, not to a reply." });
+      const reply = await ctx.db.update.create({
+        data: {
+          body,
+          parentId: parent.id,
+          propertyId: parent.propertyId,
+          clientId: parent.clientId,
+          salesRequestId: parent.salesRequestId,
+          authorId: ctx.session.user.id,
+        },
+      });
+      const where = parent.property?.name ?? parent.client?.name ?? parent.salesRequest?.client.name ?? "an update";
+      const mentioned = await mentionedIn(ctx.db, body);
+      await notify(ctx.db, {
+        to: [parent.authorId, ...parent.replies.map((r) => r.authorId), ...mentioned],
+        actorId: ctx.session.user.id,
+        kind: "UPDATE_REPLY",
+        title: `${ctx.session.user.name ?? "A colleague"} replied on ${where}`,
+        body: body.length > 160 ? `${body.slice(0, 157)}…` : body,
+        link: parent.propertyId ? `/properties/${parent.propertyId}` : parent.clientId ? `/clients/${parent.clientId}` : `/sales/${parent.salesRequestId}`,
+      });
+      return reply;
     }),
 
   /**

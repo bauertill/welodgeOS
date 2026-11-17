@@ -67,6 +67,15 @@ export function UpdateThread(scope: Scope) {
     },
   });
 
+  // A reply being written, under one update at a time (2026-11-17).
+  const [replying, setReplying] = useState<{ id: string; body: string } | null>(null);
+  const reply = api.update.reply.useMutation({
+    onSuccess: () => {
+      setReplying(null);
+      void utils.update.list.invalidate(scope);
+    },
+  });
+
   const post = api.update.post.useMutation({
     onSuccess: () => {
       setBody("");
@@ -251,8 +260,91 @@ export function UpdateThread(scope: Scope) {
                           Edited {formatMomentInWords(entry.editedAt)}
                         </span>
                       )}
+                      {replying?.id !== entry.id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            reply.reset();
+                            setReplying({ id: entry.id, body: "" });
+                          }}
+                          className="text-ink-500 hover:text-brand-700 text-xs font-medium transition-colors"
+                        >
+                          Reply{entry.replies.length ? ` · ${entry.replies.length} ${entry.replies.length === 1 ? "reply" : "replies"}` : ""}
+                        </button>
+                      )}
                     </div>
                   </>
+                )}
+
+                {/* The replies, oldest first, then the box to add one (doc §2.6). */}
+                {(entry.replies.length > 0 || replying?.id === entry.id) && (
+                  <div className="border-ink-200/70 mt-3 space-y-3 border-l-2 pl-4">
+                    {entry.replies.map((answer) => (
+                      <div key={answer.id} className="flex gap-2.5">
+                        {answer.author ? <Initials person={answer.author} /> : <span className="bg-ink-100 h-7 w-7 shrink-0 rounded-full" />}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-baseline gap-x-2">
+                            <span className="text-ink-900 text-[13px] font-semibold">{answer.author?.name ?? answer.author?.email ?? "—"}</span>
+                            <span className="text-ink-500 text-xs font-light" title={answer.createdAt.toLocaleString("en-CH")}>
+                              {formatDay(answer.createdAt)}
+                            </span>
+                            {answer.author?.id === me.data?.id && editing?.id !== answer.id && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  edit.reset();
+                                  setEditing({ id: answer.id, body: answer.body });
+                                }}
+                                className="text-ink-500 hover:text-brand-700 ml-auto text-xs font-light transition-colors"
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                          {editing?.id === answer.id ? (
+                            <div className="mt-1.5">
+                              <MentionTextarea value={editing.body} onChange={(value) => setEditing({ id: answer.id, body: value })} people={people.data ?? []} rows={2} />
+                              <div className="mt-2 flex items-center justify-end gap-2">
+                                {edit.error && <p className="mr-auto text-xs text-[#c03654]">{edit.error.message}</p>}
+                                <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                                  Cancel
+                                </Button>
+                                <Button type="button" disabled={!editing.body.trim() || edit.isPending} onClick={() => edit.mutate(editing)}>
+                                  {edit.isPending ? "Saving…" : "Save"}
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-ink-800 mt-0.5 text-sm leading-relaxed font-light whitespace-pre-line">{renderUpdateBody(answer.body)}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {replying?.id === entry.id && (
+                      <div>
+                        <MentionTextarea
+                          value={replying.body}
+                          onChange={(value) => setReplying({ id: entry.id, body: value })}
+                          people={people.data ?? []}
+                          rows={2}
+                          placeholder={`Reply to ${author.split(" ")[0]} — @ to mention a colleague`}
+                        />
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          {reply.error && <p className="mr-auto text-xs text-[#c03654]">{reply.error.message}</p>}
+                          <Button type="button" variant="secondary" onClick={() => setReplying(null)}>
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            disabled={!replying.body.trim() || reply.isPending}
+                            onClick={() => reply.mutate({ parentId: entry.id, body: replying.body })}
+                          >
+                            {reply.isPending ? "Posting…" : "Post reply"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </li>
