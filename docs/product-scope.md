@@ -2738,7 +2738,7 @@ room category at the rate we sell it for.
 - **What the client's map shows is chosen per card** (the owner, 2026-11-17: the LA28 map
   showed every one of its 332 metro and bus stations, "distracting … ideally we just see the
   property and then any points of interest we decide"). By default the map shows **only the
-  card's properties**. Under *On the client's map* in the card's popup, the team ticks whole
+  card's properties**. Under *On the client's map*, at the bottom of the card's popup with *End the client's link with "Request a proposal"*, the team ticks whole
   layers of the event's places (*All Venues (42)*) and adds single places by name (chips,
   × to take one off). Only those appear on the map and in *Getting there*, which is left
   out when nothing is chosen; a journey can only be asked to a place the map shows. Google's

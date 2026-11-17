@@ -379,23 +379,6 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 </div>
               )}
             </div>
-            <MapChoice
-              options={c.mapOptions}
-              layerIds={draft.mapLayerIds}
-              placeIds={draft.mapPlaceIds}
-              onChange={(mapLayerIds, mapPlaceIds) => setDraft({ ...draft, mapLayerIds, mapPlaceIds })}
-            />
-            <label className="border-ink-200/60 flex items-start gap-2 border-t pt-3 text-[13px] sm:col-span-2">
-              <input type="checkbox" checked={draft.canAnswer} onChange={(e) => setDraft({ ...draft, canAnswer: e.target.checked })} className="accent-brand-500 mt-0.5 h-4 w-4" />
-              <span>
-                <span className="text-ink-900 font-medium">End the client&apos;s link with &ldquo;Request a proposal&rdquo;</span>
-                <span className="text-ink-500 block text-xs font-light">
-                  {draft.canAnswer
-                    ? "They choose the rooms they want with dates and how many — as many periods as they need — add a note and send it to us. “I like it!” is always there."
-                    : "Off: the link is to look at only — the rooms, rates, photos and map, and “I like it!” on each room."}
-                </span>
-              </span>
-            </label>
           </div>
 
           {draft.properties
@@ -718,7 +701,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
 
           <div className="border-ink-200/60 rounded-xl border border-dashed bg-white p-4 text-[13px]">
             <p className="text-ink-900 font-medium">Add a property</p>
-            <p className="text-ink-500 mb-2 text-xs font-light">From the event&apos;s properties not on this card — its room types come with it at our cost plus the markup, as on a new card.</p>
+            <p className="text-ink-500 mb-2 text-xs font-light">From the event&apos;s properties not on this card — its room types come with it at our cost plus 15% to start, as on a new card.</p>
             <span className="flex flex-wrap items-center gap-2">
               <Combobox
                 value={adding}
@@ -732,6 +715,27 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
               </Button>
             </span>
             {addProperties.error && <p className="mt-2 text-xs text-[#c03654]">{friendlyError(addProperties.error)}</p>}
+          </div>
+
+          {/* What the client's link shows besides the card: the map's places, and whether it ends with Request a proposal (moved to the bottom, 2026-11-17). */}
+          <div className="border-ink-200/60 grid gap-3 rounded-xl border bg-white p-4">
+            <MapChoice
+              options={c.mapOptions}
+              layerIds={draft.mapLayerIds}
+              placeIds={draft.mapPlaceIds}
+              onChange={(mapLayerIds, mapPlaceIds) => setDraft({ ...draft, mapLayerIds, mapPlaceIds })}
+            />
+            <label className="border-ink-200/60 flex items-start gap-2 border-t pt-3 text-[13px] ">
+              <input type="checkbox" checked={draft.canAnswer} onChange={(e) => setDraft({ ...draft, canAnswer: e.target.checked })} className="accent-brand-500 mt-0.5 h-4 w-4" />
+              <span>
+                <span className="text-ink-900 font-medium">End the client&apos;s link with &ldquo;Request a proposal&rdquo;</span>
+                <span className="text-ink-500 block text-xs font-light">
+                  {draft.canAnswer
+                    ? "They choose the rooms they want with dates and how many — as many periods as they need — add a note and send it to us. “I like it!” is always there."
+                    : "Off: the link is to look at only — the rooms, rates, photos and map, and “I like it!” on each room."}
+                </span>
+              </span>
+            </label>
           </div>
 
           {c.answers.length > 0 && <ClientAnswers answers={c.answers} currency={c.currency} />}
@@ -968,7 +972,7 @@ function MapChoice({
   const inLayer = (place: Card["mapOptions"]["places"][number]) => Boolean(place.layerId && layerIds.includes(place.layerId));
   const picked = options.places.filter((place) => placeIds.includes(place.id));
   return (
-    <div className="border-ink-200/60 border-t pt-3 sm:col-span-2">
+    <div>
       <span className="text-ink-700 text-[13px] font-medium">On the client&apos;s map</span>
       <span className="text-ink-500 ml-2 text-xs font-light">the properties, and only what is ticked or added here</span>
       {options.places.length === 0 ? (
