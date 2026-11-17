@@ -48,12 +48,25 @@ export async function mentionedIn(db: Db, body: string) {
 export const plainMentions = (body: string) => body.replace(MENTION_PATTERN, "@$1");
 
 /**
- * Email what is waiting for the people who want it at once. Run after every
- * change that notifies; what fails to send stays waiting and goes next time.
+ * Only being mentioned (or tagged) is emailed (the owner, 2026-11-17: "I don't
+ * want to overwhelm the team with an email every time — when they're tagged or
+ * mentioned, yes"). Everything else stays in the bell.
+ */
+export const EMAILED_KINDS: NotificationKind[] = ["TASK_MENTION", "UPDATE_MENTION"];
+
+/**
+ * Email the mentions waiting, at once, to everyone who has not turned email
+ * off. Run after every change that notifies; what fails to send is tried again
+ * on the next run within the hour — never an old pile at once.
  */
 export async function deliverImmediate(db: PrismaClient) {
   const waiting = await db.notification.findMany({
-    where: { emailedAt: null, user: { emailNotifications: "IMMEDIATE" }, createdAt: { gte: addDays(new Date(), -2) } },
+    where: {
+      emailedAt: null,
+      kind: { in: EMAILED_KINDS },
+      user: { emailNotifications: { not: "NONE" } },
+      createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+    },
     include: { user: { select: { email: true } } },
     orderBy: { createdAt: "asc" },
     take: 50,
@@ -124,23 +137,7 @@ export async function runDaily(db: PrismaClient) {
   }
   await deliverImmediate(db);
 
-  const waiting = await db.notification.findMany({
-    where: { emailedAt: null, user: { emailNotifications: "DAILY" } },
-    include: { user: { select: { id: true, email: true, name: true } } },
-    orderBy: { createdAt: "asc" },
-  });
-  const byPerson = new Map<string, typeof waiting>();
-  for (const notification of waiting) byPerson.set(notification.userId, [...(byPerson.get(notification.userId) ?? []), notification]);
-  let summaries = 0;
-  for (const items of byPerson.values()) {
-    const person = items[0]!.user;
-    if (!person.email) continue;
-    const subject = `${items.length} ${items.length === 1 ? "thing" : "things"} for you on We Lodge OS`;
-    const { text, html } = layoutEmail(`Good morning${person.name ? `, ${person.name.split(" ")[0]}` : ""} — since yesterday:`, items);
-    if (await sendEmail({ to: person.email, subject, text, html })) {
-      await db.notification.updateMany({ where: { id: { in: items.map((item) => item.id) } }, data: { emailedAt: new Date() } });
-      summaries += 1;
-    }
-  }
+  // No morning summary email any more (2026-11-17): only mentions are emailed, as they happen.
+  const summaries = 0;
   return { reminders, summaries };
 }

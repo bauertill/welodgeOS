@@ -13,7 +13,7 @@ export const TEST_ADDRESSES = ["brandon@welodge.net", "ami@welodge.net", "till@w
  * to the server log and counts as sent — so switching on later does not send
  * everything that piled up meanwhile.
  */
-export const LIVE_EMAILS_ON = false;
+export const LIVE_EMAILS_ON = true; // Switched on 2026-11-17 — mentions only (see EMAILED_KINDS).
 
 /**
  * Sends one email through Resend (doc §2.9). On the live site only once

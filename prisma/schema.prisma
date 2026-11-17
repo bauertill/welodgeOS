@@ -1822,6 +1822,8 @@ enum NotificationKind {
   TASK_OVERDUE
   /// Someone replied to an update you wrote or replied to, or mentioned you in a reply (doc §2.6).
   UPDATE_REPLY
+  /// Someone @mentioned you in an update or a reply — emailed (doc §2.9, 2026-11-17).
+  UPDATE_MENTION
 }
 
 /// By email: each one as it happens, one summary a day, or none.

@@ -97,9 +97,12 @@ export function NotificationBell() {
   );
 }
 
+/**
+ * Only mentions are emailed (the owner, 2026-11-17), so the choice is simply
+ * yes or no. "At once" and the old "Daily summary" both count as yes.
+ */
 const preferences = [
-  { value: "IMMEDIATE", label: "At once", hint: "An email for each, as it happens." },
-  { value: "DAILY", label: "Daily summary", hint: "One email each morning with everything since the last." },
+  { value: "IMMEDIATE", label: "Email me when I'm mentioned", hint: "An email as soon as someone @mentions you in an update, a reply or a task." },
   { value: "NONE", label: "No email", hint: "Only the bell in the app." },
 ] as const;
 
@@ -112,12 +115,12 @@ export function EmailPreferenceCard() {
     <div className="border-ink-200/60 mb-8 rounded-xl border bg-white p-5">
       <h2 className="text-ink-900 text-[15px] font-medium">Notifications by email</h2>
       <p className="text-ink-500 mt-1 mb-3 text-sm font-light">
-        When you are given a task, mentioned, a task of yours is commented on or moved, or one is due tomorrow or overdue. The bell at the top
-        always shows them.
+        Only when someone @mentions you is there an email — everything else (tasks given to you, comments, replies, deadlines) is in the bell
+        at the top.
       </p>
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Notifications by email">
         {preferences.map((option) => {
-          const chosen = current.data === option.value;
+          const chosen = option.value === "NONE" ? current.data === "NONE" : current.data !== undefined && current.data !== "NONE";
           return (
             <button
               key={option.value}
