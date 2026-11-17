@@ -73,6 +73,7 @@ export function ScoutingList({
   const [roomType, setRoomType] = useRemembered(`scouting:${eventId}:roomKind`, "");
   const [area, setArea] = useRemembered(`scouting:${eventId}:area`, "");
   const [maxRate, setMaxRate] = useRemembered(`scouting:${eventId}:maxRate`, "");
+  const [search, setSearch] = useRemembered(`scouting:${eventId}:search`, "");
   /** Ticked rows, to move several into a group at once (doc §3.9). */
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** The rows being dragged, and the group they hover over. */
@@ -146,7 +147,16 @@ export function ScoutingList({
   // The few room types a client asks for (doc §4.11), each hotel's own names read into them.
   const roomWords = roomType;
   const ceiling = Number(maxRate.replace(",", "."));
+  // Free text (the owner, 2026-11-17): words found in the name, chain, area, town or address.
+  const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const searchWords = fold(search).split(/\s+/).filter(Boolean);
   const rows = allRows.filter((entry) => {
+    if (searchWords.length) {
+      const haystack = fold(
+        [entry.property.name, entry.property.provider?.name, entry.property.area, entry.property.city, entry.property.address].filter(Boolean).join(" "),
+      );
+      if (!searchWords.every((word) => haystack.includes(word))) return false;
+    }
     if (area && areaOf(entry.property) !== area) return false;
     const matching = roomWords ? entry.property.categories.filter((category) => roomTypeOf(category) === roomWords) : null;
     if (matching && matching.length === 0) return false;
@@ -158,7 +168,7 @@ export function ScoutingList({
     }
     return true;
   });
-  const narrowed = Boolean(area || roomWords || maxRate.trim());
+  const narrowed = Boolean(searchWords.length || area || roomWords || maxRate.trim());
   const filtered = narrowed || types.length > 0 || providerId !== "" || hasQuotations;
   const lowestRate = (entry: (typeof allRows)[number]) =>
     entry.rates.length ? entry.rates.reduce((low, rate) => (rate.cents < low.cents ? rate : low)) : null;
@@ -590,6 +600,15 @@ export function ScoutingList({
           ))}
         </div>
 
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search properties…"
+          aria-label="Search properties"
+          className={`w-56 rounded-full border px-4 py-2 text-[13px] font-light outline-none ${search ? "border-brand-400 bg-brand-50" : "border-ink-200 bg-white"}`}
+        />
+
         <TypePicker value={types} onChange={setTypes} />
 
         {(providers.data ?? []).length > 0 && (
@@ -662,6 +681,7 @@ export function ScoutingList({
               setArea("");
               setRoomType("");
               setMaxRate("");
+              setSearch("");
             }}
             className="text-brand-700 text-[13px] font-light hover:underline"
           >
@@ -681,7 +701,7 @@ export function ScoutingList({
         narrowed && allRows.length > 0 ? (
           <EmptyState
             title="No property matches these filters"
-            description="Widen the area, room type or price — or reset the filters."
+            description="Widen the search, area, room type or price — or reset the filters."
           />
         ) : hasQuotations ? (
           <EmptyState
