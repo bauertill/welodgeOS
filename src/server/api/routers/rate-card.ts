@@ -194,6 +194,53 @@ async function loadCard(db: Db, where: Prisma.RateCardWhereUniqueInput) {
   return card ? shape(card) : null;
 }
 
+/**
+ * What a property brings onto a card (doc §4.11): every room category, bought
+ * at its event rate in the card's currency, sold at that plus the markup, and
+ * the property's first photos. Used for a new card and for a property added to
+ * one later (2026-11-17).
+ */
+async function propertyEntries(
+  tx: Db,
+  options: { propertyIds: string[]; eventId: string | null; currency: string | null; markupBasisPoints: number; firstPosition: number },
+) {
+  const properties = await tx.property.findMany({
+    where: { id: { in: options.propertyIds } },
+    select: {
+      id: true,
+      ...withMedia,
+      categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, capacity: true, unitCount: true } },
+      photos: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], take: CARD_PHOTOS, select: { id: true } },
+    },
+  });
+  const rates = options.eventId ? (await eventRates(tx, { propertyIds: options.propertyIds, eventId: options.eventId })).get(options.eventId) : undefined;
+  const currency = options.currency ?? [...(rates?.values() ?? [])][0]?.currency ?? "USD";
+  const creates = options.propertyIds
+    .map((id) => properties.find((property) => property.id === id))
+    .filter((property): property is (typeof properties)[number] => Boolean(property))
+    .map((property, index) => ({
+      propertyId: property.id,
+      position: options.firstPosition + index,
+      // The property's first photos to start; the team changes the choice on the card.
+      photos: { create: property.photos.map((photo, at) => ({ photoId: photo.id, position: at })) },
+      lines: {
+        create: property.categories.map((category, at) => {
+          const rate = rates?.get(category.id);
+          const buying = rate && rate.currency === currency ? rate.minCents : null;
+          return {
+            categoryId: category.id,
+            name: category.name,
+            sleeps: category.capacity,
+            buyingCents: buying,
+            sellingCents: buying === null ? null : withMarkup(buying, options.markupBasisPoints),
+            position: at,
+          };
+        }),
+      },
+    }));
+  return { properties, creates, currency };
+}
+
 export const rateCardRouter = createTRPCRouter({
   /**
    * A new card from the properties ticked on a sourcing task — or, with no
@@ -217,17 +264,13 @@ export const rateCardRouter = createTRPCRouter({
           : null;
         const eventId = request?.eventId ?? input.eventId ?? null;
         const event = eventId ? await tx.event.findUnique({ where: { id: eventId }, select: { name: true, country: true, _count: { select: { rateCards: { where: { salesRequestId: null } } } } } }) : null;
-        const properties = await tx.property.findMany({
-          where: { id: { in: input.propertyIds } },
-          select: {
-            id: true,
-            ...withMedia,
-            categories: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, capacity: true, unitCount: true } },
-            photos: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], take: CARD_PHOTOS, select: { id: true } },
-          },
+        const { properties, creates, currency } = await propertyEntries(tx, {
+          propertyIds: input.propertyIds,
+          eventId,
+          currency: request?.budgetCurrency ?? null,
+          markupBasisPoints: DEFAULT_MARKUP,
+          firstPosition: 0,
         });
-        const rates = eventId ? (await eventRates(tx, { propertyIds: input.propertyIds, eventId })).get(eventId) : undefined;
-        const currency = request?.budgetCurrency ?? [...(rates?.values() ?? [])][0]?.currency ?? "USD";
         const name = request
           ? `Rate card${request._count.rateCards ? ` ${request._count.rateCards + 1}` : ""} — ${request.client.name}${request.event ? ` — ${request.event.name}` : ""}`
           : `Rate card${event?._count.rateCards ? ` ${event._count.rateCards + 1}` : ""} — ${event?.name ?? "event"} — for any client`;
@@ -239,31 +282,7 @@ export const rateCardRouter = createTRPCRouter({
             currency,
             markupBasisPoints: DEFAULT_MARKUP,
             createdById: ctx.session.user.id,
-            properties: {
-              create: input.propertyIds
-                .map((id) => properties.find((property) => property.id === id))
-                .filter((property): property is (typeof properties)[number] => Boolean(property))
-                .map((property, position) => ({
-                  propertyId: property.id,
-                  position,
-                  // The property's first photos to start; the team changes the choice on the card.
-                  photos: { create: property.photos.map((photo, index) => ({ photoId: photo.id, position: index })) },
-                  lines: {
-                    create: property.categories.map((category, index) => {
-                      const rate = rates?.get(category.id);
-                      const buying = rate && rate.currency === currency ? rate.minCents : null;
-                      return {
-                        categoryId: category.id,
-                        name: category.name,
-                        sleeps: category.capacity,
-                        buyingCents: buying,
-                        sellingCents: buying === null ? null : withMarkup(buying, DEFAULT_MARKUP),
-                        position: index,
-                      };
-                    }),
-                  },
-                })),
-            },
+            properties: { create: creates },
           },
         });
         await logAudit(tx, {
@@ -277,6 +296,63 @@ export const rateCardRouter = createTRPCRouter({
           await ensureGetMediaTask(tx, { propertyId: property.id, salesRequestId: input.salesRequestId ?? null, eventId, actorId: ctx.session.user.id });
         }
         return { id: card.id };
+      });
+    }),
+
+  /**
+   * The event's properties not on the card yet, to add (the owner, 2026-11-17):
+   * those on its properties board, ruled-out ones left out.
+   */
+  addable: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const card = await ctx.db.rateCard.findUniqueOrThrow({ where: { id: input.id }, select: { eventId: true, properties: { select: { propertyId: true } } } });
+    if (!card.eventId) return [];
+    const on = new Set(card.properties.map((property) => property.propertyId));
+    const entries = await ctx.db.scoutingEntry.findMany({
+      where: { eventId: card.eventId, status: { not: "REJECTED" } },
+      select: { property: { select: { id: true, name: true, area: true, city: true, stars: true, _count: { select: { categories: true } } } } },
+    });
+    return entries
+      .map((entry) => entry.property)
+      .filter((property) => !on.has(property.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((property) => ({
+        id: property.id,
+        label: property.name,
+        detail: [property.stars ? "★".repeat(property.stars) : null, property.area ?? property.city, `${property._count.categories} room types`].filter(Boolean).join(" · "),
+      }));
+  }),
+
+  /** Properties added to a card after it was made — at the end, as a new card would have them (2026-11-17). */
+  addProperties: protectedProcedure
+    .input(z.object({ id: z.string(), propertyIds: z.array(z.string()).min(1, "Choose a property to add.").max(30) }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.$transaction(async (tx) => {
+        const card = await tx.rateCard.findUniqueOrThrow({
+          where: { id: input.id },
+          select: { id: true, name: true, salesRequestId: true, eventId: true, currency: true, markupBasisPoints: true, properties: { select: { propertyId: true, position: true } } },
+        });
+        const on = new Set(card.properties.map((property) => property.propertyId));
+        const propertyIds = input.propertyIds.filter((id) => !on.has(id));
+        if (!propertyIds.length) return { added: [] as string[] };
+        const { properties, creates } = await propertyEntries(tx, {
+          propertyIds,
+          eventId: card.eventId,
+          currency: card.currency,
+          markupBasisPoints: card.markupBasisPoints ?? DEFAULT_MARKUP,
+          firstPosition: Math.max(-1, ...card.properties.map((property) => property.position)) + 1,
+        });
+        const added: string[] = [];
+        for (const data of creates) {
+          const entry = await tx.rateCardProperty.create({ data: { ...data, rateCardId: card.id }, select: { id: true } });
+          added.push(entry.id);
+        }
+        const names = await tx.property.findMany({ where: { id: { in: propertyIds } }, select: { name: true } });
+        await logAudit(tx, { actorId: ctx.session.user.id, ...cardHistory(card), summary: `Added to the rate card "${card.name}": ${names.map((one) => one.name).join(", ")}` });
+        // No photos or video yet: the same Get media task a new card makes (doc §4.11).
+        for (const property of properties.filter((one) => !hasMedia(one))) {
+          await ensureGetMediaTask(tx, { propertyId: property.id, salesRequestId: card.salesRequestId, eventId: card.eventId, actorId: ctx.session.user.id });
+        }
+        return { added };
       });
     }),
 

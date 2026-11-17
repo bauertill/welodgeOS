@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { Combobox } from "~/app/_components/combobox";
 import { Button, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { RateCardView, type ClientRateCard } from "~/app/_components/rate-card-view";
@@ -108,6 +109,23 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       setDraft(next);
       setSaved(JSON.stringify(next));
       void utils.property.invalidate();
+    },
+  });
+  // Properties added after the card was made (2026-11-17): they join the draft at the end, unsaved changes kept.
+  const [adding, setAdding] = useState("");
+  const addable = api.rateCard.addable.useQuery({ id }, { refetchOnWindowFocus: false });
+  const addProperties = api.rateCard.addProperties.useMutation({
+    onSuccess: async ({ added }) => {
+      setAdding("");
+      await utils.rateCard.invalidate();
+      const fresh = await utils.rateCard.byId.fetch({ id });
+      const extra = draftOf(fresh).properties.filter((property) => added.includes(property.id));
+      setDraft((current) => (current ? { ...current, properties: [...current.properties, ...extra] } : current));
+      setSaved((current) => {
+        if (!current) return current;
+        const before = JSON.parse(current) as Draft;
+        return JSON.stringify({ ...before, properties: [...before.properties, ...extra] });
+      });
     },
   });
   const share = api.rateCard.share.useMutation({
@@ -606,6 +624,24 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 </section>
               );
             })}
+
+          <div className="border-ink-200/60 rounded-xl border border-dashed bg-white p-4 text-[13px]">
+            <p className="text-ink-900 font-medium">Add a property</p>
+            <p className="text-ink-500 mb-2 text-xs font-light">From the event&apos;s properties not on this card — its room types come with it at our cost plus the markup, as on a new card.</p>
+            <span className="flex flex-wrap items-center gap-2">
+              <Combobox
+                value={adding}
+                onChange={setAdding}
+                options={addable.data ?? []}
+                placeholder={addable.data && addable.data.length === 0 ? "Every property of the event is on the card" : "Choose a property…"}
+                className="min-w-72 flex-1"
+              />
+              <Button type="button" variant="secondary" disabled={!adding || addProperties.isPending} onClick={() => addProperties.mutate({ id, propertyIds: [adding] })}>
+                {addProperties.isPending ? "Adding…" : "Add to the card"}
+              </Button>
+            </span>
+            {addProperties.error && <p className="mt-2 text-xs text-[#c03654]">{friendlyError(addProperties.error)}</p>}
+          </div>
 
           {c.answers.length > 0 && <ClientAnswers answers={c.answers} currency={c.currency} />}
 
