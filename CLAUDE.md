@@ -118,6 +118,11 @@ The live system is at https://os.welodge.net. Pushing to `master` deploys it, so
 a merge reaches real users without further ceremony. The old address,
 https://welodge-os.vercel.app, redirects there.
 
+**Migrations use a direct database connection.** `schema.prisma` has
+`directUrl = env("DIRECT_URL")`: Neon's address without `-pooler`, set on Vercel for
+staging and production, and in `.env` locally. Through the pooler, the migration
+lock could outlive the build and make every later release time out (P1002).
+
 **Changes go to `staging` first, never straight to `master`.** Pushing to
 `staging` deploys https://staging.welodge.net, which runs on a copy of the live
 database, so a migration is rehearsed on real data before it reaches the team.

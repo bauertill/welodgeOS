@@ -22,6 +22,7 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:password@localhost:5432/welodge-os
+      DIRECT_URL: postgresql://postgres:password@localhost:5432/welodge-os
       AUTH_SECRET: ci-only-not-a-real-secret
     steps:
       - uses: actions/checkout@v4

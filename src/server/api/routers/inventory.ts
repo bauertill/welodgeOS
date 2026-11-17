@@ -224,7 +224,7 @@ async function listedSlots(
   const entries = await db.scoutingEntry.findMany({
     where: {
       eventId: input.eventId,
-      status: { notIn: ["REJECTED", "ORGANISER"] },
+      status: { not: "REJECTED" },
       propertyId: input.propertyId,
       property: input.minStars ? { stars: { gte: input.minStars } } : undefined,
     },

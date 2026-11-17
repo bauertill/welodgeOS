@@ -1,43 +1,48 @@
 import type { CategoryContractStatus, ContactOutcome, QuotationStatus, ScoutingStatus, TaskStatus } from "generated/prisma";
 
+import type { ScoutingDetailShown } from "~/lib/scouting";
+
 /**
- * Where a property stands on an event's board (doc §3.9) — worked out, never
- * set by hand: from its hotel contact tasks, its quotations and its
- * contracts. It moves on its own as the work does.
+ * Where a property stands on an event's board (doc §3.9, the team 2026-11-17).
+ * Its **group** is set by hand — dragged, or several moved at once — except
+ * that a supplier contract or a contracted room type always shows it as
+ * Contracted. Its **status** is the detail beneath: what a person set, or else
+ * what the system works out from its contact tasks and quotations.
  */
-export type PropertyStage = "TO_CONTACT" | "PENDING_QUOTE" | "QUOTED" | "CONTRACTED" | "PROSPECT" | "COULDNT_HELP" | "ORGANISER" | "RULED_OUT";
-
-/** The board's order: contracted at the top, then the work in hand furthest along first, the long list, and the closed ones. */
-export const stageOrder: PropertyStage[] = ["CONTRACTED", "QUOTED", "PENDING_QUOTE", "TO_CONTACT", "PROSPECT", "COULDNT_HELP", "ORGANISER", "RULED_OUT"];
-
-export const stageInfo: Record<PropertyStage, { label: string; hint: string; colour: string }> = {
-  TO_CONTACT: { label: "To be contacted", hint: "A contact task is open and not started yet.", colour: "#7c4dd8" },
-  PENDING_QUOTE: { label: "Pending quote", hint: "Contacted — the request emailed, or reached out — and waiting for their quotation.", colour: "#1d5fa8" },
-  QUOTED: { label: "Quote received", hint: "They have sent a quotation for this event.", colour: "#b07800" },
-  CONTRACTED: { label: "Contracted", hint: "Rooms contracted, or a supplier contract for this event.", colour: "#0a7a47" },
-  PROSPECT: { label: "Prospects", hint: "On the list; nothing started yet.", colour: "#6b7280" },
-  COULDNT_HELP: { label: "Couldn't help", hint: "Their last contact task closed with why they could not help.", colour: "#a3243d" },
-  ORGANISER: { label: "Organising committee", hint: "Contracted by the event's organising committee — an official hotel, not available to us.", colour: "#6b4fa0" },
-  RULED_OUT: { label: "Ruled out", hint: "Marked Rejected for this event.", colour: "#9a9a9a" },
-};
-
-export function stageOf(entry: {
+export function groupOf(entry: {
   status: ScoutingStatus;
   categoryContracts: { status: CategoryContractStatus }[];
-  quotations: { status: QuotationStatus }[];
-  /** Its hotel contact tasks on the event, newest first. */
-  contactTasks: { status: TaskStatus; outcome: ContactOutcome | null }[];
   hasSupplierContract: boolean;
-}): PropertyStage {
-  if (entry.hasSupplierContract || entry.status === "CONTRACTED" || entry.categoryContracts.some((contract) => contract.status === "CONTRACTED")) {
-    return "CONTRACTED";
+}): ScoutingStatus {
+  if (entry.hasSupplierContract || entry.categoryContracts.some((contract) => contract.status === "CONTRACTED")) return "CONTRACTED";
+  return entry.status;
+}
+
+/** Whether the group is held at Contracted by a contract, so moving it elsewhere would not show. */
+export function contractedByContract(entry: { categoryContracts: { status: CategoryContractStatus }[]; hasSupplierContract: boolean }) {
+  return entry.hasSupplierContract || entry.categoryContracts.some((contract) => contract.status === "CONTRACTED");
+}
+
+/** The status the system works out, shown when nobody has set one by hand. */
+export function autoDetailOf(
+  entry: {
+    quotations: { status: QuotationStatus; validUntil: Date | null }[];
+    /** Its hotel contact tasks on the event, newest first. */
+    contactTasks: { status: TaskStatus; outcome: ContactOutcome | null }[];
+    status: ScoutingStatus;
+  },
+  today: Date = new Date(),
+): ScoutingDetailShown | null {
+  const live = entry.quotations.filter((quotation) => quotation.status !== "DECLINED");
+  if (live.length) {
+    const day = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const expired = live.every((quotation) => quotation.status !== "ACCEPTED" && quotation.validUntil !== null && quotation.validUntil < day);
+    return expired ? "QUOTE_EXPIRED" : "QUOTE_RECEIVED";
   }
-  if (entry.status === "ORGANISER") return "ORGANISER";
-  if (entry.status === "REJECTED") return "RULED_OUT";
-  if (entry.quotations.some((quotation) => quotation.status !== "DECLINED")) return "QUOTED";
   const open = entry.contactTasks.find((task) => task.status !== "DONE");
-  if (open) return open.status === "IN_PROGRESS" ? "PENDING_QUOTE" : "TO_CONTACT";
-  if (entry.status === "CONTACTED") return "PENDING_QUOTE";
-  if (entry.contactTasks[0]?.outcome) return "COULDNT_HELP";
-  return "PROSPECT";
+  if (open) return open.status === "IN_PROGRESS" ? "QUOTE_REQUESTED" : "TO_CONTACT";
+  const outcome = entry.contactTasks[0]?.outcome;
+  if (outcome) return outcome === "NO_AVAILABILITY" ? "NO_AVAILABILITY" : "COULDNT_HELP";
+  if (entry.status === "CONTACTED") return "QUOTE_REQUESTED";
+  return null;
 }

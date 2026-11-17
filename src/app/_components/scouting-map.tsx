@@ -137,7 +137,6 @@ const pinColors: Record<ScoutingStatus, string> = {
   SHORTLISTED: "#ab6ce2",
   REJECTED: "#db4b68",
   CONTRACTED: "#12b878",
-  ORGANISER: "#6b4fa0",
 };
 
 /** What a pin with no status is drawn in. */

@@ -720,6 +720,12 @@ building with reception and housekeeping. Its categories use these same
 bedrooms/bathrooms fields, not a hotel's `bedConfiguration`; the only thing it takes from
 the hotel side is `stars` (§3.1).
 
+**More types** (2026-11-11 and, from the team, 2026-11-17): motel, hostel, bed & breakfast,
+guest house and resort / lodge behave as hotels; furnished apartment, unfurnished apartment,
+individual home and student housing as apartments; extended stay as an aparthotel. The old
+plain **Apartment** is kept only for apartments not yet sorted into furnished or unfurnished,
+shown as *Apartment (to sort)*.
+
 ### 3.4 Amenities
 
 A single controlled list shared by every property type (`WiFi`, `Breakfast included`,
@@ -740,24 +746,27 @@ a property that otherwise exists once, globally:
 | Field | Notes |
 | --- | --- |
 | `event`, `property` | Unique together — a property appears at most once per event |
-| `status` | `PROSPECT` → `CONTACTED` → `SHORTLISTED` \| `REJECTED` — the pursuit funnel only |
+| `status` | The **group**, set by hand: `PROSPECT` · `CONTACTED` (*Reached out*) · `SHORTLISTED` · `CONTRACTED` · `REJECTED` (*Ruled out*) — §3.9 |
+| `detail` | The **status** beneath the group, when it is something only a person knows: *Rate TBC*, *No availability*, *Official hotel*, *Under construction*. Empty means the board shows what the system works out — the quote statuses are only ever worked out (§3.9) |
 | `notes` | Event-specific: what this hotel said about *this* event |
 | `addedBy`, `createdAt` | |
 
-Status meanings, which the interface states rather than assumes:
+Group meanings, which the interface states rather than assumes:
 
-| Status | Meaning |
+| Group | Meaning |
 | --- | --- |
-| `PROSPECT` | On the long list. Nobody has spoken to them yet. |
-| `CONTACTED` | We have reached out and are waiting to hear back. |
-| `SHORTLISTED` | A serious candidate — worth taking to a client. |
-| `REJECTED` | Ruled out for this event. Kept so we do not re-scout it. |
+| **Contracted** | Rooms contracted, or about to be. A supplier contract or a contracted room type puts it here on its own. |
+| **Shortlisted** | A serious candidate — worth taking to a client. |
+| **Reached out** | We have reached out and are waiting to hear back. |
+| **Prospect** | On the long list. Nobody has spoken to them yet. |
+| **Ruled out** | Not for us on this event — kept so we do not scout it again. Left out of the stock sheet, rate cards and a request's room suggestions. |
 
-A property carries no contract status of its own. `CONTRACTED` remains a valid database
-value only so a historical row stays readable — it is no longer reachable from the UI, and
-the fact it used to represent now lives per room category (below). A hotel is routinely
-mid-contract on some categories and not others, which one property-wide status could never
-say.
+**Contracted is a group the team can choose again** (the team, 2026-11-17: "how is a property
+moved from pending rate to contracted?"). What the rooms themselves are contracted for still
+lives per room category (below) — a hotel is routinely mid-contract on some categories and
+not others — and one contracted category, or a supplier contract, keeps the property in
+*Contracted* whatever its group says. *Organising committee* (2026-11-11) is no longer a group:
+those properties became **Ruled out**, with **Official hotel** as their status.
 
 **Per-category contract status.** A `CategoryContract` row records one room category's own
 supplier-contract status on one event's list — blank, then *In negotiation* → *In
@@ -1031,8 +1040,8 @@ as both are there, following as they are typed or looked up from the address, so
 spot is plain before it is saved. Dragging the pin corrects the coordinates.
 
 **The video on the Properties tab.** A property's video is sent to clients often, so the
-tab has a **Video** column: *Open* plays it, *Copy link* puts the link on the clipboard to
-paste into an email.
+row shows **Video ↗** under the name, with *copy link* to put the link on the clipboard to
+paste into an email (a column of its own until 2026-11-17).
 
 **Opening a property.** On the Properties tab, a property's name opens its full page, and
 the page's back link returns to this event's tab. Beside the name, **Quick view** opens a
@@ -1043,8 +1052,8 @@ it, with a link to edit the property or open its full page. Editing the property
 panel brings the rep back to the event's Properties tab when they save, not to the
 property's own page; and a link says "Opening…" the moment it is clicked, so a page that
 takes a moment to load never looks as though the click did nothing. The row itself shows the
-provider beside the type, the account manager, and the area above the town — without the
-country, since an event is always in one country.
+provider under the name, the area above the town — without the country, since an event is
+always in one country — and the type with its stars (§3.9, *The columns*).
 
 **What it replaces.** On Monday each event is a board: properties sorted into colour-coded
 groups, each property a row with some fifty columns — much of it what contracting a hotel
@@ -1053,24 +1062,51 @@ counts. The Properties tab becomes that board, but built on what the system alre
 so a hotel's details are entered once and reused on every event, and the stock sheet
 (§5.4), the map (§3.8) and availability (§5.3) read the same facts.
 
-#### Stages — the board grouped by where each property stands (2026-10-11)
+#### Groups and statuses — where each property stands (2026-11-17)
 
-By default the Properties tab groups its list by **stage**, which is worked out, never set
-by hand — so a property **moves between the groups on its own** as the work is done:
+The team, 2026-11-17: the group headings and the status column used different words — a
+property in *Pending quote* read "Reached out", properties in *Contracted* read "Shortlisted".
+So the board now has **one set of words for the groups, set by hand**, and a **status beneath
+them for the detail**. (Before, the groups were worked out on their own from tasks, quotes and
+contracts — the *stages* of 2026-10-11 — and the status was a separate list.)
 
-| Stage | When |
+**The groups**, top to bottom: **Contracted · Shortlisted · Reached out · Prospect · Ruled out**
+(§3.5). Each shows how many properties it holds and what it means; *Ruled out* is folded by
+default, and an empty group still shows, to drop properties into.
+
+**Moving between groups**: **drag** a row onto another group, or **tick** several (or a whole
+group with the box in its heading) and choose **Move to** a group in the bar that appears.
+Each move is in the property's history. Two things still move a property on their own:
+emailing a hotel's request from its contact task puts a *Prospect* into **Reached out** (§4.11),
+and a **supplier contract or a contracted room type** shows it in **Contracted** — such a
+property cannot be dragged out, and the board says why.
+
+**The status** — the *Status* column — shows what the system works out, marked **auto**. The
+**quote statuses are always worked out, never chosen** (the owner, 2026-11-17: "this status
+must be automatically done"):
+
+| Status (auto) | When |
 | --- | --- |
-| **Contracted** | Any of its room categories is *Contracted* for this event, or there is a supplier contract with it for this event (§7.1) — the highest stage |
 | **Quote received** | It has a quotation for this event that is not declined (§3.10) |
-| **Pending quote** | Contacted and waiting for a quotation: its contact task is in progress — emailing the request moves a task not yet started to *In progress*, and a *Prospect* to *Reached out* — or it is marked *Reached out* |
-| **To be contacted** | A hotel contact task (§4.11) is open on it and not started — it lands here as soon as the task is made, from sourcing or from the map |
-| **Prospects** | On the list, nothing started |
-| **Couldn't help** | Its last contact task closed because it could not help (§4.11) — folded by default |
-| **Ruled out** | Marked *Rejected* — folded by default |
+| **Quote expired** | Every such quotation is past its *valid until*, and none was accepted |
+| **Quote requested** | Its contact task is in progress, or it is in *Reached out* with no quote yet |
+| **To be contacted** | A hotel contact task (§4.11) is open on it and not started |
+| **No availability** / **Couldn't help** | Its last contact task closed for that reason (§4.11) |
 
-In that order — **Contracted at the top** (the owner's call, 2026-10-11), then the work in hand furthest along first — each with how many properties it holds and what it means. The
-status column (*Prospect*, *Reached out*, *Shortlisted*, *Rejected*) stays as it was, set by
-hand.
+What only a person knows is chosen from the same list: **Rate TBC**, **No availability**,
+**Official hotel**, **Under construction**. It shows instead of the worked-out one and stays
+until changed; choosing the first line (the *auto* one) goes back to what the system works out.
+
+**The columns** (the team, 2026-11-17, to keep rows compact): **Property** (its name with
+*Quick view*, the provider, the video, its quotations and rooms contracted), **Status**, **Last
+update** (the latest of an update written on the property, a quotation received, or a change
+on this event's entry), **Location**, **Type** (with the stars), **Rooms** and **To venue**.
+**Rooms** is the property's **total room count** — the basis for judging capacity — and only
+when no total is known the sum of its registered room types. The account manager, amenities
+and video columns are gone (the video is a small link under the name).
+
+**Filters**: the **type** filter takes several types at once (*Every type* when none is
+ticked), beside *Every provider* and *With quotations*.
 
 **Finding hotels from the map** (2026-10-11). The Map view has a bar above the map: **Find
 hotels not on our list near** one of the event's places of interest (its first venue by
@@ -1303,7 +1339,7 @@ entered (§3.2); on the Properties tab a rate always means the buying rate, as b
   that has not quoted is a price seen, kept in the LA28 notes, not a quote. monday's status
   sets the entry's: blank / Initial Research → Prospect; To contact → a contact task; In
   Progress / Rates Requested / Follow up → Reached out; Rates Received → Reached out with its
-  quotation; Not relevant / No availability → Rejected; OC Contracted → Organising committee;
+  quotation; Not relevant / No availability → Rejected; OC Contracted → Ruled out, status *Official hotel*;
   Contracted → Contracted — so the board's stage then follows as for any property. monday's
   groups become the LA28 board's groups; the team's **updates** come across, with replies, on
   the property's Updates, under the author where they have a login ("Louis Smith (on monday):
@@ -3796,6 +3832,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 More property types | **Built** (2026-11-11) | Motel, extended stay, student housing, hostel, bed & breakfast and other, beside hotel, apartment and aparthotel — for the LA28 move from monday.com (the owner). Each behaves as a hotel (rooms with beds, stars), an apartment (units with bedrooms, no stars: student housing) or both (extended stay, like an aparthotel). monday's furnished, luxury and complex apartments come in as Apartment, budget hotels as Hotel. Rating is stars only — monday's review scores (4.3/5) are not brought over (the owner) |
+| §3.1 Types from the team | **Built** (2026-11-17) | Added *Furnished apartment*, *Unfurnished apartment*, *Guest house*, *Individual home* and *Resort / lodge* (the team). Guest houses and resorts behave as hotels; both apartments and individual homes as apartments (units with bedrooms and bathrooms). The apartments already on the system are not guessed: they show as **Apartment (to sort)** until someone sorts each into furnished or unfurnished (the owner asked Ami to, 2026-11-17); the type stays last in every list for that |
 | §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |
 | §3.1 Scouting form in tabs | **Built** (2026-11-17) | The whole property form, grouped into tabs, as a pop-up over the event's Properties tab and as a page; save from any tab, the problem's tab opened and marked red, *Save and scout another*. Replaces the quick scouting screen (2026-10-03) |
 | §3.1 Duplicate properties | **Built** | Compared by distinctive name words, street address and 150 m on the map, on the scouting form and the server; shown with why, to open or add instead; saving anyway needs *It is a different property* |
@@ -3803,7 +3840,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
 | §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status and type (the amenity filter removed 2026-10-11), grouped by stage; per-category contract status (`CategoryContract`), independent of the property's own status |
-| §3.5 Organising committee | **Built** (2026-11-11) | A status, set by hand like Rejected: *Organising committee* — the event's organising committee has contracted the hotel (monday's "OC Contracted" and "LA28 Official Hotels"), so it is not available to us. Its own folded group on the Properties board, purple on the map; left out of the stock sheet, rate cards and a request's room suggestions |
+| §3.5 Organising committee | **Replaced** (2026-11-17) | Was a status of its own (2026-11-11); now *Ruled out* with the status *Official hotel* (§3.9 *Groups and statuses*) |
+| §3.9 Groups and statuses | **Built** (2026-11-17) | Groups set by hand (Contracted, Shortlisted, Reached out, Prospect, Ruled out), moved by dragging or by ticking several and *Move to*; a contract keeps a property in Contracted; a status beneath for the detail — the contact and quote statuses worked out (*auto*), Rate TBC, No availability, Official hotel and Under construction chosen by hand; columns Property · Status · Last update · Location · Type · Rooms (total) · To venue; several types at once in the filter |
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |

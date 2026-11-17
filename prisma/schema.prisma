@@ -13,6 +13,10 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Migrations go over a direct connection, not the pooler: a pooled one can
+  // keep the migration lock after the build ends, and the next release then
+  // times out waiting for it (P1002, 2026-11-10 and 2026-11-17).
+  directUrl = env("DIRECT_URL")
 }
 
 enum EventStatus {
@@ -23,6 +27,8 @@ enum EventStatus {
 
 enum PropertyType {
   HOTEL
+  /// An apartment not yet sorted into furnished or unfurnished (2026-11-17):
+  /// the team sorts these by hand; new ones are scouted as one or the other.
   APARTMENT
   /// Self-contained apartment-style units — bedrooms and bathrooms, like an
   /// apartment — but still star-rated and run like a hotel (doc §3.3).
@@ -35,25 +41,38 @@ enum PropertyType {
   EXTENDED_STAY
   STUDENT_HOUSING
   OTHER
+  // Added 2026-11-17 from the team's feedback (doc §3.1).
+  GUEST_HOUSE
+  INDIVIDUAL_HOME
+  RESORT_LODGE
+  FURNISHED_APARTMENT
+  UNFURNISHED_APARTMENT
 }
 
-/// Where a property has got to in *this* event's scouting list. The same
-/// property can be shortlisted for one event and rejected for another, which is
-/// why this lives on the entry rather than on the property (doc §3.5).
-///
-/// `CONTRACTED` is kept only so the enum stays valid for any historical row —
-/// it is no longer settable from the UI. A property has no single contract
-/// status of its own; that fact now lives per room category, on
-/// `CategoryContract` (doc §3.5).
+/// The group a property is in on *this* event's list (doc §3.9), set by hand —
+/// dragged, or several moved at once. The same property can be shortlisted for
+/// one event and ruled out for another, which is why this lives on the entry
+/// rather than on the property (doc §3.5). A property with a supplier contract,
+/// or a contracted room category, shows as Contracted whatever is set here.
 enum ScoutingStatus {
   PROSPECT
+  /// Reached out.
   CONTACTED
   SHORTLISTED
+  /// Ruled out — not available to us on this event, whatever the reason.
   REJECTED
   CONTRACTED
-  /// Contracted by the event's organising committee (an official hotel), so
-  /// not available to us — set by hand, like Rejected (2026-11-11).
-  ORGANISER
+}
+
+/// The detail of where a property stands, beneath its group (doc §3.9, the
+/// team 2026-11-17), when it is something only a person knows. The quote
+/// statuses — requested, received, expired — are never set by hand: the board
+/// works them out from contact tasks and quotations (the owner, 2026-11-17).
+enum ScoutingDetail {
+  RATE_TBC
+  NO_AVAILABILITY
+  OFFICIAL_HOTEL
+  UNDER_CONSTRUCTION
 }
 
 /// How far along one room category's supplier contract is, for one event. A
@@ -413,6 +432,8 @@ model EventPeriod {
 model ScoutingEntry {
   id     String         @id @default(cuid())
   status ScoutingStatus @default(PROSPECT)
+  /// The detail beneath the group, when set by hand (doc §3.9).
+  detail ScoutingDetail?
   notes  String?
 
   createdAt DateTime @default(now())

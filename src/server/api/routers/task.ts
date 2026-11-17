@@ -370,7 +370,7 @@ export const taskRouter = createTRPCRouter({
   /**
    * The request was emailed to the hotel (doc §4.11): a contact task not yet
    * started moves to In progress — and the property, on the event's board,
-   * to Pending quote (§3.9).
+   * to Reached out, its status Quote requested (§3.9).
    */
   requestEmailed: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
     const task = await ctx.db.task.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, status: true, propertyId: true, eventId: true } });

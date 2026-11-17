@@ -61,7 +61,7 @@ export default async function EventPropertiesPage({
 
       <Card className="mt-8">
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">
-          What the statuses mean
+          What the groups and statuses mean
         </h2>
         <ScoutingStatusKey />
       </Card>
