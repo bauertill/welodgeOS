@@ -1,6 +1,6 @@
 "use client";
 
-import { AdvancedMarker, APIProvider, Map as GoogleMap, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
+import { AdvancedMarker, APIProvider, Map as GoogleMap, useMap } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo, useState } from "react";
 
 import { Combobox } from "~/app/_components/combobox";
@@ -31,22 +31,10 @@ function Frame({ points }: { points: { lat: number; lng: number }[] }) {
   return null;
 }
 
-function Transit({ on }: { on: boolean }) {
-  const map = useMap();
-  const maps = useMapsLibrary("maps");
-  useEffect(() => {
-    if (!map || !maps || !on) return;
-    const layer = new maps.TransitLayer();
-    layer.setMap(map);
-    return () => layer.setMap(null);
-  }, [map, maps, on]);
-  return null;
-}
 
 /**
  * The client's map on a rate card (doc §4.11): the properties suggested,
- * numbered as on the card, the event's venues with their sports, and the
- * metro on request — and, for any property and venue, how far it is and how
+ * numbered as on the card, and the places the team chose for it — and, for any property and venue, how far it is and how
  * long it takes on foot, by car and by public transport, with Google's
  * directions a click away.
  */
@@ -65,7 +53,6 @@ export function RateCardMap({
   const located = properties.filter((property) => property.latitude !== null && property.longitude !== null);
   const [propertyId, setPropertyId] = useState(located[0]?.rateCardPropertyId ?? "");
   const [venueId, setVenueId] = useState("");
-  const [metro, setMetro] = useState(false);
   const from = located.find((property) => property.rateCardPropertyId === propertyId) ?? null;
   const to = venues.find((venue) => venue.id === venueId) ?? null;
   const journey = api.rateCard.journey.useQuery({ token, rateCardPropertyId: propertyId, placeId: venueId }, { enabled: Boolean(from && to), staleTime: Infinity, retry: false });
@@ -102,16 +89,11 @@ export function RateCardMap({
     <section className={`mx-auto rounded-2xl bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] print:hidden ${side ? "max-w-none px-5 py-5" : "max-w-3xl px-8 py-7"}`}>
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-ink-900 text-lg font-semibold">On the map</h2>
-        <label className="text-ink-700 flex items-center gap-2 text-[13px]">
-          <input type="checkbox" checked={metro} onChange={(e) => setMetro(e.target.checked)} className="accent-brand-500 h-4 w-4" />
-          Show the metro and public transport
-        </label>
       </div>
       <div className="overflow-hidden rounded-xl border border-ink-200/70">
         <APIProvider apiKey={apiKey}>
           <GoogleMap mapId={mapId} defaultCenter={points[0] ?? { lat: 0, lng: 0 }} defaultZoom={12} gestureHandling="cooperative" clickableIcons={false} style={{ height: side ? "max(24rem, calc(100vh - 22rem))" : "26rem", width: "100%" }}>
             <Frame points={points} />
-            <Transit on={metro} />
             {venues.map((venue) => (
               <AdvancedMarker key={venue.id} position={{ lat: venue.latitude, lng: venue.longitude }} title={venue.name} zIndex={venueId === venue.id ? 500 : 10} onClick={() => setVenueId(venue.id)}>
                 <span className="group relative block translate-y-1/2">

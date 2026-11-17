@@ -19,6 +19,8 @@ type Draft = {
   markup: string;
   /** The link ends with "Request a proposal"; off, it is to look at only (2026-11-17). */
   canAnswer: boolean;
+  /** Who it is sent to — chosen on a card without a request; "" is any client (2026-11-17). */
+  clientId: string;
   /** Payment and cancellation terms: one set for the card, or each property its own — the sales person decides (2026-11-17). */
   termsPerProperty: boolean;
   /** What the client's map shows besides the properties: whole layers and single places (2026-11-17). */
@@ -57,6 +59,7 @@ const draftOf = (card: Card): Draft => ({
   intro: card.intro ?? "",
   markup: card.markupBasisPoints === null ? "" : String(card.markupBasisPoints / 100),
   canAnswer: card.clientCanAnswer,
+  clientId: card.clientId ?? "",
   termsPerProperty: card.termsPerProperty,
   mapLayerIds: card.mapLayerIds,
   mapPlaceIds: card.mapPlaceIds,
@@ -97,6 +100,8 @@ const distance = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.
 export function RateCardEditor({ id, onClose }: { id: string; onClose: () => void }) {
   const utils = api.useUtils();
   const card = api.rateCard.byId.useQuery({ id }, { refetchOnWindowFocus: false });
+  // Who a card without a request is sent to (2026-11-17).
+  const clients = api.clients.list.useQuery(undefined, { enabled: Boolean(card.data && !card.data.salesRequestId), refetchOnWindowFocus: false });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
@@ -228,6 +233,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       intro: draft.intro,
       markupBasisPoints: draft.markup.trim() ? Math.round(Number(draft.markup.replace(",", ".")) * 100) : null,
       clientCanAnswer: draft.canAnswer,
+      ...(c?.salesRequestId ? {} : { clientId: draft.clientId || null }),
       termsPerProperty: draft.termsPerProperty,
       mapLayerIds: draft.mapLayerIds,
       mapPlaceIds: draft.mapPlaceIds,
@@ -278,7 +284,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
           termsPerProperty: draft.termsPerProperty,
           paymentTerms: draft.paymentTerms.trim() || null,
           cancellationTerms: draft.cancellationTerms.trim() || null,
-          clientName: c.clientName,
+          clientName: c.salesRequestId ? c.clientName : (clients.data?.find((one) => one.id === draft.clientId)?.name ?? (draft.clientId ? c.clientName : null)),
           event: c.event,
           asked: c.asked,
           properties: draft.properties
@@ -346,6 +352,26 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       ) : (
         <div className="space-y-4 pb-20">
           <div className="border-ink-200/60 grid gap-3 rounded-xl border bg-white p-4 sm:grid-cols-[1fr_auto]">
+            <div className="sm:col-span-2">
+              <span className="text-ink-700 mb-1 block text-[13px] font-medium">Sent to</span>
+              {c.salesRequestId ? (
+                <p className="text-ink-900 text-sm">
+                  {c.clientName} <span className="text-ink-500 text-xs font-light">— the client of its sales request</span>
+                </p>
+              ) : (
+                <>
+                  <Combobox
+                    value={draft.clientId}
+                    onChange={(clientId) => setDraft({ ...draft, clientId })}
+                    options={(clients.data ?? []).map((client) => ({ id: client.id, label: client.name, detail: client.shortName }))}
+                    placeholder="Any client — or type a client's name"
+                  />
+                  <span className="text-ink-500 mt-1 block text-[11px] font-light">
+                    {draft.clientId ? "Kept on the client's page; their answers come back to them." : "One link for several clients — each answer starts its own sales request."}
+                  </span>
+                </>
+              )}
+            </div>
             <label className="block sm:col-span-2">
               <span className="text-ink-700 mb-1 block text-[13px] font-medium">Name — for us</span>
               <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />

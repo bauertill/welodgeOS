@@ -2739,8 +2739,9 @@ room category at the rate we sell it for.
   "2 photos" of that room. The printout keeps the photos and gives the video's and folder's links instead.
 - **On the map, for the client** (2026-10-13): under the card on the client's link, a map
   with the suggested properties as purple squares numbered as on the card (each property's
-  name on the card carries its number), the event's venues as their sport icons, and *Show the
-  metro and public transport* (Google's). **Getting there**: from one of the properties to a
+  name on the card carries its number), the event's venues as their sport icons (since 2026-11-17 only the places
+  chosen for the card, below; Google's *Show the metro and public transport* was taken off
+  the same day). **Getting there**: from one of the properties to a
   venue searched for by name — or one of the five nearest, offered as buttons — the distance
   as the crow flies and, from Google, the time **on foot, by car and by public transport**
   (an ordinary weekday morning), each with *Directions ↗* opening the route in Google Maps.
@@ -2752,9 +2753,9 @@ room category at the rate we sell it for.
   layers of the event's places (*All Venues (42)*) and adds single places by name (chips,
   × to take one off). Only those appear on the map and in *Getting there*, which is left
   out when nothing is chosen; a journey can only be asked to a place the map shows. Google's
-  public transport stays behind *Show the metro and public transport*, off to start. The
-  "… km from" distance beside each property is unchanged — still to the event's measured
-  places. (Until then the map showed the event's venues, or every place when no layer was
+  public transport layer is no longer offered (the owner, 2026-11-17: "remove this thing"). The
+  "… km from" distance beside each property is to the nearest of the chosen places (above),
+  or, with none chosen, to the event's measured places. (Until then the map showed the event's venues, or every place when no layer was
   marked as measured, which is why LA28 showed them all.)
 - **The client's link** (`/rate-card/…`): made on the card, opened without signing in;
   *Copy link*, *Open*, *Switch off*. It shows what is saved.
@@ -3010,11 +3011,32 @@ email, *Email them the request*, *Register their quote*, and *They can't help us
 on its own once their quote is registered**; the property then shows on the sourcing task as
 quoted and is judged on that rate. While it is open the row says *Rate asked — task →*.
 
+#### Sales › Rate cards (2026-11-17)
+
+Rate cards have their own page under **Sales** (the owner, 2026-11-17: "rate cards need to
+move … under the sales tab … create rate cards, see old rate cards"): *Sales › Rate cards*
+lists every card, newest first — its name (opening its popup), who it is sent to (the client,
+linking to their page, or *Any client*), the event, when and by whom it was made, how many
+properties, whether the link is shared, and how many answers, the new ones in red; *its
+request →* where it belongs to a sales request. A search (name, client, event, who made it)
+and an event filter stay as set until *Reset filters*. **+ New rate card** asks for the event,
+**who it is sent to** — a client, picked by name, or *Any client* — and the properties (the
+event's, the *Contracted* ones ticked to start, searched by name, city or status), makes the
+card and opens it. A card made from a sales request is for that request's client; on any
+other card *Sent to* can be changed in its popup.
+
+**A card sent to a client is remembered on their page**: the client's page has a *Rate cards*
+box with that client's cards and its own *+ New rate card* (for them). When such a card is
+answered from its link, the sales request it starts is that client's — the link does not ask
+which company. The event's properties board no longer makes cards: it has *Rate cards for this
+event →*, opening the page filtered to the event. (Cards made before 2026-11-17 for a sales
+request are counted as its client's.)
+
 #### A rate card for any client (2026-10-26)
 
 Sometimes the properties are contracted first and a rate card is shared with clients before
 any of them has asked (the owner, 2026-10-26). **+ Rate card for any client**, on the event's
-properties board, opens a popup of the event's properties — the *Contracted* ones ticked to
+properties board (since 2026-11-17: *+ New rate card* on Sales › Rate cards, *Sent to: Any client*), opens a popup of the event's properties — the *Contracted* ones ticked to
 start, any other ticked or unticked, with **a search by name, city or status** and *Tick all
 shown* / *Untick all* (the owner, 2026-10-26: there will be many; what is ticked stays ticked
 when the search hides it) — and makes a card from them like any other: every room
@@ -4026,7 +4048,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Emails from Gmail | **Built** (2026-11-10) | Connect Gmail on My profile, and a card on every page until connected (Not now = a day) (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. Google set up and the owner's mailbox connected on staging, 2026-11-10; each colleague connects theirs on the live site |
 | §4.10 Contracting details | **Built** (2026-11-12) | Card on the client's page (trade name, address, VAT, registration, two signatories), edited with Add/Edit, in the client's history. A request with no details of its own shows the client's on its contracting link and rate card; what the client sends is written back to the client |
 | §4.10 Import from monday.com | **Built** (2026-11-12) | Review and import built; names approved and mismatched categories corrected by the owner. **Ran on the live site 2026-11-12:** 1,387 clients added, 33 existing ones had blanks filled in, 1,779 people added (rehearsed on staging first; a second run adds nothing). 120 people with no company to go on are left for the team to add by hand, from the review's *3 to place by hand* |
-| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates; room types renamed or added on the card (added to the property too) properties added to a card later and put in order; rooms offered at "Rate to be confirmed"; the client's link full width with the map beside it, "I like it!" on each room, rates include and payment & cancellation terms, and "Request a proposal" at the end (switchable to look-only); the client's map shows only the properties plus the layers and places chosen on the card, and the distance beside each property is to the nearest of them; new cards remember each property's description and client rates (2026-11-17), which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
+| §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates; room types renamed or added on the card (added to the property too) properties added to a card later and put in order; rooms offered at "Rate to be confirmed"; the client's link full width with the map beside it, "I like it!" on each room, rates include and payment & cancellation terms, and "Request a proposal" at the end (switchable to look-only); the client's map shows only the properties plus the layers and places chosen on the card, and the distance beside each property is to the nearest of them; new cards remember each property's description and client rates; Sales › Rate cards lists and makes every card, each sent to a client (kept on their page) or any client (2026-11-17), which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09) |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |

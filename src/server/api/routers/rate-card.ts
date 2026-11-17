@@ -34,6 +34,8 @@ const answerInclude = { orderBy: { createdAt: "desc" }, include: { items: true }
 
 const cardInclude = {
   responses: answerInclude,
+  /** Who it is sent to (2026-11-17). */
+  client: { select: { id: true, name: true } },
   // The event a card is for — its request's, or, for a general card, its own (doc §4.11).
   event: {
     select: {
@@ -107,7 +109,9 @@ function shape(card: LoadedCard) {
     cancellationTerms: card.cancellationTerms,
     updatedAt: card.updatedAt,
     /** Empty for a general card — for any client (doc §4.11, 2026-10-26). */
-    clientName: card.salesRequest?.client.name ?? null,
+    clientName: card.salesRequest?.client.name ?? card.client?.name ?? null,
+    /** Who it is sent to — a request's client, or the one chosen on a card made from Sales › Rate cards (2026-11-17). */
+    clientId: card.clientId,
     /** The client's answers from its link, newest first (doc §4.11). */
     answers: card.responses.map((response) => ({
       id: response.id,
@@ -331,7 +335,13 @@ export const rateCardRouter = createTRPCRouter({
   create: protectedProcedure
     .input(
       z
-        .object({ salesRequestId: z.string().optional(), eventId: z.string().optional(), propertyIds: z.array(z.string()).min(1, "Tick at least one property.").max(30) })
+        .object({
+          salesRequestId: z.string().optional(),
+          eventId: z.string().optional(),
+          /** Who it is sent to, for a card made without a request (2026-11-17); empty: any client. */
+          clientId: z.string().nullable().optional(),
+          propertyIds: z.array(z.string()).min(1, "Tick at least one property.").max(30),
+        })
         .refine((input) => input.salesRequestId ?? input.eventId, "A rate card is for a request or an event."),
     )
     .mutation(async ({ ctx, input }) => {
@@ -339,7 +349,7 @@ export const rateCardRouter = createTRPCRouter({
         const request = input.salesRequestId
           ? await tx.salesRequest.findUniqueOrThrow({
               where: { id: input.salesRequestId },
-              select: { eventId: true, budgetCurrency: true, client: { select: { name: true } }, event: { select: { name: true } }, _count: { select: { rateCards: true } } },
+              select: { eventId: true, clientId: true, budgetCurrency: true, client: { select: { name: true } }, event: { select: { name: true } }, _count: { select: { rateCards: true } } },
             })
           : null;
         const eventId = request?.eventId ?? input.eventId ?? null;
@@ -351,13 +361,17 @@ export const rateCardRouter = createTRPCRouter({
           markupBasisPoints: DEFAULT_MARKUP,
           firstPosition: 0,
         });
+        const chosenClient = !request && input.clientId ? await tx.client.findUnique({ where: { id: input.clientId }, select: { id: true, name: true } }) : null;
         const name = request
           ? `Rate card${request._count.rateCards ? ` ${request._count.rateCards + 1}` : ""} — ${request.client.name}${request.event ? ` — ${request.event.name}` : ""}`
-          : `Rate card${event?._count.rateCards ? ` ${event._count.rateCards + 1}` : ""} — ${event?.name ?? "event"} — for any client`;
+          : chosenClient
+            ? `Rate card — ${chosenClient.name} — ${event?.name ?? "event"}`
+            : `Rate card${event?._count.rateCards ? ` ${event._count.rateCards + 1}` : ""} — ${event?.name ?? "event"} — for any client`;
         const card = await tx.rateCard.create({
           data: {
             name,
             salesRequestId: input.salesRequestId ?? null,
+            clientId: request?.clientId ?? chosenClient?.id ?? null,
             eventId,
             currency,
             markupBasisPoints: DEFAULT_MARKUP,
@@ -371,6 +385,7 @@ export const rateCardRouter = createTRPCRouter({
           entityId: input.salesRequestId ?? eventId ?? card.id,
           summary: `Rate card made: ${card.name}`,
         });
+        if (chosenClient) await logAudit(tx, { actorId: ctx.session.user.id, entity: "Client", entityId: chosenClient.id, summary: `Rate card made for them: ${card.name}` });
         // Any property with no photos or video yet: a task to get them, as the card cannot be shared without (doc §4.11).
         for (const property of properties.filter((one) => !hasMedia(one))) {
           await ensureGetMediaTask(tx, { propertyId: property.id, salesRequestId: input.salesRequestId ?? null, eventId, actorId: ctx.session.user.id });
@@ -435,6 +450,32 @@ export const rateCardRouter = createTRPCRouter({
         return { added };
       });
     }),
+
+  /**
+   * Every rate card, newest first — Sales › Rate cards (the owner, 2026-11-17):
+   * made, sent and answered, found by name, client or event.
+   */
+  list: protectedProcedure
+    .input(z.object({ eventId: z.string().optional(), clientId: z.string().optional() }).default({}))
+    .query(({ ctx, input }) =>
+      ctx.db.rateCard.findMany({
+        where: { ...(input.eventId ? { eventId: input.eventId } : {}), ...(input.clientId ? { clientId: input.clientId } : {}) },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          updatedAt: true,
+          shareToken: true,
+          salesRequestId: true,
+          event: { select: { id: true, name: true } },
+          client: { select: { id: true, name: true } },
+          createdBy: { select: { name: true } },
+          _count: { select: { properties: true, responses: true } },
+          responses: { where: { seenAt: null }, select: { id: true } },
+        },
+      }),
+    ),
 
   /** A sales request's rate cards, newest first. */
   forRequest: protectedProcedure.input(z.object({ salesRequestId: z.string() })).query(({ ctx, input }) =>
@@ -543,6 +584,8 @@ export const rateCardRouter = createTRPCRouter({
         intro: z.string().max(3000),
         markupBasisPoints: z.number().int().min(-10_000).max(100_000).nullable(),
         clientCanAnswer: z.boolean().optional(),
+        /** Who it is sent to — only for a card without a request; a request's card is its client's (2026-11-17). */
+        clientId: z.string().nullable().optional(),
         /** Payment and cancellation terms: the card's, or each property's own — the sales person decides (2026-11-17). */
         termsPerProperty: z.boolean().optional(),
         /** What the client's map shows besides the properties (2026-11-17). */
@@ -634,6 +677,7 @@ export const rateCardRouter = createTRPCRouter({
             intro: input.intro.trim() || null,
             markupBasisPoints: input.markupBasisPoints,
             ...(input.clientCanAnswer !== undefined ? { clientCanAnswer: input.clientCanAnswer } : {}),
+            ...(input.clientId !== undefined && !card.salesRequestId ? { clientId: input.clientId } : {}),
             ...(input.termsPerProperty !== undefined ? { termsPerProperty: input.termsPerProperty } : {}),
             ...(input.mapLayerIds !== undefined ? { mapLayerIds: input.mapLayerIds } : {}),
             ...(input.mapPlaceIds !== undefined ? { mapPlaceIds: input.mapPlaceIds } : {}),
@@ -884,6 +928,7 @@ export const rateCardRouter = createTRPCRouter({
             currency: true,
             createdById: true,
             eventId: true,
+            clientId: true,
             clientCanAnswer: true,
             salesRequest: { select: { id: true, ownerId: true, client: { select: { name: true } } } },
             properties: { select: { property: { select: { name: true } }, lines: { select: { id: true, name: true, sellingCents: true, available: true, minNights: true } } } },
@@ -1071,14 +1116,17 @@ export const rateCardRouter = createTRPCRouter({
  */
 async function requestFromAnswer(
   tx: Prisma.TransactionClient,
-  card: { name: string; eventId: string | null; createdById: string | null },
+  card: { name: string; eventId: string | null; createdById: string | null; clientId: string | null },
   input: { company: string; name: string; email: string },
   items: { rooms: number; checkIn: string; checkOut: string; roomName: string }[],
   day: (text: string) => Date | null,
 ) {
   const company = input.company.trim();
-  if (!company) throw new TRPCError({ code: "BAD_REQUEST", message: "Please give your company's name." });
+  // A card sent to a known client: the request is theirs, whatever company is typed (2026-11-17).
+  const known = card.clientId ? await tx.client.findUnique({ where: { id: card.clientId }, select: { id: true, name: true } }) : null;
+  if (!company && !known) throw new TRPCError({ code: "BAD_REQUEST", message: "Please give your company's name." });
   const client =
+    known ??
     (await tx.client.findFirst({
       where: { OR: [{ name: { equals: company, mode: "insensitive" } }, { shortName: { equals: company, mode: "insensitive" } }] },
       select: { id: true, name: true },
@@ -1134,6 +1182,8 @@ export function clientCopy(card: ReturnType<typeof shape>) {
     /** Their last answer, to change and send again. */
     /** A general card's link is for anyone: no one is shown another's answer (doc §4.11). */
     general: card.salesRequestId === null,
+    /** A card without a request but for a known client: its answers go to that client, no company asked (2026-11-17). */
+    forClient: card.clientId !== null,
     /** Off: no "Request a proposal" — the link is to look at (and "I like it!") only (2026-11-17). */
     canAnswer: card.clientCanAnswer,
     termsPerProperty: card.termsPerProperty,
