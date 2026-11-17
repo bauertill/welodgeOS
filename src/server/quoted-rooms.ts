@@ -119,3 +119,137 @@ export async function buyQuotedRooms(tx: Prisma.TransactionClient, actorId: stri
   }
   return { bought };
 }
+
+/**
+ * A room type marked Contracted takes its rates from the quotation on record
+ * (doc §3.9, §3.10 — the team, 2026-11-17): the quotation accepted, or else the
+ * only one not declined that quotes this room type. Several and none accepted
+ * is a choice for a person — nothing is guessed, and the board says so.
+ *
+ * What it fills, and only where nothing is set yet:
+ *   - the room type's buying rate on this event, with what the rate includes,
+ *     the TOT and the period, as on the Properties tab;
+ *   - the price of the nights already **bought** on the stock sheet for this
+ *     room type within the quoted periods — through the inventory's own
+ *     "change the buy price", so each change is in the ledger and can be undone.
+ * Nothing is bought here: buying stays a decision (accept the quotation, or
+ * buy on the stock sheet).
+ */
+export async function carryQuotedRates(
+  tx: Prisma.TransactionClient,
+  actorId: string,
+  scoutingEntryId: string,
+  categoryIds: string[] | null,
+): Promise<{ carried: string[]; undecided: string[] }> {
+  const entry = await tx.scoutingEntry.findUniqueOrThrow({
+    where: { id: scoutingEntryId },
+    select: {
+      eventId: true,
+      categoryContracts: true,
+      quotations: {
+        where: { status: { not: "DECLINED" } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          currency: true,
+          rateIncludes: true,
+          rateIncludesOther: true,
+          cleaning: true,
+          cleaningOther: true,
+          totBasisPoints: true,
+          otherTaxes: true,
+          lines: { select: { categoryId: true, checkIn: true, checkOut: true, rooms: true, rateCents: true, category: { select: { name: true } } } },
+        },
+      },
+    },
+  });
+  const quotedCategories = [...new Set(entry.quotations.flatMap((quotation) => quotation.lines.map((line) => line.categoryId)))];
+  const carried: string[] = [];
+  const undecided: string[] = [];
+  for (const categoryId of categoryIds ?? quotedCategories) {
+    const covering = entry.quotations.filter((quotation) => quotation.lines.some((line) => line.categoryId === categoryId));
+    if (covering.length === 0) continue;
+    const accepted = covering.filter((quotation) => quotation.status === "ACCEPTED");
+    const quotation = accepted[0] ?? (covering.length === 1 ? covering[0]! : null);
+    const name = covering[0]!.lines.find((line) => line.categoryId === categoryId)!.category.name;
+    if (!quotation) {
+      undecided.push(name);
+      continue;
+    }
+    const lines = quotation.lines.filter((line) => line.categoryId === categoryId).sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+    const done: string[] = [];
+
+    // The buying rate on this event, when none is set: the rate of the line
+    // with the most room-nights, every line's period and rate in words.
+    const contract = entry.categoryContracts.find((row) => row.categoryId === categoryId);
+    if (contract?.ratePerNightCents == null) {
+      const main = lines.reduce((most, line) =>
+        nightsBetween(line.checkIn, line.checkOut) * line.rooms > nightsBetween(most.checkIn, most.checkOut) * most.rooms ? line : most,
+      );
+      const money = (cents: number) => `${quotation.currency} ${(cents / 100).toFixed(2)}`;
+      const period = lines.map((line) => `${formatRange(line.checkIn, line.checkOut)}${lines.length > 1 ? `: ${money(line.rateCents)}` : ""}`).join("; ");
+      const data = {
+        ratePerNightCents: main.rateCents,
+        rateCurrency: quotation.currency,
+        rateIncludes: quotation.rateIncludes,
+        rateIncludesOther: quotation.rateIncludesOther,
+        cleaning: quotation.cleaning,
+        cleaningOther: quotation.cleaningOther,
+        totBasisPoints: quotation.totBasisPoints,
+        otherTaxes: quotation.otherTaxes,
+        applicablePeriod: contract?.applicablePeriod ?? period,
+      };
+      await tx.categoryContract.upsert({
+        where: { scoutingEntryId_categoryId: { scoutingEntryId, categoryId } },
+        update: data,
+        create: { scoutingEntryId, categoryId, ...data },
+      });
+      done.push(`buying rate ${money(main.rateCents)}`);
+    }
+
+    // Nights already bought without a price, each priced at its line's rate.
+    let priced = 0;
+    for (const line of lines) {
+      const nights = await tx.roomNight.findMany({
+        where: {
+          eventId: entry.eventId,
+          slot: { categoryId },
+          date: { gte: line.checkIn, lt: line.checkOut },
+          acquisitionState: "BOUGHT",
+          buyPriceCents: null,
+        },
+        orderBy: [{ slotId: "asc" }, { date: "asc" }],
+        select: { slotId: true, date: true },
+      });
+      // One change per run of consecutive nights in one room.
+      const runs: { slotId: string; from: Date; to: Date }[] = [];
+      for (const night of nights) {
+        const last = runs.at(-1);
+        const next = new Date(night.date.getTime() + 86_400_000);
+        if (last && last.slotId === night.slotId && last.to.getTime() === night.date.getTime()) last.to = next;
+        else runs.push({ slotId: night.slotId, from: night.date, to: next });
+      }
+      for (const run of runs) {
+        const outcome = await applyInventoryChange(tx, actorId, {
+          eventId: entry.eventId,
+          slotIds: [run.slotId],
+          checkIn: run.from,
+          checkOut: run.to,
+          action: "REPRICE_BUY",
+          buyPriceCents: line.rateCents,
+          buyCurrency: quotation.currency,
+          reason: `Rate from the quotation "${quotation.name}"`,
+        });
+        priced += outcome.nights;
+      }
+    }
+    if (priced) done.push(`${priced} bought ${priced === 1 ? "night" : "nights"} priced`);
+    if (done.length) carried.push(`${name} — ${done.join(", ")} (from "${quotation.name}")`);
+  }
+  if (carried.length) {
+    await logAudit(tx, { actorId, entity: "ScoutingEntry", entityId: scoutingEntryId, summary: "Rates carried from the quotation", changes: carried.join("\n") });
+  }
+  return { carried, undecided };
+}

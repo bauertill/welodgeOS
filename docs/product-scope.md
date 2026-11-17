@@ -254,6 +254,44 @@ property's or a client's contacts to appear in the same feed, as on monday.com. 
 Gmail link (Gmail API with read access, set up by Till — `docs/todos.md`), which is not in
 place yet.
 
+#### The Updates board (2026-11-17)
+
+The team, 2026-11-17: when there is an update the whole team should see, or someone wants to look
+back at what was said, there should be one place for it — as on monday.com, where an update was
+posted at the provider level or against one property depending on how widely it applied.
+**Updates** is an item in the left-hand menu, beside Tasks. (Providers beyond accommodation —
+housekeeping, furniture rental — keep being handled in Excel; the board does not give them pages.)
+
+- **Four tabs: Client · Accommodation · Other providers · For the team.** *Client* holds the
+  updates on clients and their requests; *Accommodation* those on properties and on **hotel
+  chains**; *Other providers* those about a provider kept only **by name** (*Housekeeping
+  Burbank*), with names used before offered as you type; *For the team* those about nothing in
+  particular.
+- **One update, shown everywhere it belongs.** An update is the same one on the board and on the
+  page of what it is about: written on Ocean Luxury Lodge's page it is on the board, and written on
+  the board about Ocean Luxury Lodge it is on the property's Updates tab. Each update shows what it
+  is about as links — the property, the chain, the client, the request — so a click opens its full
+  history there.
+- **About several things at once.** On the board an update can be about a property, a chain, a
+  client and another provider together — any of them, or none (then it is *For the team*) — and
+  shows on each tab and page that applies; the box says where it will show before posting.
+- **Hotel chains.** An update on a chain (a provider, §3.9) shows on the chain's page and on each
+  of its properties' Updates, marked *via [chain]*; the chain's page shows its own and its
+  properties' updates.
+- **Filters** on each tab, from records already in the system: the client; the property or the
+  chain (a chain takes in its properties' updates); the provider name; and words in the text or its
+  replies, on every tab. Kept until reset.
+- **What is new.** The menu item and each tab show a red count of updates written by others since
+  you last opened that tab (the first time, the last week's); those updates are marked **New**
+  while you read them.
+- **Who wrote it and who is told.** Every update shows its writer. When posting — on the board or on
+  any page's Updates — **Notify** picks colleagues to tell: they are told in the bell and **emailed**,
+  as when @mentioned (§2.9).
+- **Files — a Google Drive link for now.** *Add a file link* attaches a link that shows as *Open the
+  file*; uploading files into the system comes later, once file storage is switched on.
+- Replies, editing one's own, and the update kinds (call summary, meeting feedback…) work as on any
+  page's Updates.
+
 ### 2.7 The team — profiles and internal chat
 
 Like Feedback, this sits outside the three phases: it is about the people at We Lodge, not
@@ -1045,10 +1083,25 @@ paste into an email (a column of its own until 2026-11-17).
 
 **Opening a property.** On the Properties tab, a property's name opens its full page, and
 the page's back link returns to this event's tab. Beside the name, **Quick view** opens a
-side panel instead, without leaving the tab: the terms agreed for this event at the top, editable and saved on
-this event only, then the contracting details that apply (the property's own, or its
-provider's, said so), its contacts and its provider's, and the rest of what is known about
-it, with a link to edit the property or open its full page. Editing the property from the
+side panel instead, without leaving the tab, **in sections** (the team, 2026-11-17):
+- **Room breakdown** (first) — each room type with its rooms, sleeps, beds (or bedrooms and
+  bathrooms), size, where its contract stands on this event, the buying rate agreed, and the
+  **lowest rate quoted** for it in any quotation not declined (*Not quoted* otherwise); above,
+  the rooms across the types and the property's own total when it differs.
+- **Quotations** — every quotation received for this event, each showing **who it was for**
+  (*For [client]*, or *General enquiry*), received and valid-until dates, and its lines by
+  **period, room type, rooms** and rate per night — what matters most when several quotes are
+  held at once (different dates, room counts, room types, a buyout). The total, room-nights,
+  payment and cancellation terms, what the rates include, taxes and notes open on **Terms,
+  taxes and total**. Editing, accepting and declining stay on the property's page, a link away.
+- **Agreed terms** — the terms agreed for this event, editable and saved on this event only.
+- **Contracting & contacts** — the contracting details that apply (the property's own, or its
+  provider's, said so), its contacts and its provider's.
+- **About** — getting around, and the rest of what is known about it, with a link to edit
+  the property or open its full page.
+
+On the property's own Quotations tab, each quotation's one-line summary now also names its room
+types and says *General enquiry* when it was not for a client. Editing the property from the
 panel brings the rep back to the event's Properties tab when they save, not to the
 property's own page; and a link says "Opening…" the moment it is clicked, so a page that
 takes a moment to load never looks as though the click did nothing. The row itself shows the
@@ -1105,8 +1158,44 @@ on this event's entry), **Location**, **Type** (with the stars), **Rooms** and *
 when no total is known the sum of its registered room types. The account manager, amenities
 and video columns are gone (the video is a small link under the name).
 
+**Rates from the quotation** (the team, 2026-11-17: "when a property's status is set to
+Contracted, and the contract follows a quote already on record, could those rates feed through
+to the inventory automatically?"). When a **room type is marked Contracted** — or the
+**property is moved into Contracted** — the quotation on record gives its rates: the quotation
+**accepted**, or else the **only one not declined** that quotes that room type. Where nothing is
+set yet, it fills:
+- the room type's **buying rate** on this event, with what the rate includes, the TOT, other
+  taxes and the period — the rate of the line with the most room-nights, every line's period
+  and rate written in *Applicable period* when there are several;
+- the **price of the nights already bought** on the stock sheet for that room type within the
+  quoted periods, each at its own line's rate — through the stock sheet's *Change the buy
+  price*, so each change is in the ledger and can be undone (§4.7).
+
+Nothing already priced is overwritten, and **nothing is bought**: buying stays a decision
+(*Accept and make the contract* on the quotation, §3.10, or on the stock sheet). When several
+quotations cover a room type and none is accepted, nothing is guessed: the board says so and
+asks for one to be accepted. What came through is said on the board and in the property's
+history.
+
 **Filters**: the **type** filter takes several types at once (*Every type* when none is
-ticked), beside *Every provider* and *With quotations*.
+ticked), beside *Every provider* and *With quotations*. To narrow down to the options worth
+comparing (the team, 2026-11-17) there are also:
+- **Area** — the areas (or towns) of the properties on this list.
+- **Room type** — only the few types a client asks for (§4.11): *Single, Double, Twin, Triple,
+  Suite* for hotel rooms, *Studio, 1–4 bedrooms* for apartments (the owner, 2026-11-17 — every
+  hotel's own room names offered at once were far too many). Each hotel's room categories are read
+  into these from their name, beds and bedrooms: a *suite* is a Suite, two beds (*Double Queen*,
+  *Twin*, *2 Queen*) a Twin, *King*, *Queen*, *Double* or *Run of house* a Double, *Studio* a
+  Studio, an apartment by its bedrooms. One that cannot be told (a bare room number) matches none.
+  A property shows when any of its room categories is of the type chosen.
+- **Up to … a night** — properties with a night at or under that price: a buying rate agreed, or
+  a rate in a quotation not declined, in its own currency. With a room type chosen, only that
+  room type's rates count.
+
+They work together, on the list and the map; the count says *4 of 10 properties*, and **Reset
+filters** clears them all. Every filter **stays as set until reset**, per event, in the browser
+(as on the Clients list, §4.10). The **Rooms** column also shows the lowest rate quoted or agreed,
+*from US$ 300*.
 
 **Finding hotels from the map** (2026-10-11). The Map view has a bar above the map: **Find
 hotels not on our list near** one of the event's places of interest (its first venue by
@@ -3628,7 +3717,8 @@ payments and its deadlines is in the contract's history.
    buying rate per event, on the Properties tab (§3.9). But the nights do not use it yet:
    the stock sheet's buy price is still entered per night, and the financials (§7) read
    only that. Open: should a night with no buy price of its own take its category's buying
-   rate?*
+   rate? Partly answered 2026-11-17: marking a room type Contracted prices its bought nights
+   from the quotation on record (§3.9, *Rates from the quotation*).*
 4. **Roles and permissions.** Is the "We Lodge Rep" an accountability label only, or does
    it gate who may sell/buy/release?
 5. **Overbooking policy.** Do we ever deliberately sell more than we hold at a category
@@ -3814,6 +3904,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
+| §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
 | §2.7 Team directory | **Built** | Everyone who has signed in, with their contact details and a *Message* button |
@@ -3841,6 +3932,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |
 | §3.5 Scouting list | **Built** | Per-event entries, pursuit status, filters by status and type (the amenity filter removed 2026-10-11), grouped by stage; per-category contract status (`CategoryContract`), independent of the property's own status |
 | §3.5 Organising committee | **Replaced** (2026-11-17) | Was a status of its own (2026-11-11); now *Ruled out* with the status *Official hotel* (§3.9 *Groups and statuses*) |
+| §3.9 Rates from the quotation | **Built** (2026-11-17) | Marking a room type Contracted, or moving a property into Contracted, fills the empty buying rate (with includes, TOT, period) and prices the bought nights without a price, from the accepted quotation or the only one not declined; several and none accepted → asked, not guessed; nothing bought, nothing overwritten |
 | §3.9 Groups and statuses | **Built** (2026-11-17) | Groups set by hand (Contracted, Shortlisted, Reached out, Prospect, Ruled out), moved by dragging or by ticking several and *Move to*; a contract keeps a property in Contracted; a status beneath for the detail — the contact and quote statuses worked out (*auto*), Rate TBC, No availability, Official hotel and Under construction chosen by hand; columns Property · Status · Last update · Location · Type · Rooms (total) · To venue; several types at once in the filter |
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |

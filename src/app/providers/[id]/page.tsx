@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 
 import { ProviderForm } from "~/app/_components/provider-form";
-import { PageHeader } from "~/app/_components/ui";
+import { Card, PageHeader } from "~/app/_components/ui";
+import { UpdateThread } from "~/app/_components/update-thread";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
 
@@ -32,6 +33,11 @@ export default async function ProviderPage({
         subtitle={`${provider.properties.length} ${provider.properties.length === 1 ? "property" : "properties"}`}
       />
       <ProviderForm provider={provider} backTo={backTo} />
+      {/* The chain's own updates — shown on each of its properties too — and theirs (doc §2.6). */}
+      <Card className="mt-8">
+        <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Updates</h2>
+        <UpdateThread providerId={provider.id} />
+      </Card>
     </>
   );
 }

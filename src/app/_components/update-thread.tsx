@@ -12,12 +12,15 @@ import { dayKey, today } from "~/lib/dates";
 import { formatDate, formatDay, formatMomentInWords } from "~/lib/format";
 import { composeBody, isHeading, updateKindOrder, updateKinds } from "~/lib/update-kinds";
 import { renderUpdateBody } from "~/lib/updates";
-import { api } from "~/trpc/react";
+import { api, type RouterOutputs } from "~/trpc/react";
 
 type Scope =
-  | { propertyId: string; clientId?: undefined; salesRequestId?: undefined }
-  | { clientId: string; propertyId?: undefined; salesRequestId?: undefined }
-  | { salesRequestId: string; propertyId?: undefined; clientId?: undefined };
+  | { propertyId: string; clientId?: undefined; salesRequestId?: undefined; providerId?: undefined }
+  | { clientId: string; propertyId?: undefined; salesRequestId?: undefined; providerId?: undefined }
+  | { salesRequestId: string; propertyId?: undefined; clientId?: undefined; providerId?: undefined }
+  | { providerId: string; propertyId?: undefined; clientId?: undefined; salesRequestId?: undefined };
+
+export type UpdateRow = RouterOutputs["update"]["list"][number];
 
 /**
  * The Updates feed (doc §2.6; called Feedback from 2026-10-01 to 2026-10-06): a running history of meeting notes and
@@ -30,8 +33,8 @@ export function UpdateThread(scope: Scope) {
   const utils = api.useUtils();
   const updates = api.update.list.useQuery(scope);
   const people = api.user.list.useQuery();
-  const me = api.user.me.useQuery();
   const [body, setBody] = useState("");
+  const [extras, setExtras] = useState<Extras>(noExtras);
   // The box is a note; the other kinds open their template in a popup (doc §2.6).
   const [form, setForm] = useState<UpdateKind | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -45,43 +48,14 @@ export function UpdateThread(scope: Scope) {
     setAnswers({});
     post.reset();
   };
-  const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
-  // Only the latest shows until asked: the feed only grows.
-  // Every update as one line — its kind, who, when and how it begins — each opened on its own.
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const [limit, setLimit] = useState(10);
-  const shown = updates.data?.slice(0, limit);
-  const more = (updates.data?.length ?? 0) - limit;
-  const toggle = (id: string) =>
-    setOpen((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const edit = api.update.edit.useMutation({
-    onSuccess: () => {
-      setEditing(null);
-      void utils.update.list.invalidate(scope);
-    },
-  });
-
-  // A reply being written, under one update at a time (2026-11-17).
-  const [replying, setReplying] = useState<{ id: string; body: string } | null>(null);
-  const reply = api.update.reply.useMutation({
-    onSuccess: () => {
-      setReplying(null);
-      void utils.update.list.invalidate(scope);
-    },
-  });
 
   const post = api.update.post.useMutation({
     onSuccess: () => {
       setBody("");
       setAnswers({});
       setForm(null);
-      void utils.update.list.invalidate(scope);
+      setExtras(noExtras);
+      void utils.update.invalidate();
     },
   });
 
@@ -118,11 +92,12 @@ export function UpdateThread(scope: Scope) {
           </span>
           {!form && post.error && <p className="text-xs text-[#c03654]">{post.error.message}</p>}
           {body.trim() && (
-            <Button type="button" className="ml-auto" disabled={post.isPending} onClick={() => post.mutate({ ...scope, body, kind: "NOTE" })}>
+            <Button type="button" className="ml-auto" disabled={post.isPending} onClick={() => post.mutate({ ...scope, ...extrasInput(extras), body, kind: "NOTE" })}>
               {post.isPending ? "Posting…" : "Post update"}
             </Button>
           )}
         </div>
+        {body.trim() && <UpdateExtras value={extras} onChange={setExtras} people={people.data ?? []} />}
       </div>
 
       {form && template && (
@@ -148,6 +123,9 @@ export function UpdateThread(scope: Scope) {
               </div>
             ))}
           </div>
+          <div className="mt-3">
+            <UpdateExtras value={extras} onChange={setExtras} people={people.data ?? []} />
+          </div>
           <div className="mt-4 flex items-center gap-2">
             {post.error && <p className="text-xs text-[#c03654]">{post.error.message}</p>}
             <Button type="button" variant="ghost" className="ml-auto" onClick={closeForm}>
@@ -156,7 +134,7 @@ export function UpdateThread(scope: Scope) {
             <Button
               type="button"
               disabled={!composed.trim() || post.isPending}
-              onClick={() => post.mutate({ ...scope, body: composed, kind: form, happenedOn: happenedOn || undefined })}
+              onClick={() => post.mutate({ ...scope, ...extrasInput(extras), body: composed, kind: form, happenedOn: happenedOn || undefined })}
             >
               {post.isPending ? "Posting…" : `Post ${template.label.toLowerCase()}`}
             </Button>
@@ -164,9 +142,72 @@ export function UpdateThread(scope: Scope) {
         </Popup>
       )}
 
-      {updates.data && updates.data.length > 0 ? (
+      <UpdateList updates={updates.data} hide={scope} />
+    </div>
+  );
+}
+
+/**
+ * A list of updates as cards, with Read more, replies and editing one's own
+ * (doc §2.6) — the same on a property, chain, client or request page and on
+ * the Updates board. `hide` leaves out the link to the page it is shown on.
+ */
+export function UpdateList({
+  updates,
+  hide,
+  empty,
+  hasMore,
+  onMore,
+  newSince,
+}: {
+  updates: UpdateRow[] | undefined;
+  hide?: Partial<Record<"propertyId" | "clientId" | "salesRequestId" | "providerId", string>>;
+  empty?: string;
+  /** On the board: more are loaded from the server, not shown ten at a time. */
+  hasMore?: boolean;
+  onMore?: () => void;
+  /** Anything newer, written by someone else, is marked New. */
+  newSince?: Date | null;
+}) {
+  const utils = api.useUtils();
+  const people = api.user.list.useQuery();
+  const me = api.user.me.useQuery();
+  const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
+  // Every update as a card — its text cut to a few lines when long, each opened on its own.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(10);
+  const shown = onMore ? (updates ?? []) : (updates ?? []).slice(0, limit);
+  const more = (updates?.length ?? 0) - limit;
+  const toggle = (id: string) =>
+    setOpen((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const isNew = (entry: UpdateRow) => Boolean(newSince && entry.createdAt > newSince && entry.author?.id !== me.data?.id);
+
+  const edit = api.update.edit.useMutation({
+    onSuccess: () => {
+      setEditing(null);
+      void utils.update.invalidate();
+    },
+  });
+
+  // A reply being written, under one update at a time (2026-11-17).
+  const [replying, setReplying] = useState<{ id: string; body: string } | null>(null);
+  const reply = api.update.reply.useMutation({
+    onSuccess: () => {
+      setReplying(null);
+      void utils.update.invalidate();
+    },
+  });
+
+  return (
+    <>
+      {updates && updates.length > 0 ? (
         <ul className="space-y-3">
-          {shown!.map((entry) => {
+          {shown.map((entry) => {
             const isOpen = open.has(entry.id) || editing?.id === entry.id;
             const textLines = entry.body.split("\n").filter((line) => line.trim() && !isHeading(entry.kind, line));
             // Easy to read at a glance (the team, 2026-11-17): the text shows, a long one cut to a few lines.
@@ -186,12 +227,8 @@ export function UpdateThread(scope: Scope) {
                     {formatDay(entry.createdAt)}
                     {entry.happenedOn ? ` · ${updateKinds[entry.kind].short} on ${formatDate(entry.happenedOn)}` : ""}
                   </span>
-                  {/* On a client's feed, an update written on one of its sales requests says which (doc §2.6). */}
-                  {entry.salesRequest && !scope.salesRequestId && (
-                    <Link href={`/sales/${entry.salesRequest.id}`} className="text-brand-700 text-xs font-light hover:underline">
-                      on the {entry.salesRequest.event?.name ?? "sales"} request
-                    </Link>
-                  )}
+                  {isNew(entry) && <span className="rounded-full bg-[#e0234e] px-1.5 text-[10px] leading-[16px] font-medium text-white">New</span>}
+                  <UpdateTags entry={entry} hide={hide} />
                   {entry.author?.id === me.data?.id && editing?.id !== entry.id && (
                     <button
                       type="button"
@@ -249,6 +286,11 @@ export function UpdateThread(scope: Scope) {
                       )}
                     </div>
                     {textLines.length === 0 && <p className="text-ink-500 mt-1 text-sm font-light italic">(empty)</p>}
+                    {entry.fileUrl && (
+                      <a href={entry.fileUrl} target="_blank" rel="noreferrer" className="text-brand-700 mt-1 inline-flex items-center gap-1 text-xs font-medium hover:underline">
+                        📎 Open the file ↗
+                      </a>
+                    )}
                     <div className="mt-1 flex items-center gap-3">
                       {longer && (
                         <button type="button" onClick={() => toggle(entry.id)} className="text-brand-700 text-xs font-medium hover:underline">
@@ -350,16 +392,118 @@ export function UpdateThread(scope: Scope) {
             </li>
             );
           })}
-          {more > 0 && (
+          {(onMore ? hasMore : more > 0) && (
             <li>
-              <button type="button" onClick={() => setLimit((current) => current + 10)} className="text-brand-700 text-[13px] font-light hover:underline">
-                Show {Math.min(10, more)} older
+              <button
+                type="button"
+                onClick={() => (onMore ? onMore() : setLimit((current) => current + 10))}
+                className="text-brand-700 text-[13px] font-light hover:underline"
+              >
+                {onMore ? "Show older" : `Show ${Math.min(10, more)} older`}
               </button>
             </li>
           )}
         </ul>
       ) : (
-        <p className="text-ink-500 text-sm font-light">No updates yet.</p>
+        <p className="text-ink-500 text-sm font-light">{empty ?? "No updates yet."}</p>
+      )}
+    </>
+  );
+}
+
+/**
+ * What an update is about, each a link to where its full history is (doc
+ * §2.6): the property, the chain, the client, the request — and a provider
+ * kept by name. The page it is shown on is left out.
+ */
+function UpdateTags({ entry, hide = {} }: { entry: UpdateRow; hide?: Partial<Record<"propertyId" | "clientId" | "salesRequestId" | "providerId", string>> }) {
+  const tag = "text-brand-700 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium hover:underline";
+  return (
+    <>
+      {entry.property && entry.property.id !== hide.propertyId && (
+        <Link href={`/properties/${entry.property.id}`} className={tag}>
+          {entry.property.name}
+        </Link>
+      )}
+      {entry.provider && entry.provider.id !== hide.providerId && (
+        <Link href={`/providers/${entry.provider.id}`} className={tag}>
+          {hide.propertyId ? `via ${entry.provider.name}` : entry.provider.name}
+        </Link>
+      )}
+      {entry.client && entry.client.id !== hide.clientId && (
+        <Link href={`/clients/${entry.client.id}`} className={tag}>
+          {entry.client.name}
+        </Link>
+      )}
+      {/* On a client's feed, an update written on one of its sales requests says which (doc §2.6). */}
+      {entry.salesRequest && entry.salesRequest.id !== hide.salesRequestId && (
+        <Link href={`/sales/${entry.salesRequest.id}`} className={tag}>
+          {hide.clientId ? "" : `${entry.salesRequest.client.name} · `}
+          {entry.salesRequest.event?.name ?? "sales"} request
+        </Link>
+      )}
+      {entry.otherProvider && <span className="bg-ink-50 text-ink-700 rounded-full px-2 py-0.5 text-[11px] font-medium">{entry.otherProvider}</span>}
+    </>
+  );
+}
+
+/** Who else to tell, and a file to go with it (doc §2.6, §2.9). */
+export type Extras = { notifyIds: string[]; fileUrl: string };
+export const noExtras: Extras = { notifyIds: [], fileUrl: "" };
+export const extrasInput = (extras: Extras) => ({ notifyIds: extras.notifyIds, fileUrl: extras.fileUrl.trim() || undefined });
+
+export function UpdateExtras({
+  value,
+  onChange,
+  people,
+}: {
+  value: Extras;
+  onChange: (value: Extras) => void;
+  people: { id: string; name: string | null; email: string | null }[];
+}) {
+  const [fileOpen, setFileOpen] = useState(Boolean(value.fileUrl));
+  const chosen = people.filter((person) => value.notifyIds.includes(person.id));
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <span className="text-ink-500 font-light">Notify</span>
+      {chosen.map((person) => (
+        <button
+          key={person.id}
+          type="button"
+          onClick={() => onChange({ ...value, notifyIds: value.notifyIds.filter((id) => id !== person.id) })}
+          className="bg-brand-50 text-brand-800 rounded-full px-2.5 py-1 font-medium"
+          title="Click to leave them out"
+        >
+          {person.name ?? person.email} ×
+        </button>
+      ))}
+      <select
+        value=""
+        onChange={(e) => e.target.value && onChange({ ...value, notifyIds: [...value.notifyIds, e.target.value] })}
+        className="border-ink-200 text-ink-700 rounded-full border bg-white px-2.5 py-1"
+        aria-label="Notify a colleague"
+      >
+        <option value="">+ colleague…</option>
+        {people
+          .filter((person) => !value.notifyIds.includes(person.id))
+          .map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.name ?? person.email}
+            </option>
+          ))}
+      </select>
+      {fileOpen ? (
+        <input
+          value={value.fileUrl}
+          onChange={(e) => onChange({ ...value, fileUrl: e.target.value })}
+          placeholder="Google Drive link — https://drive.google.com/…"
+          aria-label="Link to a file"
+          className="border-ink-200 min-w-64 flex-1 rounded-full border bg-white px-3 py-1 outline-none"
+        />
+      ) : (
+        <button type="button" onClick={() => setFileOpen(true)} className="text-brand-700 font-medium hover:underline">
+          📎 Add a file link
+        </button>
       )}
     </div>
   );

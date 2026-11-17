@@ -3,6 +3,10 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
+
+import { useRemembered } from "~/lib/remembered";
+import { formatMoney } from "~/lib/format";
+import { roomTypeGroups, roomTypeOf } from "~/lib/sales";
 import type { CategoryContractStatus, PropertyType, ScoutingDetail, ScoutingStatus } from "generated/prisma";
 
 import { ScoutingActivityLog } from "~/app/_components/activity-log";
@@ -64,17 +68,21 @@ export function ScoutingList({
 }) {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("list");
-  const [types, setTypes] = useState<PropertyType[]>([]);
+  // Filters stay as set until reset, per event (the team, 2026-11-12).
+  const [types, setTypes] = useRemembered<PropertyType[]>(`scouting:${eventId}:types`, []);
+  const [roomType, setRoomType] = useRemembered(`scouting:${eventId}:roomKind`, "");
+  const [area, setArea] = useRemembered(`scouting:${eventId}:area`, "");
+  const [maxRate, setMaxRate] = useRemembered(`scouting:${eventId}:maxRate`, "");
   /** Ticked rows, to move several into a group at once (doc §3.9). */
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** The rows being dragged, and the group they hover over. */
   const [dragging, setDragging] = useState<string[] | null>(null);
   const [dropOn, setDropOn] = useState<ScoutingStatus | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [providerId, setProviderId] = useState("");
+  const [providerId, setProviderId] = useRemembered(`scouting:${eventId}:provider`, "");
   const providers = api.provider.list.useQuery();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [hasQuotations, setHasQuotations] = useState(false);
+  const [hasQuotations, setHasQuotations] = useRemembered(`scouting:${eventId}:quoted`, false);
 
   const entries = api.scouting.listForEvent.useQuery({
     eventId,
@@ -84,9 +92,20 @@ export function ScoutingList({
     hasQuotations,
   });
 
+  // What came through from a quotation when something was marked Contracted (doc §3.9).
+  const sayCarried = (result: { carried: string[]; undecided: string[] }) => {
+    const parts = [
+      result.carried.length ? `Rates carried from the quotation: ${result.carried.join("; ")}.` : null,
+      result.undecided.length
+        ? `${result.undecided.join(", ")}: several quotations, none accepted — accept one on the property's page and its rates come through.`
+        : null,
+    ].filter(Boolean);
+    if (parts.length) setNotice(parts.join(" "));
+  };
   const setStatusMutation = api.scouting.setStatus.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       setSelected(new Set());
+      sayCarried(result);
       void entries.refetch();
     },
   });
@@ -99,8 +118,14 @@ export function ScoutingList({
       router.refresh();
     },
   });
+  const utils = api.useUtils();
   const setCategoryStatusMutation = api.scouting.setCategoryContractStatus.useMutation({
-    onSuccess: () => void entries.refetch(),
+    onSuccess: (result) => {
+      sayCarried(result);
+      void entries.refetch();
+      void utils.reporting.availability.invalidate();
+      void utils.inventory.invalidate();
+    },
   });
 
   const toggleExpanded = (id: string) =>
@@ -111,7 +136,32 @@ export function ScoutingList({
       return next;
     });
 
-  const rows = entries.data ?? [];
+  const allRows = entries.data ?? [];
+  const areaOf = (property: { area: string | null; city: string | null }) => property.area ?? property.city ?? "";
+  // What the narrowing filters offer, from the properties on this list (doc §3.9).
+  const areas = useMemo(
+    () => [...new Set(allRows.map((entry) => areaOf(entry.property)).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [allRows],
+  );
+  // The few room types a client asks for (doc §4.11), each hotel's own names read into them.
+  const roomWords = roomType;
+  const ceiling = Number(maxRate.replace(",", "."));
+  const rows = allRows.filter((entry) => {
+    if (area && areaOf(entry.property) !== area) return false;
+    const matching = roomWords ? entry.property.categories.filter((category) => roomTypeOf(category) === roomWords) : null;
+    if (matching && matching.length === 0) return false;
+    if (maxRate.trim() && Number.isFinite(ceiling)) {
+      // A night at or under the price — for the room type chosen, when one is.
+      const ids = matching ? new Set(matching.map((category) => category.id)) : null;
+      const cheapEnough = entry.rates.some((rate) => (!ids || ids.has(rate.categoryId)) && rate.cents <= ceiling * 100);
+      if (!cheapEnough) return false;
+    }
+    return true;
+  });
+  const narrowed = Boolean(area || roomWords || maxRate.trim());
+  const filtered = narrowed || types.length > 0 || providerId !== "" || hasQuotations;
+  const lowestRate = (entry: (typeof allRows)[number]) =>
+    entry.rates.length ? entry.rates.reduce((low, rate) => (rate.cents < low.cents ? rate : low)) : null;
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["group-REJECTED"]));
 
@@ -346,7 +396,7 @@ export function ScoutingList({
                             type="button"
                             onClick={() => setOpenEntry(entry.id)}
                             className="border-ink-200 text-ink-500 hover:border-brand-400 hover:text-brand-700 rounded-full border px-2 py-0.5 text-[11px] font-light whitespace-nowrap transition-colors"
-                            title="This event's terms, contracting details and contacts, without leaving the page"
+                            title="Its room breakdown, quotations, this event's terms, contracting details and contacts, without leaving the page"
                           >
                             Quick view
                           </button>
@@ -421,7 +471,17 @@ export function ScoutingList({
                     <span className="whitespace-nowrap">{propertyTypeLabels[property.type]}</span>
                     {property.stars ? <span className="text-ink-500 block text-xs font-light whitespace-nowrap">{property.stars}-star</span> : null}
                   </Td>
-                  <Td>{units || "—"}</Td>
+                  <Td>
+                    {units || "—"}
+                    {(() => {
+                      const low = lowestRate(entry);
+                      return low ? (
+                        <span className="text-ink-500 block text-xs font-light whitespace-nowrap" title="The lowest rate per night quoted or agreed">
+                          from {formatMoney(low.cents, low.currency)}
+                        </span>
+                      ) : null;
+                    })()}
+                  </Td>
                   {venues.length > 0 && (
                     <Td>
                       {nearest === null ? (
@@ -557,16 +617,73 @@ export function ScoutingList({
           With quotations
         </button>
 
+        <Select value={area} onChange={(e) => setArea(e.target.value)} className="w-auto" aria-label="Area">
+          <option value="">Every area</option>
+          {areas.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </Select>
+
+        <Select value={roomType} onChange={(e) => setRoomType(e.target.value)} className="w-auto" aria-label="Room type">
+          <option value="">Every room type</option>
+          {roomTypeGroups.map((group) => (
+            <optgroup key={group.kind} label={group.label}>
+              {group.types.map((type) => (
+                <option key={type.short} value={type.short}>
+                  {type.short}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </Select>
+
+        <label className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-light ${maxRate ? "border-brand-400 bg-brand-50" : "border-ink-200 bg-white"}`}>
+          <span className="text-ink-500">Up to</span>
+          <input
+            inputMode="decimal"
+            value={maxRate}
+            onChange={(e) => setMaxRate(e.target.value.replace(/[^0-9.,]/g, ""))}
+            placeholder="350"
+            aria-label="Highest rate per night"
+            className="w-14 bg-transparent outline-none"
+          />
+          <span className="text-ink-500">a night</span>
+        </label>
+
+        {filtered && (
+          <button
+            type="button"
+            onClick={() => {
+              setTypes([]);
+              setProviderId("");
+              setHasQuotations(false);
+              setArea("");
+              setRoomType("");
+              setMaxRate("");
+            }}
+            className="text-brand-700 text-[13px] font-light hover:underline"
+          >
+            Reset filters
+          </button>
+        )}
+
         <span className="text-ink-500 ml-auto text-[13px] font-light">
           {entries.isLoading
             ? "Loading…"
-            : `${rows.length} ${rows.length === 1 ? "property" : "properties"}`}
+            : `${rows.length}${narrowed ? ` of ${allRows.length}` : ""} ${rows.length === 1 && !narrowed ? "property" : "properties"}`}
         </span>
       </div>
 
       {/* The map shows even with no properties: its Layers panel is where places are added and My Maps imported (doc §3.7). */}
       {rows.length === 0 && !entries.isLoading && view !== "map" ? (
-        hasQuotations ? (
+        narrowed && allRows.length > 0 ? (
+          <EmptyState
+            title="No property matches these filters"
+            description="Widen the area, room type or price — or reset the filters."
+          />
+        ) : hasQuotations ? (
           <EmptyState
             title="No property has a quotation yet"
             description="Open a property and add the quotation it sent in its Quotations section — then it shows here and on the map."

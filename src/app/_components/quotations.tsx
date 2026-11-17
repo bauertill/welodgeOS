@@ -143,6 +143,40 @@ export function QuotationsSection({
   );
 }
 
+/** The terms a quotation offers, in words, leaving out what it does not say. */
+function quotationTerms(quotation: Quotation): [string, string][] {
+return [
+  [
+    "Payments",
+    quotation.payments
+      .map((payment) => `${percent(payment.percentBasisPoints)}${payment.plusTaxes ? " + all taxes" : ""} ${payment.onSignature ? "on signature" : `on ${formatDate(payment.dueOn!)}`}`)
+      .join(" · ") || null,
+  ],
+  ["Payment terms", quotation.paymentTerms],
+  [
+    "Cancellation",
+    quotation.cancellations
+      .map((cut) =>
+        cut.feeBasisPoints !== null
+          ? `${percent(cut.feeBasisPoints)} charged from ${formatDate(cut.cutoffOn)}`
+          : `${cut.kind === "ATTRITION" ? "attrition" : cut.kind === "RELEASE" ? "release" : "other"}${cut.percentBasisPoints !== null ? ` ${percent(cut.percentBasisPoints)}` : ""} until ${formatDate(cut.cutoffOn)}`,
+      )
+      .join(" · ") || null,
+  ],
+  ["Cancellation terms", quotation.cancellationTerms],
+  ["Rates include", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
+  ["TOT", percent(quotation.totBasisPoints)],
+  ["Tax per room per night", quotation.taxPerNightCents !== null ? formatMoney(quotation.taxPerNightCents, quotation.currency) : null],
+  ["Other taxes", quotation.otherTaxes],
+].filter(([, value]) => value) as [string, string][];
+}
+
+/** "King, Queen and Suite" — the room types a quotation covers, each once. */
+function roomTypesOf(quotation: Quotation) {
+  const names = [...new Set(quotation.lines.map((line) => line.category.name))];
+  return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
 function QuotationCard({
   quotation,
   eventId,
@@ -188,30 +222,7 @@ function QuotationCard({
   const short = quotation.shortfall;
   const shortWords = short.map((room) => `${room.name} ${room.has} → ${room.quoted}`).join(", ");
   const error = setStatus.error ?? remove.error ?? makeContract.error ?? buyRooms.error ?? raise.error;
-  const terms = [
-    [
-      "Payments",
-      quotation.payments
-        .map((payment) => `${percent(payment.percentBasisPoints)}${payment.plusTaxes ? " + all taxes" : ""} ${payment.onSignature ? "on signature" : `on ${formatDate(payment.dueOn!)}`}`)
-        .join(" · ") || null,
-    ],
-    ["Payment terms", quotation.paymentTerms],
-    [
-      "Cancellation",
-      quotation.cancellations
-        .map((cut) =>
-          cut.feeBasisPoints !== null
-            ? `${percent(cut.feeBasisPoints)} charged from ${formatDate(cut.cutoffOn)}`
-            : `${cut.kind === "ATTRITION" ? "attrition" : cut.kind === "RELEASE" ? "release" : "other"}${cut.percentBasisPoints !== null ? ` ${percent(cut.percentBasisPoints)}` : ""} until ${formatDate(cut.cutoffOn)}`,
-        )
-        .join(" · ") || null,
-    ],
-    ["Cancellation terms", quotation.cancellationTerms],
-    ["Rates include", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
-    ["TOT", percent(quotation.totBasisPoints)],
-    ["Tax per room per night", quotation.taxPerNightCents !== null ? formatMoney(quotation.taxPerNightCents, quotation.currency) : null],
-    ["Other taxes", quotation.otherTaxes],
-  ].filter(([, value]) => value) as [string, string][];
+  const terms = quotationTerms(quotation);
 
   return (
     <div className={`border-brand-200 bg-brand-50/60 rounded-lg border ${quotation.status === "DECLINED" ? "opacity-60" : ""}`}>
@@ -236,10 +247,13 @@ function QuotationCard({
             <span className={`ml-2 rounded-full px-2 py-0.5 align-middle text-[11px] font-medium ${statusStyles[quotation.status]}`}>
               {quotationStatusLabels[quotation.status]}
             </span>
-            {quotation.salesRequest && <span className="text-brand-700 ml-2 text-xs font-medium">For {quotation.salesRequest.client.name}</span>}
+            <span className="text-brand-700 ml-2 text-xs font-medium">
+              {quotation.salesRequest ? `For ${quotation.salesRequest.client.name}` : "General enquiry"}
+            </span>
           </p>
           <p className="text-ink-500 mt-0.5 text-xs font-light">
             {[
+              roomTypesOf(quotation) || null,
               quotation.from && quotation.to ? formatRange(quotation.from, quotation.to) : null,
               `${quotation.roomNights} room-nights`,
               quotation.rooms ? `${quotation.rooms} rooms` : null,
@@ -404,6 +418,135 @@ function QuotationCard({
       {error && <FormError message={friendlyError(error)} />}
       </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A hotel's quotations at a glance, in the Properties tab's quick view (doc
+ * §3.9, the team 2026-11-17): for each, who it was for — a client, or a general
+ * enquiry — and its lines by period, room type and rooms, which are what
+ * matter most when several are held at once. The rest (rates include, taxes,
+ * payment and cancellation terms, notes) opens on a click; editing stays on the
+ * property's page.
+ */
+export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEntryId: string; propertyHref: string }) {
+  const quotations = api.quotation.forEntry.useQuery({ scoutingEntryId });
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  if (quotations.isLoading) return <p className="text-ink-500 text-sm font-light">Loading…</p>;
+  const rows = quotations.data ?? [];
+  if (rows.length === 0)
+    return (
+      <p className="text-ink-500 text-sm font-light">
+        No quotation for this event yet.{" "}
+        <Link href={propertyHref} className="text-brand-700 hover:underline">
+          Add one on the property&apos;s page
+        </Link>
+        .
+      </p>
+    );
+  return (
+    <div className="space-y-3">
+      {rows.map((quotation) => {
+        const opened = open.has(quotation.id);
+        const terms = quotationTerms(quotation);
+        return (
+          <div key={quotation.id} className={`border-ink-200/60 rounded-xl border bg-white p-4 ${quotation.status === "DECLINED" ? "opacity-60" : ""}`}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <p className="text-ink-900 text-[14px] font-medium">
+                {quotation.name}
+                <span className={`ml-2 rounded-full px-2 py-0.5 align-middle text-[11px] font-medium ${statusStyles[quotation.status]}`}>
+                  {quotationStatusLabels[quotation.status]}
+                </span>
+              </p>
+              <span className={`text-xs font-medium ${quotation.salesRequest ? "text-brand-700" : "text-ink-500"}`}>
+                {quotation.salesRequest ? `For ${quotation.salesRequest.client.name}` : "General enquiry"}
+              </span>
+            </div>
+            <p className="text-ink-500 mt-0.5 text-xs font-light">
+              {[
+                quotation.receivedOn ? `Received ${formatDate(quotation.receivedOn)}` : null,
+                quotation.validUntil ? `valid until ${formatDate(quotation.validUntil)}` : null,
+                quotation.rooms ? `${quotation.rooms} rooms in all` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            <table className="mt-2 w-full text-left">
+              <thead>
+                <tr>
+                  <th className={`${th} pl-0`}>Period</th>
+                  <th className={th}>Room type</th>
+                  <th className={th}>Rooms</th>
+                  <th className={`${th} pr-0 text-right`}>Per night</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quotation.lines.map((line) => (
+                  <tr key={line.id}>
+                    <td className={`${td} pl-0 whitespace-nowrap`}>
+                      {formatRange(line.checkIn, line.checkOut)}
+                      <span className="text-ink-500 block text-xs">{line.nights} nights</span>
+                    </td>
+                    <td className={`${td} text-ink-900`}>{line.category.name}</td>
+                    <td className={td}>{line.rooms}</td>
+                    <td className={`${td} pr-0 text-right whitespace-nowrap`}>{formatMoney(line.rateCents, quotation.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button
+              type="button"
+              onClick={() =>
+                setOpen((current) => {
+                  const next = new Set(current);
+                  if (next.has(quotation.id)) next.delete(quotation.id);
+                  else next.add(quotation.id);
+                  return next;
+                })
+              }
+              aria-expanded={opened}
+              className="text-brand-700 mt-2 text-[13px] font-light hover:underline"
+            >
+              {opened ? "Fewer details" : "Terms, taxes and total"}
+            </button>
+            {opened && (
+              <div className="mt-2 space-y-2">
+                <p className="text-[13px] font-light">
+                  <span className="text-ink-500">Total </span>
+                  <span className="text-ink-900 font-medium">{formatMoney(quotation.payableCents, quotation.currency)}</span>
+                  <span className="text-ink-500">
+                    {" "}
+                    · {quotation.roomNights} room-nights
+                    {quotation.taxCents > 0 && ` · incl. ${formatMoney(quotation.taxCents, quotation.currency)} taxes`}
+                  </span>
+                </p>
+                {terms.length > 0 && (
+                  <dl className="space-y-1 text-[13px] font-light">
+                    {terms.map(([label, value]) => (
+                      <div key={label} className="flex gap-3">
+                        <dt className="text-ink-500 w-32 shrink-0">{label}</dt>
+                        <dd className="text-ink-900 min-w-0 whitespace-pre-line">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {quotation.notes && <p className="text-ink-700 text-[13px] font-light whitespace-pre-line">{quotation.notes}</p>}
+                <div className="flex flex-wrap gap-x-4 text-xs">
+                  {quotation.documentUrl && (
+                    <a href={quotation.documentUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                      Open the quotation ↗
+                    </a>
+                  )}
+                  <Link href={propertyHref} className="text-brand-700 hover:underline">
+                    Edit or accept it on the property&apos;s page
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

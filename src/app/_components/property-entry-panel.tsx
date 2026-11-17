@@ -9,16 +9,21 @@ import { formatDuration, formatKm, TravelTimes } from "~/app/_components/travel-
 import { ContactList, ContractingDetails, PropertyFacts } from "~/app/_components/property-details";
 import { termTextFields } from "~/lib/contracting";
 import { dayKey, parseDay } from "~/lib/dates";
-import { describeRateIncludes, propertyTypeLabels } from "~/lib/scouting";
+import { formatMoney } from "~/lib/format";
+import { categoryContractStatusLabels, describeRateIncludes, isHotelLike, propertyTypeLabels } from "~/lib/scouting";
+import { QuotationsGlance } from "~/app/_components/quotations";
 import { api } from "~/trpc/react";
 
 type TermKey = (typeof termTextFields)[number]["key"];
 
+type PanelTab = "rooms" | "quotations" | "terms" | "contracting" | "about";
+
 /**
- * A property on this event, opened from the Properties tab (doc §3.9): the
- * terms agreed for this event — kept on the event, never shared with another —
- * beside what the property itself carries, including the contracting details
- * that go to the lawyers.
+ * A property on this event, opened from the Properties tab (doc §3.9) — in
+ * sections (the team, 2026-11-17): the room breakdown, every quotation
+ * received, the terms agreed for this event — kept on the event, never shared
+ * with another — the contracting details and contacts, and the rest of what
+ * the property itself carries.
  */
 export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onClose: () => void }) {
   const utils = api.useUtils();
@@ -38,6 +43,8 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
   const [roomingListDeadline, setRoomingListDeadline] = useState("");
   const [minimumStay, setMinimumStay] = useState("");
   const [saved, setSaved] = useState(false);
+  const [tab, setTab] = useState<PanelTab>("rooms");
+  const quotations = api.quotation.forEntry.useQuery({ scoutingEntryId: entryId });
 
   useEffect(() => {
     const data = entry.data;
@@ -76,7 +83,7 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
       <aside
         role="dialog"
         aria-label={property?.name ?? "Property"}
-        className="border-ink-200/60 fixed inset-y-0 right-0 z-40 w-full max-w-xl overflow-y-auto border-l bg-white p-6 shadow-xl"
+        className="border-ink-200/60 fixed inset-y-0 right-0 z-40 w-full max-w-2xl overflow-y-auto border-l bg-white p-6 shadow-xl"
       >
         <div className="mb-5 flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -101,8 +108,54 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
         </div>
 
         {entry.data && property && (
+          <div role="tablist" aria-label="Sections" className="border-ink-200/60 -mx-6 mb-5 flex gap-1 overflow-x-auto border-b px-4">
+            {(
+              [
+                ["rooms", "Room breakdown", property.categories.length],
+                ["quotations", "Quotations", quotations.data?.length ?? 0],
+                ["terms", "Agreed terms", 0],
+                ["contracting", "Contracting & contacts", 0],
+                ["about", "About", 0],
+              ] as [PanelTab, string, number][]
+            ).map(([key, label, count]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 pt-1.5 pb-2.5 text-[13px] whitespace-nowrap transition-colors ${
+                  tab === key ? "border-ink-900 text-ink-900 font-medium" : "text-ink-500 hover:text-ink-900 border-transparent font-light"
+                }`}
+              >
+                {label}
+                {count > 0 && <span className="bg-ink-50 text-ink-500 rounded-full px-1.5 text-[11px] leading-[18px]">{count}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {entry.data && property && tab === "rooms" && (
+          <RoomBreakdown
+            hotel={isHotelLike(property.type)}
+            categories={property.categories}
+            contracts={entry.data.categoryContracts}
+            quotations={quotations.data ?? []}
+            totalRooms={property.totalRooms}
+          />
+        )}
+
+        {entry.data && property && tab === "quotations" && (
+          <QuotationsGlance
+            scoutingEntryId={entryId}
+            propertyHref={`/properties/${property.id}?back=${encodeURIComponent(`/events/${entry.data.eventId}`)}#quotations`}
+          />
+        )}
+
+        {entry.data && property && (
           <div className="space-y-8">
             <form
+              hidden={tab !== "terms"}
               className="space-y-4"
               onSubmit={(e) => {
                 e.preventDefault();
@@ -219,6 +272,8 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
               </div>
             </form>
 
+            {tab === "contracting" && (
+            <>
             <section>
               <div className="mb-3 flex items-baseline justify-between gap-3">
                 <h3 className="text-ink-900 text-[15px] font-medium">Contracting details</h3>
@@ -237,6 +292,11 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
               <ContactList property={property} />
             </section>
 
+            </>
+            )}
+
+            {tab === "about" && (
+            <>
             <section>
               <h3 className="text-ink-900 mb-3 text-[15px] font-medium">Getting around</h3>
               <GettingAround propertyId={property.id} eventId={entry.data.eventId} />
@@ -252,6 +312,8 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
                 Open the property&apos;s page
               </PendingLink>
             </section>
+            </>
+            )}
           </div>
         )}
       </aside>
@@ -369,6 +431,96 @@ function GettingAround({ propertyId, eventId }: { propertyId: string; eventId: s
             <p className="text-ink-500 text-[10px] font-light">Found by Google, closest first. Car times ignore live traffic.</p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The property's room types on this event (doc §3.9): how many of each, who
+ * sleeps in them, where the contract stands, the buying rate agreed, and the
+ * lowest rate quoted for it in any quotation not declined.
+ */
+function RoomBreakdown({
+  hotel,
+  categories,
+  contracts,
+  quotations,
+  totalRooms,
+}: {
+  hotel: boolean;
+  categories: { id: string; name: string; unitCount: number; capacity: number; bedConfiguration: string | null; bedrooms: number | null; bathrooms: number | null; size: string | null }[];
+  contracts: { categoryId: string; status: keyof typeof categoryContractStatusLabels; ratePerNightCents: number | null; rateCurrency: string | null }[];
+  quotations: { status: string; currency: string; lines: { categoryId: string; rateCents: number }[] }[];
+  totalRooms: number | null;
+}) {
+  if (categories.length === 0) return <p className="text-ink-500 text-sm font-light">No room types recorded yet — add them on the property&apos;s page.</p>;
+  const quoted = (categoryId: string) => {
+    const offers = quotations
+      .filter((quotation) => quotation.status !== "DECLINED")
+      .flatMap((quotation) => quotation.lines.filter((line) => line.categoryId === categoryId).map((line) => ({ cents: line.rateCents, currency: quotation.currency })));
+    if (offers.length === 0) return null;
+    const lowest = offers.reduce((low, offer) => (offer.cents < low.cents ? offer : low));
+    return { lowest, count: offers.length };
+  };
+  const registered = categories.reduce((sum, category) => sum + category.unitCount, 0);
+  const th = "text-ink-500 border-ink-200/60 border-b px-2 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase first:pl-0";
+  const td = "border-ink-200/40 border-b px-2 py-2.5 align-top text-[13px] font-light first:pl-0";
+  return (
+    <div>
+      <p className="text-ink-500 mb-2 text-xs font-light">
+        {registered} {hotel ? "rooms" : "units"} across {categories.length} {categories.length === 1 ? "type" : "types"}
+        {totalRooms && totalRooms !== registered ? ` · ${totalRooms} at the property in all` : ""}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead>
+            <tr>
+              <th className={th}>Room type</th>
+              <th className={th}>{hotel ? "Rooms" : "Units"}</th>
+              <th className={th}>Sleeps</th>
+              <th className={th}>{hotel ? "Beds" : "Bedrooms"}</th>
+              <th className={th}>Contract</th>
+              <th className={th}>Buying rate</th>
+              <th className={th}>Quoted from</th>
+            </tr>
+          </thead>
+          <tbody>
+            {categories.map((category) => {
+              const contract = contracts.find((row) => row.categoryId === category.id);
+              const offer = quoted(category.id);
+              return (
+                <tr key={category.id}>
+                  <td className={`${td} text-ink-900`}>
+                    {category.name}
+                    {category.size && <span className="text-ink-500 block text-xs">{category.size}</span>}
+                  </td>
+                  <td className={td}>{category.unitCount}</td>
+                  <td className={td}>{category.capacity}</td>
+                  <td className={td}>
+                    {hotel
+                      ? (category.bedConfiguration ?? "—")
+                      : [category.bedrooms !== null ? `${category.bedrooms} bed` : null, category.bathrooms !== null ? `${category.bathrooms} bath` : null].filter(Boolean).join(" · ") || "—"}
+                  </td>
+                  <td className={td}>{(contract && categoryContractStatusLabels[contract.status]) || "—"}</td>
+                  <td className={`${td} whitespace-nowrap`}>
+                    {contract?.ratePerNightCents != null ? formatMoney(contract.ratePerNightCents, contract.rateCurrency ?? "USD") : "—"}
+                  </td>
+                  <td className={`${td} whitespace-nowrap`}>
+                    {offer ? (
+                      <>
+                        {formatMoney(offer.lowest.cents, offer.lowest.currency)}
+                        {offer.count > 1 && <span className="text-ink-500 block text-xs">{offer.count} quoted lines</span>}
+                      </>
+                    ) : (
+                      <span className="text-ink-500">Not quoted</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
