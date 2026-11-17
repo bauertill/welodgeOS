@@ -600,7 +600,7 @@ It is research, not inventory: nothing here implies a commercial position.
 ### 3.1 Property
 
 **The same property twice is refused, as far as it can be told.** While a property is
-scouted — on the quick screen and on the full form — it is compared with every property
+scouted — on the scouting form — it is compared with every property
 already in the system, and anything that looks like it is shown, with why: **a very
 similar name** (the same distinctive words, so *Residence Inn Burbank Downtown* and
 *Residence Inn by Marriott Los Angeles Burbank/Downtown* match, while words every chain
@@ -610,22 +610,22 @@ click — or it says it is on the event already. Saving it anyway takes ticking 
 different property*; without that the system refuses it, on the server too. An exactly
 equal name is always refused.
 
-**Scouting a property is quick by default** (2026-10-03, on trial). *Scout a new property* on
-an event opens it as a **pop-up over the Properties tab**, so the list stays where it was;
-saving closes it and the property is on the list at once, *Save and scout another* keeps it
-open for the next one, and closing it with something typed asks first. (Reached without an
-event, it is a page of its own.) It is
-one short screen with only what is known on a first look: the name (warned at once if the
-library already has it), the type and stars as one-click buttons, the address — searched on
-Google Maps where that is switched on — with city and country, website and phone; the room
-types as quick rows of name, number of rooms and how many each sleeps, with one-click
-names (*+ King*, *+ Twin*, *+ Studio*…); the amenities as chips; one contact; and notes. The
-position on the map is found from the address as it is typed and shown beside the form,
-where the pin can be dragged. *Save and add to [event]* saves and goes back to the event;
-*Save and scout another* saves and clears the screen for the next one. Bed set-ups, sizes,
-indicative prices, services, the provider and contracting details are added afterwards on
-the property's page, each part editing in place (§3.9). *Use the full form* still opens the
-complete form, with every field at once.
+**Scouting a property is the whole form, in tabs** (2026-11-17, from the team's feedback;
+it replaces the quick screen of 2026-10-03). *Scout a new property* on an event opens it as a
+**pop-up over the Properties tab**, so the list stays where it was; reached without an event,
+it is a page of its own. Every field is there every time, but grouped into **tabs** rather than
+one long page to scroll: *Property* (name, type, stars, address — searched on Google Maps where
+that is switched on — city, country, the position on the map, website, phone, total rooms),
+*Room categories* (or *Unit types*), *Amenities*, *Details*, *Services*, *Contracting*,
+*Contacts* and *Notes*. A tab shows how many room categories, amenities or contacts it holds.
+Anything typed is kept while clicking between tabs, and **saving works from any tab** — nothing
+has to be visited first; *Next* steps through them in order for whoever wants to. If something
+stops the save (no name, a name already in the library, a look-alike not yet confirmed as
+different, a latitude without a longitude), the form opens the tab where the problem is and
+marks it in red. *Save and add to [event]* saves and closes; *Save and scout another* saves and
+empties the form for the next one, keeping the type; closing with something typed asks first.
+Editing a property (*Edit* on its page) uses the same tabbed form. Most of these parts can
+also be filled in later on the property's page, each editing in place (§3.9).
 
 Common to every type:
 
@@ -3797,8 +3797,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 More property types | **Built** (2026-11-11) | Motel, extended stay, student housing, hostel, bed & breakfast and other, beside hotel, apartment and aparthotel — for the LA28 move from monday.com (the owner). Each behaves as a hotel (rooms with beds, stars), an apartment (units with bedrooms, no stars: student housing) or both (extended stay, like an aparthotel). monday's furnished, luxury and complex apartments come in as Apartment, budget hotels as Hotel. Rating is stars only — monday's review scores (4.3/5) are not brought over (the owner) |
 | §3.1 Address search on Google Maps | **Built** | On the property form (new and edit). *Places API (New)* switched on and allowed on `GOOGLE_MAPS_SERVER_KEY` (Till, 2026-10-05) — the same switch moved the sourcing task's search for properties not in the system, and its contact lookup, from OpenStreetMap to Google |
-| §3.1 Quick scouting screen | **Built, on trial** | A pop-up over the event's Properties tab; the default *Scout a property* screen: essentials only, map found from the address, quick room-type rows and amenity chips, *Save and scout another*; *Use the full form* for everything |
-| §3.1 Duplicate properties | **Built** | Compared by distinctive name words, street address and 150 m on the map, on the quick screen, the full form and the server; shown with why, to open or add instead; saving anyway needs *It is a different property* |
+| §3.1 Scouting form in tabs | **Built** (2026-11-17) | The whole property form, grouped into tabs, as a pop-up over the event's Properties tab and as a page; save from any tab, the problem's tab opened and marked red, *Save and scout another*. Replaces the quick scouting screen (2026-10-03) |
+| §3.1 Duplicate properties | **Built** | Compared by distinctive name words, street address and 150 m on the map, on the scouting form and the server; shown with why, to open or add instead; saving anyway needs *It is a different property* |
 | §3.2 Hotel categories | **Built** | Name, room count, capacity, bed configuration, size, notes; the event rate per event read from the agreed rate or the quotations (§3.9) — the indicative price range is no longer entered (2026-10-06) |
 | §3.3 Apartment units | **Built** | Bedrooms and bathrooms, halves allowed |
 | §3.4 Amenities | **Built** | Controlled list; edited in `prisma/seed.ts`, not in the app. `pnpm run db:seed:amenities` loads the vocabulary alone, which is what a live database gets |

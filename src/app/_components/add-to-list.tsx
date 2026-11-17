@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button, Select } from "~/app/_components/form";
-import { ScoutPopup } from "~/app/_components/quick-scout";
+import { ScoutPopup } from "~/app/_components/scout-popup";
 import { propertyTypeLabels } from "~/lib/scouting";
 import { api } from "~/trpc/react";
 
