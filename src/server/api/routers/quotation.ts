@@ -1,11 +1,12 @@
-import { CancellationKind, Cleaning, QuotationStatus, RateInclusion, type Prisma } from "generated/prisma";
+import { CancellationKind, Cleaning, QuotationStatus, RateInclusion, TaxKind, type Prisma } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { nightsBetween, parseDay, today } from "~/lib/dates";
-import { percent, taxPerNight } from "~/lib/finance";
+import { percent } from "~/lib/finance";
 import { formatDate, formatMoney } from "~/lib/format";
 import { describeRateIncludes } from "~/lib/scouting";
+import { taxesPerNight, taxName } from "~/lib/taxes";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { openStages } from "~/lib/sales";
 import { logAudit } from "~/server/audit";
@@ -48,6 +49,17 @@ export const paymentInput = z
   })
   .refine((payment) => payment.onSignature || payment.dueOn, "Each payment is due on signature or on a date — give the date");
 
+/** A tax or fee on the rates: a % of the rate, or a fixed amount per room per night (doc §3.10). */
+const taxInput = z
+  .object({
+    kind: z.nativeEnum(TaxKind),
+    label: z.string().max(200),
+    basisPoints: z.number().int().min(0).max(10_000).nullable(),
+    amountCents: z.number().int().min(0).max(10_000_000).nullable(),
+  })
+  .refine((tax) => (tax.basisPoints === null) !== (tax.amountCents === null), "Each tax is a percentage or an amount per night — give one of them")
+  .refine((tax) => tax.kind !== "OTHER" || tax.label.trim(), "Name the tax chosen as Other");
+
 /** A cancellation cut-off as quoted: by this date, this share. */
 export const cancellationInput = z.object({
   kind: z.nativeEnum(CancellationKind),
@@ -69,8 +81,7 @@ const quotationInput = z.object({
   rateIncludesOther: z.string().max(2000),
   cleaning: z.nativeEnum(Cleaning).nullable(),
   cleaningOther: z.string().max(500),
-  totBasisPoints: z.number().int().min(0).max(10_000).nullable(),
-  taxPerNightCents: z.number().int().min(0).max(10_000_000).nullable().default(null),
+  taxes: z.array(taxInput).max(20).default([]),
   otherTaxes: z.string().max(2000),
   documentUrl: z
     .string()
@@ -94,6 +105,7 @@ const include = {
   },
   payments: { orderBy: { position: "asc" } },
   cancellations: { orderBy: { position: "asc" } },
+  taxes: { orderBy: { position: "asc" } },
   contract: { select: { id: true, name: true, eventId: true } },
   addedBy: { select: { name: true, email: true } },
   salesRequest: { select: { id: true, client: { select: { name: true } } } },
@@ -103,14 +115,16 @@ type Loaded = Prisma.QuotationGetPayload<{ include: typeof include }>;
 
 /**
  * What a quotation comes to, line by line and in all — worked out, never
- * stored. `totalCents` is the rooms; `taxCents` the TOT and per-night tax on
- * top, line by line as the hotel works it out; `payableCents` both (doc §3.10).
+ * stored. `totalCents` is the rooms; `taxCents` the taxes and fees on top,
+ * line by line as the hotel works it out — none when the rates include taxes;
+ * `payableCents` both (doc §3.10).
  */
 function withTotals(quotation: Loaded) {
+  const taxesIncluded = quotation.rateIncludes.includes("TAXES");
   const lines = quotation.lines.map((line) => {
     const nights = nightsBetween(line.checkIn, line.checkOut);
     const roomNights = nights * line.rooms;
-    const taxPerNightCents = taxPerNight(line.rateCents, quotation.totBasisPoints, quotation.taxPerNightCents);
+    const taxPerNightCents = taxesIncluded ? 0 : taxesPerNight(line.rateCents, quotation.taxes);
     return { ...line, nights, roomNights, totalCents: roomNights * line.rateCents, taxPerNightCents, taxCents: roomNights * taxPerNightCents };
   });
   const totalCents = lines.reduce((sum, line) => sum + line.totalCents, 0);
@@ -119,6 +133,7 @@ function withTotals(quotation: Loaded) {
   const ends = lines.map((line) => line.checkOut.getTime());
   return {
     ...quotation,
+    taxesIncluded,
     lines,
     roomNights: lines.reduce((sum, line) => sum + line.roomNights, 0),
     totalCents,
@@ -200,7 +215,7 @@ export const quotationRouter = createTRPCRouter({
     const entry = await ctx.db.scoutingEntry.findUniqueOrThrow({
       where: { id: input.scoutingEntryId },
       select: {
-        event: { select: { id: true, name: true, startDate: true, endDate: true } },
+        event: { select: { id: true, name: true, startDate: true, endDate: true, currency: true } },
         property: {
           select: {
             id: true,
@@ -240,7 +255,7 @@ export const quotationRouter = createTRPCRouter({
           if (request?.eventId !== entry.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That sales request is not for this event." });
         }
         const own = new Set(entry.property.categories.map((category) => category.id));
-        const { lines, payments, cancellations, ...fields } = input.quotation;
+        const { lines, payments, cancellations, taxes, ...fields } = input.quotation;
         for (const line of lines) {
           if (!own.has(line.categoryId)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Every line must be one of this hotel's own room categories." });
@@ -261,8 +276,6 @@ export const quotationRouter = createTRPCRouter({
           rateIncludesOther: blank(fields.rateIncludesOther),
           cleaning: fields.cleaning,
           cleaningOther: fields.cleaning === "OTHER" ? blank(fields.cleaningOther) : null,
-          totBasisPoints: fields.totBasisPoints,
-          taxPerNightCents: fields.taxPerNightCents,
           otherTaxes: blank(fields.otherTaxes),
           documentUrl: blank(fields.documentUrl),
           notes: blank(fields.notes),
@@ -347,6 +360,18 @@ export const quotationRouter = createTRPCRouter({
             percentBasisPoints: cut.percentBasisPoints,
             feeBasisPoints: cut.feeBasisPoints,
             remarks: blank(cut.remarks),
+            position,
+          })),
+        });
+        // Its taxes and fees too — none kept when the rates include taxes (doc §3.10).
+        await tx.quotationTax.deleteMany({ where: { quotationId: saved.id } });
+        await tx.quotationTax.createMany({
+          data: (fields.rateIncludes.includes("TAXES") ? [] : taxes).map((tax, position) => ({
+            quotationId: saved.id,
+            kind: tax.kind,
+            label: blank(tax.label),
+            basisPoints: tax.basisPoints,
+            amountCents: tax.amountCents,
             position,
           })),
         });
@@ -451,8 +476,11 @@ export const quotationRouter = createTRPCRouter({
           const includes = describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther);
           return includes ? `Rates include: ${includes}` : null;
         })(),
-        quotation.totBasisPoints !== null ? `TOT: ${percent(quotation.totBasisPoints)}` : null,
-        quotation.taxPerNightCents !== null ? `Tax per room per night: ${formatMoney(quotation.taxPerNightCents, quotation.currency)}` : null,
+        quotation.taxes.length
+          ? `Taxes and fees on top: ${quotation.taxes
+              .map((tax) => `${taxName(tax)} ${tax.basisPoints !== null ? percent(tax.basisPoints) : `${formatMoney(tax.amountCents!, quotation.currency)} per room per night`}`)
+              .join(" · ")}`
+          : null,
         quotation.otherTaxes ? `Other taxes: ${quotation.otherTaxes}` : null,
       ]
         .filter(Boolean)

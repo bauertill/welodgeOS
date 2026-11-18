@@ -91,6 +91,14 @@ its **project lead**, and its **accommodation managers** — one or more. The ac
 managers are given each new sales request's sourcing task, and the project lead is told
 of it (§4.11). Changes to the team are in the event's log.
 
+**An event's currency** (Ami, 2026-11-18: the Women's World Cup 2027 is quoted in Brazilian
+reais). Chosen when the event is created, and changeable under *Edit event*: USD, EUR, CHF,
+GBP or **BRL**; existing events start as USD. It is where amounts on the event *start*, never
+a rule: a new quotation opens in it (unless the hotel's rates on the event are already in
+another currency), a room type's buying rate not yet set starts in it, and a new rate card
+with no rates to go by takes it. Any one quotation, rate or card can still be in another
+currency. A change is in the event's log.
+
 
 **An event's tabs** (reordered 2026-10-13): **Properties**, Inventory, Deadlines, Position,
 and **Event details** last. **Opening an event** — from the Events menu, the events list or
@@ -1527,12 +1535,12 @@ A quotation has:
 | Name | The group or scenario it is for — *Austria House staff*, *Main block, option B*. Required |
 | Received on, valid until | When the hotel sent it, and until when the offer stands. Both optional |
 | Rooms | How many rooms the quotation is for, as the hotel put it |
-| Currency | One per quotation |
+| Currency | One per quotation, starting as the event's (§2.3). In anything but US dollars, the total, each rate and each line's total also show **≈ in USD at today's rate** (§4.5) — on the quotation, in the quick view and as the form is typed |
 | Lines | **Periods × room types**: each line is rooms of one of the hotel's own room categories, for one period (check-in to check-out), at one rate per room per night, optionally with how many people per room. A pre or post period, or a second room type, is another line. At least one line |
 | Payment terms, cancellation terms | As the hotel worded them, in plain text — not yet the structured payments and cut-offs of a contract (§7.1) |
 | Rates include | The same choice as a room category's rate (§3.9): Breakfast, Wi-Fi, Taxes, Parking and Cleaning — which then asks how often: daily, weekly or other — plus anything else in words |
-| TOT, tax per night, other applicable tax | The TOT as a percentage of the rate; a **fixed tax per room per night** on top of it (Santa Monica's $2.30 — 2026-11-11); and any other tax in words, as on a room category's rate |
-| Taxes, worked out | **Rates are taken as before tax and the taxes are added on top** (the owner, 2026-11-11, Hotel Carmel's agreement). Each line's tax per room per night is its rate × the TOT, rounded to the cent, plus the fixed tax — $245 at 15% + $2.30 is $39.05 — times its room-nights. The quotation shows *rooms + taxes = total*, as the form is typed and once saved, with a *Tax per night* column; Hotel Carmel's comes to $508,137.00 + $80,822.85 = $588,959.85. A tax in words only (*TMD: 6.25 USD*) is not added |
+| Taxes and fees | **A line per tax or fee** (Ami, 2026-11-18), as many as the hotel adds: what it is, picked from a list — *Occupancy tax (TOT)*, *City tax*, *VAT*, *Sales tax*, *ISS — municipal service tax*, *Service charge*, *Tourism tax*, *Tourism district fee (TMD / TBID)*, *Resort fee*, or *Other* with its name ("Taxa de turismo") — an optional detail, and either a **% of the rate** or a **fixed amount per room per night** in the quotation's currency. This replaced the one TOT % and one fixed tax per night (2026-11-11): each quotation's TOT became an *Occupancy tax (TOT)* line and its fixed tax an *Other — Tax per room per night* line, so totals did not change. Anything the list cannot say goes in words beside it, and is not added |
+| Taxes, worked out | **Rates are taken as before tax and the taxes are added on top** (the owner, 2026-11-11, Hotel Carmel's agreement) — **unless *Taxes* is ticked under *Rates include***: then nothing is added, the tax lines are not asked for, and the quotation says *Taxes and fees: Included in the rates*. Each line's tax per room per night is each percentage of its rate, rounded to the cent, plus each fixed amount — every percentage of the rate itself, never compounded on another tax: R$ 1,000 with ISS 5%, service charge 10% and R$ 7.50 tourism tax is R$ 157.50; $245 at 15% + $2.30 is $39.05 — times its room-nights. The quotation shows *rooms + taxes = total*, as the form is typed and once saved, with a *Tax per night* column; Hotel Carmel's comes to $508,137.00 + $80,822.85 = $588,959.85. A contract made from the quotation carries the taxes, and lists them in its notes. A room type's rate taken from the quotation (§3.9) keeps one TOT figure — the percentages added together — and the fixed amounts in words |
 | Payments | Shares of the **rooms' total**, due on signature or on a date; a payment can also take **all of the taxes** (*+ all taxes*) — Hotel Carmel's last payment is "30% + tax 100%" |
 | Link | The quotation itself, as a Google Drive link |
 | Notes | Anything else |
@@ -1845,7 +1853,11 @@ never a silent write.
 7. **Dates are closed-open.** `checkIn < checkOut`; nights are `[checkIn, checkOut)`.
 8. **State changes are append-only.** Every transition writes a ledger entry (§4.7).
 9. **Currency consistency.** Buy and sell on the same night may differ in currency, but
-   aggregation always states its currency; no implicit conversion.
+   aggregation always states its currency; no implicit conversion. **The ≈ USD beside an
+   amount in another currency** (2026-11-18) is a guide only: today's European Central Bank
+   reference rate, fetched from frankfurter.dev (only currency codes are sent) and refreshed
+   every six hours; the rate and its date show on hover. Nothing is converted or stored at
+   it, and when the rate cannot be fetched the ≈ USD simply does not show.
 
 ### 4.6 Deadlines
 
@@ -4033,7 +4045,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Providers | **Built** | Reached through an event, not the menu: from a provider's name on the Properties tab, in the side panel or on the property's page, whose back link returns to the event. A page per provider with its contracting details, contacts and properties. Added from a property's form. The Properties tab filters by provider. A property with no contracting details of its own shows its provider's, marked "From …"; its provider's contacts are listed after its own |
 | §3.9 Property details | **Built** | Area, year built, general email, video, check-in and check-out times, breakfast, cleaning, laundry, gym, public transport, and the eight contracting details — on the property's form and page. Changes are recorded in its activity. Each section of the property's page edits in place, room categories included (add, edit, remove, with the inventory rules). The video is a column on the Properties tab, with Open and Copy link |
 | §3.10 Quotations | **Built** | On the property's page, third of its tabs (Updates, Room categories, Quotations, Contracts, Log — since 2026-10-06), one tinted line each until opened, per event; the facts in one Details panel of folding sections, empty fields left out; Updates showing only the latest. Several per property per event, lines of periods × room categories with rooms and rates, the rooms quoted for, rates include and taxes as on a room category, quoted terms as text, Drive link; totals worked out; Received/Accepted/Declined; *Accept and make the contract* creates the supplier contract and buys the quoted rooms on the stock sheet (2026-11-05); *Buy its rooms on the stock sheet* for one already tied to a contract. *With quotations* filters the list and the map. Sales request overlay, Google Places research, website reading and hotel forms not built |
-| §3.10 / §7.1 Taxes on quotations and contracts | **Built** (2026-11-11) | Fixed tax per room per night beside the TOT; taxes worked out per line and shown as rooms + taxes = total, with a tax-per-night column; *+ all taxes* on a payment; contracts keep the rooms as their total with the taxes beside it and show the total payable; a contract made from a quotation carries both |
+| §2.3 / §4.5 Event currency, ≈ USD | **Built** (2026-11-18) | Currency chosen on the event (BRL added to every currency list); new quotations, unset room type rates and new rate cards start in it; quotations in another currency also show ≈ USD at today's ECB rate, a guide only |
+| §3.10 / §7.1 Taxes on quotations and contracts | **Built** (2026-11-11; tax lines 2026-11-18) | A line per tax or fee, picked from a list, each a % of the rate or a fixed amount per room per night; none added when the rates include taxes; taxes worked out per line and shown as rooms + taxes = total, with a tax-per-night column; *+ all taxes* on a payment; contracts keep the rooms as their total with the taxes beside it and show the total payable; a contract made from a quotation carries both |
 | §3.10 Quote updates room types | **Built** (2026-11-11) | A quotation for more rooms than a room type has on the system says so and offers *Update the room types to match the quote*; accepting or buying its rooms asks and updates them first. Raised only, recorded on the property |
 | §3.10 Event periods | **Built** (2026-11-11) | Named periods per event on its Edit page (no overlaps, gaps allowed); coloured bars and jump-to chips on the stock sheet; *Split by the event's periods* for rates on the stock sheet and in Add rooms; one-click period dates on quotation lines, request lines and the client's needs form. A rate card column per period is **not built** |
 | §3.9 Per-event terms and side panel | **Built** | Account manager, applicable period, rates include, deposit, cancellation and payment terms, block expiry, rooming list deadline, minimum stay in nights — edited in the side panel opened from the property's name. Account manager shown in the row |

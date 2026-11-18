@@ -29,6 +29,7 @@ import {
 import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
 import { isClosed, salesStageLabels } from "~/lib/sales";
 import { api } from "~/trpc/react";
+import { CURRENCIES } from "~/lib/currency";
 
 /** What the grid already knows about one selected room-night. */
 export type SelectedCell = {
@@ -88,7 +89,6 @@ function changed(current: string, start: string): string | null | undefined {
 
 const priceText = (cents: number | null) => (cents === null ? "" : String(cents / 100));
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
 /** "5 Bought, 3 In progress" — a mixed selection said as counts, not one lie. */
 function tally<T extends string>(

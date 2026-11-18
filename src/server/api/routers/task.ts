@@ -199,10 +199,9 @@ export const taskRouter = createTRPCRouter({
             rateIncludes: true,
             rateIncludesOther: true,
             cleaning: true,
-            totBasisPoints: true,
             otherTaxes: true,
             agreementOn: true,
-            _count: { select: { lines: true, payments: true, cancellations: true } },
+            _count: { select: { lines: true, payments: true, cancellations: true, taxes: true } },
           },
         },
         categoryContracts: {
@@ -217,7 +216,7 @@ export const taskRouter = createTRPCRouter({
     const detailed = categories.filter((category) => (isApartmentLike(property.type) ? category.bedrooms !== null : Boolean(category.bedConfiguration?.trim()))).length;
     const has = (value: string | null | undefined) => Boolean(value?.trim());
     const includes = [...quotes, ...rates].some((rate) => rate.rateIncludes.length > 0 || has(rate.rateIncludesOther) || rate.cleaning !== null);
-    const extras = [...quotes, ...rates].some((rate) => rate.totBasisPoints !== null || has(rate.otherTaxes));
+    const extras = quotes.some((quote) => quote._count.taxes > 0 || has(quote.otherTaxes)) || rates.some((rate) => rate.totBasisPoints !== null || has(rate.otherTaxes));
     const pricedQuotes = quotes.filter((quote) => quote._count.lines > 0).length;
     const pricedCategories = rates.filter((rate) => rate.ratePerNightCents !== null).length;
 

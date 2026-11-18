@@ -5,6 +5,7 @@ import { addDays, dayKey, nightsBetween, parseDay } from "~/lib/dates";
 import { splitStayByPeriods } from "~/lib/event-periods";
 import { formatDay } from "~/lib/format";
 import { api } from "~/trpc/react";
+import { CURRENCIES } from "~/lib/currency";
 
 /**
  * A stay priced by period (doc §4.8) — a pre rate, the event rate and a post
@@ -14,7 +15,6 @@ import { api } from "~/trpc/react";
 
 export type RatePeriod = { checkIn: string; checkOut: string; price: string; /** The event period it is, when split by them (doc §3.10). */ label?: string };
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
 /** Splits the stay in two at its middle night, as a starting point for a new period. */
 export function splitPeriod(periods: RatePeriod[], index: number): RatePeriod[] {

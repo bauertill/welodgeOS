@@ -59,6 +59,7 @@ export default async function EventDetailsPage({ params }: { params: Promise<{ i
                   startDate: dayKey(event.startDate),
                   endDate: dayKey(event.endDate),
                   status: event.status,
+                  currency: event.currency,
                 }}
               />
             </span>

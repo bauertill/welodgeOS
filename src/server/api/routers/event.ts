@@ -14,6 +14,8 @@ const eventInput = z.object({
   startDate: z.date(),
   endDate: z.date(),
   status: z.enum(["PLANNING", "ACTIVE", "CLOSED"]).default("PLANNING"),
+  /** The currency its hotels quote in (doc §2.3). */
+  currency: z.string().length(3).optional(),
 });
 
 export const eventRouter = createTRPCRouter({
@@ -166,6 +168,7 @@ export const eventRouter = createTRPCRouter({
             { key: "startDate", label: "Start date" },
             { key: "endDate", label: "End date" },
             { key: "status", label: "Status" },
+            { key: "currency", label: "Currency" },
           ],
         );
         return updated;

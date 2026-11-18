@@ -46,11 +46,11 @@ import {
 import { eventColours, type EventColour } from "~/lib/event-colours";
 import { useRemembered } from "~/lib/remembered";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { CURRENCIES } from "~/lib/currency";
 
 type Request = RouterOutputs["sales"]["list"][number];
 type FullRequest = NonNullable<RouterOutputs["sales"]["byId"]>;
 
-const CURRENCIES = ["EUR", "USD", "CHF", "GBP"];
 
 /** "2028-07-10" for a date box, or "" when there is none. */
 const dayInput = (value: Date | null) => (value ? dayKey(value) : "");
@@ -2261,7 +2261,7 @@ function ChangeRooms({
               </div>
               <div className="w-24 shrink-0">
                 <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
-                  {["USD", "EUR", "CHF", "GBP"].map((code) => (
+                  {CURRENCIES.map((code) => (
                     <option key={code}>{code}</option>
                   ))}
                 </Select>
@@ -2477,7 +2477,7 @@ function AddRooms({
               </div>
               <div className="w-24 shrink-0">
                 <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
-                  {["USD", "EUR", "CHF", "GBP"].map((code) => (
+                  {CURRENCIES.map((code) => (
                     <option key={code}>{code}</option>
                   ))}
                 </Select>

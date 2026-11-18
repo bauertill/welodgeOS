@@ -40,6 +40,7 @@ export default async function EditEventPage({
           startDate: dayKey(event.startDate),
           endDate: dayKey(event.endDate),
           status: event.status,
+          currency: event.currency,
         }}
       />
 

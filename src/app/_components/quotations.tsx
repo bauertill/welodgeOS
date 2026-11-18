@@ -1,20 +1,23 @@
 "use client";
 
-import type { Cleaning, QuotationStatus, RateInclusion } from "generated/prisma";
+import type { Cleaning, QuotationStatus, RateInclusion, TaxKind } from "generated/prisma";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { PeriodChips } from "~/app/_components/period-chips";
 import { Combobox } from "~/app/_components/combobox";
+import { InUsd, useUsd } from "~/app/_components/in-usd";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { RateIncludesPicker } from "~/app/_components/room-categories";
 import { checkTerms, TermsEditor, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
 import { dayKey } from "~/lib/dates";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
-import { contractHref, percent, taxPerNight } from "~/lib/finance";
+import { currencyOptions } from "~/lib/currency";
+import { contractHref, percent } from "~/lib/finance";
 import { describeRateIncludes } from "~/lib/scouting";
+import { taxesPerNight, taxKindLabels, taxKinds, taxName } from "~/lib/taxes";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 /**
@@ -61,7 +64,6 @@ export function PropertyQuotations({
 type Quotation = RouterOutputs["quotation"]["forEntry"][number];
 type Category = { id: string; name: string };
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
 const td = "border-ink-200/40 border-b px-3 py-2 align-top text-[13px] font-light";
 
@@ -165,8 +167,12 @@ return [
   ],
   ["Cancellation terms", quotation.cancellationTerms],
   ["Rates include", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
-  ["TOT", percent(quotation.totBasisPoints)],
-  ["Tax per room per night", quotation.taxPerNightCents !== null ? formatMoney(quotation.taxPerNightCents, quotation.currency) : null],
+  [
+    "Taxes and fees",
+    quotation.taxesIncluded
+      ? "Included in the rates"
+      : quotation.taxes.map((tax) => `${taxName(tax)} ${tax.basisPoints !== null ? percent(tax.basisPoints) : `${formatMoney(tax.amountCents!, quotation.currency)} per room per night`}`).join(" · ") || null,
+  ],
   ["Other taxes", quotation.otherTaxes],
 ].filter(([, value]) => value) as [string, string][];
 }
@@ -272,6 +278,7 @@ function QuotationCard({
               {formatMoney(quotation.totalCents, quotation.currency)} + {formatMoney(quotation.taxCents, quotation.currency)} taxes
             </span>
           )}
+          <InUsd cents={quotation.payableCents} currency={quotation.currency} />
         </p>
       </button>
 
@@ -302,12 +309,16 @@ function QuotationCard({
                   <span className="text-ink-500 block text-xs">{line.nights} nights</span>
                 </td>
                 <td className={td}>{line.rooms}</td>
-                <td className={`${td} whitespace-nowrap`}>{formatMoney(line.rateCents, quotation.currency)}</td>
+                <td className={`${td} whitespace-nowrap`}>
+                  {formatMoney(line.rateCents, quotation.currency)}
+                  <InUsd cents={line.rateCents} currency={quotation.currency} />
+                </td>
                 {quotation.taxCents > 0 && <td className={`${td} whitespace-nowrap`}>{formatMoney(line.taxPerNightCents, quotation.currency)}</td>}
                 <td className={td}>{line.roomNights}</td>
                 <td className={`${td} whitespace-nowrap`}>
                   {formatMoney(line.totalCents + line.taxCents, quotation.currency)}
                   {line.taxCents > 0 && <span className="text-ink-500 block text-xs">incl. {formatMoney(line.taxCents, quotation.currency)} tax</span>}
+                  <InUsd cents={line.totalCents + line.taxCents} currency={quotation.currency} />
                 </td>
               </tr>
             ))}
@@ -490,7 +501,10 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                     </td>
                     <td className={`${td} text-ink-900`}>{line.category.name}</td>
                     <td className={td}>{line.rooms}</td>
-                    <td className={`${td} pr-0 text-right whitespace-nowrap`}>{formatMoney(line.rateCents, quotation.currency)}</td>
+                    <td className={`${td} pr-0 text-right whitespace-nowrap`}>
+                      {formatMoney(line.rateCents, quotation.currency)}
+                      <InUsd cents={line.rateCents} currency={quotation.currency} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -520,6 +534,7 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                     · {quotation.roomNights} room-nights
                     {quotation.taxCents > 0 && ` · incl. ${formatMoney(quotation.taxCents, quotation.currency)} taxes`}
                   </span>
+                  <InUsd cents={quotation.payableCents} currency={quotation.currency} className="text-ink-500 ml-1 text-xs font-light" />
                 </p>
                 {terms.length > 0 && (
                   <dl className="space-y-1 text-[13px] font-light">
@@ -547,6 +562,82 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
           </div>
         );
       })}
+    </div>
+  );
+}
+
+type TaxDraft = { kind: TaxKind; label: string; how: "PERCENT" | "FIXED"; value: string };
+
+/** A tax line as typed, read: a percentage in hundredths or an amount in cents — null when not a number. */
+function readTax(tax: TaxDraft) {
+  const value = Number(tax.value.replace(",", ".").replace("%", "").trim());
+  if (!tax.value.trim() || !Number.isFinite(value) || value < 0) return null;
+  return tax.how === "PERCENT" ? { basisPoints: Math.round(value * 100), amountCents: null } : { basisPoints: null, amountCents: Math.round(value * 100) };
+}
+
+/**
+ * The taxes and fees on top of the rates (doc §3.10): a line each — what it is,
+ * from the list, and a % of the rate or an amount per room per night. When the
+ * rates include taxes, nothing is added and the lines are not asked for.
+ */
+function TaxesEditor({ taxes, setTaxes, currency, included }: { taxes: TaxDraft[]; setTaxes: (next: TaxDraft[]) => void; currency: string; included: boolean }) {
+  const change = (index: number, patch: Partial<TaxDraft>) => setTaxes(taxes.map((tax, i) => (i === index ? { ...tax, ...patch } : tax)));
+  return (
+    <div>
+      <Label>Taxes and fees on top of the rates</Label>
+      {included ? (
+        <p className="text-ink-500 text-xs font-light">The rates include taxes (ticked under Rates include), so nothing is added on top.</p>
+      ) : (
+        <>
+          <p className="text-ink-500 mb-2 text-xs font-light">
+            Rates are taken as before tax. Each tax is worked out on the rate and added to the total — a percentage is always of the rate itself, not of the rate
+            plus another tax.
+          </p>
+          {taxes.length > 0 && (
+            <div className="space-y-2">
+              {taxes.map((tax, index) => (
+                <div key={index} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_8.5rem_5.5rem_auto] sm:items-center">
+                  <Select value={tax.kind} onChange={(e) => change(index, { kind: e.target.value as TaxKind })} aria-label={`Tax ${index + 1}`} className="col-span-2 sm:col-span-1">
+                    {taxKinds.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {taxKindLabels[kind]}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    value={tax.label}
+                    onChange={(e) => change(index, { label: e.target.value })}
+                    placeholder={tax.kind === "OTHER" ? "Its name — Taxa de turismo" : "Detail, optional"}
+                    aria-label={`Tax ${index + 1} name`}
+                    className="col-span-2 sm:col-span-1"
+                  />
+                  <Select value={tax.how} onChange={(e) => change(index, { how: e.target.value as TaxDraft["how"] })} aria-label={`Tax ${index + 1} kind of amount`}>
+                    <option value="PERCENT">% of rate</option>
+                    <option value="FIXED">{currency} / room / night</option>
+                  </Select>
+                  <Input
+                    value={tax.value}
+                    onChange={(e) => change(index, { value: e.target.value })}
+                    inputMode="decimal"
+                    placeholder={tax.how === "PERCENT" ? "5.00" : "12.50"}
+                    aria-label={`Tax ${index + 1} ${tax.how === "PERCENT" ? "percentage" : "amount"}`}
+                  />
+                  <button type="button" onClick={() => setTaxes(taxes.filter((_, i) => i !== index))} className="text-xs text-[#c03654] hover:underline">
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setTaxes([...taxes, { kind: taxes.length ? "OTHER" : "OCCUPANCY", label: "", how: "PERCENT", value: "" }])}
+            className="text-brand-700 mt-2 text-xs font-medium hover:underline"
+          >
+            + Add a tax or fee
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -583,12 +674,20 @@ function QuotationEditor({
     cancellationTerms: quotation?.cancellationTerms ?? "",
     rateIncludesOther: quotation?.rateIncludesOther ?? "",
     cleaningOther: quotation?.cleaningOther ?? "",
-    tot: quotation?.totBasisPoints != null ? (quotation.totBasisPoints / 100).toFixed(2) : "",
-    taxPerNight: quotation?.taxPerNightCents != null ? (quotation.taxPerNightCents / 100).toFixed(2) : "",
     otherTaxes: quotation?.otherTaxes ?? "",
     documentUrl: quotation?.documentUrl ?? "",
     notes: quotation?.notes ?? "",
   });
+  // The taxes and fees on top, a line each, picked from the list (doc §3.10).
+  const [taxes, setTaxes] = useState<TaxDraft[]>(
+    quotation?.taxes.map((tax) => ({
+      kind: tax.kind,
+      label: tax.label ?? "",
+      how: tax.basisPoints !== null ? "PERCENT" : "FIXED",
+      value: tax.basisPoints !== null ? (tax.basisPoints / 100).toFixed(2) : ((tax.amountCents ?? 0) / 100).toFixed(2),
+    })) ?? [],
+  );
+  const toUsd = useUsd();
   const [agreementOn, setAgreementOn] = useState<"HOTEL" | "WE_LODGE" | null>(quotation?.agreementOn ?? null);
   // Which client's request it was quoted for (doc §4.11) — for a new one, the request its open contact task is about.
   const requests = api.quotation.requestsFor.useQuery({ scoutingEntryId });
@@ -629,6 +728,9 @@ function QuotationEditor({
   useEffect(() => {
     if (quotation || prefilled || !context.data) return;
     setPrefilled(true);
+    // In the event's currency to start — BRL for the Women's World Cup (doc §2.3).
+    const eventCurrency = context.data.event.currency;
+    setDraft((current) => ({ ...current, currency: eventCurrency }));
     const withRooms = context.data.property.categories.filter((category) => category.unitCount > 0);
     if (withRooms.length === 0) return;
     // Only while the form is as it opened: nothing typed into the lines yet.
@@ -654,12 +756,15 @@ function QuotationEditor({
     setDraft((current) => ({
       ...current,
       rooms: current.rooms || String(withRooms.reduce((sum, category) => sum + category.unitCount, 0)),
-      currency: priced?.rateCurrency && CURRENCIES.includes(priced.rateCurrency) ? priced.rateCurrency : current.currency,
+      currency: priced?.rateCurrency ?? eventCurrency,
       rateIncludesOther: current.rateIncludesOther || (included?.rateIncludesOther ?? ""),
       cleaningOther: current.cleaningOther || (included?.cleaningOther ?? ""),
-      tot: current.tot || (taxed?.totBasisPoints != null ? (taxed.totBasisPoints / 100).toFixed(2) : ""),
       otherTaxes: current.otherTaxes || (taxed?.otherTaxes ?? ""),
     }));
+    if (taxed?.totBasisPoints != null) {
+      const bp = taxed.totBasisPoints;
+      setTaxes((current) => (current.length ? current : [{ kind: "OCCUPANCY", label: "", how: "PERCENT", value: (bp / 100).toFixed(2) }]));
+    }
     if (included) {
       setIncludes(included.rateIncludes);
       if (included.cleaning) {
@@ -702,10 +807,8 @@ function QuotationEditor({
   });
 
   // What the lines come to, as they are typed: the rooms, and the taxes on top worked out as the hotel does (doc §3.10).
-  const typedTot = Number(draft.tot.replace(",", ".").replace("%", ""));
-  const typedFixed = Number(draft.taxPerNight.replace(",", "."));
-  const totBp = draft.tot.trim() && Number.isFinite(typedTot) ? Math.round(typedTot * 100) : null;
-  const fixedCents = draft.taxPerNight.trim() && Number.isFinite(typedFixed) ? Math.round(typedFixed * 100) : null;
+  const taxesIncluded = includes.includes("TAXES");
+  const typedTaxes = taxesIncluded ? [] : taxes.map(readTax).filter((tax) => tax !== null);
   const sums = lines.reduce(
     (sum, line) => {
       const nights = line.checkIn && line.checkOut ? Math.max(0, (Date.parse(line.checkOut) - Date.parse(line.checkIn)) / 86_400_000) : 0;
@@ -713,7 +816,7 @@ function QuotationEditor({
       if (!Number.isFinite(rate)) return sum;
       const rateCents = Math.round(rate * 100);
       const roomNights = nights * (Number(line.rooms) || 0);
-      return { rooms: sum.rooms + roomNights * rateCents, taxes: sum.taxes + roomNights * taxPerNight(rateCents, totBp, fixedCents) };
+      return { rooms: sum.rooms + roomNights * rateCents, taxes: sum.taxes + roomNights * taxesPerNight(rateCents, typedTaxes) };
     },
     { rooms: 0, taxes: 0 },
   );
@@ -740,14 +843,19 @@ function QuotationEditor({
         const rooms = draft.rooms.trim() ? Number(draft.rooms) : null;
         if (rooms !== null && (!Number.isInteger(rooms) || rooms < 0)) return setProblem("Rooms should be a whole number, like 40.");
         if (cleaningIncluded && !cleaning) return setProblem("Say how often the rooms are cleaned, or untick cleaning.");
-        const tot = draft.tot.trim() ? Number(draft.tot.replace(",", ".").replace("%", "")) : null;
-        if (tot !== null && (!Number.isFinite(tot) || tot < 0 || tot > 100)) return setProblem("TOT should be a percentage, like 15.");
-        const perNight = draft.taxPerNight.trim() ? Number(draft.taxPerNight.replace(",", ".")) : null;
-        if (perNight !== null && (!Number.isFinite(perNight) || perNight < 0)) return setProblem("The tax per room per night should be an amount, like 2.30.");
+        const taxesOut = [];
+        for (const [i, tax] of (taxesIncluded ? [] : taxes).entries()) {
+          const read = readTax(tax);
+          const name = tax.kind === "OTHER" ? tax.label.trim() || `Tax ${i + 1}` : taxKindLabels[tax.kind];
+          if (tax.kind === "OTHER" && !tax.label.trim()) return setProblem(`Tax ${i + 1}: name the tax, or choose it from the list.`);
+          if (!read) return setProblem(tax.how === "PERCENT" ? `${name}: give the percentage, like 5.` : `${name}: give the amount per room per night, like 12.50.`);
+          if (read.basisPoints !== null && read.basisPoints > 10_000) return setProblem(`${name}: a percentage is at most 100.`);
+          taxesOut.push({ kind: tax.kind, label: tax.label, ...read });
+        }
         const terms = checkTerms(payments, cancellations, "OTHER");
         if (typeof terms === "string") return setProblem(terms);
         const { payments: paymentsOut, cancellations: cancellationsOut } = terms;
-        const { tot: _tot, taxPerNight: _taxPerNight, ...fields } = draft;
+        const fields = draft;
         save.mutate({
           scoutingEntryId,
           id: quotation?.id,
@@ -756,8 +864,7 @@ function QuotationEditor({
             rooms,
             rateIncludes: includes,
             cleaning: cleaningIncluded && cleaning ? cleaning : null,
-            totBasisPoints: tot === null ? null : Math.round(tot * 100),
-            taxPerNightCents: perNight === null ? null : Math.round(perNight * 100),
+            taxes: taxesOut,
             salesRequestId: forRequest,
             agreementOn,
             lines: parsed,
@@ -803,7 +910,7 @@ function QuotationEditor({
           <span className="text-ink-700 text-[13px] font-medium">Rooms and rates — a line per room category and period</span>
           <div className="w-24">
             <Select value={draft.currency} onChange={(e) => set("currency")(e.target.value)} aria-label="Currency" className="py-1 text-xs">
-              {CURRENCIES.map((code) => (
+              {currencyOptions(draft.currency).map((code) => (
                 <option key={code}>{code}</option>
               ))}
             </Select>
@@ -903,6 +1010,9 @@ function QuotationEditor({
                 Comes to <strong className="font-semibold">{formatMoney(sums.rooms, draft.currency)}</strong>
               </>
             )}
+            {toUsd(sums.rooms + sums.taxes, draft.currency) !== null && (
+              <span className="text-ink-500 ml-1">≈ {formatMoney(toUsd(sums.rooms + sums.taxes, draft.currency)!, "USD")}</span>
+            )}
           </span>
         </div>
       </div>
@@ -943,13 +1053,10 @@ function QuotationEditor({
             onCleaningOtherChange={set("cleaningOther")}
           />
         </div>
-        <Field label="TOT — city / occupancy tax on the rate, %" hint="Rates are taken as before tax; the tax is added on top.">
-          <Input value={draft.tot} onChange={(e) => set("tot")(e.target.value)} placeholder="15.00" inputMode="decimal" aria-label="TOT %" />
-        </Field>
-        <Field label={`Fixed tax per room per night, ${draft.currency}`} hint="Added on top of the TOT — Santa Monica's $2.30, say.">
-          <Input value={draft.taxPerNight} onChange={(e) => set("taxPerNight")(e.target.value)} placeholder="2.30" inputMode="decimal" aria-label="Tax per room per night" />
-        </Field>
-        <Field label="Other applicable tax, in words">
+        <div className="sm:col-span-2">
+          <TaxesEditor taxes={taxes} setTaxes={setTaxes} currency={draft.currency} included={taxesIncluded} />
+        </div>
+        <Field label="Anything else about the taxes, in words — optional">
           <Input value={draft.otherTaxes} onChange={(e) => set("otherTaxes")(e.target.value)} placeholder="TMD: 6.25 USD (ADR 200–300)" aria-label="Other applicable tax" />
         </Field>
         <Field label="The quotation — Google Drive link">

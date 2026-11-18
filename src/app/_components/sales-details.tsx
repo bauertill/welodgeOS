@@ -18,6 +18,7 @@ import { peopleWords, wishes } from "~/lib/needs";
 import { currencyForCountry, roomTypeGroups } from "~/lib/sales";
 import { measuredPlaces } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { CURRENCIES } from "~/lib/currency";
 
 /**
  * A sales request in detail (doc §4.11): it starts as an enquiry — what the
@@ -33,7 +34,6 @@ const knownRoomTypes = new Set<string>(roomTypeGroups.flatMap((group) => group.t
 /** What a unit is — the number on each line counts these (doc §4.11). */
 const UNIT_HINT = "One unit is one hotel room or one whole apartment — a 3-bedroom apartment counts as 1 unit.";
 
-const CURRENCIES = ["EUR", "USD", "CHF", "GBP"];
 export const budgetBasisLabels: Record<BudgetBasis, string> = {
   PER_ROOM_NIGHT: "per room per night",
   PER_PERSON_NIGHT: "per person per night",
