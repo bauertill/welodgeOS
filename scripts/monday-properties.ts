@@ -778,7 +778,7 @@ async function apply(db: PrismaClient, plans: PropertyPlan[], eventId: string) {
                     name: p.quote.fromDailyRate ? "From monday — Daily Rate" : "From monday — LA28 rates",
                     status: p.plan.status === "CONTRACTED" ? "ACCEPTED" : "RECEIVED",
                     currency: "USD",
-                    totBasisPoints: p.quote.tot,
+                    ...(p.quote.tot != null && { taxes: { create: [{ kind: "OCCUPANCY", basisPoints: p.quote.tot }] } }),
                     otherTaxes: p.quote.otherTaxes,
                     rateIncludesOther: p.quote.includes,
                     notes: "Brought across from monday.com's LA28 board, 2026-11.",

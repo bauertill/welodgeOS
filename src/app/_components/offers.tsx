@@ -12,8 +12,8 @@ import { contractHref, percent } from "~/lib/finance";
 import { canTrust } from "~/lib/offers";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { CURRENCIES } from "~/lib/currency";
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 type LineDraft = { categoryId: string; rooms: string; checkIn: string; checkOut: string; rate: string };
 type Offer = RouterOutputs["offer"]["forRequest"][number];
 

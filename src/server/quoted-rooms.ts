@@ -3,6 +3,7 @@ import type { Prisma } from "generated/prisma";
 
 import { dayKey, eachNight, nightsBetween } from "~/lib/dates";
 import { formatRange } from "~/lib/format";
+import { percentTaxes, taxName } from "~/lib/taxes";
 import { applyInventoryChange } from "~/server/api/routers/inventory";
 import { logAudit } from "~/server/audit";
 
@@ -158,7 +159,7 @@ export async function carryQuotedRates(
           rateIncludesOther: true,
           cleaning: true,
           cleaningOther: true,
-          totBasisPoints: true,
+          taxes: { orderBy: { position: "asc" }, select: { kind: true, label: true, basisPoints: true, amountCents: true } },
           otherTaxes: true,
           lines: { select: { categoryId: true, checkIn: true, checkOut: true, rooms: true, rateCents: true, category: { select: { name: true } } } },
         },
@@ -197,8 +198,15 @@ export async function carryQuotedRates(
         rateIncludesOther: quotation.rateIncludesOther,
         cleaning: quotation.cleaning,
         cleaningOther: quotation.cleaningOther,
-        totBasisPoints: quotation.totBasisPoints,
-        otherTaxes: quotation.otherTaxes,
+        // A room type keeps one TOT figure: the quoted percentages together; the fixed amounts, in words (doc §3.9).
+        totBasisPoints: percentTaxes(quotation.taxes),
+        otherTaxes:
+          [
+            ...quotation.taxes.filter((tax) => tax.amountCents !== null).map((tax) => `${taxName(tax)}: ${money(tax.amountCents!)} per room per night`),
+            quotation.otherTaxes,
+          ]
+            .filter(Boolean)
+            .join("; ") || null,
         applicablePeriod: contract?.applicablePeriod ?? period,
       };
       await tx.categoryContract.upsert({

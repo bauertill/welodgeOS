@@ -270,7 +270,9 @@ async function propertyEntries(
     },
   });
   const rates = options.eventId ? (await eventRates(tx, { propertyIds: options.propertyIds, eventId: options.eventId })).get(options.eventId) : undefined;
-  const currency = options.currency ?? [...(rates?.values() ?? [])][0]?.currency ?? "USD";
+  // The card's currency: the rates', else the event's own (doc §2.3) — BRL for the Women's World Cup.
+  const eventCurrency = options.eventId ? (await tx.event.findUnique({ where: { id: options.eventId }, select: { currency: true } }))?.currency : undefined;
+  const currency = options.currency ?? [...(rates?.values() ?? [])][0]?.currency ?? eventCurrency ?? "USD";
   // A property marked "Rate TBC" on the event's board: its rooms with no rate come onto the card as rate to be confirmed (2026-11-17).
   const tbc = new Set(
     options.eventId

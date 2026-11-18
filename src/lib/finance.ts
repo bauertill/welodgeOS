@@ -80,15 +80,6 @@ export function paymentAmount(
   return Math.round((contract.totalCents * payment.percentBasisPoints) / 10_000) + taxes;
 }
 
-/**
- * The tax on one room for one night (doc §3.10): the TOT share of the rate,
- * rounded to the cent, plus any fixed amount per night — as hotels in Los
- * Angeles work it out: $245 at 15% + $2.30 is $39.05.
- */
-export function taxPerNight(rateCents: number, totBasisPoints: number | null, fixedCents: number | null) {
-  return Math.round((rateCents * (totBasisPoints ?? 0)) / 10_000) + (fixedCents ?? 0);
-}
-
 /** What the payable total is: the rooms and, when there are any, the taxes on top. */
 export const withTaxes = (contract: { totalCents: number | null; taxCents?: number | null }) =>
   contract.totalCents === null ? null : contract.totalCents + (contract.taxCents ?? 0);

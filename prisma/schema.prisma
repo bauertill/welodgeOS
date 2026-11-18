@@ -96,6 +96,9 @@ model Event {
   startDate DateTime    @db.Date
   endDate   DateTime    @db.Date
   status    EventStatus @default(PLANNING)
+  /// The currency the event's hotels quote in — USD for LA28, BRL for the
+  /// Women's World Cup 2027 (doc §2.3). New quotations and rates start in it.
+  currency  String      @default("USD")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -572,6 +575,41 @@ model CategoryContract {
 
 // --- Quotations (doc §3.10) ------------------------------------------------------
 
+/// What a tax or fee on a quotation is, from the list the team picks from (doc §3.10).
+enum TaxKind {
+  OCCUPANCY
+  CITY
+  VAT
+  SALES
+  ISS
+  SERVICE_CHARGE
+  TOURISM
+  TOURISM_DISTRICT
+  RESORT_FEE
+  OTHER
+}
+
+/**
+ * One tax or fee a hotel adds to its rates (doc §3.10): a percentage of the
+ * room rate, or a fixed amount per room per night, in the quotation's currency.
+ * Every percentage is of the rate itself, never of the rate plus another tax.
+ */
+model QuotationTax {
+  id          String    @id @default(cuid())
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationId String
+  kind        TaxKind
+  /// Its name when the kind is Other, or a precision — "Taxa de turismo".
+  label       String?
+  /// A percentage of the rate, in hundredths: 5.00% is 500. Either this or amountCents.
+  basisPoints Int?
+  /// A fixed amount per room per night, in minor units.
+  amountCents Int?
+  position    Int       @default(0)
+
+  @@index([quotationId])
+}
+
 /// Where a quotation stands with us.
 enum QuotationStatus {
   RECEIVED
@@ -616,12 +654,12 @@ model Quotation {
   rateIncludesOther String?
   cleaning          Cleaning?
   cleaningOther     String?
-  /// TOT as hundredths of a percent: 15.00% is 1500.
-  totBasisPoints    Int?
+  /// The taxes and fees on top of the rates, each a % of the rate or a fixed
+  /// amount per room per night (doc §3.10). None are added when the rates
+  /// include taxes.
+  taxes             QuotationTax[]
+  /// Anything about the taxes the list does not say, in words.
   otherTaxes        String?
-  /// A fixed tax per room per night on top of the TOT share — Santa Monica's
-  /// $2.30 (doc §3.10). Added to the rooms' total as the hotel does.
-  taxPerNightCents Int?
   /// The quotation as received — a Google Drive link.
   documentUrl       String?
   notes             String?

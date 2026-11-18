@@ -17,6 +17,7 @@ import {
   rateInclusionOrder,
 } from "~/lib/scouting";
 import { api } from "~/trpc/react";
+import { CURRENCIES } from "~/lib/currency";
 
 type Category = {
   id: string;
@@ -45,7 +46,6 @@ type Contract = {
   applicablePeriod: string | null;
 };
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 
 /** "15.00%" from 1500 — TOT is kept in hundredths of a percent. */
 const percent = (basisPoints: number | null) =>
@@ -125,6 +125,7 @@ export function RoomCategoryTable({
                   <EditRow
                     key={category.id}
                     scoutingEntryId={scoutingEntryId}
+                    eventId={eventId}
                     propertyId={propertyId}
                     hotel={hotel}
                     category={category}
@@ -208,6 +209,7 @@ export function RoomCategoryTable({
  */
 function EditRow({
   scoutingEntryId,
+  eventId,
   propertyId,
   hotel,
   category,
@@ -215,6 +217,7 @@ function EditRow({
   onDone,
 }: {
   scoutingEntryId: string;
+  eventId: string;
   propertyId: string;
   hotel: boolean;
   category: Category;
@@ -222,6 +225,8 @@ function EditRow({
   onDone: () => void;
 }) {
   const utils = api.useUtils();
+  // A rate not set yet starts in the event's currency (doc §2.3) — BRL for the Women's World Cup.
+  const eventCurrency = api.event.list.useQuery().data?.find((event) => event.id === eventId)?.currency;
   const [name, setName] = useState(category.name);
   const [units, setUnits] = useState(String(category.unitCount));
   const [size, setSize] = useState(category.size ?? "");
@@ -232,7 +237,11 @@ function EditRow({
   const [rate, setRate] = useState(
     contract?.ratePerNightCents != null ? (contract.ratePerNightCents / 100).toFixed(2) : "",
   );
-  const [currency, setCurrency] = useState(contract?.rateCurrency ?? category.currency ?? "USD");
+  const [currency, setCurrency] = useState(contract?.rateCurrency ?? eventCurrency ?? category.currency ?? "USD");
+  const [currencyTouched, setCurrencyTouched] = useState(false);
+  useEffect(() => {
+    if (!contract?.rateCurrency && eventCurrency && !currencyTouched) setCurrency(eventCurrency);
+  }, [contract?.rateCurrency, eventCurrency, currencyTouched]);
   const [includes, setIncludes] = useState<RateInclusion[]>(contract?.rateIncludes ?? []);
   const [includesOther, setIncludesOther] = useState(contract?.rateIncludesOther ?? "");
   // Ticking Cleaning comes before choosing how often, so the tick is kept apart.
@@ -378,7 +387,14 @@ function EditRow({
                 />
               </div>
               <div className="w-24 shrink-0">
-                <Select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="Currency">
+                <Select
+                  value={currency}
+                  onChange={(e) => {
+                    setCurrencyTouched(true);
+                    setCurrency(e.target.value);
+                  }}
+                  aria-label="Currency"
+                >
                   {(CURRENCIES.includes(currency) ? CURRENCIES : [currency, ...CURRENCIES]).map((option) => (
                     <option key={option}>{option}</option>
                   ))}

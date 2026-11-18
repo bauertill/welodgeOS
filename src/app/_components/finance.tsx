@@ -29,12 +29,12 @@ import {
   withTaxes,
 } from "~/lib/finance";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { CURRENCIES } from "~/lib/currency";
 
 type FullContract = NonNullable<RouterOutputs["finance"]["contract"]>;
 type Payment = FullContract["payments"][number];
 type Cancellation = FullContract["cancellations"][number];
 
-const CURRENCIES = ["USD", "EUR", "CHF", "GBP"];
 const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
 const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
 

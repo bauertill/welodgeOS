@@ -11,6 +11,7 @@ import {
   Input,
   Select,
 } from "~/app/_components/form";
+import { CURRENCIES } from "~/lib/currency";
 import { api } from "~/trpc/react";
 
 export type EventFormValues = {
@@ -21,6 +22,8 @@ export type EventFormValues = {
   startDate: string;
   endDate: string;
   status: "PLANNING" | "ACTIVE" | "CLOSED";
+  /** The currency its hotels quote in — new quotations and rates start in it (doc §2.3). */
+  currency?: string;
 };
 
 export const emptyEvent: EventFormValues = {
@@ -30,6 +33,7 @@ export const emptyEvent: EventFormValues = {
   startDate: "",
   endDate: "",
   status: "PLANNING",
+  currency: "USD",
 };
 
 /**
@@ -91,6 +95,7 @@ export function EventForm({
       startDate,
       endDate,
       status: values.status,
+      currency: values.currency,
     };
 
     if (initial.id) update.mutate({ ...payload, id: initial.id });
@@ -154,6 +159,22 @@ export function EventForm({
               <option value="PLANNING">Planning</option>
               <option value="ACTIVE">Active</option>
               <option value="CLOSED">Closed</option>
+            </Select>
+          </Field>
+
+          <Field
+            label="Currency"
+            hint="What the hotels quote in. New quotations and rates on this event start in it, and amounts in another currency also show in USD at today's rate."
+          >
+            <Select
+              value={values.currency ?? "USD"}
+              onChange={(e) => set("currency", e.target.value)}
+            >
+              {(CURRENCIES.includes(values.currency ?? "USD") ? CURRENCIES : [...CURRENCIES, values.currency!]).map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
             </Select>
           </Field>
         </div>
