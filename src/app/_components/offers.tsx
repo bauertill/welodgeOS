@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
+import { Combobox } from "~/app/_components/combobox";
 import { Popup } from "~/app/_components/popup";
 import { checkTerms, TermsEditor, toCancellationDraft, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
 import { dayKey, nightsBetween, parseDay, today } from "~/lib/dates";
@@ -15,7 +16,8 @@ import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { CURRENCIES } from "~/lib/currency";
 
-type LineDraft = { categoryId: string; rooms: string; checkIn: string; checkOut: string; rate: string };
+/** A line of rooms; `property` only narrows the room types offered (the owner, 2026-11-18: search the property, then pick its room type). */
+type LineDraft = { categoryId: string; rooms: string; checkIn: string; checkOut: string; rate: string; property?: string };
 type Offer = RouterOutputs["offer"]["forRequest"][number];
 
 const toCents = (text: string) => {
@@ -94,6 +96,7 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
 
   const setLine = (index: number, change: Partial<LineDraft>) => setLines((current) => current.map((line, i) => (i === index ? { ...line, ...change } : line)));
   const total = lines.reduce((sum, line) => sum + (Number(line.rooms) || 0) * nightsOf(line) * (toCents(line.rate) ?? 0), 0);
+  const propertyOf = (categoryId: string) => context.categories.find((category) => category.id === categoryId)?.property ?? "";
   const byProperty = context.categories.reduce<Record<string, { id: string; name: string }[]>>((groups, category) => {
     (groups[category.property] ??= []).push(category);
     return groups;
@@ -138,17 +141,28 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
         <div className="space-y-3">
           {lines.map((line, index) => (
             <div key={index} className={index > 0 ? "border-ink-200/60 border-t pt-3" : ""}>
-              <div className="grid gap-2 sm:grid-cols-[1fr_4.5rem]">
-                <Select value={line.categoryId} onChange={(e) => setLine(index, { categoryId: e.target.value })} aria-label={`Line ${index + 1} room type`}>
-                  <option value="">Choose the room type…</option>
-                  {Object.entries(byProperty).map(([property, categories]) => (
-                    <optgroup key={property} label={property}>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name} — {property}
-                        </option>
-                      ))}
-                    </optgroup>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_4.5rem]">
+                <Combobox
+                  value={line.property ?? propertyOf(line.categoryId)}
+                  onChange={(property) => {
+                    const types = byProperty[property] ?? [];
+                    // One room type at the property: chosen with it.
+                    setLine(index, { property, categoryId: types.length === 1 ? types[0]!.id : "" });
+                  }}
+                  options={Object.keys(byProperty).map((property) => ({ id: property, label: property, detail: `${byProperty[property]!.length} room ${byProperty[property]!.length === 1 ? "type" : "types"}` }))}
+                  placeholder="Search the property…"
+                />
+                <Select
+                  value={line.categoryId}
+                  onChange={(e) => setLine(index, { categoryId: e.target.value })}
+                  aria-label={`Line ${index + 1} room type`}
+                  disabled={!(line.property ?? propertyOf(line.categoryId))}
+                >
+                  <option value="">{line.property ?? propertyOf(line.categoryId) ? "Choose the room type…" : "Choose the property first"}</option>
+                  {(byProperty[line.property ?? propertyOf(line.categoryId)] ?? []).map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
                   ))}
                 </Select>
                 <Input value={line.rooms} onChange={(e) => setLine(index, { rooms: e.target.value })} inputMode="numeric" aria-label={`Line ${index + 1} rooms`} placeholder="Rooms" />
@@ -166,11 +180,22 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
                     ? `= ${formatMoney(Number(line.rooms) * nightsOf(line) * toCents(line.rate)!, currency)}`
                     : ""}
                 </span>
-                {lines.length > 1 && (
-                  <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} className="text-ink-400 ml-auto text-lg leading-none hover:text-[#c03654]" aria-label={`Remove line ${index + 1}`}>
-                    ×
+                <span className="ml-auto flex items-center gap-3">
+                  {/* The same rooms again, for another period or rate (the owner, 2026-11-18). */}
+                  <button
+                    type="button"
+                    onClick={() => setLines((current) => [...current.slice(0, index + 1), { ...line }, ...current.slice(index + 1)])}
+                    className="text-brand-700 text-xs font-medium hover:underline"
+                    aria-label={`Duplicate line ${index + 1}`}
+                  >
+                    Duplicate
                   </button>
-                )}
+                  {lines.length > 1 && (
+                    <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} className="text-ink-400 text-lg leading-none hover:text-[#c03654]" aria-label={`Remove line ${index + 1}`}>
+                      ×
+                    </button>
+                  )}
+                </span>
               </div>
             </div>
           ))}
@@ -178,7 +203,7 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
         <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
           <button
             type="button"
-            onClick={() => setLines((current) => [...current, { ...current.at(-1)!, categoryId: "", rate: "" }])}
+            onClick={() => setLines((current) => [...current, { ...current.at(-1)!, categoryId: "", rate: "", property: "" }])}
             className="text-brand-700 text-xs font-medium hover:underline"
           >
             + Add a line
