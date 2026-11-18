@@ -2973,6 +2973,11 @@ follow-up and the signing come next and are not built yet (§12).
   change is in its history. Only an open offer can be edited — a signed or vouched-for one is
   the contract. An agreement whose wording was changed by hand for the client is not rewritten:
   the form, and the history, say to check it still matches.
+- **Choosing the rooms on an offer line** (the owner, 2026-11-18: "searching this whole list is
+  stupid"): first **search the property** by typing its name, then pick one of **its** room types
+  — chosen straight away when it has only one — instead of scrolling every room type of every
+  hotel on the event. **Duplicate** on a line copies it just below — the same rooms for another
+  period or rate.
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
 - **Before there is any offer** (2026-10-30), an open request with no rate card answer has a
