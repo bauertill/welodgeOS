@@ -17,7 +17,16 @@ import { api, type RouterOutputs } from "~/trpc/react";
 import { CURRENCIES } from "~/lib/currency";
 
 /** A line of rooms; `property` only narrows the room types offered (the owner, 2026-11-18: search the property, then pick its room type). */
-type LineDraft = { categoryId: string; rooms: string; checkIn: string; checkOut: string; rate: string; property?: string };
+type LineDraft = { categoryId: string; rooms: string; checkIn: string; checkOut: string; rate: string; property?: string; /** Lines with the same block are one room type's periods. */ block?: number };
+let blocks = 0;
+const newBlock = () => ++blocks;
+/** Side by side lines of the same room type and rooms start as one block of periods. */
+const inBlocks = (lines: LineDraft[]) =>
+  lines.reduce<LineDraft[]>((all, line) => {
+    const before = all.at(-1);
+    const same = before && line.categoryId && line.categoryId === before.categoryId && line.rooms === before.rooms;
+    return [...all, { ...line, block: same ? before.block : newBlock() }];
+  }, []);
 type Offer = RouterOutputs["offer"]["forRequest"][number];
 
 const toCents = (text: string) => {
@@ -60,13 +69,13 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
   const router = useRouter();
   // Changing an offer starts from the offer itself; a new one from the answer and the last offer's terms.
   const terms = offer ?? context.termsFrom;
-  const [lines, setLines] = useState<LineDraft[]>(
+  const [lines, setLines] = useState<LineDraft[]>(() => inBlocks(
     offer
       ? offer.lines.map((line) => ({ categoryId: line.categoryId, rooms: String(line.rooms), checkIn: dayKey(line.checkIn), checkOut: dayKey(line.checkOut), rate: String(line.rateCents / 100) }))
       : context.lines.length
       ? context.lines.map((line) => ({ categoryId: line.categoryId, rooms: String(line.rooms), checkIn: line.checkIn, checkOut: line.checkOut, rate: String(line.rateCents / 100) }))
       : [{ categoryId: "", rooms: "1", checkIn: dayKey(context.event.startDate), checkOut: dayKey(context.event.endDate), rate: "" }],
-  );
+  ));
   const [currency, setCurrency] = useState(offer?.currency ?? context.currency);
   const [validUntil, setValidUntil] = useState(offer ? dayKey(offer.validUntil) : context.validUntil);
   const [inclusions, setInclusions] = useState(terms?.inclusions ?? "");
@@ -94,6 +103,18 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
   const update = api.offer.update.useMutation({ onSuccess: saved });
   const saving = create.isPending || update.isPending;
 
+  /*
+   * Lines shown as rooms with their periods (the owner, 2026-11-18: one room
+   * type at a different rate for each period, as in a Schedule 2.1): side by
+   * side lines of one block — the same room type and rooms — are shown once, each
+   * period with its own dates and rate. Saved as one line per period, as before.
+   */
+  const groups = lines.reduce<{ first: number; last: number }[]>((all, line, index) => {
+    const previous = all.at(-1);
+    if (previous && line.block === lines[index - 1]?.block) previous.last = index;
+    else all.push({ first: index, last: index });
+    return all;
+  }, []);
   const setLine = (index: number, change: Partial<LineDraft>) => setLines((current) => current.map((line, i) => (i === index ? { ...line, ...change } : line)));
   const total = lines.reduce((sum, line) => sum + (Number(line.rooms) || 0) * nightsOf(line) * (toCents(line.rate) ?? 0), 0);
   const propertyOf = (categoryId: string) => context.categories.find((category) => category.id === categoryId)?.property ?? "";
@@ -139,71 +160,120 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
           {context.responseId ? "From their rate card answer — change anything." : "They have not answered a rate card — add the rooms you are offering."}
         </p>
         <div className="space-y-3">
-          {lines.map((line, index) => (
-            <div key={index} className={index > 0 ? "border-ink-200/60 border-t pt-3" : ""}>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_4.5rem]">
-                <Combobox
-                  value={line.property ?? propertyOf(line.categoryId)}
-                  onChange={(property) => {
-                    const types = byProperty[property] ?? [];
-                    // One room type at the property: chosen with it.
-                    setLine(index, { property, categoryId: types.length === 1 ? types[0]!.id : "" });
-                  }}
-                  options={Object.keys(byProperty).map((property) => ({ id: property, label: property, detail: `${byProperty[property]!.length} room ${byProperty[property]!.length === 1 ? "type" : "types"}` }))}
-                  placeholder="Search the property…"
-                />
-                <Select
-                  value={line.categoryId}
-                  onChange={(e) => setLine(index, { categoryId: e.target.value })}
-                  aria-label={`Line ${index + 1} room type`}
-                  disabled={!(line.property ?? propertyOf(line.categoryId))}
-                >
-                  <option value="">{line.property ?? propertyOf(line.categoryId) ? "Choose the room type…" : "Choose the property first"}</option>
-                  {(byProperty[line.property ?? propertyOf(line.categoryId)] ?? []).map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </Select>
-                <Input value={line.rooms} onChange={(e) => setLine(index, { rooms: e.target.value })} inputMode="numeric" aria-label={`Line ${index + 1} rooms`} placeholder="Rooms" />
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Input type="date" value={line.checkIn} onChange={(e) => setLine(index, { checkIn: e.target.value })} aria-label={`Line ${index + 1} arrival`} className="w-40 px-2" />
-                <span className="text-ink-400">→</span>
-                <Input type="date" value={line.checkOut} onChange={(e) => setLine(index, { checkOut: e.target.value })} aria-label={`Line ${index + 1} departure`} className="w-40 px-2" />
-                <span className="flex items-center gap-1">
-                  <Input value={line.rate} onChange={(e) => setLine(index, { rate: e.target.value })} inputMode="decimal" aria-label={`Line ${index + 1} rate per night`} placeholder="500" className="w-24 px-2" />
-                  <span className="text-ink-500 text-[12px]">{currency} / night</span>
-                </span>
-                <span className="text-ink-500 text-xs font-light">
-                  {nightsOf(line) > 0 && toCents(line.rate) !== null && Number(line.rooms) > 0
-                    ? `= ${formatMoney(Number(line.rooms) * nightsOf(line) * toCents(line.rate)!, currency)}`
-                    : ""}
-                </span>
-                <span className="ml-auto flex items-center gap-3">
-                  {/* The same rooms again, for another period or rate (the owner, 2026-11-18). */}
-                  <button
-                    type="button"
-                    onClick={() => setLines((current) => [...current.slice(0, index + 1), { ...line }, ...current.slice(index + 1)])}
-                    className="text-brand-700 text-xs font-medium hover:underline"
-                    aria-label={`Duplicate line ${index + 1}`}
-                  >
-                    Duplicate
-                  </button>
-                  {lines.length > 1 && (
-                    <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} className="text-ink-400 text-lg leading-none hover:text-[#c03654]" aria-label={`Remove line ${index + 1}`}>
+          {groups.map(({ first, last }, groupIndex) => {
+            const head = lines[first]!;
+            const property = head.property ?? propertyOf(head.categoryId);
+            const indices = Array.from({ length: last - first + 1 }, (_, i) => first + i);
+            // A change to the room type or rooms is every period's (2026-11-18).
+            const setGroup = (change: Partial<LineDraft>) => setLines((current) => current.map((line, i) => (i >= first && i <= last ? { ...line, ...change } : line)));
+            return (
+              <div key={first} className={groupIndex > 0 ? "border-ink-200/60 border-t pt-3" : ""}>
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_4.5rem_auto] sm:items-center">
+                  <Combobox
+                    value={property}
+                    onChange={(chosen) => {
+                      const types = byProperty[chosen] ?? [];
+                      // One room type at the property: chosen with it.
+                      setGroup({ property: chosen, categoryId: types.length === 1 ? types[0]!.id : "" });
+                    }}
+                    options={Object.keys(byProperty).map((name) => ({ id: name, label: name, detail: `${byProperty[name]!.length} room ${byProperty[name]!.length === 1 ? "type" : "types"}` }))}
+                    placeholder="Search the property…"
+                  />
+                  <Select value={head.categoryId} onChange={(e) => setGroup({ categoryId: e.target.value })} aria-label={`Line ${groupIndex + 1} room type`} disabled={!property}>
+                    <option value="">{property ? "Choose the room type…" : "Choose the property first"}</option>
+                    {(byProperty[property] ?? []).map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input value={head.rooms} onChange={(e) => setGroup({ rooms: e.target.value })} inputMode="numeric" aria-label={`Line ${groupIndex + 1} rooms`} placeholder="Rooms" />
+                  {groups.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setLines((current) => current.filter((_, i) => i < first || i > last))}
+                      className="text-ink-400 text-lg leading-none hover:text-[#c03654]"
+                      aria-label={`Remove line ${groupIndex + 1}`}
+                      title="Remove these rooms, every period"
+                    >
                       ×
                     </button>
+                  ) : (
+                    <span />
                   )}
-                </span>
+                </div>
+                <div className="mt-2 space-y-2">
+                  {indices.map((index, periodIndex) => {
+                    const line = lines[index]!;
+                    return (
+                      <div key={index} className="flex flex-wrap items-center gap-2">
+                        <Input type="date" value={line.checkIn} onChange={(e) => setLine(index, { checkIn: e.target.value })} aria-label={`Line ${groupIndex + 1} period ${periodIndex + 1} arrival`} className="w-40 px-2" />
+                        <span className="text-ink-400">→</span>
+                        <Input type="date" value={line.checkOut} onChange={(e) => setLine(index, { checkOut: e.target.value })} aria-label={`Line ${groupIndex + 1} period ${periodIndex + 1} departure`} className="w-40 px-2" />
+                        <span className="flex items-center gap-1">
+                          <Input value={line.rate} onChange={(e) => setLine(index, { rate: e.target.value })} inputMode="decimal" aria-label={`Line ${groupIndex + 1} period ${periodIndex + 1} rate per night`} placeholder="500" className="w-24 px-2" />
+                          <span className="text-ink-500 text-[12px]">{currency} / night</span>
+                        </span>
+                        <span className="text-ink-500 text-xs font-light">
+                          {nightsOf(line) > 0 && toCents(line.rate) !== null && Number(line.rooms) > 0
+                            ? `${nightsOf(line)} nights = ${formatMoney(Number(line.rooms) * nightsOf(line) * toCents(line.rate)!, currency)}`
+                            : ""}
+                        </span>
+                        {indices.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setLines((current) => current.filter((_, i) => i !== index))}
+                            className="text-ink-400 ml-auto text-base leading-none hover:text-[#c03654]"
+                            aria-label={`Remove line ${groupIndex + 1} period ${periodIndex + 1}`}
+                            title="Remove this period"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-4 text-xs">
+                  {/* Another period for the same rooms at its own rate, starting when the last ends (2026-11-18). */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLines((current) => {
+                        const previous = current[last]!;
+                        const next = { ...previous, checkIn: previous.checkOut, checkOut: "", rate: "" };
+                        return [...current.slice(0, last + 1), next, ...current.slice(last + 1)];
+                      })
+                    }
+                    disabled={!head.categoryId}
+                    className="text-brand-700 font-medium hover:underline disabled:text-ink-400 disabled:no-underline"
+                    aria-label={`Add a period to line ${groupIndex + 1}`}
+                  >
+                    + Add a period at another rate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLines((current) => {
+                        const block = newBlock();
+                        return [...current.slice(0, last + 1), ...current.slice(first, last + 1).map((line) => ({ ...line, categoryId: "", property, block })), ...current.slice(last + 1)];
+                      })
+                    }
+                    className="text-brand-700 font-medium hover:underline"
+                    aria-label={`Duplicate line ${groupIndex + 1}`}
+                    title="The same periods and rates for another room type at this property"
+                  >
+                    Duplicate for another room type
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
           <button
             type="button"
-            onClick={() => setLines((current) => [...current, { ...current.at(-1)!, categoryId: "", rate: "", property: "" }])}
+            onClick={() => setLines((current) => [...current, { ...current.at(-1)!, categoryId: "", rate: "", property: "", block: newBlock() }])}
             className="text-brand-700 text-xs font-medium hover:underline"
           >
             + Add a line

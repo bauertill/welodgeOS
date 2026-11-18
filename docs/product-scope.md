@@ -511,10 +511,23 @@ and when; only the latest shows, with *Show all* for the rest. It can be edited 
 **Deleting a task** (2026-10-07): *Delete task* at the foot of its details, and on the board —
 *Delete* on a Kanban card (it shows when the pointer is on the card) and at the end of each
 row of the List. It always asks first; the task's comments go with it, and it cannot be
-undone. Anyone can delete any task, as anyone can edit one.
+undone. Anyone can delete any task, as anyone can edit one; its files are deleted with it.
 
 **My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
 you asked of others, each with a link to the board.
+
+**Files on a task** (the owner, 2026-11-18). A task's page has a **Files** box above its
+comments: *Upload a file* — or drop one or several onto it — up to **100 MB** each, any kind.
+Each is listed with its size, who put it there and when; clicking it opens it (a PDF or a
+picture in the browser, anything else downloads); × removes it, after asking, and **deletes the
+file**. Adding and removing are in the task's history. Deleting the task deletes its files.
+The files are **real uploads**, not links: kept in the site's own **private file store**
+(Vercel Blob, the project's *welodge-files* store, chosen by the owner over Drive links;
+free to 1 GB, then charged by use). Uploaded straight from the browser to the store, and opened
+only through the site by someone signed in — the store's own address does not open them. The
+live site, staging and the team's computers share the one store, so a file put on a task on
+staging is a real file too; the nightly copy of live onto staging copies the records, not the
+files, which stay where they are.
 
 Not built yet: each type's own workflow; tasks shown on the property, client and
 sales-request pages they are about. Who is told what about tasks is §2.9.
@@ -2976,8 +2989,15 @@ follow-up and the signing come next and are not built yet (§12).
 - **Choosing the rooms on an offer line** (the owner, 2026-11-18: "searching this whole list is
   stupid"): first **search the property** by typing its name, then pick one of **its** room types
   — chosen straight away when it has only one — instead of scrolling every room type of every
-  hotel on the event. **Duplicate** on a line copies it just below — the same rooms for another
-  period or rate.
+  hotel on the event. **A room type at a different rate per period** (the owner, 2026-11-18, as
+  in a Schedule 2.1 — Ocean Luxury Lofts' Standard Apartment, 4 units, at $323.35, $555,
+  $324.30 and $410 over four periods): a line is the property, the room type and the number of
+  rooms once, with its **periods** beneath, each its own dates and rate per night, its nights
+  and its subtotal. **+ Add a period at another rate** adds one starting on the last one's
+  departure; changing the room type or the rooms changes every period. **Duplicate for another
+  room type** copies the periods and rates below for another room type at the same property. It
+  is saved, blocked and written into the agreement as one line per period, as before; an offer
+  opened again shows side by side lines of the same room type and rooms as one line with periods.
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
 - **Before there is any offer** (2026-10-30), an open request with no rate card answer has a
@@ -4051,7 +4071,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
-| §2.8 Tasks | **Built** | One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
+| §2.8 Tasks | **Built** | Files uploaded onto a task, kept in the private file store (2026-11-18). One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
