@@ -12,6 +12,85 @@ const MAX_BYTES = 100 * 1024 * 1024;
 const sizeInWords = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 /**
+ * Put files on a task: each straight into the private store, then recorded on
+ * the task. Returns the names of any that could not be uploaded.
+ */
+export async function uploadTaskFiles(
+  taskId: string,
+  files: File[],
+  record: (input: { taskId: string; pathname: string; name: string }) => Promise<unknown>,
+  onProgress: (name: string, percentage: number) => void,
+) {
+  const failed: string[] = [];
+  for (const file of files) {
+    if (file.size > MAX_BYTES) {
+      failed.push(`${file.name} (over 100 MB)`);
+      continue;
+    }
+    try {
+      const blob = await upload(`tasks/${taskId}/${file.name}`, file, {
+        access: "private",
+        handleUploadUrl: "/api/files/upload",
+        clientPayload: taskId,
+        multipart: file.size > 8 * 1024 * 1024,
+        onUploadProgress: ({ percentage }) => onProgress(file.name, percentage),
+      });
+      await record({ taskId, pathname: blob.pathname, name: file.name });
+    } catch {
+      failed.push(file.name);
+    }
+  }
+  return failed;
+}
+
+/** Files chosen while writing a new task, uploaded once it is added. */
+export function NewTaskFiles({ files, setFiles }: { files: File[]; setFiles: (files: File[]) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length) setFiles([...files, ...e.dataTransfer.files]);
+      }}
+    >
+      <span className="text-ink-700 mb-1 block text-[13px] font-medium">Files — optional</span>
+      {files.length > 0 && (
+        <ul className="mb-2 space-y-1">
+          {files.map((file, index) => (
+            <li key={`${file.name}-${index}`} className="flex items-center gap-2 text-[13px]">
+              <span className="text-ink-900 min-w-0 flex-1 truncate">{file.name}</span>
+              <span className="text-ink-500 text-xs font-light">{sizeInWords(file.size)}</span>
+              <button type="button" onClick={() => setFiles(files.filter((_, i) => i !== index))} className="text-ink-400 text-lg leading-none hover:text-[#c03654]" aria-label={`Remove ${file.name}`}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input
+        ref={input}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const chosen = [...(e.target.files ?? [])];
+          e.target.value = "";
+          setFiles([...files, ...chosen]);
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        className="border-ink-300 text-ink-700 hover:border-brand-300 hover:text-brand-700 w-full rounded-lg border border-dashed px-4 py-2.5 text-[13px] font-light"
+      >
+        {files.length ? "+ Add another file" : "Attach a file — or drop it here (up to 100 MB)"}
+      </button>
+    </div>
+  );
+}
+
+/**
  * Files on a task (the owner, 2026-11-18: "can we have an upload a file to a
  * task"): choose or drop one or several, up to 100 MB each; each listed with
  * who put it there and when, opened with a click, and removable. Kept in the

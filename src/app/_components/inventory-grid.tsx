@@ -308,6 +308,33 @@ export function InventoryGrid({
     growing.current = null;
   }, [firstDate, grid.data?.dates.length]);
 
+  /*
+   * Open on the first night with anything on it (the owner, 2026-11-18: FDFA's
+   * addendum, sold for July, looked missing because the sheet opened in
+   * January). On first showing, and whenever the property or client filter
+   * changes, the sheet scrolls sideways to bring that night into view; after
+   * that it stays where the person scrolls it.
+   */
+  const placedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const box = scroller.current;
+    if (!box || !grid.data || grid.isFetching) return;
+    const key = `${propertyId}|${clientId}`;
+    if (placedFor.current === key) return;
+    // A night with something on it: a client, someone asking, or anything started with the hotel.
+    const nights = Object.entries(grid.data.cells)
+      .filter(([, cell]) => cell.clientName || cell.requestedBy.length > 0 || (cell.acquisitionState !== "NONE" && cell.acquisitionState !== "RELEASED"))
+      .map(([cellKey]) => cellKey.split("|")[1]!);
+    if (!nights.length) return;
+    placedFor.current = key;
+    const first = nights.reduce((earliest, night) => (night < earliest ? night : earliest));
+    const index = grid.data.dates.findIndex((date) => dayKey(date) === first);
+    const cell = box.querySelector<HTMLElement>("thead th:nth-child(2)");
+    const width = cell?.getBoundingClientRect().width ?? columnWidth.current;
+    box.scrollLeft = Math.max(0, (index - 2) * width);
+    lastLeft.current = box.scrollLeft;
+  }, [grid.data, grid.isFetching, propertyId, clientId]);
+
   // The event's named periods (doc §3.10): a band over the dates, and a chip to jump to each.
   const periods = (api.event.periods.useQuery({ eventId }).data ?? []).map((period, index) => ({ ...period, colour: periodColour(index) }));
 

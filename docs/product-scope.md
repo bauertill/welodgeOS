@@ -516,7 +516,15 @@ undone. Anyone can delete any task, as anyone can edit one; its files are delete
 **My work** is at the top of *My profile*: the open tasks you complete, and the open tasks
 you asked of others, each with a link to the board.
 
-**Files on a task** (the owner, 2026-11-18). A task's page has a **Files** box above its
+**Tagging someone in the details** (the owner, 2026-11-18): the task's *Details* take
+@mentions as comments do — typing @ offers the team — and whoever is tagged is told (in the
+app, and by email for those who get mention emails, §2.9): when the task is added, or when a
+change to the details first names them; someone also just given the task hears once, as
+given it. The details show the tag as "@Name".
+
+**Files on a task** (the owner, 2026-11-18). *New task* has **Files — optional** at the foot:
+files attached or dropped there go up as soon as the task is added (if one fails, the task is
+still added and opens, saying which to add again). A task's page has a **Files** box above its
 comments: *Upload a file* — or drop one or several onto it — up to **100 MB** each, any kind.
 Each is listed with its size, who put it there and when; clicking it opens it (a PDF or a
 picture in the browser, anything else downloads); × removes it, after asking, and **deletes the
@@ -3317,7 +3325,12 @@ counts a room when at least half its nights are ours and unsold (§5.4).
 The familiar spreadsheet view is generated, never stored: supplier / room category / room
 down the rows, one column per night. Rows are grouped property → category → slot number,
 collapsed to the property level by default, and columns span whatever check-in/check-out
-window is currently in view, filtered by property and client. The property and client filters
+window is currently in view, filtered by property and client. **It opens on the first night
+with anything on it** (the owner, 2026-11-18: FDFA's addendum, sold for July 2028, looked
+missing because the sheet opened in January): on first showing, and whenever the property or
+client filter changes, the sheet scrolls sideways to a couple of days before the first night
+with a client, someone asking, or anything started with the hotel; after that it stays where
+it is scrolled. The property and client filters
 and *Show empty* **stay as set until reset**, per event, in each person's browser (the team,
 2026-11-12); *Reset filters* clears them, and a link from an acquire task sets them. **The client filter
 offers only the clients on this event's sheet** (the owner, 2026-11-18) — holding, buying or
