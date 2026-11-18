@@ -276,7 +276,12 @@ export const financeRouter = createTRPCRouter({
       };
       if (nights) refuse(`${nights} ${nights === 1 ? "room-night is" : "room-nights are"} ${contract.party === "SUPPLIER" ? "bought" : "sold"} under it — move them to another contract on the stock sheet first.`);
       if (contract.offer) refuse("It records the client signing their offer — it cannot be deleted.");
-      if (contract.salesRequest?.stage === "CONTRACTED") refuse("Its sales request is contracted on it — move the request back a step first.");
+      // A contracted request needs a client contract to stand on — this one only when it is the last (the
+      // owner, 2026-11-18: FDFA's contract typed by hand, then made again from the signed offer).
+      if (contract.salesRequestId && contract.salesRequest?.stage === "CONTRACTED") {
+        const another = await tx.contract.count({ where: { salesRequestId: contract.salesRequestId, party: contract.party, id: { not: contract.id } } });
+        if (!another) refuse("Its sales request is contracted on it — move the request back a step first.");
+      }
       if (contract._count.addenda) refuse("An addendum is tied to it — untie the addendum first.");
       // A quotation that made it moves to the hotel's one other contract for the event, if there is exactly one —
       // the contract it duplicated — so it does not offer to make the contract again.
