@@ -1473,8 +1473,21 @@ on a deadline board later. **Payments**: each *On signature* or *On a date*, and
 percentage of the total; one line to start, *+ Add a payment* for more, and the form says
 what they add up to (green at 100%). **Cancellation cut-offs**: each a kind — *Cancellation
 fee* (the share charged from the date), *Attrition* (the share that may be reduced, free,
-until the date), *Release* (the share that may be handed back until the date) or *Other* —
-its date and its percentage; *+ Add a cut-off* for more. A line left empty is ignored. The
+until the date), *Release* (the share that may be handed back until the date), **Rooms may
+be cancelled** or **In words** — its date and its percentage; *+ Add a cut-off* for more. A line
+left empty is ignored. **Rooms may be cancelled** (the team, 2026-11-18, for the FDFA and BBC
+offers): a **number of rooms**, with a room type if it is only some (suggested from the rooms on
+the quote or offer, typed freely — "family rooms"), that may be cancelled **until** the date,
+**free** when the percentage is left empty or for that **cancellation fee** — read in an
+agreement as "Two (2) family rooms may be cancelled free of charge up to and including 1
+September 2027" and "Two (2) family rooms may be cancelled with a 30% (Thirty per centum)
+cancellation fee up to and including 1 December 2027". **In words** is a term as written, with a
+date only if it has one — "After that, no cancellations are allowed", "Olympics cancelled: We
+Lodge keeps a 15% fee" — and stands as its own line of the agreement's Cancellation Policy, in
+order. Every line can also take words after it. When the offer or quotation becomes a contract
+(§7.1), each dated line becomes one of its cut-offs (a number of rooms shown under *Applies to*,
+"2 rooms", with its room type), and a line in words with no date goes into the contract's notes,
+as it has no date to remind anyone of. The
 quote shows them as "30% on signature · 70% on 1 Dec 2027" and "100% charged from 1 May
 2028 · attrition 10% until 1 Mar 2028". The old free-text boxes stay underneath as *Other
 payment / cancellation terms, in words*, so quotes typed before keep what they say. **Accept
@@ -4092,6 +4105,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
+| §3.10 / §4.11 Cancellation by rooms, terms in words | **Built** (2026-11-18) | A cut-off can be a number of rooms (with an optional room type) that may be cancelled until a date, free or for a fee; or a term in words with or without a date; on quotations and offers, written into the agreement, carried to the contract (words without a date as notes) |
 | §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. *Delete this contract* for one made by mistake or twice, refused once rooms, a signed offer, a contracted request or an addendum rest on it (2026-11-05). PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |

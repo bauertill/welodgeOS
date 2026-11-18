@@ -168,7 +168,10 @@ async function closeOffer(
       totalCents: total,
       currency: offer.currency,
       ownerId: request.ownerId ?? actor.id,
-      notes: how.signed ? "Made from the offer when the client signed." : `Not signed yet — trust guarantee by ${actor.name ?? "an admin"} on ${formatDate(today())}.`,
+      notes: [
+        how.signed ? "Made from the offer when the client signed." : `Not signed yet — trust guarantee by ${actor.name ?? "an admin"} on ${formatDate(today())}.`,
+        ...offer.cancellations.filter((cut) => !cut.cutoffOn && cut.remarks).map((cut) => `Cancellation: ${cut.remarks}`),
+      ].join("\n\n"),
       noCancellationTerms: offer.cancellations.length === 0,
       payments: {
         create: offer.payments.map((payment, index) => ({
@@ -179,13 +182,18 @@ async function closeOffer(
         })),
       },
       cancellations: {
-        create: offer.cancellations.map((cut) => ({
-          kind: cut.kind,
-          cutoffOn: cut.cutoffOn,
-          percentBasisPoints: cut.percentBasisPoints,
-          feeBasisPoints: cut.feeBasisPoints,
-          remarks: cut.remarks,
-        })),
+        // A term in words with no date has no cut-off to watch: it goes in the contract's notes (2026-11-18).
+        create: offer.cancellations
+          .filter((cut) => cut.cutoffOn)
+          .map((cut) => ({
+            kind: cut.kind,
+            cutoffOn: cut.cutoffOn!,
+            percentBasisPoints: cut.percentBasisPoints,
+            feeBasisPoints: cut.feeBasisPoints,
+            appliesTo: cut.rooms !== null ? `${cut.rooms} ${cut.rooms === 1 ? "room" : "rooms"}` : null,
+            roomType: cut.roomType,
+            remarks: cut.remarks,
+          })),
       },
     },
   });
@@ -402,9 +410,11 @@ export const offerRouter = createTRPCRouter({
             cancellations: {
               create: input.cancellations.map((cut, position) => ({
                 kind: cut.kind,
-                cutoffOn: parseDay(cut.cutoffOn),
+                cutoffOn: cut.cutoffOn ? parseDay(cut.cutoffOn) : null,
                 percentBasisPoints: cut.percentBasisPoints,
                 feeBasisPoints: cut.feeBasisPoints,
+                rooms: cut.rooms,
+                roomType: cut.rooms !== null ? cut.roomType.trim() || null : null,
                 remarks: cut.remarks.trim() || null,
                 position,
               })),

@@ -1,19 +1,49 @@
 "use client";
 
 import type { CancellationKind } from "generated/prisma";
+import { useId } from "react";
 
 import { Input, Select } from "~/app/_components/form";
 
 export type PaymentDraft = { onSignature: boolean; dueOn: string; percent: string; /** Also takes all of the taxes (doc §3.10). */ plusTaxes?: boolean };
-/** A cut-off's meaning: a cancellation fee from the date, or what may go — attrition, release — by it. */
-export type CutKind = "FEE" | "ATTRITION" | "RELEASE" | "OTHER";
-export type CancellationDraft = { kind: CutKind; cutoffOn: string; percent: string; remarks: string };
+/**
+ * A cut-off's meaning: a cancellation fee from the date; what may go —
+ * attrition, release — by it; a number of rooms that may be cancelled by it,
+ * free or for a fee (2026-11-18: "Two (2) family rooms may be cancelled free
+ * of charge up to and including 1 September 2027"); or a term in words, with
+ * or without a date ("After that, no cancellations are allowed").
+ */
+export type CutKind = "FEE" | "ROOMS" | "ATTRITION" | "RELEASE" | "OTHER";
+export type CancellationDraft = { kind: CutKind; cutoffOn: string; percent: string; remarks: string; rooms?: string; roomType?: string };
 export const cutKindLabels: Record<CutKind, { label: string; percent: string }> = {
   FEE: { label: "Cancellation fee", percent: "% charged from this date" },
+  ROOMS: { label: "Rooms may be cancelled", percent: "% fee — leave empty if free" },
   ATTRITION: { label: "Attrition", percent: "% may be reduced, free, until this date" },
   RELEASE: { label: "Release", percent: "% may be handed back until this date" },
-  OTHER: { label: "Other", percent: "%" },
+  OTHER: { label: "In words", percent: "%" },
 };
+
+/** A saved term back into the editor's line. */
+export function toCancellationDraft(cut: {
+  kind: string;
+  cutoffOn: Date | null;
+  percentBasisPoints: number | null;
+  feeBasisPoints: number | null;
+  rooms: number | null;
+  roomType: string | null;
+  remarks: string | null;
+}, dayKey: (date: Date) => string): CancellationDraft {
+  const kind: CutKind =
+    cut.rooms !== null ? "ROOMS" : cut.feeBasisPoints !== null ? "FEE" : cut.kind === "ATTRITION" || cut.kind === "RELEASE" ? cut.kind : "OTHER";
+  return {
+    kind,
+    cutoffOn: cut.cutoffOn ? dayKey(cut.cutoffOn) : "",
+    percent: toPercent(kind === "ROOMS" ? (cut.feeBasisPoints || null) : (cut.feeBasisPoints ?? cut.percentBasisPoints)),
+    remarks: cut.remarks ?? "",
+    rooms: cut.rooms?.toString() ?? "",
+    roomType: cut.roomType ?? "",
+  };
+}
 export const toPercent = (basisPoints: number | null) => (basisPoints === null ? "" : String(basisPoints / 100));
 export const toBasisPoints = (text: string) => {
   const value = Number(text.trim().replace(",", ".").replace("%", ""));
@@ -32,15 +62,22 @@ export function checkTerms(payments: PaymentDraft[], cancellations: Cancellation
   }
   const cancellationsOut = [];
   for (const [i, cut] of cancellations.entries()) {
-    if (!cut.percent.trim() && !cut.cutoffOn && !cut.remarks.trim()) continue;
-    if (!cut.cutoffOn) return `Cancellation ${i + 1}: give the cut-off date.`;
+    if (!cut.percent.trim() && !cut.cutoffOn && !cut.remarks.trim() && !cut.rooms?.trim()) continue;
+    // Only a term in words may go without a date — "After that, no cancellations are allowed".
+    if (!cut.cutoffOn && cut.kind !== "OTHER") return `Cancellation ${i + 1}: give the cut-off date.`;
+    if (cut.kind === "OTHER" && !cut.remarks.trim()) return `Cancellation ${i + 1}: write the term in words.`;
     const share = cut.percent.trim() ? toBasisPoints(cut.percent) : null;
     if (cut.percent.trim() && share === null) return `Cancellation ${i + 1}: the percentage should be between 0 and 100.`;
+    const rooms = cut.kind === "ROOMS" ? Number(cut.rooms?.trim()) : null;
+    if (rooms !== null && (!Number.isInteger(rooms) || rooms < 1)) return `Cancellation ${i + 1}: say how many rooms may be cancelled, like 2.`;
     cancellationsOut.push({
-      kind: cut.kind === "FEE" ? feeKind : cut.kind,
+      kind: cut.kind === "FEE" || cut.kind === "ROOMS" ? feeKind : cut.kind,
       cutoffOn: cut.cutoffOn,
-      percentBasisPoints: cut.kind === "FEE" ? null : share,
-      feeBasisPoints: cut.kind === "FEE" ? (share ?? 0) : null,
+      percentBasisPoints: cut.kind === "FEE" || cut.kind === "ROOMS" ? null : share,
+      // A number of rooms cancelled free has no fee; one for a fee, its share.
+      feeBasisPoints: cut.kind === "FEE" ? (share ?? 0) : cut.kind === "ROOMS" ? share || null : null,
+      rooms,
+      roomType: cut.kind === "ROOMS" ? (cut.roomType ?? "") : "",
       remarks: cut.remarks,
     });
   }
@@ -58,6 +95,7 @@ export function TermsEditor({
   cancellations,
   setCancellations,
   taxes = false,
+  roomTypes = [],
 }: {
   payments: PaymentDraft[];
   setPayments: React.Dispatch<React.SetStateAction<PaymentDraft[]>>;
@@ -65,7 +103,12 @@ export function TermsEditor({
   setCancellations: React.Dispatch<React.SetStateAction<CancellationDraft[]>>;
   /** Offer "+ all taxes" on a payment — a hotel's quotation, where taxes come on top (doc §3.10). */
   taxes?: boolean;
+  /** The room types on offer, suggested for a "Rooms may be cancelled" line. */
+  roomTypes?: string[];
 }) {
+  const listId = useId();
+  const setCut = (index: number, patch: Partial<CancellationDraft>) =>
+    setCancellations((current) => current.map((one, i) => (i === index ? { ...one, ...patch } : one)));
   const paidShare = payments.reduce((sum, payment) => sum + (toBasisPoints(payment.percent) ?? 0), 0);
   return (
     <>
@@ -134,36 +177,62 @@ export function TermsEditor({
       <div className="space-y-2">
         {cancellations.map((cut, index) => (
           <div key={index} className="flex flex-wrap items-center gap-2">
-            <Select
-              value={cut.kind}
-              onChange={(e) => setCancellations((current) => current.map((one, i) => (i === index ? { ...one, kind: e.target.value as CutKind } : one)))}
-              aria-label={`Cancellation ${index + 1} kind`}
-              className="w-44"
-            >
+            <Select value={cut.kind} onChange={(e) => setCut(index, { kind: e.target.value as CutKind })} aria-label={`Cancellation ${index + 1} kind`} className="w-52">
               {(Object.keys(cutKindLabels) as CutKind[]).map((kind) => (
                 <option key={kind} value={kind}>
                   {cutKindLabels[kind].label}
                 </option>
               ))}
             </Select>
+            {cut.kind === "ROOMS" && (
+              <>
+                <Input
+                  value={cut.rooms ?? ""}
+                  onChange={(e) => setCut(index, { rooms: e.target.value })}
+                  inputMode="numeric"
+                  placeholder="2"
+                  aria-label={`Cancellation ${index + 1} rooms`}
+                  className="w-14 px-2"
+                />
+                <Input
+                  value={cut.roomType ?? ""}
+                  onChange={(e) => setCut(index, { roomType: e.target.value })}
+                  list={listId}
+                  placeholder="family rooms — optional"
+                  aria-label={`Cancellation ${index + 1} room type`}
+                  className="w-48 px-2"
+                />
+                <span className="text-ink-500 text-[12px]">until</span>
+              </>
+            )}
             <Input
               type="date"
               value={cut.cutoffOn}
-              onChange={(e) => setCancellations((current) => current.map((one, i) => (i === index ? { ...one, cutoffOn: e.target.value } : one)))}
+              onChange={(e) => setCut(index, { cutoffOn: e.target.value })}
               aria-label={`Cancellation ${index + 1} cut-off`}
+              title={cut.kind === "OTHER" ? "A date, if the term has one" : undefined}
               className="w-40 px-2"
             />
-            <span className="flex items-center gap-1">
-              <Input
-                value={cut.percent}
-                onChange={(e) => setCancellations((current) => current.map((one, i) => (i === index ? { ...one, percent: e.target.value } : one)))}
-                inputMode="decimal"
-                placeholder="50"
-                aria-label={`Cancellation ${index + 1} percentage`}
-                className="w-16 px-2"
-              />
-              <span className="text-ink-500 text-[12px] whitespace-nowrap">{cutKindLabels[cut.kind].percent}</span>
-            </span>
+            {cut.kind !== "OTHER" && (
+              <span className="flex items-center gap-1">
+                <Input
+                  value={cut.percent}
+                  onChange={(e) => setCut(index, { percent: e.target.value })}
+                  inputMode="decimal"
+                  placeholder={cut.kind === "ROOMS" ? "30" : "50"}
+                  aria-label={`Cancellation ${index + 1} percentage`}
+                  className="w-16 px-2"
+                />
+                <span className="text-ink-500 text-[12px] whitespace-nowrap">{cutKindLabels[cut.kind].percent}</span>
+              </span>
+            )}
+            <Input
+              value={cut.remarks}
+              onChange={(e) => setCut(index, { remarks: e.target.value })}
+              placeholder={cut.kind === "OTHER" ? "After that, no cancellations are allowed." : "Anything to add, in words — optional"}
+              aria-label={`Cancellation ${index + 1} in words`}
+              className="min-w-56 flex-1 px-2"
+            />
             {cancellations.length > 1 && (
               <button type="button" onClick={() => setCancellations((current) => current.filter((_, i) => i !== index))} className="text-ink-400 text-lg leading-none hover:text-[#c03654]" aria-label={`Remove cancellation ${index + 1}`}>
                 ×
@@ -171,8 +240,13 @@ export function TermsEditor({
             )}
           </div>
         ))}
+        <datalist id={listId}>
+          {[...new Set(roomTypes)].map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
       </div>
-      <button type="button" onClick={() => setCancellations((current) => [...current, { kind: current.at(-1)?.kind ?? "FEE", cutoffOn: "", percent: "", remarks: "" }])} className="text-brand-700 mt-1.5 text-xs font-medium hover:underline">
+      <button type="button" onClick={() => setCancellations((current) => [...current, { kind: current.at(-1)?.kind ?? "FEE", cutoffOn: "", percent: "", remarks: "", rooms: "", roomType: current.at(-1)?.roomType ?? "" }])} className="text-brand-700 mt-1.5 text-xs font-medium hover:underline">
         + Add a cut-off
       </button>
     </div>

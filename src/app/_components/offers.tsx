@@ -6,10 +6,11 @@ import { useState } from "react";
 
 import { Button, Field, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
-import { checkTerms, TermsEditor, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
+import { checkTerms, TermsEditor, toCancellationDraft, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
 import { dayKey, nightsBetween, parseDay, today } from "~/lib/dates";
 import { contractHref, percent } from "~/lib/finance";
 import { canTrust } from "~/lib/offers";
+import { cutSummary } from "~/lib/cancellation";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { CURRENCIES } from "~/lib/currency";
@@ -62,12 +63,7 @@ function OfferForm({ salesRequestId, context, onDone }: { salesRequestId: string
   );
   const [cancellations, setCancellations] = useState<CancellationDraft[]>(
     context.termsFrom?.cancellations.length
-      ? context.termsFrom.cancellations.map((cut) => ({
-          kind: cut.feeBasisPoints !== null ? "FEE" : cut.kind === "ATTRITION" || cut.kind === "RELEASE" ? cut.kind : "OTHER",
-          cutoffOn: dayKey(cut.cutoffOn),
-          percent: toPercent(cut.feeBasisPoints ?? cut.percentBasisPoints),
-          remarks: cut.remarks ?? "",
-        }))
+      ? context.termsFrom.cancellations.map((cut) => toCancellationDraft(cut, dayKey))
       : [{ kind: "FEE", cutoffOn: "", percent: "", remarks: "" }],
   );
   const [problem, setProblem] = useState<string | null>(null);
@@ -192,7 +188,13 @@ function OfferForm({ salesRequestId, context, onDone }: { salesRequestId: string
 
       <div className="space-y-4 rounded-xl bg-white px-5 py-4">
         {context.termsFrom && <p className="text-ink-500 text-xs font-light">Terms from the last offer on {context.event.name} — change them for this client if needed.</p>}
-        <TermsEditor payments={payments} setPayments={setPayments} cancellations={cancellations} setCancellations={setCancellations} />
+        <TermsEditor
+          payments={payments}
+          setPayments={setPayments}
+          cancellations={cancellations}
+          setCancellations={setCancellations}
+          roomTypes={lines.map((line) => context.categories.find((category) => category.id === line.categoryId)?.name ?? "").filter(Boolean)}
+        />
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="The rate includes — one per line">
             <Textarea rows={3} value={inclusions} onChange={(e) => setInclusions(e.target.value)} placeholder={"Daily housekeeping\nComplimentary Wi-Fi\nTaxes at current levels"} />
@@ -306,11 +308,7 @@ function OfferItem({ offer }: { offer: Offer }) {
               {offer.payments.length > 0 && <br />}
               Cancellation:{" "}
               {offer.cancellations
-                .map((cut) =>
-                  cut.feeBasisPoints !== null
-                    ? `${percent(cut.feeBasisPoints)} charged from ${formatDate(cut.cutoffOn)}`
-                    : `${cut.kind === "ATTRITION" ? "attrition" : cut.kind === "RELEASE" ? "release" : "other"}${cut.percentBasisPoints !== null ? ` ${percent(cut.percentBasisPoints)}` : ""} until ${formatDate(cut.cutoffOn)}`,
-                )
+                .map(cutSummary)
                 .join(" · ")}
             </>
           )}
