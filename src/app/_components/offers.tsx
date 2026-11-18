@@ -31,12 +31,21 @@ const nightsOf = (line: { checkIn: string; checkOut: string }) =>
  * it holds and the terms of the last offer on this event. Making it blocks
  * the rooms until it runs out.
  */
-export function OfferPopup({ salesRequestId, responseId, onClose }: { salesRequestId: string; responseId: string | null; onClose: () => void }) {
+export function OfferPopup({ salesRequestId, responseId, offer, onClose }: { salesRequestId: string; responseId: string | null; offer?: Offer; onClose: () => void }) {
   const context = api.offer.formContext.useQuery({ salesRequestId, responseId }, { refetchOnWindowFocus: false });
   return (
-    <Popup size="medium" title="Make an offer" subtitle="The rooms are blocked for the client until the offer runs out — nobody else is offered them." onClose={onClose}>
+    <Popup
+      size="medium"
+      title={offer ? "Change the offer" : "Make an offer"}
+      subtitle={
+        offer
+          ? "Changing the rooms, dates or rates releases the rooms held for this request and blocks the new ones in one step — if a room is no longer free, nothing changes."
+          : "The rooms are blocked for the client until the offer runs out — nobody else is offered them."
+      }
+      onClose={onClose}
+    >
       {context.data ? (
-        <OfferForm salesRequestId={salesRequestId} context={context.data} onDone={onClose} />
+        <OfferForm salesRequestId={salesRequestId} context={context.data} offer={offer} onDone={onClose} />
       ) : (
         <p className="text-ink-500 text-sm font-light">{context.error ? friendlyError(context.error) : "Loading…"}</p>
       )}
@@ -44,38 +53,44 @@ export function OfferPopup({ salesRequestId, responseId, onClose }: { salesReque
   );
 }
 
-function OfferForm({ salesRequestId, context, onDone }: { salesRequestId: string; context: RouterOutputs["offer"]["formContext"]; onDone: () => void }) {
+function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId: string; context: RouterOutputs["offer"]["formContext"]; offer?: Offer; onDone: () => void }) {
   const utils = api.useUtils();
   const router = useRouter();
+  // Changing an offer starts from the offer itself; a new one from the answer and the last offer's terms.
+  const terms = offer ?? context.termsFrom;
   const [lines, setLines] = useState<LineDraft[]>(
-    context.lines.length
+    offer
+      ? offer.lines.map((line) => ({ categoryId: line.categoryId, rooms: String(line.rooms), checkIn: dayKey(line.checkIn), checkOut: dayKey(line.checkOut), rate: String(line.rateCents / 100) }))
+      : context.lines.length
       ? context.lines.map((line) => ({ categoryId: line.categoryId, rooms: String(line.rooms), checkIn: line.checkIn, checkOut: line.checkOut, rate: String(line.rateCents / 100) }))
       : [{ categoryId: "", rooms: "1", checkIn: dayKey(context.event.startDate), checkOut: dayKey(context.event.endDate), rate: "" }],
   );
-  const [currency, setCurrency] = useState(context.currency);
-  const [validUntil, setValidUntil] = useState(context.validUntil);
-  const [inclusions, setInclusions] = useState(context.termsFrom?.inclusions ?? "");
-  const [conditions, setConditions] = useState(context.termsFrom?.conditions ?? "");
+  const [currency, setCurrency] = useState(offer?.currency ?? context.currency);
+  const [validUntil, setValidUntil] = useState(offer ? dayKey(offer.validUntil) : context.validUntil);
+  const [inclusions, setInclusions] = useState(terms?.inclusions ?? "");
+  const [conditions, setConditions] = useState(terms?.conditions ?? "");
   const [payments, setPayments] = useState<PaymentDraft[]>(
-    context.termsFrom?.payments.length
-      ? context.termsFrom.payments.map((payment) => ({ onSignature: payment.onSignature, dueOn: payment.dueOn ? dayKey(payment.dueOn) : "", percent: toPercent(payment.percentBasisPoints) }))
+    terms?.payments.length
+      ? terms.payments.map((payment) => ({ onSignature: payment.onSignature, dueOn: payment.dueOn ? dayKey(payment.dueOn) : "", percent: toPercent(payment.percentBasisPoints) }))
       : [{ onSignature: true, dueOn: "", percent: "" }],
   );
   const [cancellations, setCancellations] = useState<CancellationDraft[]>(
-    context.termsFrom?.cancellations.length
-      ? context.termsFrom.cancellations.map((cut) => toCancellationDraft(cut, dayKey))
+    terms?.cancellations.length
+      ? terms.cancellations.map((cut) => toCancellationDraft(cut, dayKey))
       : [{ kind: "FEE", cutoffOn: "", percent: "", remarks: "" }],
   );
   const [problem, setProblem] = useState<string | null>(null);
-  const create = api.offer.create.useMutation({
-    onSuccess: () => {
-      void utils.offer.invalidate();
-      void utils.sales.invalidate();
-      void utils.inventory.invalidate();
-      router.refresh();
-      onDone();
-    },
-  });
+  const saved = () => {
+    void utils.offer.invalidate();
+    void utils.sales.invalidate();
+    void utils.inventory.invalidate();
+    void utils.audit.invalidate();
+    router.refresh();
+    onDone();
+  };
+  const create = api.offer.create.useMutation({ onSuccess: saved });
+  const update = api.offer.update.useMutation({ onSuccess: saved });
+  const saving = create.isPending || update.isPending;
 
   const setLine = (index: number, change: Partial<LineDraft>) => setLines((current) => current.map((line, i) => (i === index ? { ...line, ...change } : line)));
   const total = lines.reduce((sum, line) => sum + (Number(line.rooms) || 0) * nightsOf(line) * (toCents(line.rate) ?? 0), 0);
@@ -96,9 +111,11 @@ function OfferForm({ salesRequestId, context, onDone }: { salesRequestId: string
       if (rateCents === null) return setProblem(`Line ${i + 1}: give the rate per night, like 500.`);
       linesOut.push({ categoryId: line.categoryId, rooms, checkIn: line.checkIn, checkOut: line.checkOut, rateCents });
     }
-    const terms = checkTerms(payments, cancellations, "CLIENT_CANCELLATION");
-    if (typeof terms === "string") return setProblem(terms);
-    create.mutate({ salesRequestId, responseId: context.responseId, currency, validUntil, inclusions, conditions, lines: linesOut, ...terms });
+    const checked = checkTerms(payments, cancellations, "CLIENT_CANCELLATION");
+    if (typeof checked === "string") return setProblem(checked);
+    const values = { salesRequestId, responseId: offer ? offer.responseId : context.responseId, currency, validUntil, inclusions, conditions, lines: linesOut, ...checked };
+    if (offer) update.mutate({ ...values, id: offer.id });
+    else create.mutate(values);
   };
 
   return (
@@ -187,7 +204,7 @@ function OfferForm({ salesRequestId, context, onDone }: { salesRequestId: string
       </div>
 
       <div className="space-y-4 rounded-xl bg-white px-5 py-4">
-        {context.termsFrom && <p className="text-ink-500 text-xs font-light">Terms from the last offer on {context.event.name} — change them for this client if needed.</p>}
+        {!offer && context.termsFrom && <p className="text-ink-500 text-xs font-light">Terms from the last offer on {context.event.name} — change them for this client if needed.</p>}
         <TermsEditor
           payments={payments}
           setPayments={setPayments}
@@ -206,9 +223,14 @@ function OfferForm({ salesRequestId, context, onDone }: { salesRequestId: string
       </div>
 
       <div className="space-y-2">
-        <FormError message={problem ?? (create.error ? friendlyError(create.error) : null)} />
-        <Button type="button" onClick={submit} disabled={create.isPending}>
-          {create.isPending ? "Blocking the rooms…" : "Make the offer and block the rooms"}
+        {offer?.agreementText && (
+          <p className="text-[12px] font-light text-[#7a5410]">
+            The agreement&rsquo;s wording was changed by hand for this client — check it still matches once the offer is saved.
+          </p>
+        )}
+        <FormError message={problem ?? (create.error ?? update.error ? friendlyError((create.error ?? update.error)!) : null)} />
+        <Button type="button" onClick={submit} disabled={saving}>
+          {saving ? (offer ? "Saving the offer…" : "Blocking the rooms…") : offer ? "Save the offer" : "Make the offer and block the rooms"}
         </Button>
       </div>
     </div>
@@ -257,6 +279,7 @@ function OfferItem({ offer }: { offer: Offer }) {
   const router = useRouter();
   const [extending, setExtending] = useState<string | null>(null);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [editing, setEditing] = useState(false);
   /** Registering the signed agreement: when, and the signed copy. */
   const [signing, setSigning] = useState<{ signedOn: string; documentUrl: string } | null>(null);
   const [trusting, setTrusting] = useState(false);
@@ -277,6 +300,7 @@ function OfferItem({ offer }: { offer: Offer }) {
 
   return (
     <li className={`border-ink-200/70 rounded-xl border px-4 py-3 ${offer.status === "WITHDRAWN" ? "opacity-70" : ""}`}>
+      {editing && <OfferPopup salesRequestId={offer.salesRequestId} responseId={offer.responseId} offer={offer} onClose={() => setEditing(false)} />}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-ink-900 text-[14px] font-medium">
           {rooms} {rooms === 1 ? "room" : "rooms"} · {formatMoney(offer.totalCents, offer.currency)}
@@ -376,6 +400,9 @@ function OfferItem({ offer }: { offer: Offer }) {
                 className="text-brand-700 font-medium hover:underline disabled:cursor-not-allowed disabled:text-ink-400 disabled:no-underline"
               >
                 Trust guarantee
+              </button>
+              <button type="button" onClick={() => setEditing(true)} className="text-brand-700 font-medium hover:underline">
+                Edit the offer
               </button>
               <button type="button" onClick={() => setExtending(dayKey(offer.validUntil))} className="text-brand-700 font-medium hover:underline">
                 Extend the hold

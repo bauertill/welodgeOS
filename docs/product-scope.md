@@ -2963,7 +2963,16 @@ follow-up and the signing come next and are not built yet (§12).
   withdraw*, in red; *Withdrawn — rooms released*. **An offer that runs out is only flagged**
   (the owner, 2026-10-14): the rooms stay blocked until a person decides. **Extend the hold**
   moves the offer and its blocks to a new date; **Withdraw** releases its rooms for others.
-  Both act on the request's blocked rooms of the offer's room types.
+  Both act on the request's blocked rooms of the offer's room types. **Edit the offer** (the
+  owner, 2026-11-18) opens it in the same popup it was made in, filled with what it says: its
+  rooms, dates, rates, currency, how long it holds, payments, cancellation terms, what the rate
+  includes and special conditions. When the rooms, dates, rates or currency change, the
+  request's blocked rooms of the offer's room types are released and the new ones blocked **in
+  one step** — if a room is no longer free, nothing changes and the old rooms stay held; a new
+  hold date alone just moves the blocks. The request's value follows the new total, and the
+  change is in its history. Only an open offer can be edited — a signed or vouched-for one is
+  the contract. An agreement whose wording was changed by hand for the client is not rewritten:
+  the form, and the history, say to check it still matches.
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
 - **Before there is any offer** (2026-10-30), an open request with no rate card answer has a
@@ -4105,6 +4114,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.1–§4.2 Prices required | **Built** | Buy needs the buy price; Block and Sell need the sell price — unless every night already carries one |
 | §5.4 Recorded now, notes on hover, red banner | **Built** | The panel shows and prefills what the selected nights share; the hover card shows price and notes; urgent and critical bookings are outlined and bannered |
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
+| §4.11 Editing an offer | **Built** (2026-11-18) | *Edit the offer* on an open offer: rooms, dates, rates, hold date and terms; changed rooms released and re-blocked in one all-or-nothing step; a hand-edited agreement flagged to check |
 | §3.10 / §4.11 Cancellation by rooms, terms in words | **Built** (2026-11-18) | A cut-off can be a number of rooms (with an optional room type) that may be cancelled until a date, free or for a fee; or a term in words with or without a date; on quotations and offers, written into the agreement, carried to the contract (words without a date as notes) |
 | §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. *Delete this contract* for one made by mistake or twice, refused once rooms, a signed offer, a contracted request or an addendum rest on it (2026-11-05). PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |

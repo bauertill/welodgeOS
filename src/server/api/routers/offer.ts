@@ -455,6 +455,111 @@ export const offerRouter = createTRPCRouter({
   ),
 
   /**
+   * Change an open offer (the owner, 2026-11-18: "we should be able to edit an
+   * offer"): its rooms, dates, rates, how long it holds and its terms. When the
+   * rooms change, the request's blocked rooms are released and the new ones
+   * blocked in the same step — all or nothing, through the stock sheet's rules
+   * and ledger, so a room someone else took meanwhile refuses the change and
+   * the old rooms stay held. Only an open offer: a signed one is the contract.
+   */
+  update: protectedProcedure.input(offerInput.extend({ id: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(
+      async (tx) => {
+        const actorId = ctx.session.user.id;
+        const offer = await tx.offer.findUniqueOrThrow({ where: { id: input.id }, include: { lines: { orderBy: { position: "asc" } } } });
+        if (offer.salesRequestId !== input.salesRequestId) throw new TRPCError({ code: "NOT_FOUND", message: "That offer is not this request's." });
+        if (offer.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: "Only an open offer can be changed — a signed one is the contract now." });
+        const validUntil = parseDay(input.validUntil);
+        if (validUntil < today()) throw new TRPCError({ code: "BAD_REQUEST", message: "The offer has to hold until today or later." });
+        for (const line of input.lines) {
+          if (parseDay(line.checkOut) <= parseDay(line.checkIn)) throw new TRPCError({ code: "BAD_REQUEST", message: "Each line's departure must be after its arrival." });
+        }
+        const key = (line: { categoryId: string; rooms: number; checkIn: string; checkOut: string; rateCents: number }) =>
+          [line.categoryId, line.rooms, line.checkIn, line.checkOut, line.rateCents].join("|");
+        const before = offer.lines.map((line) => key({ ...line, checkIn: dayKey(line.checkIn), checkOut: dayKey(line.checkOut) }));
+        const roomsChanged = before.join("\n") !== input.lines.map(key).join("\n") || input.currency !== offer.currency;
+        if (roomsChanged) {
+          // The old rooms go back, then the new ones are blocked — in one step.
+          for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) {
+            const held = await tx.roomNight.count({ where: { salesRequestId: offer.salesRequestId, salesState: "BLOCKED", slot: { categoryId } } });
+            if (held) await changeRoomsTx(tx, actorId, { id: offer.salesRequestId, categoryId, state: "BLOCKED", action: "RELEASE_HOLD" });
+          }
+          for (const line of input.lines) {
+            await addRoomsTx(tx, actorId, {
+              id: offer.salesRequestId,
+              categoryId: line.categoryId,
+              rooms: line.rooms,
+              checkIn: line.checkIn,
+              checkOut: line.checkOut,
+              action: "BLOCK",
+              blockExpiry: input.validUntil,
+              sellPriceCents: line.rateCents,
+              sellCurrency: input.currency,
+            });
+          }
+        } else if (validUntil.getTime() !== offer.validUntil.getTime()) {
+          for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) {
+            await changeRoomsTx(tx, actorId, { id: offer.salesRequestId, categoryId, state: "BLOCKED", action: "EXTEND_BLOCK", blockExpiry: input.validUntil });
+          }
+        }
+        await tx.offerLine.deleteMany({ where: { offerId: offer.id } });
+        await tx.offerPayment.deleteMany({ where: { offerId: offer.id } });
+        await tx.offerCancellation.deleteMany({ where: { offerId: offer.id } });
+        await tx.offer.update({
+          where: { id: offer.id },
+          data: {
+            currency: input.currency,
+            validUntil,
+            inclusions: blank(input.inclusions),
+            conditions: blank(input.conditions),
+            lines: {
+              create: input.lines.map((line, position) => ({
+                categoryId: line.categoryId,
+                rooms: line.rooms,
+                checkIn: parseDay(line.checkIn),
+                checkOut: parseDay(line.checkOut),
+                rateCents: line.rateCents,
+                position,
+              })),
+            },
+            payments: {
+              create: input.payments.map((payment, position) => ({
+                onSignature: payment.onSignature,
+                dueOn: payment.onSignature || !payment.dueOn ? null : parseDay(payment.dueOn),
+                percentBasisPoints: payment.percentBasisPoints,
+                position,
+              })),
+            },
+            cancellations: {
+              create: input.cancellations.map((cut, position) => ({
+                kind: cut.kind,
+                cutoffOn: cut.cutoffOn ? parseDay(cut.cutoffOn) : null,
+                percentBasisPoints: cut.percentBasisPoints,
+                feeBasisPoints: cut.feeBasisPoints,
+                rooms: cut.rooms,
+                roomType: cut.rooms !== null ? cut.roomType.trim() || null : null,
+                remarks: cut.remarks.trim() || null,
+                position,
+              })),
+            },
+          },
+        });
+        const total = offerTotal(input.lines.map((line) => ({ ...line, checkIn: parseDay(line.checkIn), checkOut: parseDay(line.checkOut) })));
+        await tx.salesRequest.update({ where: { id: offer.salesRequestId }, data: { blockedUntil: validUntil, valueCents: total, valueCurrency: input.currency } });
+        await logAudit(tx, {
+          actorId,
+          entity: "SalesRequest",
+          entityId: offer.salesRequestId,
+          summary: `Offer changed: ${input.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms, ${formatMoney(total, input.currency)}, holding until ${formatDate(validUntil)}${roomsChanged ? " — rooms re-blocked" : ""}`,
+          changes: offer.agreementText !== null ? "The agreement's wording had been changed by hand: check it still matches." : undefined,
+        });
+        return { id: offer.id, agreementEdited: offer.agreementText !== null };
+      },
+      { timeout: 60_000 },
+    ),
+  ),
+
+  /**
    * The offer's agreement to review (doc §4.11): as changed for this client,
    * or as the framework fills it — and that fresh filling, to go back to.
    */
