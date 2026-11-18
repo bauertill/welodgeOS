@@ -14,7 +14,7 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
 import { Popup } from "~/app/_components/popup";
-import { TaskFiles } from "~/app/_components/task-files";
+import { NewTaskFiles, TaskFiles, uploadTaskFiles } from "~/app/_components/task-files";
 import { WebsiteLink } from "~/app/_components/website-link";
 import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
@@ -677,10 +677,27 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
     if (onDone) onDone();
     else router.push(`/tasks/${id}`);
   };
-  const create = api.task.create.useMutation({ onSuccess: (saved) => done(saved.id) });
+  // Files chosen on a new task go up once it exists (the owner, 2026-11-18: "upload straight away").
+  const [files, setFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState<string | null>(null);
+  const [fileProblem, setFileProblem] = useState<string | null>(null);
+  const addFile = api.task.addFile.useMutation();
+  const create = api.task.create.useMutation({
+    onSuccess: async (saved) => {
+      if (files.length) {
+        const failed = await uploadTaskFiles(saved.id, files, (input) => addFile.mutateAsync(input), (name, percentage) => setSending(`Uploading ${name}… ${Math.round(percentage)}%`));
+        setSending(null);
+        if (failed.length) {
+          setFileProblem(`The task is added, but ${failed.join(", ")} could not be uploaded — add it on the task.`);
+          return router.push(`/tasks/${saved.id}`);
+        }
+      }
+      done(saved.id);
+    },
+  });
   const update = api.task.update.useMutation({ onSuccess: (saved) => done(saved.id) });
   const error = create.error ?? update.error;
-  const pending = create.isPending || update.isPending;
+  const pending = create.isPending || update.isPending || sending !== null;
 
   const peopleList = people.data ?? [];
   const requestOptions = useMemo(
@@ -719,7 +736,8 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
         <Input value={draft.title} onChange={(e) => set("title", e.target.value)} placeholder="Get photos and a video of Hotel Carmel" autoFocus={!task} />
       </Field>
       <Field label="Details">
-        <Textarea rows={3} value={draft.details} onChange={(e) => set("details", e.target.value)} placeholder="Anything the person completing it needs to know" />
+        {/* @ to tag a colleague, who is told (the owner, 2026-11-18). */}
+        <MentionTextarea value={draft.details} onChange={(value) => set("details", value)} people={peopleList} placeholder="Anything the person completing it needs to know — @ to tag a colleague" rows={3} />
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -783,7 +801,9 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
         </div>
       </div>
 
-      <FormError message={error ? friendlyError(error) : null} />
+      {!task && <NewTaskFiles files={files} setFiles={setFiles} />}
+      {sending && <p className="text-ink-500 text-xs font-light">{sending}</p>}
+      <FormError message={fileProblem ?? (error ? friendlyError(error) : null)} />
       <div className="flex gap-2">
         <Button type="submit" disabled={pending || !draft.title.trim()}>
           {pending ? "Saving…" : task ? "Save" : "Add task"}
@@ -944,7 +964,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
             !hotelContact && (
               <div className="bg-ink-50/60 mb-4 rounded-lg px-3 py-2.5">
                 <p className="text-ink-500 mb-1 text-[11px] font-medium tracking-wider uppercase">What to do</p>
-                <p className="text-ink-900 text-sm font-light whitespace-pre-line">{t.details}</p>
+                <p className="text-ink-900 text-sm font-light whitespace-pre-line">{renderUpdateBody(t.details)}</p>
               </div>
             )
           )}

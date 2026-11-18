@@ -468,7 +468,18 @@ export const taskRouter = createTRPCRouter({
         actorId: ctx.session.user.id,
         kind: "TASK_ASSIGNED",
         title: `${firstNameOf(ctx.session.user)} gave you a task: ${task.title}`,
-        body: [task.deadline ? `Due ${formatDate(task.deadline)}` : null, task.details].filter(Boolean).join("\n") || null,
+        body: [task.deadline ? `Due ${formatDate(task.deadline)}` : null, task.details ? plainMentions(task.details) : null].filter(Boolean).join("\n") || null,
+        link: `/tasks/${task.id}`,
+        taskId: task.id,
+      });
+      // Someone @mentioned in the details is told (the owner, 2026-11-18) — unless they were just given it.
+      const mentioned = task.details ? await mentionedIn(tx, task.details) : [];
+      await notify(tx, {
+        to: mentioned.filter((id) => !task.assignees.some((person) => person.id === id)),
+        actorId: ctx.session.user.id,
+        kind: "TASK_MENTION",
+        title: `${firstNameOf(ctx.session.user)} mentioned you on "${task.title}"`,
+        body: plainMentions(task.details ?? ""),
         link: `/tasks/${task.id}`,
         taskId: task.id,
       });
@@ -514,6 +525,20 @@ export const taskRouter = createTRPCRouter({
         link: `/tasks/${id}`,
         taskId: id,
       });
+      // Newly @mentioned in the details (the owner, 2026-11-18): told once, when first named there.
+      if (fields.details !== undefined && after.details) {
+        const earlier = new Set(before.details ? await mentionedIn(tx, before.details) : []);
+        const named = (await mentionedIn(tx, after.details)).filter((person) => !earlier.has(person) && !added.includes(person));
+        await notify(tx, {
+          to: named,
+          actorId: ctx.session.user.id,
+          kind: "TASK_MENTION",
+          title: `${firstNameOf(ctx.session.user)} mentioned you on "${after.title}"`,
+          body: plainMentions(after.details),
+          link: `/tasks/${id}`,
+          taskId: id,
+        });
+      }
       if (before.status !== after.status) {
         await notify(tx, {
           to: [after.requestedBy?.id, ...after.assignees.map((person) => person.id)].filter((person) => !added.includes(person ?? "")),
