@@ -709,9 +709,14 @@ model QuotationCancellation {
   quotation          Quotation        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   quotationId        String
   kind               CancellationKind
-  cutoffOn           DateTime         @db.Date
+  /// The cut-off. Empty only for a term in words with no date (doc §3.10).
+  cutoffOn           DateTime?        @db.Date
   /// How much may go by the cut-off — for attrition or release. 10% is 1000.
   percentBasisPoints Int?
+  /// A number of rooms that may be cancelled by the cut-off, rather than a
+  /// share — "two family rooms free until 1 September" (doc §4.11, 2026-11-18).
+  rooms              Int?
+  roomType           String?
   /// What cancelling costs from the cut-off, as a share — a cancellation fee.
   feeBasisPoints     Int?
   remarks            String?
@@ -2278,8 +2283,13 @@ model OfferCancellation {
   offer              Offer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
   offerId            String
   kind               CancellationKind
-  cutoffOn           DateTime         @db.Date
+  /// The cut-off. Empty only for a term in words with no date (doc §4.11).
+  cutoffOn           DateTime?        @db.Date
   percentBasisPoints Int?
+  /// A number of rooms the client may cancel by the cut-off, free or for the
+  /// fee, rather than a share (doc §4.11, 2026-11-18).
+  rooms              Int?
+  roomType           String?
   feeBasisPoints     Int?
   remarks            String?
   position           Int              @default(0)

@@ -33,7 +33,7 @@ export type AgreementData = {
   event: { name: string; startDate: Date; endDate: Date; country: string | null };
   lines: { property: string; propertyAddress: string | null; room: string; rooms: number; checkIn: Date; checkOut: Date; rateCents: number }[];
   payments: { onSignature: boolean; dueOn: Date | null; percentBasisPoints: number }[];
-  cancellations: { kind: string; cutoffOn: Date; percentBasisPoints: number | null; feeBasisPoints: number | null; remarks: string | null }[];
+  cancellations: { kind: string; cutoffOn: Date | null; percentBasisPoints: number | null; feeBasisPoints: number | null; rooms: number | null; roomType: string | null; remarks: string | null }[];
   inclusions: string[];
   conditions: string[];
   validUntil: Date;
@@ -93,10 +93,21 @@ function paymentLines(data: AgreementData, under: string) {
   });
 }
 
+/** "Two (2) family rooms", "Three (3) rooms" — as the agreement writes a number of rooms. */
+export function roomsInWords(rooms: number, roomType: string | null) {
+  const words = numberInWords(rooms);
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)} (${rooms}) ${roomType?.trim() || (rooms === 1 ? "room" : "rooms")}`;
+}
+
 function cancellationText(cut: AgreementData["cancellations"][number]) {
+  // A term in words, with no date: as written (doc §4.11, 2026-11-18).
+  if (!cut.cutoffOn) return cut.remarks ?? "";
   const by = `up to and including ${plainDate(cut.cutoffOn)}`;
   const said =
-    cut.feeBasisPoints !== null
+    // A number of rooms the client may cancel (2026-11-18): "Two (2) family rooms may be cancelled free of charge up to and including 1 September 2027."
+    cut.rooms !== null
+      ? `${roomsInWords(cut.rooms, cut.roomType)} may be cancelled ${cut.feeBasisPoints ? `with a ${share(cut.feeBasisPoints)} cancellation fee` : "free of charge"} ${by}.`
+      : cut.feeBasisPoints !== null
       ? `From ${plainDate(cut.cutoffOn)}, a cancellation fee of ${share(cut.feeBasisPoints)} of the full value of the Booking applies.`
       : cut.kind === "ATTRITION"
         ? `Up to ${cut.percentBasisPoints !== null ? share(cut.percentBasisPoints) : "an agreed share"} of the rooms may be reduced free of charge ${by}.`

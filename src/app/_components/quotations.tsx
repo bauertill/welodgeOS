@@ -11,8 +11,9 @@ import { InUsd, useUsd } from "~/app/_components/in-usd";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { RateIncludesPicker } from "~/app/_components/room-categories";
-import { checkTerms, TermsEditor, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
+import { checkTerms, TermsEditor, toCancellationDraft, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
 import { dayKey } from "~/lib/dates";
+import { cutSummary } from "~/lib/cancellation";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import { currencyOptions } from "~/lib/currency";
 import { contractHref, percent } from "~/lib/finance";
@@ -158,11 +159,7 @@ return [
   [
     "Cancellation",
     quotation.cancellations
-      .map((cut) =>
-        cut.feeBasisPoints !== null
-          ? `${percent(cut.feeBasisPoints)} charged from ${formatDate(cut.cutoffOn)}`
-          : `${cut.kind === "ATTRITION" ? "attrition" : cut.kind === "RELEASE" ? "release" : "other"}${cut.percentBasisPoints !== null ? ` ${percent(cut.percentBasisPoints)}` : ""} until ${formatDate(cut.cutoffOn)}`,
-      )
+      .map(cutSummary)
       .join(" · ") || null,
   ],
   ["Cancellation terms", quotation.cancellationTerms],
@@ -783,12 +780,7 @@ function QuotationEditor({
   );
   const [cancellations, setCancellations] = useState<CancellationDraft[]>(
     quotation?.cancellations.length
-      ? quotation.cancellations.map((cut) => ({
-          kind: cut.feeBasisPoints !== null ? "FEE" : cut.kind === "ATTRITION" || cut.kind === "RELEASE" ? cut.kind : "OTHER",
-          cutoffOn: dayKey(cut.cutoffOn),
-          percent: toPercent(cut.feeBasisPoints ?? cut.percentBasisPoints),
-          remarks: cut.remarks ?? "",
-        }))
+      ? quotation.cancellations.map((cut) => toCancellationDraft(cut, dayKey))
       : [{ kind: "FEE", cutoffOn: "", percent: "", remarks: "" }],
   );
   const set = (key: keyof typeof draft) => (value: string) => setDraft((current) => ({ ...current, [key]: value }));
@@ -1018,7 +1010,14 @@ function QuotationEditor({
       </div>
 
       <div className="space-y-4">
-        <TermsEditor payments={payments} setPayments={setPayments} cancellations={cancellations} setCancellations={setCancellations} taxes />
+        <TermsEditor
+          payments={payments}
+          setPayments={setPayments}
+          cancellations={cancellations}
+          setCancellations={setCancellations}
+          taxes
+          roomTypes={lines.map((line) => cats.find((category) => category.id === line.categoryId)?.name ?? "").filter(Boolean)}
+        />
         <label className="flex flex-wrap items-center gap-2 text-[13px]">
           <span className="text-ink-700 font-medium">The contract will be on</span>
           <Select value={agreementOn ?? ""} onChange={(e) => setAgreementOn((e.target.value || null) as "HOTEL" | "WE_LODGE" | null)} className="w-52" aria-label="Whose agreement">

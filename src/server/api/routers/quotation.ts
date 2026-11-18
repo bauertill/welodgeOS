@@ -63,7 +63,11 @@ const taxInput = z
 /** A cancellation cut-off as quoted: by this date, this share. */
 export const cancellationInput = z.object({
   kind: z.nativeEnum(CancellationKind),
-  cutoffOn: day,
+  /** Empty only for a term in words (2026-11-18). */
+  cutoffOn: optionalDay,
+  /** A number of rooms that may be cancelled by the cut-off, rather than a share. */
+  rooms: z.number().int().min(1).max(100_000).nullable().default(null),
+  roomType: z.string().max(200).default(""),
   percentBasisPoints: z.number().int().min(0).max(10_000).nullable(),
   feeBasisPoints: z.number().int().min(0).max(10_000).nullable(),
   remarks: z.string().max(500),
@@ -356,9 +360,11 @@ export const quotationRouter = createTRPCRouter({
           data: cancellations.map((cut, position) => ({
             quotationId: saved.id,
             kind: cut.kind,
-            cutoffOn: parseDay(cut.cutoffOn),
+            cutoffOn: toDay(cut.cutoffOn),
             percentBasisPoints: cut.percentBasisPoints,
             feeBasisPoints: cut.feeBasisPoints,
+            rooms: cut.rooms,
+            roomType: cut.rooms !== null ? blank(cut.roomType) : null,
             remarks: blank(cut.remarks),
             position,
           })),
@@ -482,6 +488,8 @@ export const quotationRouter = createTRPCRouter({
               .join(" · ")}`
           : null,
         quotation.otherTaxes ? `Other taxes: ${quotation.otherTaxes}` : null,
+        // Cancellation terms in words with no date have no cut-off on the contract: kept here (2026-11-18).
+        ...quotation.cancellations.filter((cut) => !cut.cutoffOn && cut.remarks).map((cut) => `Cancellation: ${cut.remarks}`),
       ]
         .filter(Boolean)
         .join("\n\n");
@@ -514,14 +522,18 @@ export const quotationRouter = createTRPCRouter({
         })),
       });
       await tx.contractCancellation.createMany({
-        data: quotation.cancellations.map((cut) => ({
-          contractId: contract.id,
-          kind: cut.kind,
-          cutoffOn: cut.cutoffOn,
-          percentBasisPoints: cut.percentBasisPoints,
-          feeBasisPoints: cut.feeBasisPoints,
-          remarks: cut.remarks,
-        })),
+        data: quotation.cancellations
+          .filter((cut) => cut.cutoffOn)
+          .map((cut) => ({
+            contractId: contract.id,
+            kind: cut.kind,
+            cutoffOn: cut.cutoffOn!,
+            percentBasisPoints: cut.percentBasisPoints,
+            feeBasisPoints: cut.feeBasisPoints,
+            appliesTo: cut.rooms !== null ? `${cut.rooms} ${cut.rooms === 1 ? "room" : "rooms"}` : null,
+            roomType: cut.roomType,
+            remarks: cut.remarks,
+          })),
       });
       await tx.quotation.update({ where: { id: quotation.id }, data: { status: "ACCEPTED", contractId: contract.id } });
       await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contract", entityId: contract.id, summary: `Contract made from the quotation "${quotation.name}"` });
