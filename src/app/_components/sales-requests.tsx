@@ -335,6 +335,22 @@ function initialsOf(name: string) {
 function StageGroup({ stage, requests, colours }: { stage: SalesRequestStage; requests: Request[]; colours: Map<string, EventColour> }) {
   const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2 text-[10px] font-medium tracking-wider whitespace-nowrap uppercase";
   const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
+  const router = useRouter();
+  /*
+   * Anywhere on a row opens the request (the owner, 2026-11-18: "having to
+   * click on the name is hard") — except its own buttons and links, the
+   * manager picker and delete, and anything in a popup they open, which is
+   * not inside the row on the page. Text being selected is left alone, and a
+   * Cmd/Ctrl-click opens it in a new tab, as on the name.
+   */
+  const openRow = (event: React.MouseEvent<HTMLTableRowElement>, id: string) => {
+    const target = event.target as HTMLElement;
+    if (!event.currentTarget.contains(target)) return;
+    if (target.closest("a, button, input, select, textarea, label, [role=listbox], [role=option]")) return;
+    if (window.getSelection()?.toString()) return;
+    if (event.metaKey || event.ctrlKey) window.open(`/sales/${id}`, "_blank");
+    else router.push(`/sales/${id}`);
+  };
   return (
     <section>
       <h2 className="mb-2 flex items-center gap-2 text-[14px] font-medium">
@@ -360,7 +376,7 @@ function StageGroup({ stage, requests, colours }: { stage: SalesRequestStage; re
             {requests.map((request) => {
               const colour = request.event ? colours.get(request.event.id) : undefined;
               return (
-              <tr key={request.id} className="group hover:bg-ink-50/40">
+              <tr key={request.id} onClick={(event) => openRow(event, request.id)} className="group hover:bg-ink-50/40 cursor-pointer">
                 <td className={`${td} min-w-44`} style={{ boxShadow: `inset 4px 0 0 ${colour?.stripe ?? "transparent"}` }}>
                   <Link href={`/sales/${request.id}`} className="text-ink-900 hover:text-brand-700 font-medium">
                     {request.client.name}
