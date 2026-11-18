@@ -903,6 +903,26 @@ export const inventoryRouter = createTRPCRouter({
    * is exactly one place that decides what a room-night means (doc §4, the
    * Inventory tab overhaul).
    */
+  /**
+   * The clients on an event's stock sheet (the owner, 2026-11-18): those
+   * holding, buying or asking for any of its nights, whatever their state —
+   * what the sheet's client filter offers, not every client on file.
+   */
+  clientsOnSheet: protectedProcedure.input(z.object({ eventId: z.string(), keep: z.string().optional() })).query(({ ctx, input }) =>
+    ctx.db.client.findMany({
+      where: {
+        OR: [
+          { roomNights: { some: { eventId: input.eventId } } },
+          { requests: { some: { roomNight: { eventId: input.eventId } } } },
+          // The client already chosen stays offered, so the filter never shows blank.
+          ...(input.keep ? [{ id: input.keep }] : []),
+        ],
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, shortName: true },
+    }),
+  ),
+
   grid: protectedProcedure
     .input(
       z.object({

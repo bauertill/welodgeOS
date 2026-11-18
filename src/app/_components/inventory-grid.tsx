@@ -205,7 +205,8 @@ export function InventoryGrid({
     // The last sheet stays on screen while the next one loads, so nothing —
     // an open calendar least of all — disappears from under the pointer.
   }, { enabled: restored, placeholderData: keepPreviousData });
-  const clients = api.clients.list.useQuery();
+  // Only the clients on this sheet (the owner, 2026-11-18), not every client on file.
+  const clients = api.inventory.clientsOnSheet.useQuery({ eventId, keep: clientId || undefined });
   // What is available over the window in view (doc §5.4): whole rooms held
   // by us and not sold on every night of it. Only a sale takes a room — a
   // block is a hold that may lapse, so a blocked room still counts here. This
@@ -768,7 +769,7 @@ export function InventoryGrid({
           className="w-52"
           value={clientId}
           onChange={setClientId}
-          placeholder="Every client"
+          placeholder={clients.data && clients.data.length === 0 ? "No clients on the sheet yet" : "Every client"}
           options={(clients.data ?? []).map((client) => ({
             id: client.id,
             label: client.name,
