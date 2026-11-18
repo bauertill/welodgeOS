@@ -1007,6 +1007,7 @@ model User {
   gmail              GmailConnection?
   agreementTemplates AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
   updatesSeen        UpdateBoardSeen[]
+  taskFiles TaskFile[] @relation("TaskFileUploadedBy")
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
@@ -1872,6 +1873,8 @@ model Task {
   salesRequestId String?
 
   comments TaskComment[]
+  /// Files put on the task (doc §2.8, 2026-11-18).
+  files    TaskFile[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -1886,6 +1889,28 @@ model Task {
 
 /// A comment on a task, with @mentions like an update (doc §2.6). Its author
 /// can edit it, which it then says.
+/**
+ * A file put on a task (the owner, 2026-11-18): kept in the site's private
+ * file store (Vercel Blob), opened only by someone signed in, through the
+ * site. Removing it from the task deletes the file too.
+ */
+model TaskFile {
+  id           String   @id @default(cuid())
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId       String
+  /// Where it is in the file store.
+  pathname     String   @unique
+  /// The file's name, as it was uploaded.
+  name         String
+  contentType  String?
+  size         Int
+  uploadedBy   User?    @relation("TaskFileUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
 model TaskComment {
   id        String    @id @default(cuid())
   task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)

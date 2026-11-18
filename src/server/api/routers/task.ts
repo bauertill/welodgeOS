@@ -9,6 +9,7 @@ import { formatDate, formatRange } from "~/lib/format";
 import { contactOutcomeLabels, taskStatusLabels } from "~/lib/tasks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
+import { deleteStored, storedFile, taskFilePrefix } from "~/server/files";
 import { GET_RATE } from "~/server/get-rate";
 import { ensureHotelContactTask, HOTEL_CONTACT, hotelContactItems } from "~/server/hotel-contact";
 import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
@@ -530,9 +531,40 @@ export const taskRouter = createTRPCRouter({
   }),
 
   remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const files = await ctx.db.taskFile.findMany({ where: { taskId: input.id }, select: { pathname: true } });
     const removed = await ctx.db.task.delete({ where: { id: input.id } });
+    // Its files go from the store too.
+    await deleteStored(files.map((file) => file.pathname));
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Task", entityId: removed.id, summary: `Task removed: ${removed.title}` });
     return removed;
+  }),
+
+  // --- Files (doc §2.8, 2026-11-18) -----------------------------------------
+
+  files: protectedProcedure.input(z.object({ taskId: z.string() })).query(({ ctx, input }) =>
+    ctx.db.taskFile.findMany({ where: { taskId: input.taskId }, orderBy: { createdAt: "desc" }, include: { uploadedBy: person } }),
+  ),
+
+  /** Record a file the browser has just put in the store, under this task's own place — checked to be there. */
+  addFile: protectedProcedure
+    .input(z.object({ taskId: z.string(), pathname: z.string().max(1000), name: z.string().trim().min(1).max(300) }))
+    .mutation(async ({ ctx, input }) => {
+      if (!input.pathname.startsWith(taskFilePrefix(input.taskId))) throw new TRPCError({ code: "BAD_REQUEST", message: "That file is not this task's." });
+      const stored = await storedFile(input.pathname);
+      if (!stored) throw new TRPCError({ code: "BAD_REQUEST", message: "The file did not arrive — try uploading it again." });
+      const file = await ctx.db.taskFile.create({
+        data: { taskId: input.taskId, pathname: input.pathname, name: input.name, contentType: stored.contentType || null, size: stored.size, uploadedById: ctx.session.user.id },
+        include: { uploadedBy: person },
+      });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Task", entityId: input.taskId, summary: `File added: ${input.name}` });
+      return file;
+    }),
+
+  /** Take a file off the task — it is deleted from the store as well. */
+  removeFile: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const file = await ctx.db.taskFile.delete({ where: { id: input.id } });
+    await deleteStored([file.pathname]);
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Task", entityId: file.taskId, summary: `File removed: ${file.name}` });
   }),
 
   // --- Comments --------------------------------------------------------------
