@@ -2976,8 +2976,15 @@ follow-up and the signing come next and are not built yet (§12).
 - **Choosing the rooms on an offer line** (the owner, 2026-11-18: "searching this whole list is
   stupid"): first **search the property** by typing its name, then pick one of **its** room types
   — chosen straight away when it has only one — instead of scrolling every room type of every
-  hotel on the event. **Duplicate** on a line copies it just below — the same rooms for another
-  period or rate.
+  hotel on the event. **A room type at a different rate per period** (the owner, 2026-11-18, as
+  in a Schedule 2.1 — Ocean Luxury Lofts' Standard Apartment, 4 units, at $323.35, $555,
+  $324.30 and $410 over four periods): a line is the property, the room type and the number of
+  rooms once, with its **periods** beneath, each its own dates and rate per night, its nights
+  and its subtotal. **+ Add a period at another rate** adds one starting on the last one's
+  departure; changing the room type or the rooms changes every period. **Duplicate for another
+  room type** copies the periods and rates below for another room type at the same property. It
+  is saved, blocked and written into the agreement as one line per period, as before; an offer
+  opened again shows side by side lines of the same room type and rooms as one line with periods.
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
 - **Before there is any offer** (2026-10-30), an open request with no rate card answer has a
