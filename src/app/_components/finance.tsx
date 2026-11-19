@@ -435,7 +435,7 @@ export function ContractsList({ eventId }: { eventId: string }) {
  * on, each with its own + New contract; accepting a quotation adds one too.
  */
 export function PropertyContracts({ propertyId, contractorId, events }: { propertyId?: string; contractorId?: string; events: { id: string; name: string }[] }) {
-  // The same list serves a contractor's page (doc §3.11), one per event it works on.
+  // The same list serves a contractor's page (doc §3.11), for its one event.
   const contracts = api.finance.contracts.useQuery({ propertyId, contractorId, party: "SUPPLIER" });
   const rows = contracts.data ?? [];
   if (events.length === 0) {

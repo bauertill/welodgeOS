@@ -39,7 +39,7 @@ import {
 } from "~/lib/tasks";
 import { renderUpdateBody } from "~/lib/updates";
 import { api, type RouterOutputs } from "~/trpc/react";
-import { contractorWhat } from "~/lib/contractors";
+import { contractorHref, contractorWhat } from "~/lib/contractors";
 
 /**
  * Tasks (doc §2.8): one board everyone sees, as a list or as Kanban columns
@@ -92,7 +92,7 @@ function About({ task }: { task: Task }) {
     task.salesRequest
       ? { href: `/sales/${task.salesRequest.id}`, label: `${task.salesRequest.client.name} · request` }
       : task.client && { href: `/clients/${task.client.id}`, label: task.client.shortName ?? task.client.name },
-    task.contractor && { href: `/contractors/${task.contractor.id}`, label: task.contractor.name },
+    task.contractor && { href: contractorHref(task.contractor.eventId, task.contractor.id), label: task.contractor.name },
   ].filter(Boolean) as { href: string; label: string }[];
   if (items.length === 0) return null;
   return (
@@ -807,9 +807,16 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
           <Combobox value={draft.salesRequestId} onChange={(value) => set("salesRequestId", value)} placeholder="No sales request" options={requestOptions} />
           <Combobox
             value={draft.contractorId}
-            onChange={(value) => set("contractorId", value)}
+            onChange={(value) => {
+              set("contractorId", value);
+              // A contractor belongs to one event: choosing it fills in that event when left empty.
+              const event = contractors.data?.find((contractor) => contractor.id === value)?.eventId;
+              if (event && !draft.eventId) set("eventId", event);
+            }}
             placeholder="No contractor"
-            options={(contractors.data ?? []).map((contractor) => ({ id: contractor.id, label: contractor.name, detail: contractorWhat(contractor) }))}
+            options={(contractors.data ?? [])
+              .filter((contractor) => !draft.eventId || contractor.eventId === draft.eventId)
+              .map((contractor) => ({ id: contractor.id, label: contractor.name, detail: `${contractorWhat(contractor)} · ${contractor.event.name}` }))}
           />
         </div>
       </div>

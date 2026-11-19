@@ -9,7 +9,7 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, Fieldset, FormError, friendlyError, Input, Select, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { contractingFields, type ContractingKey } from "~/lib/contracting";
-import { contractorKindLabels, contractorKinds, contractorWhat } from "~/lib/contractors";
+import { contractorHref, contractorKindLabels, contractorKinds, contractorWhat } from "~/lib/contractors";
 import { useRemembered } from "~/lib/remembered";
 import { propertyTypeLabels } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -18,41 +18,30 @@ const th = "text-ink-500 border-ink-200/60 border-b px-3 py-2.5 text-[10px] font
 const td = "border-ink-200/40 border-b px-3 py-2.5 align-top text-[13px] font-light";
 
 /**
- * Contractors (doc §3.11): the furniture, cleaning and other companies we use
- * besides the hotels — every one, or one event's. Found by name, what they do
- * or a contact; a click on a row opens its page. On an event, the ones working
- * on it, and an existing contractor put on it or a new one made.
+ * An event's Contractors tab (doc §3.11): the furniture, cleaning and other
+ * companies working on it besides the hotels — each belongs to this event
+ * alone. Found by name, what they do or a contact; a click on a row opens its
+ * page; + New contractor adds one.
  */
-export function ContractorList({ eventId }: { eventId?: string }) {
+export function ContractorList({ eventId }: { eventId: string }) {
   const router = useRouter();
-  const [search, setSearch] = useRemembered(eventId ? `contractors:event:${eventId}:search` : "contractors:search", "");
-  const [kind, setKind] = useRemembered<string>(eventId ? `contractors:event:${eventId}:kind` : "contractors:kind", "");
+  const [search, setSearch] = useRemembered(`contractors:event:${eventId}:search`, "");
+  const [kind, setKind] = useRemembered<string>(`contractors:event:${eventId}:kind`, "");
   const list = api.contractor.list.useQuery({ eventId });
-  const all = api.contractor.list.useQuery({}, { enabled: Boolean(eventId) });
   const [making, setMaking] = useState(false);
-  const [adding, setAdding] = useState("");
-  const utils = api.useUtils();
-  const putOn = api.contractor.setEvent.useMutation({
-    onSuccess: () => {
-      setAdding("");
-      void utils.contractor.invalidate();
-    },
-  });
 
   const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const rows = (list.data ?? []).filter((contractor) => {
     if (kind && contractor.kind !== kind) return false;
-    const text = `${contractor.name} ${contractorWhat(contractor)} ${contractor.contacts.map((c) => `${c.name} ${c.email ?? ""}`).join(" ")} ${contractor.email ?? ""} ${contractor.events.map((e) => e.event.name).join(" ")}`.toLowerCase();
+    const text = `${contractor.name} ${contractorWhat(contractor)} ${contractor.contacts.map((c) => `${c.name} ${c.email ?? ""}`).join(" ")} ${contractor.email ?? ""}`.toLowerCase();
     return words.every((word) => text.includes(word));
   });
-  const onEvent = new Set((list.data ?? []).map((contractor) => contractor.id));
-  const others = (all.data ?? []).filter((contractor) => !onEvent.has(contractor.id));
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <span className="min-w-64 flex-1">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, what they do, a contact or an event" aria-label="Search contractors" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, what they do or a contact" aria-label="Search contractors" />
         </span>
         <span className="w-48">
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="What they do">
@@ -64,16 +53,6 @@ export function ContractorList({ eventId }: { eventId?: string }) {
             ))}
           </Select>
         </span>
-        {eventId && others.length > 0 && (
-          <span className="flex min-w-72 items-center gap-2">
-            <span className="min-w-0 flex-1">
-              <Combobox value={adding} onChange={setAdding} placeholder="Put an existing contractor on this event…" options={others.map((contractor) => ({ id: contractor.id, label: contractor.name, detail: contractorWhat(contractor) }))} />
-            </span>
-            <Button type="button" variant="secondary" disabled={!adding || putOn.isPending} onClick={() => putOn.mutate({ contractorId: adding, eventId, on: true })}>
-              Add
-            </Button>
-          </span>
-        )}
         <span className="ml-auto">
           <Button type="button" onClick={() => setMaking(true)}>
             + New contractor
@@ -85,7 +64,7 @@ export function ContractorList({ eventId }: { eventId?: string }) {
         <p className="text-ink-500 text-sm font-light">Loading…</p>
       ) : rows.length === 0 ? (
         <p className="text-ink-500 text-sm font-light">
-          {list.data?.length ? "No contractor matches." : eventId ? "No contractors on this event yet — add one above, or make a new one." : "No contractors yet. Add the furniture, cleaning and other companies we use with + New contractor."}
+          {list.data?.length ? "No contractor matches." : "No contractors on this event yet. Add the furniture, cleaning and other companies working on it with + New contractor."}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl bg-white">
@@ -95,7 +74,6 @@ export function ContractorList({ eventId }: { eventId?: string }) {
                 <th className={`${th} pl-4`}>Contractor</th>
                 <th className={th}>What they do</th>
                 <th className={th}>Contact</th>
-                {!eventId && <th className={th}>Events</th>}
                 <th className={th}>Properties</th>
                 <th className={th}>Contracts</th>
                 <th className={th}>Tasks</th>
@@ -110,13 +88,13 @@ export function ContractorList({ eventId }: { eventId?: string }) {
                     className="hover:bg-brand-50/40 cursor-pointer"
                     onClick={(e) => {
                       if ((e.target as HTMLElement).closest("a, button")) return;
-                      const href = `/contractors/${contractor.id}${eventId ? `?back=${encodeURIComponent(`/events/${eventId}/contractors`)}` : ""}`;
+                      const href = contractorHref(eventId, contractor.id);
                       if (e.metaKey || e.ctrlKey) window.open(href, "_blank");
                       else router.push(href);
                     }}
                   >
                     <td className={`${td} text-ink-900 pl-4 font-medium`}>
-                      <Link href={`/contractors/${contractor.id}`} className="hover:text-brand-700">
+                      <Link href={contractorHref(eventId, contractor.id)} className="hover:text-brand-700">
                         {contractor.name}
                       </Link>
                     </td>
@@ -131,7 +109,6 @@ export function ContractorList({ eventId }: { eventId?: string }) {
                         (contractor.email ?? contractor.phone ?? <span className="text-ink-500">—</span>)
                       )}
                     </td>
-                    {!eventId && <td className={td}>{contractor.events.map((e) => e.event.name).join(", ") || <span className="text-ink-500">—</span>}</td>}
                     <td className={td}>{contractor._count.properties || "—"}</td>
                     <td className={td}>{contractor._count.contracts || "—"}</td>
                     <td className={td}>{contractor._count.tasks || "—"}</td>
@@ -149,14 +126,14 @@ export function ContractorList({ eventId }: { eventId?: string }) {
 }
 
 /** A new contractor: its name and what it does — the rest on its page, which opens straight after. */
-function NewContractor({ eventId, onClose }: { eventId?: string; onClose: () => void }) {
+function NewContractor({ eventId, onClose }: { eventId: string; onClose: () => void }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ContractorKind>("FURNITURE");
   const [service, setService] = useState("");
-  const create = api.contractor.create.useMutation({ onSuccess: (made) => router.push(`/contractors/${made.id}${eventId ? `?back=${encodeURIComponent(`/events/${eventId}/contractors`)}` : ""}`) });
+  const create = api.contractor.create.useMutation({ onSuccess: (made) => router.push(contractorHref(eventId, made.id)) });
   return (
-    <Popup size="medium" title="New contractor" subtitle={eventId ? "A company working on this event besides the hotels. Its page opens next, for its contacts, properties and contracts." : "A company we use besides the hotels. Its page opens next, for its contacts, events, properties and contracts."} onClose={onClose}>
+    <Popup size="medium" title="New contractor" subtitle="A company working on this event besides the hotels. Its page opens next, for its contacts, properties and contracts." onClose={onClose}>
       <form
         className="space-y-4 rounded-xl bg-white p-5"
         onSubmit={(e) => {
@@ -222,7 +199,7 @@ export function ContractorForm({ contractor }: { contractor: Contractor }) {
       router.refresh();
     },
   });
-  const remove = api.contractor.remove.useMutation({ onSuccess: () => router.push("/contractors") });
+  const remove = api.contractor.remove.useMutation({ onSuccess: ({ eventId }) => router.push(`/events/${eventId}/contractors`) });
 
   return (
     <form
@@ -339,7 +316,7 @@ export function ContractorForm({ contractor }: { contractor: Contractor }) {
           className="ml-auto"
           disabled={remove.isPending}
           onClick={() => {
-            if (window.confirm(`Delete ${contractor.name}? Its contacts, events and properties go with it; tasks stay, about nothing. Refused while it has a contract.`)) remove.mutate({ id: contractor.id });
+            if (window.confirm(`Delete ${contractor.name}? Its contacts and properties go with it; tasks stay, about nothing. Refused while it has a contract.`)) remove.mutate({ id: contractor.id });
           }}
         >
           Delete contractor
@@ -349,53 +326,11 @@ export function ContractorForm({ contractor }: { contractor: Contractor }) {
   );
 }
 
-/** The events a contractor works on: each taken off with ×, another put on. */
-export function ContractorEvents({ contractor }: { contractor: Contractor }) {
-  const router = useRouter();
-  const events = api.event.list.useQuery();
-  const [adding, setAdding] = useState("");
-  const set = api.contractor.setEvent.useMutation({
-    onSuccess: () => {
-      setAdding("");
-      router.refresh();
-    },
-  });
-  const on = new Set(contractor.events.map((e) => e.eventId));
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {contractor.events.length === 0 && <span className="text-ink-500 text-sm font-light">On no event yet.</span>}
-      {contractor.events.map((entry) => (
-        <span key={entry.eventId} className="bg-brand-50 text-brand-700 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px]">
-          <Link href={`/events/${entry.eventId}/contractors`} className="hover:underline">
-            {entry.event.name}
-          </Link>
-          <button
-            type="button"
-            aria-label={`Take off ${entry.event.name}`}
-            onClick={() => window.confirm(`Take ${contractor.name} off ${entry.event.name}? Its contracts for it stay.`) && set.mutate({ contractorId: contractor.id, eventId: entry.eventId, on: false })}
-            className="hover:text-ink-900 leading-none"
-          >
-            ×
-          </button>
-        </span>
-      ))}
-      <span className="flex w-72 items-center gap-2">
-        <span className="min-w-0 flex-1">
-          <Combobox value={adding} onChange={setAdding} placeholder="Put on an event…" options={(events.data ?? []).filter((event) => !on.has(event.id)).map((event) => ({ id: event.id, label: event.name }))} />
-        </span>
-        <Button type="button" variant="secondary" disabled={!adding || set.isPending} onClick={() => set.mutate({ contractorId: contractor.id, eventId: adding, on: true })}>
-          Add
-        </Button>
-      </span>
-      <FormError message={set.error ? friendlyError(set.error) : null} />
-    </div>
-  );
-}
-
-/** The properties a contractor serves, and what it does at each. */
+/** The properties a contractor serves — among its event's — and what it does at each. */
 export function ContractorProperties({ contractor }: { contractor: Contractor }) {
   const router = useRouter();
-  const properties = api.property.list.useQuery({});
+  const entries = api.scouting.listForEvent.useQuery({ eventId: contractor.eventId, amenityIds: [] });
+  const properties = (entries.data ?? []).filter((entry) => entry.status !== "REJECTED").map((entry) => entry.property);
   const [adding, setAdding] = useState("");
   const [what, setWhat] = useState("");
   const set = api.contractor.setProperty.useMutation({
@@ -445,7 +380,7 @@ export function ContractorProperties({ contractor }: { contractor: Contractor })
             value={adding}
             onChange={setAdding}
             placeholder="Add a property it serves…"
-            options={(properties.data ?? []).filter((property) => !linked.has(property.id)).map((property) => ({ id: property.id, label: property.name, detail: property.city }))}
+            options={properties.filter((property) => !linked.has(property.id)).map((property) => ({ id: property.id, label: property.name, detail: property.city }))}
           />
         </span>
         <span className="min-w-56 flex-1">
@@ -466,23 +401,19 @@ export function PropertyContractors({ propertyId }: { propertyId: string }) {
   if (rows.isLoading) return <p className="text-ink-500 text-sm font-light">Loading…</p>;
   if (!rows.data?.length) {
     return (
-      <p className="text-ink-500 text-sm font-light">
-        None yet. Add a property to a contractor on its page, under{" "}
-        <Link href="/contractors" className="text-brand-700 hover:underline">
-          Contractors
-        </Link>
-        .
-      </p>
+      <p className="text-ink-500 text-sm font-light">None yet. Add a property to a contractor on its page, under the event&apos;s Contractors tab.</p>
     );
   }
   return (
     <ul className="divide-ink-200/60 divide-y text-[13px]">
       {rows.data.map((entry) => (
         <li key={entry.contractorId} className="flex flex-wrap items-baseline gap-x-3 py-2">
-          <Link href={`/contractors/${entry.contractorId}`} className="text-ink-900 hover:text-brand-700 font-medium">
+          <Link href={contractorHref(entry.contractor.eventId, entry.contractorId)} className="text-ink-900 hover:text-brand-700 font-medium">
             {entry.contractor.name}
           </Link>
-          <span className="text-ink-500 text-xs font-light">{contractorWhat(entry.contractor)}</span>
+          <span className="text-ink-500 text-xs font-light">
+            {contractorWhat(entry.contractor)} · {entry.contractor.event.name}
+          </span>
           {entry.what && <span className="text-ink-700 font-light">{entry.what}</span>}
           {(entry.contractor.phone ?? entry.contractor.email) && <span className="text-ink-500 ml-auto text-xs font-light">{entry.contractor.phone ?? entry.contractor.email}</span>}
         </li>

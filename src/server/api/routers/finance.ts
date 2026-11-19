@@ -146,20 +146,18 @@ export const financeRouter = createTRPCRouter({
 
   /**
    * Who a new contract can be with on this event: the hotels on its list, any
-   * client, or any contractor — those working on this event first (doc §3.11).
+   * client, or one of this event's contractors (doc §3.11).
    */
   counterparties: protectedProcedure
     .input(z.object({ eventId: z.string(), party: z.enum(["SUPPLIER", "CLIENT", "CONTRACTOR"]) }))
     .query(async ({ ctx, input }) => {
       if (input.party === "CONTRACTOR") {
         const contractors = await ctx.db.contractor.findMany({
+          where: { eventId: input.eventId },
           orderBy: { name: "asc" },
-          select: { id: true, name: true, kind: true, service: true, events: { where: { eventId: input.eventId }, select: { eventId: true } } },
+          select: { id: true, name: true, kind: true, service: true },
         });
-        return contractors
-          .map((contractor) => ({ id: contractor.id, label: contractor.name, detail: `${contractorWhat(contractor)}${contractor.events.length ? " · on this event" : ""}`, here: contractor.events.length > 0 }))
-          .sort((a, b) => Number(b.here) - Number(a.here) || a.label.localeCompare(b.label))
-          .map(({ here: _here, ...option }) => option);
+        return contractors.map((contractor) => ({ id: contractor.id, label: contractor.name, detail: contractorWhat(contractor) }));
       }
       if (input.party === "CLIENT") {
         const clients = await ctx.db.client.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, shortName: true } });
@@ -190,6 +188,10 @@ export const financeRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       if (input.party === "SUPPLIER" && !input.propertyId === !input.contractorId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the hotel or the contractor this contract is with." });
+      }
+      if (input.party === "SUPPLIER" && input.contractorId && !input.propertyId) {
+        const contractor = await ctx.db.contractor.findUnique({ where: { id: input.contractorId }, select: { eventId: true } });
+        if (contractor?.eventId !== input.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That contractor works on another event." });
       }
       if (input.party === "CLIENT" && !input.clientId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the client this contract is with." });

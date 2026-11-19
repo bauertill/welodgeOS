@@ -657,7 +657,7 @@ of several) — and *How this works* on the Sales requests page goes straight to
   only from now on** and every update, report and task is made in OS; the daily habit (the
   bell, my tasks, the Updates feed); how people are told (an email at once only when
   `@mentioned`, everything else in the bell and the 7:00 morning summary, §2.9); where things
-  live, menu by menu; and five house rules. Who to ask: the owner.
+  live, menu by menu (contractors on each event's Contractors tab); and five house rules. Who to ask: the owner.
 - **I'm stuck**: the questions people ask most — the link that cannot be made, the request
   that will not move on, the offer that ran out — each answered in two sentences and pointing
   to its section.
@@ -1697,13 +1697,17 @@ its one period** and nothing below shows.
 ### 3.11 Contractors
 
 > **Built** (2026-11-19). The owner: "we are also using other contractors like furniture
-> companies, cleaning companies etc, we should have a space for this."
+> companies, cleaning companies etc, we should have a space for this" — and, the same day:
+> "they form part of an event and don't cross from event to event. It should be a tab in the
+> event."
 
-A **contractor** is a company we use besides the hotels: furniture rental, cleaning, linen and
-laundry, maintenance, transport, security, catering, or *Other* with what it does in words.
-It is global, like a client — the same company comes back for the next event — and is reached
-from **Contractors** in the left menu, and from the **Contractors** tab on each event, which
-lists the ones working on that event, puts an existing one on it, or makes a new one there.
+A **contractor** is a company working on an event besides the hotels: furniture rental,
+cleaning, linen and laundry, maintenance, transport, security, catering, or *Other* with what
+it does in words. **It belongs to one event** and lives on that event's **Contractors** tab,
+which lists them and makes new ones; there is no Contractors menu item and no list across
+events (the first version, global like a client, lasted a morning with none made). The same
+company working on two events is two contractors, one on each; its name is unique within an
+event. Older links to a contractor open it on its event.
 
 Each contractor's page holds:
 
@@ -1711,21 +1715,22 @@ Each contractor's page holds:
   notes; its **contacts** (name, role, email, phone); and its **contracting details** (the
   same fields as a hotel's, §3.9: trade name, VAT and registration numbers, IBAN, BIC,
   signatory, contract email), visible to every colleague.
-- **Events** it works on — put on or taken off; taking it off an event keeps its contracts.
-- **Properties it serves**, each with what it does there ("Furnishes the 12 apartments"); each
+- **Properties it serves** — chosen from its event's properties — each with what it does there ("Furnishes the 12 apartments"); each
   property's page has a *Contractors* tab listing them back.
-- **Contracts and payments**, one list per event it is on, each with *+ New contract*. A
+- **Contracts and payments** for its event, with *+ New contract*; a contract can only name a
+  contractor of the contract's own event. A
   contractor's contract is a **supplier contract** (§7.1) with the contractor in the hotel's
   place — the new-contract form asks *With: a hotel · a contractor · a client* — so its
   payments appear under Finances › Payments *To suppliers*, its cancellation deadlines with the
   suppliers', and a contract in another currency locks its rate at signing like any other (§7).
   It carries no room-nights.
-- **Tasks** about it (a task's *About* can now name a contractor, §2.8), with *+ Add task*.
+- **Tasks** about it (a task's *About* can now name a contractor, §2.8 — the picker shows the
+  chosen event's contractors, and choosing one fills in its event), with *+ Add task*.
 - **Updates** (§2.6), shown on the board's *Other providers* tab too.
 - Its history.
 
 A contractor is **deleted** only while it has no contract (those are kept); its contacts,
-events, properties and updates go with it, and its tasks stay, about nothing.
+properties and updates go with it, and its tasks stay, about nothing.
 
 ## 4. Phase 2 — Acquisition & Sales
 
@@ -4138,7 +4143,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
-| §3.11 Contractors | **Built** (2026-11-19) | Contractors menu item and a Contractors tab per event; each with what it does, contacts, contracting details, events, properties it serves (shown on the property too), supplier contracts and payments per event, tasks and updates (board's Other providers tab) |
+| §3.11 Contractors | **Built** (2026-11-19) | A Contractors tab per event — each contractor belongs to one event (no menu item since the same day); each with what it does, contacts, contracting details, properties it serves among the event's (shown on the property too), supplier contracts and payments, tasks and updates (board's Other providers tab) |
 | §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |

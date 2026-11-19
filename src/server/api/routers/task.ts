@@ -32,7 +32,7 @@ const include = {
   property: { select: { id: true, name: true } },
   client: { select: { id: true, name: true, shortName: true } },
   salesRequest: { select: { id: true, client: { select: { name: true } } } },
-  contractor: { select: { id: true, name: true } },
+  contractor: { select: { id: true, name: true, eventId: true } },
   _count: { select: { comments: true } },
 } satisfies Prisma.TaskInclude;
 

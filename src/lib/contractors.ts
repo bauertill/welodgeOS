@@ -17,3 +17,6 @@ export const contractorKinds = Object.keys(contractorKindLabels) as ContractorKi
 /** "Furniture", or what an Other contractor does in its own words. */
 export const contractorWhat = (contractor: { kind: ContractorKind; service?: string | null }) =>
   contractor.kind === "OTHER" && contractor.service?.trim() ? contractor.service.trim() : contractorKindLabels[contractor.kind];
+
+/** A contractor's page, on its event's Contractors tab (doc §3.11). */
+export const contractorHref = (eventId: string, contractorId: string) => `/events/${eventId}/contractors/${contractorId}`;

@@ -189,17 +189,11 @@ const places = [
     title: "Events",
     href: "/events",
     who: "Acquisitions, operations",
-    text: "Each event with its Properties and map, Inventory, Deadlines, Position, Contractors and Event details.",
+    text: "Each event with its Properties and map, Inventory, Deadlines, Position, Event details, and Contractors: the furniture, cleaning and other companies working on it.",
   },
   { title: "Sales", href: "/sales", who: "Sales", text: "Sales requests from first interest to signed, Clients and their contacts, and Rate cards." },
   { title: "Tasks", href: "/tasks", who: "Everyone", text: "The team's shared task board, as a Kanban or a list. Filter by person, event, status or priority." },
   { title: "Updates", href: "/updates", who: "Everyone", text: "Every update the team posts, in one feed, with replies and tags." },
-  {
-    title: "Contractors",
-    href: "/contractors",
-    who: "Operations, acquisitions",
-    text: "Furniture, cleaning, linen and other companies we use besides hotels: contacts, contracts, payments and the properties they serve.",
-  },
   { title: "Guides", href: "/guide", who: "Everyone", text: "Step-by-step guides, under your name at the bottom left. Searchable, with answers for when you're stuck." },
   { title: "My profile", href: "/team/profile", who: "Everyone", text: "Your details, and which emails you get." },
 ];
