@@ -31,12 +31,12 @@ export default async function WelcomeGuidePage() {
         <p className="mt-6 text-[13px] font-light text-white/70">A five-minute read.</p>
       </div>
 
-      {/* From today */}
+      {/* From Friday 20 November */}
       <div className="flex flex-col gap-4 rounded-2xl border-2 border-[#e0234e]/30 bg-[#fdecef] p-6 md:flex-row md:items-center md:p-8">
         <Icon path="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" className="h-10 w-10 shrink-0 text-[#e0234e]" />
         <div>
-          <p className="text-[12px] font-medium tracking-wider text-[#b3173b] uppercase">From today</p>
-          <p className="text-ink-900 mt-1 text-xl font-semibold md:text-2xl">monday.com is now view only. All updates and reports go into OS.</p>
+          <p className="text-[12px] font-medium tracking-wider text-[#b3173b] uppercase">From Friday 20 November</p>
+          <p className="text-ink-900 mt-1 text-xl font-semibold md:text-2xl">monday.com becomes view only. All updates and reports go into OS.</p>
         </div>
       </div>
 
@@ -49,7 +49,7 @@ export default async function WelcomeGuidePage() {
         <p>
           Open a hotel and you see its contracts, quotations, tasks and full history. Open a client and you see every request, rate card and conversation.
         </p>
-        <p>The sales team already works in OS. Now acquisitions and the rest of the team are moving over too, so from today OS is where the work happens.</p>
+        <p>The sales team already works in OS. Now acquisitions and the rest of the team are moving over too, so from Friday 20 November OS is where the work happens.</p>
       </Section>
 
       {/* 2. monday.com */}
