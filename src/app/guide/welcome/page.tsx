@@ -172,11 +172,27 @@ export default async function WelcomeGuidePage() {
         </ol>
       </Section>
 
+      {/* First launch: feedback */}
+      <div className="border-brand-400 bg-brand-50/60 flex flex-col gap-4 rounded-2xl border p-6 md:flex-row md:p-8">
+        <Icon path="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4-3.9-3.8 5.4-.8Z" className="text-brand-700 h-9 w-9 shrink-0" />
+        <div className="text-ink-700 space-y-2 text-[14px] leading-relaxed font-light md:text-[15px]">
+          <p className="text-ink-900 text-lg font-semibold">This is our first launch</p>
+          <p>
+            We&apos;re still working through things like notifications, so some parts will keep improving over the coming weeks. Your feedback helps us get there
+            faster.
+          </p>
+          <p>
+            <strong className="text-ink-900 font-medium">Found a problem or have an idea?</strong> Send Brandon a message on chat, with a screenshot of the issue. A
+            proper bug-reporting system is on its way.
+          </p>
+        </div>
+      </div>
+
       {/* Help + close */}
       <div className="brand-gradient rounded-2xl px-6 py-10 text-center text-white md:px-12">
         <p className="text-2xl font-semibold">Thanks for making the move. One place, one team.</p>
         <p className="mx-auto mt-3 max-w-xl text-[14px] font-light text-white/85">
-          Stuck? Open the Guides and search them. If something still looks wrong or missing, tell Brandon.
+          Stuck? Open the Guides and search them. Something wrong or missing? Message Brandon on chat, with a screenshot.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link href="/tasks" className="text-brand-700 rounded-lg bg-white px-5 py-2.5 text-[14px] font-medium shadow-sm hover:bg-white/90">

@@ -658,7 +658,10 @@ of several) — and *How this works* on the Sales requests page goes straight to
   **a full import of monday.com**, so everything from there should be found in OS; the daily habit (the
   bell, my tasks, the Updates feed); how people are told (an email at once only when
   `@mentioned`, everything else in the bell and the 7:00 morning summary, §2.9); where things
-  live, menu by menu (contractors on each event's Contractors tab); and five house rules. Who to ask: the owner.
+  live, menu by menu (contractors on each event's Contractors tab); five house rules; and that
+  this is the first launch — notifications and more still being worked through — so problems
+  and ideas go to the owner by chat message with a screenshot until a bug-reporting system
+  exists. Who to ask: the owner.
 - **I'm stuck**: the questions people ask most — the link that cannot be made, the request
   that will not move on, the offer that ran out — each answered in two sentences and pointing
   to its section.
