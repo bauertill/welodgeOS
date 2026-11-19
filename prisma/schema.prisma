@@ -815,6 +815,16 @@ model Contract {
   /// (doc §7.1). The total stays the rooms; payments are shares of it.
   taxCents Int?
   currency            String?
+  /// The rate to the US dollar locked on the day it was signed (the owner,
+  /// 2026-11-19: "it needs to lock"), for a contract in another currency:
+  /// units of `lockedRateCurrency` per US$ 1, in millionths (5.3412 is
+  /// 5341200) — the European Central Bank's for `lockedRateFor`, published on
+  /// `lockedRateOn` (the business day before, at a weekend). Locked again when
+  /// the signing date or the currency changes (doc §7).
+  lockedRateMicros   Int?
+  lockedRateCurrency String?
+  lockedRateFor      DateTime? @db.Date
+  lockedRateOn       DateTime? @db.Date
   notes               String?
   /// Said on purpose when the contract has no cancellation deadlines at all,
   /// so it stops being flagged as missing them.

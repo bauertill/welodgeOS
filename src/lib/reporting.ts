@@ -19,8 +19,9 @@ import type { NightRecord } from "~/lib/stay-rows";
  * **Totals are never converted** (invariant §4.5.9). Every total states the
  * currency it is in. The one exception is a night's margin when it is bought in
  * one currency and sold in another (the Women's World Cup: bought in reais, sold
- * in dollars): the buying price is turned into the selling currency at the
- * day's rate, so the margin is in what the client pays (2026-11-19).
+ * in dollars): the buying price is turned into the selling currency, so the
+ * margin is in what the client pays — at the rate locked when its contract was
+ * signed, or today's while there is none (2026-11-19).
  */
 
 export type Money = { currency: string; cents: number };
@@ -542,8 +543,13 @@ export type Financials = {
   costAtRisk: Money[];
   idleCost: Money[];
   /**
-   * Nights bought and sold in different currencies whose margin used the day's
-   * rate, and the date of that rate.
+   * Nights bought and sold in different currencies whose margin used the rates
+   * locked when their contracts were signed.
+   */
+  marginLocked: number;
+  /**
+   * Nights bought and sold in different currencies with no locked rate yet (an
+   * unsigned contract, or none), whose margin used today's rate — and its date.
    */
   marginConverted: number;
   rateDate: string | null;
@@ -557,13 +563,25 @@ export type Financials = {
 /** Rates as units of each currency per US dollar, and the day they are for. */
 export type DayRates = { date: string; perUsd: Record<string, number> };
 
-/** An amount turned from one currency into another at the day's rate, or null. */
-export function convert(cents: number, from: string, to: string, rates: DayRates | null): number | null {
-  if (from === to) return cents;
-  const fromPerUsd = rates?.perUsd[from];
-  const toPerUsd = rates?.perUsd[to];
-  if (!fromPerUsd || !toPerUsd) return null;
-  return Math.round((cents / fromPerUsd) * toPerUsd);
+/**
+ * A night's buying price in its selling currency: through the dollar, at each
+ * side's contract rate locked at signing where it has one, else today's.
+ */
+function costInSellCurrency(night: NightRecord, rates: DayRates | null): { cents: number; locked: boolean } | null {
+  const buy = night.buyCurrency!;
+  const sell = night.sellCurrency!;
+  if (buy === sell) return { cents: night.buyPriceCents!, locked: true };
+  let locked = true;
+  const perUsd = (currency: string, lock: NightRecord["acquisitionRate"]) => {
+    if (currency === "USD") return 1;
+    if (lock && lock.currency === currency) return lock.perUsd;
+    locked = false;
+    return rates?.perUsd[currency] ?? null;
+  };
+  const buyPerUsd = perUsd(buy, night.acquisitionRate);
+  const sellPerUsd = perUsd(sell, night.salesRate);
+  if (!buyPerUsd || !sellPerUsd) return null;
+  return { cents: Math.round((night.buyPriceCents! / buyPerUsd) * sellPerUsd), locked };
 }
 
 export function financials(nights: NightRecord[], rates: DayRates | null = null): Financials {
@@ -575,6 +593,7 @@ export function financials(nights: NightRecord[], rates: DayRates | null = null)
   const idleCost = new Purse();
   let marginNotComparable = 0;
   let marginConverted = 0;
+  let marginLocked = 0;
 
   for (const night of nights) {
     if (held(night)) committedCost.add(night.buyPriceCents, night.buyCurrency);
@@ -587,14 +606,18 @@ export function financials(nights: NightRecord[], rates: DayRates | null = null)
       night.sellCurrency;
 
     if (hasBoth) {
-      // Bought in another currency: the buying price in the selling currency
-      // at the day's rate, so the margin is in what the client pays.
-      const cost = convert(night.buyPriceCents!, night.buyCurrency!, night.sellCurrency!, rates);
+      // Bought in another currency: the buying price in the selling currency,
+      // at the rate locked at signing (else today's), so the margin is in what
+      // the client pays.
+      const cost = costInSellCurrency(night, rates);
       if (cost === null) {
         marginNotComparable += 1;
       } else {
-        if (night.buyCurrency !== night.sellCurrency) marginConverted += 1;
-        const margin = night.sellPriceCents! - cost;
+        if (night.buyCurrency !== night.sellCurrency) {
+          if (cost.locked) marginLocked += 1;
+          else marginConverted += 1;
+        }
+        const margin = night.sellPriceCents! - cost.cents;
         // Realised and pipeline margin are never added together (doc §7).
         const purse = held(night) && sold(night) ? realisedMargin : pipelineMargin;
         purse.add(margin, night.sellCurrency);
@@ -620,6 +643,7 @@ export function financials(nights: NightRecord[], rates: DayRates | null = null)
     pipelineMargin: pipelineMargin.total,
     costAtRisk: costAtRisk.total,
     idleCost: idleCost.total,
+    marginLocked,
     marginConverted,
     rateDate: marginConverted > 0 ? (rates?.date ?? null) : null,
     marginNotComparable,

@@ -237,7 +237,7 @@ export function PositionReport({ eventId }: { eventId: string }) {
       {/* --- §7 money ------------------------------------------------------- */}
       <Collapsible
         title="Money"
-        hint="Summed over room-nights, per currency, with the total in US dollars at today's rate beneath. A margin bought in one currency and sold in another is worked out at today's rate."
+        hint="Summed over room-nights, per currency, with the total in US dollars at today's rate beneath. A margin bought in one currency and sold in another uses the rate locked when its contract was signed (today's until then)."
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <MoneyCard
@@ -271,12 +271,21 @@ export function PositionReport({ eventId }: { eventId: string }) {
             amounts={money.data?.idleCost ?? []}
           />
         </div>
+        {(money.data?.marginLocked ?? 0) > 0 && (
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            {money.data!.marginLocked} room-nights are bought in one currency
+            and sold in another: their margin is in the selling currency, with
+            the buying price converted at the rate locked when the contracts
+            were signed.
+          </p>
+        )}
         {(money.data?.marginConverted ?? 0) > 0 && (
           <p className="text-ink-500 mt-3 text-xs font-light">
             {money.data!.marginConverted} room-nights are bought in one currency
-            and sold in another: their margin is in the selling currency, with
-            the buying price converted at today&apos;s European Central Bank rate
-            {money.data!.rateDate ? ` (${formatDate(new Date(`${money.data!.rateDate}T00:00:00Z`))})` : ""}, so it moves with the rate until it is paid.
+            and sold in another under a contract not signed yet: their margin
+            uses today&apos;s European Central Bank rate
+            {money.data!.rateDate ? ` (${formatDate(new Date(`${money.data!.rateDate}T00:00:00Z`))})` : ""} until the
+            contract is signed, when the rate locks.
           </p>
         )}
         {(money.data?.marginNotComparable ?? 0) > 0 && (

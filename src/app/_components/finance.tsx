@@ -865,6 +865,21 @@ function ContractDetails({ contract }: { contract: FullContract }) {
             }
           />
           <Row label="Signed on" value={contract.signedOn ? formatDate(contract.signedOn) : null} />
+          {contract.currency && contract.currency !== "USD" && (
+            <Row
+              label="Rate to US$"
+              value={
+                contract.lockedRateMicros !== null && contract.lockedRateCurrency === contract.currency && contract.lockedRateOn ? (
+                  <span title="Locked on the day the contract was signed — the European Central Bank's rate for that day (the business day before, at a weekend). It changes only if the signing date or the currency does.">
+                    US$ 1 = {(contract.lockedRateMicros / 1_000_000).toFixed(4)} {contract.currency}
+                    <span className="text-ink-500 ml-1.5 text-xs font-light">locked at signing · ECB rate of {formatDate(contract.lockedRateOn)}</span>
+                  </span>
+                ) : (
+                  <span className="text-ink-500 font-light">{contract.signedOn ? "Not locked yet — the signing day's rate could not be fetched; tried again when the contract is opened" : "Locked on the day it is signed; until then the margin uses today's rate"}</span>
+                )
+              }
+            />
+          )}
           <Row label="Account manager" value={contract.owner ? <Manager person={contract.owner} /> : null} />
           <Row label="Room-nights" value={String(contract.party === "SUPPLIER" ? contract._count.acquisitionNights : contract._count.salesNights)} />
           {contract.notes && <Row label="Notes" value={contract.notes} />}

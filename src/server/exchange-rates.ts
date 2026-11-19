@@ -31,3 +31,28 @@ export async function usdRates(): Promise<UsdRates | null> {
     return cached?.rates ?? null;
   }
 }
+
+/**
+ * The rates for one past day (doc §7: a contract's rate is locked on the day
+ * it was signed). The ECB publishes on business days, so a weekend or holiday
+ * gives the last rate before it, and `date` says which. Kept for good once
+ * fetched, since a past day's rate never changes; null when it cannot be had.
+ */
+const byDay = new Map<string, UsdRates>();
+
+export async function usdRatesOn(day: string): Promise<UsdRates | null> {
+  const known = byDay.get(day);
+  if (known) return known;
+  try {
+    const symbols = CURRENCIES.filter((code) => code !== "USD").join(",");
+    const response = await fetch(`https://api.frankfurter.dev/v1/${day}?base=USD&symbols=${symbols}`, { signal: AbortSignal.timeout(5000), cache: "no-store" });
+    if (!response.ok) throw new Error(`Exchange rates for ${day}: ${response.status}`);
+    const body = (await response.json()) as { date: string; rates: Record<string, number> };
+    const rates = { date: body.date, perUsd: { ...body.rates, USD: 1 } };
+    byDay.set(day, rates);
+    return rates;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}

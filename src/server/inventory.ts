@@ -6,7 +6,7 @@ import type {
   SalesState,
 } from "generated/prisma";
 
-import type { NightRecord } from "~/lib/stay-rows";
+import type { LockedRate, NightRecord } from "~/lib/stay-rows";
 import type { InventoryAction } from "~/lib/inventory";
 
 /**
@@ -15,11 +15,21 @@ import type { InventoryAction } from "~/lib/inventory";
  * none of them can disagree about what a night is.
  */
 
+/** A night's contract, with its rate to the dollar locked at signing (doc §7). */
+const lockedContract = { id: true, name: true, signedOn: true, currency: true, lockedRateMicros: true, lockedRateCurrency: true, lockedRateFor: true, lockedRateOn: true } as const;
+
+/** The contract's locked rate, while it still matches its signing date and currency. */
+function lockedRate(contract: { signedOn: Date | null; currency: string | null; lockedRateMicros: number | null; lockedRateCurrency: string | null; lockedRateFor: Date | null; lockedRateOn: Date | null } | null): LockedRate | null {
+  if (!contract?.signedOn || contract.lockedRateMicros === null || !contract.lockedRateFor || !contract.lockedRateOn) return null;
+  if (contract.lockedRateCurrency !== contract.currency || contract.lockedRateFor.getTime() !== contract.signedOn.getTime()) return null;
+  return { currency: contract.lockedRateCurrency!, perUsd: contract.lockedRateMicros / 1_000_000, rateOn: contract.lockedRateOn };
+}
+
 /** Everything the stock sheet and the position grid need about a night. */
 export const nightInclude = {
   client: { select: { id: true, name: true, shortName: true } },
-  acquisitionContract: { select: { id: true, name: true } },
-  salesContract: { select: { id: true, name: true } },
+  acquisitionContract: { select: lockedContract },
+  salesContract: { select: lockedContract },
   acquisitionOwner: { select: { name: true, email: true } },
   salesOwner: { select: { name: true, email: true } },
   requests: {
@@ -82,6 +92,7 @@ export function flatten(night: LoadedNight): NightRecord {
     acquisitionNotes: night.acquisitionNotes,
     acquisitionContractId: night.acquisitionContractId,
     acquisitionContract: night.acquisitionContract?.name ?? null,
+    acquisitionRate: lockedRate(night.acquisitionContract),
 
     salesState: night.salesState,
     clientId: night.clientId,
@@ -96,6 +107,7 @@ export function flatten(night: LoadedNight): NightRecord {
     salesNotes: night.salesNotes,
     salesContractId: night.salesContractId,
     salesContract: night.salesContract?.name ?? null,
+    salesRate: lockedRate(night.salesContract),
 
     requestedBy: night.requests.map((request) => ({
       id: request.clientId,

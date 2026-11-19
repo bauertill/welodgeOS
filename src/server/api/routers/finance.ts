@@ -8,6 +8,7 @@ import { cancellationKindLabels, isSettled, missingTerms, paymentAmount, payment
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { moveStage } from "~/server/api/routers/sales";
 import { diffFields, logAudit } from "~/server/audit";
+import { lockContractRates } from "~/server/locked-rates";
 
 /**
  * Contracts, their payments and their cancellation deadlines (doc §7.1): what
@@ -121,6 +122,7 @@ export const financeRouter = createTRPCRouter({
 
   /** One contract in full: its terms, and what is due and open. */
   contract: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    await lockContractRates(ctx.db, [input.id]);
     const contract = await ctx.db.contract.findUnique({
       where: { id: input.id },
       include: {
@@ -225,6 +227,7 @@ export const financeRouter = createTRPCRouter({
         ...(input.noCancellationTerms !== undefined && { noCancellationTerms: input.noCancellationTerms }),
       };
       const after = await ctx.db.contract.update({ where: { id: input.id }, data, include: { owner: person } });
+      await lockContractRates(ctx.db, [input.id]);
       const readable = (c: typeof after) => ({
         name: c.name,
         documentUrl: c.documentUrl,
