@@ -317,6 +317,17 @@ the first is the one to try first. The email shown is the Google account the per
 in with (§2.5). It cannot be changed from the profile, because it is not a contact detail
 the person chose but the identity that lets them in; changing it would lock them out.
 
+**Team tags** (the owner, 2026-11-19: "team tags, for example @LA … then it sends a
+notification to everybody instead of having to tag each individual person"). At the top of
+the Team page: each tag is a short name and the colleagues in it, made, changed or deleted by
+**anyone signed in** (no admin step, as everywhere else on the team pages). Typing @ in an
+update, a reply, a task's details or a comment offers the team tags first (*LA · team · 5
+people*), then colleagues; **@LA tells every member exactly as if each had been @mentioned by
+name** — in the bell, and by email to those who get mention emails (§2.9) — the writer
+excepted. A name is unique and can never be a colleague's name, so a mention means one thing.
+Membership is read when the post is written: someone added to @LA later is not told about
+older posts, and deleting a tag leaves the words in posts that used it.
+
 **The team directory** lists everyone who has ever signed in, with their title, email and
 numbers, and a *Message* button that opens a private conversation with that person.
 
@@ -557,6 +568,7 @@ about what they did themselves.
 | A task becomes overdue | The same people. Once |
 | A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card |
 | Someone is `@mentioned` in an update or a reply (§2.6, 2026-11-17) | Each person mentioned — **emailed** |
+| A team tag (`@LA`, §2.7) is written in any of the above | Each of its members, as if mentioned by name — **emailed** |
 | Someone replies to an update (§2.6) | Whoever wrote the update and whoever replied before, apart from those mentioned |
 
 **The bell** in the header shows how many are unread and the latest thirty, newest first;
@@ -658,7 +670,8 @@ of several) — and *How this works* on the Sales requests page goes straight to
   **a full import of monday.com**, so everything from there should be found in OS; the daily habit (the
   bell, my tasks, the Updates feed); how people are told (an email at once only when
   `@mentioned`, everything else in the bell and the 7:00 morning summary, §2.9); where things
-  live, menu by menu (contractors on each event's Contractors tab); five house rules; and that
+  live, menu by menu (contractors on each event's Contractors tab); team tags; five house rules;
+  the owner's onboarding call; and that
   this is the first launch — notifications and more still being worked through — so problems
   and ideas go to the owner by chat message with a screenshot until a bug-reporting system
   exists. Who to ask: the owner.
@@ -4158,6 +4171,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Reactions, replies, emoji | **Built** | Quick reactions (your three most used), the full emoji picker with search and skin tones, the team's own emoji (added by anyone, kept in the database, not yet removable), quote replies that jump to the original, emoji in the text |
 | §2.7 GIFs | **Built, needs a key** | GIPHY search and trending, sent as a link, PG-13. Needs `GIPHY_API_KEY` on the live site (`docs/todos.md`) |
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
+| §2.7 Team tags | **Built** (2026-11-19) | On the Team page; @LA in an update, reply, task or comment tells every member as a mention (bell and email); made and changed by anyone |
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | Files uploaded onto a task, kept in the private file store (2026-11-18). One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |

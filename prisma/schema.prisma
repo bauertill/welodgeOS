@@ -405,6 +405,19 @@ model ProviderContact {
   @@index([providerId])
 }
 
+/// A team tag (doc §2.7, the owner 2026-11-19: "team tags, for example @LA
+/// … then it sends a notification to everybody instead of having to tag each
+/// individual person"). Writing @[LA] in an update, reply, task or comment
+/// tells every member, exactly as if each had been @mentioned.
+model TeamTag {
+  id        String   @id @default(cuid())
+  /// Unique, and never a colleague's name, so a mention means one thing.
+  name      String   @unique
+  members   User[]   @relation("TeamTagMembers")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// What a contractor does for us (doc §3.11).
 enum ContractorKind {
   FURNITURE
@@ -1087,6 +1100,8 @@ model User {
   dailySummary       Boolean              @default(true)
   /// Their time zone, as their browser reports it ("Europe/Zurich", "America/Los_Angeles").
   timeZone           String?
+  /// The team tags they belong to — @LA tells all of them (doc §2.7, the owner 2026-11-19).
+  teamTags           TeamTag[]            @relation("TeamTagMembers")
   /// When their last morning summary went — so it goes once a day.
   summarySentAt      DateTime?
   notifications      Notification[]       @relation("NotificationFor")

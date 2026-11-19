@@ -3,8 +3,11 @@
 import { useRef, useState } from "react";
 
 import { Textarea } from "~/app/_components/form";
+import { api } from "~/trpc/react";
 
 type Person = { id: string; name: string | null; email: string | null };
+/** Someone to mention, or a team tag — @LA tells everyone in it (doc §2.7). */
+type Candidate = Person & { members?: number };
 
 const displayName = (person: Person) => person.name ?? person.email ?? "Someone";
 
@@ -13,7 +16,8 @@ const displayName = (person: Person) => person.name ?? person.email ?? "Someone"
  * opens a dropdown of matching people, and choosing one inserts `@[Full
  * Name]` at the cursor — the literal token `~/lib/updates.tsx` renders back
  * as a highlight (doc §2.6). Mentions are plain text written at post time,
- * not a link to a live user record.
+ * not a link to a live user record. Team tags (@LA, doc §2.7) are offered
+ * first, written the same way, and tell every member.
  */
 export function MentionTextarea({
   value,
@@ -41,12 +45,17 @@ export function MentionTextarea({
     pendingCursor.current = null;
   }
 
+  const tags = api.teamTag.list.useQuery(undefined, { staleTime: 60_000 });
+  const everyone: Candidate[] = [
+    ...(tags.data ?? []).map((tag) => ({ id: `tag:${tag.id}`, name: tag.name, email: null, members: tag.members.length })),
+    ...people,
+  ];
   const candidates = trigger
-    ? people
+    ? everyone
         .filter((person) =>
           displayName(person).toLowerCase().includes(trigger.query.toLowerCase()),
         )
-        .slice(0, 6)
+        .slice(0, 8)
     : [];
 
   const updateTrigger = (text: string, cursor: number) => {
@@ -115,6 +124,11 @@ export function MentionTextarea({
                 }`}
               >
                 {displayName(person)}
+                {person.members !== undefined && (
+                  <span className={`ml-2 text-xs ${index === highlighted ? "text-white/80" : "text-ink-500"}`}>
+                    team · {person.members} {person.members === 1 ? "person" : "people"}
+                  </span>
+                )}
               </button>
             </li>
           ))}

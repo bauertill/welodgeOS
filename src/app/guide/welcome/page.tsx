@@ -28,7 +28,7 @@ export default async function WelcomeGuidePage() {
         <p className="mt-4 max-w-2xl text-[15px] font-light text-white/85 md:text-[17px]">
           We Lodge OS is where we now plan events, source and contract properties, sell to clients, and keep each other up to date.
         </p>
-        <p className="mt-6 text-[13px] font-light text-white/70">A five-minute read.</p>
+        <p className="mt-6 text-[13px] font-light text-white/70">A five-minute read. Brandon will also walk everyone through the system on an onboarding call.</p>
       </div>
 
       {/* From Friday 20 November */}
@@ -158,7 +158,8 @@ export default async function WelcomeGuidePage() {
         </p>
         <p>
           <strong className="text-ink-900 font-medium">Tag the people who need to know.</strong> Type @ and their name. They get an email straight away, with a link to
-          the page.
+          the page. To reach a whole team, use its team tag: <strong className="font-medium">@LA</strong> tells everyone in it at once. Team tags are made on the
+          Team page, under your name at the bottom left.
         </p>
         <ol className="space-y-3">
           {houseRules.map(([title, text], i) => (
@@ -180,6 +181,10 @@ export default async function WelcomeGuidePage() {
           <p>
             We&apos;re still working through things like notifications, so some parts will keep improving over the coming weeks. Your feedback helps us get there
             faster.
+          </p>
+          <p>
+            <strong className="text-ink-900 font-medium">The onboarding call.</strong> Brandon will take the team through the system on a call. Bring your questions,
+            and read this page first so we can spend the time on how you work.
           </p>
           <p>
             <strong className="text-ink-900 font-medium">Found a problem or have an idea?</strong> Send Brandon a message on chat, with a screenshot of the issue. A
