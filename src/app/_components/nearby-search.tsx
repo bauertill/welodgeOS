@@ -25,7 +25,6 @@ const distance = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.
 export function NearbySearch({
   eventId,
   pins,
-  allPins,
   places,
   layers = [],
   availability,
@@ -33,8 +32,6 @@ export function NearbySearch({
 }: {
   eventId: string;
   pins: MapPin[];
-  /** Every property on the event, whatever the filters — the Accommodation layer. */
-  allPins?: MapPin[];
   places: MapPlace[];
   layers?: MapLayer[];
   availability: MapAvailability[];
@@ -202,7 +199,6 @@ export function NearbySearch({
 
       <ScoutingMap
         pins={pins}
-        allPins={allPins}
         places={places}
         layers={layers}
         availability={availability}
