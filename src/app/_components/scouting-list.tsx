@@ -235,9 +235,11 @@ export function ScoutingList({
     [places],
   );
 
-  const pins: MapPin[] = useMemo(
+  // Every property on the list as a pin — the map's Accommodation layer shows
+  // them all, whatever the filters; the ones matching the filters stand out.
+  const allPins: MapPin[] = useMemo(
     () =>
-      rows
+      allRows
         .filter(
           (entry) =>
             entry.property.latitude !== null &&
@@ -260,8 +262,12 @@ export function ScoutingList({
             .join(" · "),
           href: `/properties/${entry.property.id}`,
         })),
-    [rows],
+    [allRows],
   );
+  const pins = useMemo(() => {
+    const shown = new Set(rows.map((entry) => entry.id));
+    return allPins.filter((pin) => shown.has(pin.id));
+  }, [allPins, rows]);
 
   const withoutCoordinates = rows.length - pins.length;
 
@@ -723,6 +729,7 @@ export function ScoutingList({
           <NearbySearch
             eventId={eventId}
             pins={pins}
+            allPins={allPins}
             places={places}
             layers={layers}
             availability={availability.data ?? []}

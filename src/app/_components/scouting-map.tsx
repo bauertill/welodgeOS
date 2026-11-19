@@ -105,7 +105,7 @@ function useShown(eventId: string | undefined, layers: MapLayer[]) {
       // As above.
     }
   };
-  const ids = [...layers.map((layer) => layer.id), "properties"];
+  const ids = [...layers.map((layer) => layer.id), "properties", "accommodation"];
   return {
     isShown: (id: string) => (id === "transit" ? hidden.includes("transit:on") : !hidden.includes(id)),
     toggle: (id: string) =>
@@ -405,8 +405,15 @@ export function ScoutingMap({
   searchPoint = null,
   layers = [],
   onlyPlaceId = null,
+  allPins,
 }: {
   pins: MapPin[];
+  /**
+   * Every property on the event's list, whatever the list's filters — the
+   * Accommodation layer (the owner, 2026-11-19: "we should show all the
+   * properties"). Those also matching the filters are drawn once, as theirs.
+   */
+  allPins?: MapPin[];
   places?: MapPlace[];
   availability?: MapAvailability[];
   eventId?: string;
@@ -427,6 +434,9 @@ export function ScoutingMap({
     ? places.filter((place) => place.id === onlyPlaceId)
     : places.filter((place) => !place.layerId || shown.isShown(place.layerId));
   const showProperties = shown.isShown("properties");
+  const matching = new Set(showProperties ? pins.map((pin) => pin.id) : []);
+  // The rest of the event's properties, paler, so what the filters picked stands out.
+  const otherPins = allPins && shown.isShown("accommodation") && !onlyPlaceId ? allPins.filter((pin) => !matching.has(pin.id)) : [];
   // A place being added from the Layers panel: its spot, and whether the next map click sets it.
   const [draftPoint, setDraftPoint] = useState<{ latitude: number; longitude: number } | null>(null);
   const [picking, setPicking] = useState(false);
@@ -501,7 +511,7 @@ export function ScoutingMap({
     );
   }
 
-  const openProperty = pins.find((pin) => pin.id === openId);
+  const openProperty = pins.find((pin) => pin.id === openId) ?? allPins?.find((pin) => pin.id === openId);
   const openPlace = places.find((place) => place.id === openId);
 
   return (
@@ -538,6 +548,7 @@ export function ScoutingMap({
             layers={layers}
             places={places}
             shown={shown}
+            propertyCounts={{ matching: pins.length, all: allPins?.length }}
             draftPoint={draftPoint}
             setDraftPoint={setDraftPoint}
             picking={picking}
@@ -596,6 +607,30 @@ export function ScoutingMap({
               </AdvancedMarker>
             ))}
 
+            {otherPins.map((pin) => (
+              <AdvancedMarker
+                key={`all-${pin.id}`}
+                position={{ lat: pin.latitude, lng: pin.longitude }}
+                title={pin.name}
+                zIndex={openId === pin.id ? 1000 : 90}
+                clickable
+                onClick={() => openPin(pin.id)}
+              >
+                {/* Accommodation: every property on the event, a smaller, paler pin than those matching the filters. */}
+                <span className="group relative block translate-y-1/2">
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded border-2 border-white text-[10px] leading-none opacity-75 shadow transition-transform group-hover:scale-110 group-hover:opacity-100 ${openId === pin.id ? "ring-brand-300 scale-110 opacity-100 ring-4" : ""}`}
+                    style={{ background: propertyColor(pin) }}
+                  >
+                    {pin.type && isApartmentLike(pin.type) ? "🏠" : "🛏️"}
+                  </span>
+                  <span className="bg-ink-900 pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg group-hover:block">
+                    {pin.name}
+                    {pin.stars ? ` · ${pin.stars}★` : ""}
+                  </span>
+                </span>
+              </AdvancedMarker>
+            ))}
             {(showProperties ? pins : []).map((pin) => (
               <AdvancedMarker
                 key={pin.id}

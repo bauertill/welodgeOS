@@ -67,6 +67,7 @@ export function LayersPanel({
   layers,
   places,
   shown,
+  propertyCounts,
   draftPoint,
   setDraftPoint,
   picking,
@@ -76,6 +77,8 @@ export function LayersPanel({
   layers: MapLayer[];
   places: MapPlace[];
   shown: Shown;
+  /** Properties matching the list's filters, and on the event at all (the Accommodation layer). */
+  propertyCounts?: { matching: number; all?: number };
   /** Where a new place goes, pinned on the map meanwhile. */
   draftPoint: Point | null;
   setDraftPoint: (point: Point | null) => void;
@@ -278,7 +281,14 @@ export function LayersPanel({
               {adding?.layerId === layer.id && addForm}
             </div>
           ))}
-          {row("properties", "Our properties", <span className="bg-brand-500 inline-block h-2.5 w-2.5 shrink-0 rounded-full" />)}
+          {propertyCounts?.all !== undefined &&
+            row("accommodation", "Accommodation", <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm bg-[#8e7cc3] opacity-75" />, propertyCounts.all)}
+          {row(
+            "properties",
+            propertyCounts?.all !== undefined ? "Matching the filters" : "Our properties",
+            <span className="bg-brand-500 inline-block h-2.5 w-2.5 shrink-0 rounded-sm" />,
+            propertyCounts?.all !== undefined ? propertyCounts.matching : undefined,
+          )}
           {row("transit", "Google public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
           <div className="text-brand-700 flex justify-between px-1.5 pt-1 text-[11px]">
             <button type="button" onClick={shown.showAll} className="hover:underline">
