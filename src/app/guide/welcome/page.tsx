@@ -37,7 +37,7 @@ export default async function WelcomeGuidePage() {
         <div>
           <p className="text-[12px] font-medium tracking-wider text-[#b3173b] uppercase">From Friday 20 November</p>
           <p className="text-ink-900 mt-1 text-xl font-semibold md:text-2xl">monday.com becomes view only. All updates and reports go into OS.</p>
-          <p className="text-ink-700 mt-1.5 text-[14px] font-light">We&apos;ve done a full import of monday.com, so everything you had there is already in OS.</p>
+          <p className="text-ink-700 mt-1.5 text-[14px] font-light">We&apos;ve done a full import from monday.com: every client and contact, and all the LA28 work. It&apos;s already in OS.</p>
         </div>
       </div>
 
@@ -58,8 +58,8 @@ export default async function WelcomeGuidePage() {
         <div className="flex gap-4 rounded-xl border border-[#0a7a47]/25 bg-[#e8f5ee] p-5">
           <Icon path="M20 6 9 17l-5-5" className="mt-0.5 h-6 w-6 shrink-0 text-[#0a7a47]" />
           <p>
-            <strong className="text-ink-900 font-semibold">We did a full import of monday.com.</strong> Clients and their contacts, properties, and their updates and history
-            were all brought across, so all the information you need should be found in OS.
+            <strong className="text-ink-900 font-semibold">We did a full import from monday.com.</strong> Every client and their contacts, and all the LA28 work (the
+            properties, their updates and history) were brought across, so all that information should be found in OS.
           </p>
         </div>
         <ul className="space-y-2.5">

@@ -667,7 +667,8 @@ of several) — and *How this works* on the Sales requests page goes straight to
   be filled out on OS"), at `/guide/welcome` and first on the Guides page: one page for the
   whole team, for the owner to send as a link. It says what OS is; that **monday.com is view
   only from Friday 20 November 2026** and every update, report and task is made in OS — after
-  **a full import of monday.com**, so everything from there should be found in OS; the daily habit (the
+  **a full import from monday.com** (every client and contact, and all the LA28 work), so it
+  should all be found in OS; the daily habit (the
   bell, my tasks, the Updates feed); how people are told (an email at once only when
   `@mentioned`, everything else in the bell and the 7:00 morning summary, §2.9); where things
   live, menu by menu (contractors on each event's Contractors tab); team tags; five house rules;
