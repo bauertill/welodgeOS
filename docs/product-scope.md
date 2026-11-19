@@ -672,7 +672,7 @@ of several) — and *How this works* on the Sales requests page goes straight to
   bell, my tasks, the Updates feed); how people are told (an email at once only when
   `@mentioned`, everything else in the bell and the 7:00 morning summary, §2.9); where things
   live, menu by menu (contractors on each event's Contractors tab); team tags; five house rules;
-  the owner's onboarding call; and that
+  the onboarding call (no presenter named — it is for a large team); and that
   this is the first launch — notifications and more still being worked through — so problems
   and ideas go to the owner by chat message with a screenshot until a bug-reporting system
   exists. Who to ask: the owner.

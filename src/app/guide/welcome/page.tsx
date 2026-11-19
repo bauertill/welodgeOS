@@ -28,7 +28,7 @@ export default async function WelcomeGuidePage() {
         <p className="mt-4 max-w-2xl text-[15px] font-light text-white/85 md:text-[17px]">
           We Lodge OS is where we now plan events, source and contract properties, sell to clients, and keep each other up to date.
         </p>
-        <p className="mt-6 text-[13px] font-light text-white/70">A five-minute read. Brandon will also walk everyone through the system on an onboarding call.</p>
+        <p className="mt-6 text-[13px] font-light text-white/70">A five-minute read. We&apos;ll also walk everyone through the system on an onboarding call.</p>
       </div>
 
       {/* From Friday 20 November */}
@@ -183,7 +183,7 @@ export default async function WelcomeGuidePage() {
             faster.
           </p>
           <p>
-            <strong className="text-ink-900 font-medium">The onboarding call.</strong> Brandon will take the team through the system on a call. Bring your questions,
+            <strong className="text-ink-900 font-medium">The onboarding call.</strong> We&apos;ll take the team through the system on an onboarding call. Bring your questions,
             and read this page first so we can spend the time on how you work.
           </p>
           <p>
