@@ -37,6 +37,7 @@ export default async function WelcomeGuidePage() {
         <div>
           <p className="text-[12px] font-medium tracking-wider text-[#b3173b] uppercase">From Friday 20 November</p>
           <p className="text-ink-900 mt-1 text-xl font-semibold md:text-2xl">monday.com becomes view only. All updates and reports go into OS.</p>
+          <p className="text-ink-700 mt-1.5 text-[14px] font-light">We&apos;ve done a full import of monday.com, so everything you had there is already in OS.</p>
         </div>
       </div>
 
@@ -54,8 +55,15 @@ export default async function WelcomeGuidePage() {
 
       {/* 2. monday.com */}
       <Section number={2} title="What changes with monday.com" icon="M4 6h16M4 12h16M4 18h10">
+        <div className="flex gap-4 rounded-xl border border-[#0a7a47]/25 bg-[#e8f5ee] p-5">
+          <Icon path="M20 6 9 17l-5-5" className="mt-0.5 h-6 w-6 shrink-0 text-[#0a7a47]" />
+          <p>
+            <strong className="text-ink-900 font-semibold">We did a full import of monday.com.</strong> Clients and their contacts, properties, and their updates and history
+            were all brought across, so all the information you need should be found in OS.
+          </p>
+        </div>
         <ul className="space-y-2.5">
-          <Rule ok>Look things up on monday.com if you need old history.</Rule>
+          <Rule ok>Look for everything in OS first. monday.com stays open, view only, in case you need to double-check something.</Rule>
           <Rule>Add new items, updates, files or reports on monday.com.</Rule>
           <Rule ok>Log every update, call note, meeting summary and report in OS, on the property, client, request or contractor it is about.</Rule>
           <Rule ok>Create and assign all tasks in OS. Tasks no longer come through monday.com.</Rule>
