@@ -1891,7 +1891,11 @@ never a silent write.
    amount in another currency** (2026-11-18) is a guide only: today's European Central Bank
    reference rate, fetched from frankfurter.dev (only currency codes are sent) and refreshed
    every six hours; the rate and its date show on hover. Nothing is converted or stored at
-   it, and when the rate cannot be fetched the ≈ USD simply does not show.
+   it, and when the rate cannot be fetched the ≈ USD simply does not show. **One exception,
+   a night's margin** (the owner, 2026-11-19: on the Women's World Cup "we buy in BRL and sell
+   in USD"): where a night is bought in one currency and sold in another, its buying price is
+   turned into the selling currency at the day's rate, so the margin is in what the client
+   pays (§7). The money totals on the event's report also show their whole in ≈ USD beneath.
 
 ### 4.6 Deadlines
 
@@ -3717,7 +3721,14 @@ every aggregate is a sum over nights.
 
 Derived:
 
-- **Margin per night** = `sellPrice − buyPrice` (only meaningful where both are set).
+- **Margin per night** = `sellPrice − buyPrice` (only meaningful where both are set), in
+  the selling currency. **Bought in one currency and sold in another** (2026-11-19 — the
+  Women's World Cup is bought in reais and sold in dollars), the buying price is converted
+  into the selling currency **at the day's rate** (the European Central Bank's, §4.5.9), so
+  the margin moves with the rate from one day to the next; the report says how many nights
+  were converted and the rate's date. Nothing is stored at that rate, and no rate is locked
+  on the day a contract is signed or paid — *to decide if wanted*. When the day's rate cannot
+  be fetched, those nights are left out of the margin and counted, never guessed.
 - **Committed cost** = Σ `buyPrice` over `BOUGHT` nights.
 - **Contracted revenue** = Σ `sellPrice` over `SOLD` nights.
 - **Realised margin** = over nights that are both `BOUGHT` and `SOLD`.
@@ -3732,7 +3743,8 @@ Derived:
 
 Aggregations must be available by event, property, category, client, party and date range.
 
-**Out of scope for v1:** invoicing, FX conversion (aggregates are reported per currency),
+**Out of scope for v1:** invoicing, FX conversion beyond a night's margin and the ≈ USD guide
+(aggregates are reported per currency),
 taxes and tourist levies, commission splits. Payment schedules and their tracking — once out
 of scope here — are now §7.1.
 
@@ -4156,6 +4168,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
 | §4.11 Editing an offer | **Built** (2026-11-18) | *Edit the offer* on an open offer: rooms, dates, rates, hold date and terms; changed rooms released and re-blocked in one all-or-nothing step; a hand-edited agreement flagged to check |
 | §3.10 / §4.11 Cancellation by rooms, terms in words | **Built** (2026-11-18) | A cut-off can be a number of rooms (with an optional room type) that may be cancelled until a date, free or for a fee; or a term in words with or without a date; on quotations and offers, written into the agreement, carried to the contract (words without a date as notes) |
+| §7 Margin across currencies | **Built** (2026-11-19) | A night bought in one currency and sold in another (BRL bought, USD sold) has its margin worked out at the day's European Central Bank rate, in the selling currency; the event report's money totals show ≈ USD in all beneath. No rate is locked at signing or payment |
 | §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. *Delete this contract* for one made by mistake or twice, refused once rooms, a signed offer, a contracted request (unless another contract of the request remains, 2026-11-18) or an addendum rest on it (2026-11-05). PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |
