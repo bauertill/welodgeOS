@@ -650,6 +650,14 @@ of several) — and *How this works* on the Sales requests page goes straight to
   by stage, each linking to its section.
 - **It never mentions staging** (the owner, 2026-11-10): the team works on the live site
   only; staging is for testing changes to the system, not for the team to practise on.
+- **Welcome to We Lodge OS** (the owner, 2026-11-19: "the team can start shifting over all
+  of their work onto OS … monday.com should be view only, and all updates and reports need to
+  be filled out on OS"), at `/guide/welcome` and first on the Guides page: one page for the
+  whole team, for the owner to send as a link. It says what OS is; that **monday.com is view
+  only from now on** and every update, report and task is made in OS; the daily habit (the
+  bell, my tasks, the Updates feed); how people are told (an email at once only when
+  `@mentioned`, everything else in the bell and the 7:00 morning summary, §2.9); where things
+  live, menu by menu; and five house rules. Who to ask: the owner.
 - **I'm stuck**: the questions people ask most — the link that cannot be made, the request
   that will not move on, the offer that ran out — each answered in two sentences and pointing
   to its section.
@@ -4147,6 +4155,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
+| §2.11 Welcome to We Lodge OS | **Built** (2026-11-19) | /guide/welcome, first on the Guides page: what OS is, monday.com view only, the daily habit, how people are told, where things live, five house rules |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 More property types | **Built** (2026-11-11) | Motel, extended stay, student housing, hostel, bed & breakfast and other, beside hotel, apartment and aparthotel — for the LA28 move from monday.com (the owner). Each behaves as a hotel (rooms with beds, stars), an apartment (units with bedrooms, no stars: student housing) or both (extended stay, like an aparthotel). monday's furnished, luxury and complex apartments come in as Apartment, budget hotels as Hotel. Rating is stars only — monday's review scores (4.3/5) are not brought over (the owner) |
