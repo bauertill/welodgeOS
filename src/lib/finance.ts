@@ -115,9 +115,11 @@ export const newContractHref = (eventId: string, query = "") => `/events/${event
 export function contractBack(contract: {
   event: { id: string; name: string };
   property: { id: string; name: string } | null;
+  contractor?: { id: string; name: string } | null;
   salesRequest: { id: string } | null;
   client: { name: string } | null;
 }) {
+  if (contract.contractor) return { href: `/contractors/${contract.contractor.id}`, label: contract.contractor.name };
   if (contract.property) {
     return { href: `/properties/${contract.property.id}?back=${encodeURIComponent(`/events/${contract.event.id}`)}#contracts`, label: contract.property.name };
   }

@@ -434,11 +434,16 @@ export function ContractsList({ eventId }: { eventId: string }) {
  * while the event's Contracts tab is hidden. One list per event the hotel is
  * on, each with its own + New contract; accepting a quotation adds one too.
  */
-export function PropertyContracts({ propertyId, events }: { propertyId: string; events: { id: string; name: string }[] }) {
-  const contracts = api.finance.contracts.useQuery({ propertyId, party: "SUPPLIER" });
+export function PropertyContracts({ propertyId, contractorId, events }: { propertyId?: string; contractorId?: string; events: { id: string; name: string }[] }) {
+  // The same list serves a contractor's page (doc §3.11), one per event it works on.
+  const contracts = api.finance.contracts.useQuery({ propertyId, contractorId, party: "SUPPLIER" });
   const rows = contracts.data ?? [];
   if (events.length === 0) {
-    return <p className="text-ink-500 text-sm font-light">Put the property on an event&apos;s list to add its contract for that event.</p>;
+    return (
+      <p className="text-ink-500 text-sm font-light">
+        {contractorId ? "Put the contractor on an event to add its contract for that event." : "Put the property on an event's list to add its contract for that event."}
+      </p>
+    );
   }
   return (
     <div className="space-y-6">
@@ -448,13 +453,13 @@ export function PropertyContracts({ propertyId, events }: { propertyId: string; 
           <div key={event.id}>
             <div className="mb-3 flex items-baseline justify-between gap-3">
               <h3 className="text-ink-700 text-[13px] font-medium">{events.length > 1 ? `For ${event.name}` : ""}</h3>
-              <Link href={newContractHref(event.id, `?property=${propertyId}`)} className="text-brand-700 text-[13px] font-medium hover:underline">
+              <Link href={newContractHref(event.id, contractorId ? `?contractor=${contractorId}` : `?property=${propertyId}`)} className="text-brand-700 text-[13px] font-medium hover:underline">
                 + New contract
               </Link>
             </div>
             {own.length === 0 ? (
               <p className="text-ink-500 text-[13px] font-light">
-                {contracts.isLoading ? "…" : "None yet. Add the signed contract with + New contract — or accept a quotation, which makes one."}
+                {contracts.isLoading ? "…" : contractorId ? "None yet. Add the signed contract with + New contract." : "None yet. Add the signed contract with + New contract — or accept a quotation, which makes one."}
               </p>
             ) : (
               <div className="border-ink-200/60 overflow-x-auto rounded-lg border">
@@ -523,6 +528,8 @@ export function NewContractForm({
     eventName: string;
     clientId?: string;
     propertyId?: string;
+    /** A furniture, cleaning… company (doc §3.11): a supplier contract not with a hotel. */
+    contractorId?: string;
     salesRequestId?: string;
     /** Registered to mark its sales request Signed: saving it does both (doc §4.11). */
     markRequestSigned?: boolean;
@@ -532,9 +539,10 @@ export function NewContractForm({
 }) {
   const router = useRouter();
   const utils = api.useUtils();
-  const [party, setParty] = useState<ContractParty>(preset?.party ?? "SUPPLIER");
+  // A contractor's contract is a supplier contract, with the contractor in the hotel's place (doc §3.11).
+  const [party, setParty] = useState<ContractParty | "CONTRACTOR">(preset?.contractorId ? "CONTRACTOR" : (preset?.party ?? "SUPPLIER"));
   const eventId = preset?.eventId ?? "";
-  const [withId, setWithId] = useState(preset?.clientId ?? preset?.propertyId ?? "");
+  const [withId, setWithId] = useState(preset?.clientId ?? preset?.propertyId ?? preset?.contractorId ?? "");
   const [name, setName] = useState("");
   const [documentUrl, setDocumentUrl] = useState("");
   const [signedOn, setSignedOn] = useState("");
@@ -560,11 +568,13 @@ export function NewContractForm({
           const cents = parseMoney(total);
           if (Number.isNaN(cents)) return setProblem("The total should be a number, like 198450.");
           create.mutate({
-            party,
+            party: party === "CONTRACTOR" ? "SUPPLIER" : party,
             eventId,
             ...(party === "SUPPLIER"
               ? { propertyId: withId }
-              : { clientId: withId, salesRequestId: preset?.salesRequestId, markRequestSigned: preset?.markRequestSigned }),
+              : party === "CONTRACTOR"
+                ? { contractorId: withId }
+                : { clientId: withId, salesRequestId: preset?.salesRequestId, markRequestSigned: preset?.markRequestSigned }),
             name,
             documentUrl,
             signedOn,
@@ -581,7 +591,8 @@ export function NewContractForm({
               setWithId("");
             }}
             options={[
-              { value: "SUPPLIER", label: "A supplier" },
+              { value: "SUPPLIER", label: "A hotel" },
+              { value: "CONTRACTOR", label: "A contractor" },
               { value: "CLIENT", label: "A client" },
             ]}
           />
@@ -591,11 +602,11 @@ export function NewContractForm({
           <p className="text-ink-900 py-2 text-sm">{preset.eventName}</p>
         </Field>
         <div className="sm:col-span-2">
-          <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">{party === "SUPPLIER" ? "Hotel" : "Client"}</span>
+          <span className="text-ink-700 mb-1.5 block text-[13px] font-medium">{party === "SUPPLIER" ? "Hotel" : party === "CONTRACTOR" ? "Contractor" : "Client"}</span>
           <Combobox
             value={withId}
             onChange={setWithId}
-            placeholder={eventId ? (party === "SUPPLIER" ? "Choose a hotel on this event" : "Choose a client") : "Choose the event first"}
+            placeholder={eventId ? (party === "SUPPLIER" ? "Choose a hotel on this event" : party === "CONTRACTOR" ? "Choose a contractor — furniture, cleaning…" : "Choose a client") : "Choose the event first"}
             options={options.data ?? []}
           />
         </div>
@@ -826,7 +837,7 @@ function ContractDetails({ contract }: { contract: FullContract }) {
         </form>
       ) : (
         <dl className="space-y-2 text-sm font-light">
-          <Row label="With" value={`${contract.property?.name ?? contract.client?.name ?? "—"} (${partyLabels[contract.party].toLowerCase()})`} />
+          <Row label="With" value={contract.contractor ? <Link href={`/contractors/${contract.contractor.id}`} className="text-brand-700 hover:underline">{contract.contractor.name} (contractor)</Link> : `${contract.property?.name ?? contract.client?.name ?? "—"} (${partyLabels[contract.party].toLowerCase()})`} />
           <Row
             label="Event"
             value={
@@ -865,8 +876,23 @@ function ContractDetails({ contract }: { contract: FullContract }) {
             }
           />
           <Row label="Signed on" value={contract.signedOn ? formatDate(contract.signedOn) : null} />
+          {contract.currency && contract.currency !== "USD" && (
+            <Row
+              label="Rate to US$"
+              value={
+                contract.lockedRateMicros !== null && contract.lockedRateCurrency === contract.currency && contract.lockedRateOn ? (
+                  <span title="Locked on the day the contract was signed — the European Central Bank's rate for that day (the business day before, at a weekend). It changes only if the signing date or the currency does.">
+                    US$ 1 = {(contract.lockedRateMicros / 1_000_000).toFixed(4)} {contract.currency}
+                    <span className="text-ink-500 ml-1.5 text-xs font-light">locked at signing · ECB rate of {formatDate(contract.lockedRateOn)}</span>
+                  </span>
+                ) : (
+                  <span className="text-ink-500 font-light">{contract.signedOn ? "Not locked yet — the signing day's rate could not be fetched; tried again when the contract is opened" : "Locked on the day it is signed; until then the margin uses today's rate"}</span>
+                )
+              }
+            />
+          )}
           <Row label="Account manager" value={contract.owner ? <Manager person={contract.owner} /> : null} />
-          <Row label="Room-nights" value={String(contract.party === "SUPPLIER" ? contract._count.acquisitionNights : contract._count.salesNights)} />
+          {!contract.contractor && <Row label="Room-nights" value={String(contract.party === "SUPPLIER" ? contract._count.acquisitionNights : contract._count.salesNights)} />}
           {contract.notes && <Row label="Notes" value={contract.notes} />}
         </dl>
       )}

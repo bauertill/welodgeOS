@@ -8,6 +8,9 @@ import type { AcquisitionState, SalesState } from "generated/prisma";
  */
 
 /** One room-night, flattened for display. */
+/** Units of `currency` per US$ 1, locked on a contract's signing day (doc §7). */
+export type LockedRate = { currency: string; perUsd: number; rateOn: Date };
+
 export type NightRecord = {
   id: string;
   date: Date;
@@ -33,6 +36,8 @@ export type NightRecord = {
   acquisitionNotes: string | null;
   acquisitionContractId: string | null;
   acquisitionContract: string | null;
+  /** The hotel contract's rate to the dollar, locked at signing (doc §7). */
+  acquisitionRate?: LockedRate | null;
 
   salesState: SalesState;
   clientId: string | null;
@@ -47,6 +52,8 @@ export type NightRecord = {
   salesNotes: string | null;
   salesContractId: string | null;
   salesContract: string | null;
+  /** The client contract's rate to the dollar, locked at signing (doc §7). */
+  salesRate?: LockedRate | null;
 
   /** Clients with a soft request on this night (doc §4.3). */
   requestedBy: { id: string; name: string }[];

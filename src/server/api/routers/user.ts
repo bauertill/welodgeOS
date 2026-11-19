@@ -94,7 +94,7 @@ export const userRouter = createTRPCRouter({
 
   /** The tab events open on for them (doc §3.10): Properties ("") or another. */
   setEventStartTab: protectedProcedure
-    .input(z.object({ tab: z.enum(["", "inventory", "deadlines", "position", "details"]) }))
+    .input(z.object({ tab: z.enum(["", "inventory", "deadlines", "position", "contractors", "details"]) }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db.user.update({ where: { id: ctx.session.user.id }, data: { eventStartTab: input.tab || null } });
       return { ok: true };

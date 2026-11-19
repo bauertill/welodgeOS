@@ -39,6 +39,7 @@ import {
 } from "~/lib/tasks";
 import { renderUpdateBody } from "~/lib/updates";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { contractorWhat } from "~/lib/contractors";
 
 /**
  * Tasks (doc §2.8): one board everyone sees, as a list or as Kanban columns
@@ -91,6 +92,7 @@ function About({ task }: { task: Task }) {
     task.salesRequest
       ? { href: `/sales/${task.salesRequest.id}`, label: `${task.salesRequest.client.name} · request` }
       : task.client && { href: `/clients/${task.client.id}`, label: task.client.shortName ?? task.client.name },
+    task.contractor && { href: `/contractors/${task.contractor.id}`, label: task.contractor.name },
   ].filter(Boolean) as { href: string; label: string }[];
   if (items.length === 0) return null;
   return (
@@ -464,7 +466,7 @@ function shortTitle(task: Task) {
 
 /** What the task is about, in words — for the card's hover. */
 function aboutText(task: Task) {
-  return [task.event?.name, task.property?.name, task.salesRequest ? `${task.salesRequest.client.name} · request` : (task.client?.shortName ?? task.client?.name)]
+  return [task.event?.name, task.property?.name, task.salesRequest ? `${task.salesRequest.client.name} · request` : (task.client?.shortName ?? task.client?.name), task.contractor?.name]
     .filter(Boolean)
     .join(" · ");
 }
@@ -620,6 +622,7 @@ export type TaskPreset = {
   propertyId?: string;
   clientId?: string;
   salesRequestId?: string;
+  contractorId?: string;
   status?: TaskStatus;
   assigneeIds?: string[];
 };
@@ -637,6 +640,7 @@ type Draft = {
   propertyId: string;
   clientId: string;
   salesRequestId: string;
+  contractorId: string;
 };
 
 /** A task added or changed: what it is, who completes it, by when, and what it is about. */
@@ -649,6 +653,7 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
   const clients = api.clients.list.useQuery();
   const properties = api.property.list.useQuery({});
   const requests = api.sales.list.useQuery({ show: "all" });
+  const contractors = api.contractor.list.useQuery();
 
   const [draft, setDraft] = useState<Draft>({
     title: task?.title ?? "",
@@ -663,6 +668,7 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
     propertyId: task?.property?.id ?? preset?.propertyId ?? "",
     clientId: task?.client?.id ?? preset?.clientId ?? "",
     salesRequestId: task?.salesRequest?.id ?? preset?.salesRequestId ?? "",
+    contractorId: task?.contractor?.id ?? preset?.contractorId ?? "",
   });
   // Whoever adds a task asked for it, unless someone else is chosen.
   useEffect(() => {
@@ -727,6 +733,7 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
           propertyId: draft.propertyId || null,
           clientId: draft.clientId || null,
           salesRequestId: draft.salesRequestId || null,
+          contractorId: draft.contractorId || null,
         };
         if (task) update.mutate({ id: task.id, ...input });
         else create.mutate(input);
@@ -798,6 +805,12 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
             options={(clients.data ?? []).map((client) => ({ id: client.id, label: client.name, detail: client.shortName }))}
           />
           <Combobox value={draft.salesRequestId} onChange={(value) => set("salesRequestId", value)} placeholder="No sales request" options={requestOptions} />
+          <Combobox
+            value={draft.contractorId}
+            onChange={(value) => set("contractorId", value)}
+            placeholder="No contractor"
+            options={(contractors.data ?? []).map((contractor) => ({ id: contractor.id, label: contractor.name, detail: contractorWhat(contractor) }))}
+          />
         </div>
       </div>
 
@@ -2029,6 +2042,41 @@ export function MyWork() {
           </h2>
           <TaskTable tasks={askedOpen} compact />
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The tasks about one thing, on its page — a contractor's (doc §3.11) — with
+ * + Add task already about it; each opens in a popup.
+ */
+export function RelatedTasks({ preset, empty = "No tasks yet." }: { preset: TaskPreset; empty?: string }) {
+  const tasks = api.task.list.useQuery({ contractorId: preset.contractorId, eventId: preset.contractorId ? undefined : preset.eventId, doneWithinDays: 30 });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const rows = tasks.data ?? [];
+  return (
+    <div className="space-y-3">
+      {tasks.isLoading ? (
+        <p className="text-ink-500 text-sm font-light">Loading…</p>
+      ) : rows.length === 0 ? (
+        <div className="flex items-center gap-3">
+          <p className="text-ink-500 text-sm font-light">{empty}</p>
+          <button type="button" onClick={() => setAdding(true)} className="text-brand-700 text-[13px] font-medium hover:underline">
+            + Add task
+          </button>
+        </div>
+      ) : (
+        <TaskTable tasks={rows} onOpen={setOpenId} onAdd={() => setAdding(true)} />
+      )}
+      {openId && <TaskPopup id={openId} onClose={() => setOpenId(null)} />}
+      {adding && (
+        <Popup title="New task" subtitle="What it is, who completes it, and by when." onClose={() => setAdding(false)}>
+          <div className="border-ink-200/60 rounded-xl border bg-white p-5">
+            <TaskForm preset={preset} onDone={() => setAdding(false)} />
+          </div>
+        </Popup>
       )}
     </div>
   );

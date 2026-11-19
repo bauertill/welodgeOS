@@ -8,6 +8,8 @@ import { cancellationKindLabels, isSettled, missingTerms, paymentAmount, payment
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { moveStage } from "~/server/api/routers/sales";
 import { diffFields, logAudit } from "~/server/audit";
+import { lockContractRates } from "~/server/locked-rates";
+import { contractorWhat } from "~/lib/contractors";
 
 /**
  * Contracts, their payments and their cancellation deadlines (doc §7.1): what
@@ -33,6 +35,8 @@ const contractInclude = {
   event: { select: { id: true, name: true } },
   property: { select: { id: true, name: true } },
   client: { select: { id: true, name: true, shortName: true } },
+  /** A furniture, cleaning… company, on a supplier contract not with a hotel (doc §3.11). */
+  contractor: { select: { id: true, name: true } },
   salesRequest: { select: { id: true, stage: true } },
   /** Requests for more rooms or changes under it (doc §4.11). */
   addenda: { select: { id: true, stage: true, waitingOn: true, createdAt: true }, orderBy: { createdAt: "asc" } },
@@ -41,8 +45,8 @@ const contractInclude = {
 } satisfies Prisma.ContractInclude;
 
 /** Who the contract is with, as a person reads it. */
-const counterparty = (contract: { property: { name: string } | null; client: { name: string } | null }) =>
-  contract.property?.name ?? contract.client?.name ?? "—";
+const counterparty = (contract: { property: { name: string } | null; client: { name: string } | null; contractor?: { name: string } | null }) =>
+  contract.property?.name ?? contract.contractor?.name ?? contract.client?.name ?? "—";
 
 const contractInput = z.object({
   name: z.string().trim().min(1, "Give the contract a name").max(300),
@@ -106,13 +110,15 @@ export const financeRouter = createTRPCRouter({
         party: z.nativeEnum(ContractParty).optional(),
         salesRequestId: z.string().optional(),
         propertyId: z.string().optional(),
+        /** A contractor's contracts, for its page (doc §3.11). */
+        contractorId: z.string().optional(),
         /** A client's contracts, for their page and for choosing what an addendum adds to (doc §4.11). */
         clientId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const contracts = await ctx.db.contract.findMany({
-        where: { eventId: input.eventId, party: input.party, salesRequestId: input.salesRequestId, propertyId: input.propertyId, clientId: input.clientId },
+        where: { eventId: input.eventId, party: input.party, salesRequestId: input.salesRequestId, propertyId: input.propertyId, contractorId: input.contractorId, clientId: input.clientId },
         orderBy: [{ event: { startDate: "asc" } }, { name: "asc" }],
         include: contractInclude,
       });
@@ -121,6 +127,7 @@ export const financeRouter = createTRPCRouter({
 
   /** One contract in full: its terms, and what is due and open. */
   contract: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    await lockContractRates(ctx.db, [input.id]);
     const contract = await ctx.db.contract.findUnique({
       where: { id: input.id },
       include: {
@@ -137,10 +144,23 @@ export const financeRouter = createTRPCRouter({
     };
   }),
 
-  /** Who a new contract can be with on this event: the hotels on its list, or any client. */
+  /**
+   * Who a new contract can be with on this event: the hotels on its list, any
+   * client, or any contractor — those working on this event first (doc §3.11).
+   */
   counterparties: protectedProcedure
-    .input(z.object({ eventId: z.string(), party: z.nativeEnum(ContractParty) }))
+    .input(z.object({ eventId: z.string(), party: z.enum(["SUPPLIER", "CLIENT", "CONTRACTOR"]) }))
     .query(async ({ ctx, input }) => {
+      if (input.party === "CONTRACTOR") {
+        const contractors = await ctx.db.contractor.findMany({
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, kind: true, service: true, events: { where: { eventId: input.eventId }, select: { eventId: true } } },
+        });
+        return contractors
+          .map((contractor) => ({ id: contractor.id, label: contractor.name, detail: `${contractorWhat(contractor)}${contractor.events.length ? " · on this event" : ""}`, here: contractor.events.length > 0 }))
+          .sort((a, b) => Number(b.here) - Number(a.here) || a.label.localeCompare(b.label))
+          .map(({ here: _here, ...option }) => option);
+      }
       if (input.party === "CLIENT") {
         const clients = await ctx.db.client.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, shortName: true } });
         return clients.map((client) => ({ id: client.id, label: client.name, detail: client.shortName }));
@@ -159,6 +179,8 @@ export const financeRouter = createTRPCRouter({
         party: z.nativeEnum(ContractParty),
         eventId: z.string(),
         propertyId: z.string().optional(),
+        /** A contractor instead of a hotel, on a supplier contract (doc §3.11). */
+        contractorId: z.string().optional(),
         clientId: z.string().optional(),
         salesRequestId: z.string().optional(),
         /** Registered on the way to marking its sales request Signed: the request moves too. */
@@ -166,8 +188,8 @@ export const financeRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (input.party === "SUPPLIER" && !input.propertyId) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the hotel this contract is with." });
+      if (input.party === "SUPPLIER" && !input.propertyId === !input.contractorId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the hotel or the contractor this contract is with." });
       }
       if (input.party === "CLIENT" && !input.clientId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the client this contract is with." });
@@ -187,7 +209,8 @@ export const financeRouter = createTRPCRouter({
           party: input.party,
           name: input.name,
           eventId: input.eventId,
-          propertyId: input.party === "SUPPLIER" ? input.propertyId : null,
+          propertyId: input.party === "SUPPLIER" ? (input.propertyId ?? null) : null,
+          contractorId: input.party === "SUPPLIER" && !input.propertyId ? (input.contractorId ?? null) : null,
           clientId: input.party === "CLIENT" ? input.clientId : null,
           salesRequestId: input.party === "CLIENT" ? (input.salesRequestId ?? null) : null,
           documentUrl: blank(input.documentUrl),
@@ -225,6 +248,7 @@ export const financeRouter = createTRPCRouter({
         ...(input.noCancellationTerms !== undefined && { noCancellationTerms: input.noCancellationTerms }),
       };
       const after = await ctx.db.contract.update({ where: { id: input.id }, data, include: { owner: person } });
+      await lockContractRates(ctx.db, [input.id]);
       const readable = (c: typeof after) => ({
         name: c.name,
         documentUrl: c.documentUrl,
@@ -475,6 +499,7 @@ export const financeRouter = createTRPCRouter({
               currency: true,
               event: { select: { id: true, name: true } },
               property: { select: { id: true, name: true } },
+              contractor: { select: { id: true, name: true } },
               client: { select: { id: true, name: true } },
             },
           },
@@ -512,6 +537,7 @@ export const financeRouter = createTRPCRouter({
               name: true,
               event: { select: { id: true, name: true } },
               property: { select: { id: true, name: true } },
+              contractor: { select: { id: true, name: true } },
               client: { select: { id: true, name: true } },
             },
           },

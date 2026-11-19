@@ -273,7 +273,8 @@ housekeeping, furniture rental — keep being handled in Excel; the board does n
 - **Four tabs: Client · Accommodation · Other providers · For the team.** *Client* holds the
   updates on clients and their requests; *Accommodation* those on properties and on **hotel
   chains**; *Other providers* those about a provider kept only **by name** (*Housekeeping
-  Burbank*), with names used before offered as you type; *For the team* those about nothing in
+  Burbank*), with names used before offered as you type, and those written on a
+  **contractor's** page (§3.11, 2026-11-19); *For the team* those about nothing in
   particular.
 - **One update, shown everywhere it belongs.** An update is the same one on the board and on the
   page of what it is about: written on Ocean Luxury Lodge's page it is on the board, and written on
@@ -502,7 +503,8 @@ source* first (§4.11), then the comments; on the right, its **details** — on 
 task, **what the client asked**, read from the sales request so it is always the latest:
 each line large ("20 × Single room") with its dates and nights beneath, then the budget,
 the places as labels and the client's words; on another task, what to do — then who
-completes it, who asked, deadline, priority, type and what it is about; and under them its
+completes it, who asked, deadline, priority, type and what it is about (an event, a property, a
+client, a sales request, and — from 2026-11-19 — a contractor, §3.11); and under them its
 **status as steps** — *Backlog → To do → In progress → Done*, passed ones ticked, each a
 click away, with the next move as one button (*Move to To do*, *Start it*, *Mark done*;
 *Reopen* once done). Below, its *Log* — every change, who made it
@@ -964,7 +966,11 @@ centre a racket 🎾, Dodger Stadium ⚾, the Coliseum's ceremonies 🎆); with 
 squares (2026-10-13): a 🛏️ bed for a hotel or aparthotel, coloured by its stars — five black,
 four blue, three green, two or fewer yellow, grey when the stars are not known — and a 🏠 house
 in purple for an apartment; name and stars on pointing, the panel on clicking (its status
-there, no longer in its colour).
+there, no longer in its colour). **The properties are two layers** (the owner, 2026-11-19): **Contracted** — the
+properties contracted on the event, their squares edged in green — and **Accommodation**,
+every other property on the list;
+each ticked on or off, with its count. Both follow the list's search and filters, as the map
+always has.
 
 | Field | Notes |
 | --- | --- |
@@ -1680,6 +1686,39 @@ its one period** and nothing below shows.
 
 ---
 
+### 3.11 Contractors
+
+> **Built** (2026-11-19). The owner: "we are also using other contractors like furniture
+> companies, cleaning companies etc, we should have a space for this."
+
+A **contractor** is a company we use besides the hotels: furniture rental, cleaning, linen and
+laundry, maintenance, transport, security, catering, or *Other* with what it does in words.
+It is global, like a client — the same company comes back for the next event — and is reached
+from **Contractors** in the left menu, and from the **Contractors** tab on each event, which
+lists the ones working on that event, puts an existing one on it, or makes a new one there.
+
+Each contractor's page holds:
+
+- **Its details** — name, what it does (and more about it in words), email, phone, website,
+  notes; its **contacts** (name, role, email, phone); and its **contracting details** (the
+  same fields as a hotel's, §3.9: trade name, VAT and registration numbers, IBAN, BIC,
+  signatory, contract email), visible to every colleague.
+- **Events** it works on — put on or taken off; taking it off an event keeps its contracts.
+- **Properties it serves**, each with what it does there ("Furnishes the 12 apartments"); each
+  property's page has a *Contractors* tab listing them back.
+- **Contracts and payments**, one list per event it is on, each with *+ New contract*. A
+  contractor's contract is a **supplier contract** (§7.1) with the contractor in the hotel's
+  place — the new-contract form asks *With: a hotel · a contractor · a client* — so its
+  payments appear under Finances › Payments *To suppliers*, its cancellation deadlines with the
+  suppliers', and a contract in another currency locks its rate at signing like any other (§7).
+  It carries no room-nights.
+- **Tasks** about it (a task's *About* can now name a contractor, §2.8), with *+ Add task*.
+- **Updates** (§2.6), shown on the board's *Other providers* tab too.
+- Its history.
+
+A contractor is **deleted** only while it has no contract (those are kept); its contacts,
+events, properties and updates go with it, and its tasks stay, about nothing.
+
 ## 4. Phase 2 — Acquisition & Sales
 
 ### 4.1 The acquisition axis (supply)
@@ -1891,7 +1930,11 @@ never a silent write.
    amount in another currency** (2026-11-18) is a guide only: today's European Central Bank
    reference rate, fetched from frankfurter.dev (only currency codes are sent) and refreshed
    every six hours; the rate and its date show on hover. Nothing is converted or stored at
-   it, and when the rate cannot be fetched the ≈ USD simply does not show.
+   it, and when the rate cannot be fetched the ≈ USD simply does not show. **One exception,
+   a night's margin** (the owner, 2026-11-19: on the Women's World Cup "we buy in BRL and sell
+   in USD"): where a night is bought in one currency and sold in another, its buying price is
+   turned into the selling currency at the rate **locked when its contract was signed**
+   (today's until then), so the margin is in what the client pays (§7). The money totals on the event's report also show their whole in ≈ USD beneath.
 
 ### 4.6 Deadlines
 
@@ -3717,7 +3760,21 @@ every aggregate is a sum over nights.
 
 Derived:
 
-- **Margin per night** = `sellPrice − buyPrice` (only meaningful where both are set).
+- **Margin per night** = `sellPrice − buyPrice` (only meaningful where both are set), in
+  the selling currency. **Bought in one currency and sold in another** (2026-11-19 — the
+  Women's World Cup is bought in reais and sold in dollars), the buying price is converted
+  into the selling currency through the US dollar, **at the rate locked when the contract
+  was signed** (the owner, 2026-11-19: "it needs to lock" — at signing, not at each
+  payment). A contract in anything but dollars, once it has a signing date, keeps the
+  European Central Bank's rate *for that date* (the business day before, at a weekend),
+  shown on the contract as *Rate to US$ — locked at signing*; it is locked again only if
+  the signing date or the currency is changed, and let go if the date is cleared. Each side
+  uses its own contract: the hotel contract for the buying price, the client contract for
+  the selling price. A night whose contract is not signed yet — or that has none — uses
+  today's rate until it is, and the report says how many nights are locked and how many
+  still on today's rate. When a rate cannot be fetched, those nights are left out of the
+  margin and counted, never guessed; the lock is tried again the next time the contract or
+  the report is opened. Payments do not lock their own rate.
 - **Committed cost** = Σ `buyPrice` over `BOUGHT` nights.
 - **Contracted revenue** = Σ `sellPrice` over `SOLD` nights.
 - **Realised margin** = over nights that are both `BOUGHT` and `SOLD`.
@@ -3732,7 +3789,8 @@ Derived:
 
 Aggregations must be available by event, property, category, client, party and date range.
 
-**Out of scope for v1:** invoicing, FX conversion (aggregates are reported per currency),
+**Out of scope for v1:** invoicing, FX conversion beyond a night's margin and the ≈ USD guide
+(aggregates are reported per currency),
 taxes and tourist levies, commission splits. Payment schedules and their tracking — once out
 of scope here — are now §7.1.
 
@@ -3747,8 +3805,8 @@ of scope here — are now §7.1.
 > Deadlines* boards.
 
 Every contract we sign — with a supplier or with a client — carries payment and
-cancellation deadlines. **A contract is a record of its own**: who it is with (a hotel, on a
-supplier contract; a client, and the sales request it came from, on a client contract), the
+cancellation deadlines. **A contract is a record of its own**: who it is with (a hotel — or a
+contractor, §3.11 — on a supplier contract; a client, and the sales request it came from, on a client contract), the
 event, its name ("Group Sales Agreement"), the signed PDF as a Google Drive link, when it
 was signed, its account manager, notes, and **its total** — what the whole contract is worth,
 with its currency (§4.5).
@@ -4072,6 +4130,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
+| §3.11 Contractors | **Built** (2026-11-19) | Contractors menu item and a Contractors tab per event; each with what it does, contacts, contracting details, events, properties it serves (shown on the property too), supplier contracts and payments per event, tasks and updates (board's Other providers tab) |
 | §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
@@ -4105,6 +4164,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |
+| §3.7 Map: Contracted and Accommodation layers | **Built** (2026-11-19) | The event's map shows its properties as two layers, *Contracted* and *Accommodation* (everything else), each ticked on or off; both follow the list's filters |
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
@@ -4156,6 +4216,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
 | §4.11 Editing an offer | **Built** (2026-11-18) | *Edit the offer* on an open offer: rooms, dates, rates, hold date and terms; changed rooms released and re-blocked in one all-or-nothing step; a hand-edited agreement flagged to check |
 | §3.10 / §4.11 Cancellation by rooms, terms in words | **Built** (2026-11-18) | A cut-off can be a number of rooms (with an optional room type) that may be cancelled until a date, free or for a fee; or a term in words with or without a date; on quotations and offers, written into the agreement, carried to the contract (words without a date as notes) |
+| §7 Margin across currencies | **Built** (2026-11-19) | A night bought in one currency and sold in another (BRL bought, USD sold) has its margin in the selling currency at the European Central Bank rate locked when its contract was signed (shown on the contract), today's until then; the event report's money totals show ≈ USD in all beneath. Payments do not lock their own rate |
 | §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. *Delete this contract* for one made by mistake or twice, refused once rooms, a signed offer, a contracted request (unless another contract of the request remains, 2026-11-18) or an addendum rest on it (2026-11-05). PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
 | §4.7 Undo | **Built** | Restores a ledger entry's nights to their exact prior fields; refused while anything later still in force has touched the same nights. Undoing the latest change and then the one before works; an entry can be undone once, and then shows as Undone |

@@ -105,7 +105,7 @@ function useShown(eventId: string | undefined, layers: MapLayer[]) {
       // As above.
     }
   };
-  const ids = [...layers.map((layer) => layer.id), "properties"];
+  const ids = [...layers.map((layer) => layer.id), "contracted", "accommodation"];
   return {
     isShown: (id: string) => (id === "transit" ? hidden.includes("transit:on") : !hidden.includes(id)),
     toggle: (id: string) =>
@@ -426,7 +426,11 @@ export function ScoutingMap({
   const visiblePlaces = onlyPlaceId
     ? places.filter((place) => place.id === onlyPlaceId)
     : places.filter((place) => !place.layerId || shown.isShown(place.layerId));
-  const showProperties = shown.isShown("properties");
+  // Two layers of properties (the owner, 2026-11-19): Contracted, and
+  // Accommodation for everything else — each ticked on or off.
+  const contractedPins = pins.filter((pin) => pin.status === "CONTRACTED");
+  const otherPins = pins.filter((pin) => pin.status !== "CONTRACTED");
+  const shownPins = [...(shown.isShown("contracted") ? contractedPins : []), ...(shown.isShown("accommodation") ? otherPins : [])];
   // A place being added from the Layers panel: its spot, and whether the next map click sets it.
   const [draftPoint, setDraftPoint] = useState<{ latitude: number; longitude: number } | null>(null);
   const [picking, setPicking] = useState(false);
@@ -538,6 +542,7 @@ export function ScoutingMap({
             layers={layers}
             places={places}
             shown={shown}
+            propertyCounts={{ contracted: contractedPins.length, other: otherPins.length }}
             draftPoint={draftPoint}
             setDraftPoint={setDraftPoint}
             picking={picking}
@@ -596,7 +601,7 @@ export function ScoutingMap({
               </AdvancedMarker>
             ))}
 
-            {(showProperties ? pins : []).map((pin) => (
+            {shownPins.map((pin) => (
               <AdvancedMarker
                 key={pin.id}
                 position={{ lat: pin.latitude, lng: pin.longitude }}
@@ -609,7 +614,7 @@ export function ScoutingMap({
                 {/* Our property (2026-10-13): a bed for a hotel, a house for an apartment, coloured by its stars. */}
                 <span className="group relative block translate-y-1/2">
                   <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-md border-2 border-white text-[14px] leading-none shadow-md transition-transform group-hover:scale-110 ${openId === pin.id ? "ring-brand-300 scale-110 ring-4" : ""}`}
+                    className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-[14px] leading-none shadow-md transition-transform group-hover:scale-110 ${pin.status === "CONTRACTED" ? "border-[#0a7a47]" : "border-white"} ${openId === pin.id ? "ring-brand-300 scale-110 ring-4" : ""}`}
                     style={{ background: propertyColor(pin) }}
                   >
                     {pin.type && isApartmentLike(pin.type) ? "🏠" : "🛏️"}

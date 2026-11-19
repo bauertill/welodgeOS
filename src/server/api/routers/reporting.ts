@@ -10,7 +10,9 @@ import {
   summarise,
 } from "~/lib/reporting";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { usdRates } from "~/server/exchange-rates";
 import { flatten, nightInclude } from "~/server/inventory";
+import { lockContractRates } from "~/server/locked-rates";
 
 /**
  * The derived views of §5 and the money of §7. Every figure is computed from
@@ -92,8 +94,17 @@ export const reportingRouter = createTRPCRouter({
     .input(scope)
     .query(async ({ ctx, input }) => deadlines(await load(ctx.db, input))),
 
-  /** §7 — committed cost, contracted revenue, margin, cost at risk, idle cost. */
+  /**
+   * §7 — committed cost, contracted revenue, margin, cost at risk, idle cost.
+   * A margin bought and sold in different currencies uses the rate locked when
+   * its contract was signed, else today's.
+   */
   financials: protectedProcedure
     .input(scope)
-    .query(async ({ ctx, input }) => financials(await load(ctx.db, input))),
+    .query(async ({ ctx, input }) => {
+      // Lock any newly signed contract's rate before the nights are read.
+      await lockContractRates(ctx.db);
+      const [nights, rates] = await Promise.all([load(ctx.db, input), usdRates()]);
+      return financials(nights, rates);
+    }),
 });

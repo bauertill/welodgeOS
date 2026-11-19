@@ -12,14 +12,14 @@ export default async function NewContractPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ request?: string; property?: string; sign?: string }>;
+  searchParams: Promise<{ request?: string; property?: string; contractor?: string; sign?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
   const { id } = await params;
   const event = await api.event.byId({ id });
   if (!event) notFound();
-  const { request: requestId, property, sign } = await searchParams;
+  const { request: requestId, property, contractor, sign } = await searchParams;
   // From a sales request: a client contract for that client, worth what the request is.
   const request = requestId ? await api.sales.byId({ id: requestId }) : null;
   return (
@@ -28,7 +28,9 @@ export default async function NewContractPage({
         back={
           request
             ? { href: `/sales/${request.id}`, label: "The sales request" }
-            : property
+            : contractor
+              ? { href: `/contractors/${contractor}`, label: "The contractor" }
+              : property
               ? { href: `/properties/${property}?back=${encodeURIComponent(`/events/${event.id}`)}#contracts`, label: "The property" }
               : { href: `/events/${event.id}`, label: event.name }
         }
@@ -52,7 +54,7 @@ export default async function NewContractPage({
                 totalCents: request.valueCents,
                 currency: request.valueCurrency,
               }
-            : { party: property ? "SUPPLIER" : undefined, eventId: event.id, eventName: event.name, propertyId: property }
+            : { party: property || contractor ? "SUPPLIER" : undefined, eventId: event.id, eventName: event.name, propertyId: property, contractorId: contractor }
         }
       />
     </>

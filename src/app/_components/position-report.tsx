@@ -14,7 +14,8 @@ import {
   Td,
   Th,
 } from "~/app/_components/ui";
-import { formatDate, formatRange } from "~/lib/format";
+import { useUsd } from "~/app/_components/in-usd";
+import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import type { Severity } from "~/lib/position";
 import { api } from "~/trpc/react";
 
@@ -236,7 +237,7 @@ export function PositionReport({ eventId }: { eventId: string }) {
       {/* --- §7 money ------------------------------------------------------- */}
       <Collapsible
         title="Money"
-        hint="Summed over room-nights, per currency. Nothing is converted."
+        hint="Summed over room-nights, per currency, with the total in US dollars at today's rate beneath. A margin bought in one currency and sold in another uses the rate locked when its contract was signed (today's until then)."
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <MoneyCard
@@ -270,11 +271,28 @@ export function PositionReport({ eventId }: { eventId: string }) {
             amounts={money.data?.idleCost ?? []}
           />
         </div>
+        {(money.data?.marginLocked ?? 0) > 0 && (
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            {money.data!.marginLocked} room-nights are bought in one currency
+            and sold in another: their margin is in the selling currency, with
+            the buying price converted at the rate locked when the contracts
+            were signed.
+          </p>
+        )}
+        {(money.data?.marginConverted ?? 0) > 0 && (
+          <p className="text-ink-500 mt-3 text-xs font-light">
+            {money.data!.marginConverted} room-nights are bought in one currency
+            and sold in another under a contract not signed yet: their margin
+            uses today&apos;s European Central Bank rate
+            {money.data!.rateDate ? ` (${formatDate(new Date(`${money.data!.rateDate}T00:00:00Z`))})` : ""} until the
+            contract is signed, when the rate locks.
+          </p>
+        )}
         {(money.data?.marginNotComparable ?? 0) > 0 && (
           <p className="text-ink-500 mt-3 text-xs font-light">
             {money.data!.marginNotComparable} room-nights are bought and sold in
-            different currencies, so their margin is left out rather than
-            converted at a rate nobody agreed.
+            different currencies and today&apos;s rate could not be fetched, so
+            their margin is left out for now rather than guessed.
           </p>
         )}
       </Collapsible>
@@ -365,7 +383,28 @@ function MoneyCard({
       <p className="text-ink-900 mt-2 text-2xl font-semibold">
         <MoneyTotal amounts={amounts} empty="—" />
       </p>
+      <UsdTotal amounts={amounts} />
       <p className="text-ink-500 mt-1 text-xs font-light">{hint}</p>
     </Card>
+  );
+}
+
+/**
+ * Beneath a total with anything but dollars in it: the whole of it in US
+ * dollars at today's rate — a guide, the amounts stay in their currencies.
+ */
+function UsdTotal({ amounts }: { amounts: { currency: string; cents: number }[] }) {
+  const toUsd = useUsd();
+  if (!amounts.some((amount) => amount.currency !== "USD")) return null;
+  let usd = 0;
+  for (const amount of amounts) {
+    const converted = amount.currency === "USD" ? amount.cents : toUsd(amount.cents, amount.currency);
+    if (converted === null) return null;
+    usd += converted;
+  }
+  return (
+    <p className="text-ink-500 mt-0.5 text-xs font-light" title="At today's European Central Bank rate. A guide only — the amounts stay in their currencies.">
+      ≈ {formatMoney(usd, "USD")} in all, at today&apos;s rate
+    </p>
   );
 }
