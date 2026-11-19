@@ -115,6 +115,8 @@ model Event {
   salesRequests         SalesRequest[]
   contracts             Contract[]
   tasks                 Task[]
+  /// Furniture, cleaning and other contractors working on it (doc §3.11).
+  contractors           ContractorEvent[]
   /// The event's team (doc §2.3): who leads it, and who sources its
   /// accommodation — given each new sales request's sourcing task (§4.11).
   projectLead           User?           @relation("EventProjectLead", fields: [projectLeadId], references: [id], onDelete: SetNull)
@@ -266,6 +268,8 @@ model Property {
   scoutingEntries ScoutingEntry[]
   updates         Update[]
   contracts       Contract[]
+  /// Contractors who furnish, clean or otherwise serve it (doc §3.11).
+  contractors     ContractorProperty[]
 
   scoutedBy   User?              @relation(fields: [scoutedById], references: [id], onDelete: SetNull)
   scoutedById String?
@@ -398,6 +402,92 @@ model ProviderContact {
   providerId String
 
   @@index([providerId])
+}
+
+/// What a contractor does for us (doc §3.11).
+enum ContractorKind {
+  FURNITURE
+  CLEANING
+  LINEN
+  MAINTENANCE
+  TRANSPORT
+  SECURITY
+  CATERING
+  OTHER
+}
+
+/// A company we use besides the hotels — furniture, cleaning, linen… (the
+/// owner, 2026-11-19, doc §3.11): its contacts and contracting details, the
+/// events it works on, the properties it serves, its contracts and payments,
+/// its tasks and updates.
+model Contractor {
+  id      String         @id @default(cuid())
+  name    String         @unique
+  kind    ContractorKind @default(OTHER)
+  /// What it does, in words, when the kind is Other — or more about it.
+  service String?
+  website String?
+  email   String?
+  phone   String?
+  notes   String?
+
+  // Contracting details (doc §3.9) — the legal entity a contract is signed with.
+  tradeName          String?
+  vatNumber          String?
+  registrationNumber String?
+  iban               String?
+  bic                String?
+  signatoryName      String?
+  signatoryTitle     String?
+  contractEmail      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts   ContractorContact[]
+  events     ContractorEvent[]
+  properties ContractorProperty[]
+  contracts  Contract[]
+  updates    Update[]
+  tasks      Task[]
+}
+
+model ContractorContact {
+  id    String  @id @default(cuid())
+  name  String
+  role  String?
+  email String?
+  phone String?
+
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  contractorId String
+
+  @@index([contractorId])
+}
+
+/// A contractor working on an event.
+model ContractorEvent {
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  contractorId String
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId      String
+  createdAt    DateTime   @default(now())
+
+  @@id([contractorId, eventId])
+  @@index([eventId])
+}
+
+/// A property a contractor serves, and what it does there ("Furnishes the 12 apartments").
+model ContractorProperty {
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  contractorId String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId   String
+  what         String?
+  createdAt    DateTime   @default(now())
+
+  @@id([contractorId, propertyId])
+  @@index([propertyId])
 }
 
 model PropertyContact {
@@ -804,6 +894,10 @@ model Contract {
   clientId       String?
   salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
   salesRequestId String?
+  /// The contractor — furniture, cleaning… — on a supplier contract that is
+  /// not with a hotel (doc §3.11).
+  contractor     Contractor?   @relation(fields: [contractorId], references: [id], onDelete: Restrict)
+  contractorId   String?
 
   /// The signed PDF, as a Google Drive link for now (doc §7.1).
   documentUrl         String?
@@ -1567,6 +1661,9 @@ model Update {
   /// A provider not kept in the system — housekeeping, furniture rental — by
   /// name, for the Updates board's *Other providers* (doc §2.6).
   otherProvider String?
+  /// On a contractor (doc §3.11): on its page and the board's Other providers tab.
+  contractor   Contractor? @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  contractorId String?
   /// A file that goes with it — a Google Drive link for now (doc §2.6).
   fileUrl String?
 
@@ -1881,6 +1978,9 @@ model Task {
   clientId       String?
   salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
   salesRequestId String?
+  /// A contractor it is about (doc §3.11).
+  contractor     Contractor?   @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  contractorId   String?
 
   comments TaskComment[]
   /// Files put on the task (doc §2.8, 2026-11-18).

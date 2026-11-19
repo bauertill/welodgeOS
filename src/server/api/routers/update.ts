@@ -23,9 +23,10 @@ const scope = z
     clientId: z.string().optional(),
     salesRequestId: z.string().optional(),
     providerId: z.string().optional(),
+    contractorId: z.string().optional(),
   })
-  .refine((value) => [value.propertyId, value.clientId, value.salesRequestId, value.providerId].filter(Boolean).length === 1, {
-    message: "A feed is for exactly one property, chain, client or sales request.",
+  .refine((value) => [value.propertyId, value.clientId, value.salesRequestId, value.providerId, value.contractorId].filter(Boolean).length === 1, {
+    message: "A feed is for exactly one property, chain, contractor, client or sales request.",
   });
 
 const person = { select: { id: true, name: true, email: true, image: true } } as const;
@@ -33,6 +34,7 @@ const person = { select: { id: true, name: true, email: true, image: true } } as
 const about = {
   property: { select: { id: true, name: true } },
   provider: { select: { id: true, name: true } },
+  contractor: { select: { id: true, name: true } },
   client: { select: { id: true, name: true } },
   salesRequest: { select: { id: true, client: { select: { id: true, name: true } }, event: { select: { name: true } } } },
 } as const;
@@ -53,19 +55,21 @@ function tabWhere(tab: BoardTab): Prisma.UpdateWhereInput {
       return { OR: [{ clientId: { not: null } }, { salesRequestId: { not: null } }] };
     case "ACCOMMODATION":
       return { OR: [{ propertyId: { not: null } }, { providerId: { not: null } }] };
+    // Other providers: those kept by name, and the contractors (doc §3.11).
     case "OTHER":
-      return { otherProvider: { not: null } };
+      return { OR: [{ otherProvider: { not: null } }, { contractorId: { not: null } }] };
     case "TEAM":
-      return { propertyId: null, providerId: null, clientId: null, salesRequestId: null, otherProvider: null };
+      return { propertyId: null, providerId: null, clientId: null, salesRequestId: null, otherProvider: null, contractorId: null };
   }
 }
 
-type Tags = { propertyId?: string | null; providerId?: string | null; clientId?: string | null; salesRequestId?: string | null; otherProvider?: string | null };
+type Tags = { propertyId?: string | null; providerId?: string | null; contractorId?: string | null; clientId?: string | null; salesRequestId?: string | null; otherProvider?: string | null };
 
 /** Where an update is read in full: its property, chain, client or request — or the board. */
 function linkFor(tags: Tags) {
   if (tags.propertyId) return `/properties/${tags.propertyId}`;
   if (tags.providerId) return `/providers/${tags.providerId}`;
+  if (tags.contractorId) return `/contractors/${tags.contractorId}`;
   if (tags.clientId) return `/clients/${tags.clientId}`;
   if (tags.salesRequestId) return `/sales/${tags.salesRequestId}`;
   return `/updates?tab=${tags.otherProvider ? "OTHER" : "TEAM"}`;
@@ -75,11 +79,12 @@ function linkFor(tags: Tags) {
 function whereFor(update: {
   property?: { name: string } | null;
   provider?: { name: string } | null;
+  contractor?: { name: string } | null;
   client?: { name: string } | null;
   salesRequest?: { client: { name: string } } | null;
   otherProvider?: string | null;
 }) {
-  return update.property?.name ?? update.provider?.name ?? update.client?.name ?? update.salesRequest?.client.name ?? update.otherProvider ?? "the team's updates";
+  return update.property?.name ?? update.provider?.name ?? update.contractor?.name ?? update.client?.name ?? update.salesRequest?.client.name ?? update.otherProvider ?? "the team's updates";
 }
 
 const fileUrl = z
@@ -102,6 +107,8 @@ export const updateRouter = createTRPCRouter({
     } else if (input.providerId) {
       // The chain's own, and those on each of its properties.
       where = { OR: [{ providerId: input.providerId }, { property: { providerId: input.providerId } }] };
+    } else if (input.contractorId) {
+      where = { contractorId: input.contractorId };
     } else {
       where = { salesRequestId: input.salesRequestId };
     }
@@ -207,6 +214,7 @@ export const updateRouter = createTRPCRouter({
         clientId: z.string().optional(),
         salesRequestId: z.string().optional(),
         providerId: z.string().optional(),
+        contractorId: z.string().optional(),
         otherProvider: z.string().trim().max(200).optional(),
         body: z.string().min(1),
         kind: z.nativeEnum(UpdateKind).default("NOTE"),
@@ -238,6 +246,7 @@ export const updateRouter = createTRPCRouter({
           clientId: input.clientId || null,
           salesRequestId: input.salesRequestId || null,
           providerId: input.providerId || null,
+          contractorId: input.contractorId || null,
           otherProvider: input.otherProvider || null,
           fileUrl: input.fileUrl || null,
           authorId: ctx.session.user.id,
@@ -277,6 +286,7 @@ export const updateRouter = createTRPCRouter({
           clientId: true,
           salesRequestId: true,
           providerId: true,
+          contractorId: true,
           otherProvider: true,
           replies: { select: { authorId: true } },
           ...about,
@@ -292,6 +302,7 @@ export const updateRouter = createTRPCRouter({
           clientId: parent.clientId,
           salesRequestId: parent.salesRequestId,
           providerId: parent.providerId,
+          contractorId: parent.contractorId,
           otherProvider: parent.otherProvider,
           authorId: ctx.session.user.id,
         },

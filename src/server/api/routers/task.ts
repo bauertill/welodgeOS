@@ -32,6 +32,7 @@ const include = {
   property: { select: { id: true, name: true } },
   client: { select: { id: true, name: true, shortName: true } },
   salesRequest: { select: { id: true, client: { select: { name: true } } } },
+  contractor: { select: { id: true, name: true } },
   _count: { select: { comments: true } },
 } satisfies Prisma.TaskInclude;
 
@@ -51,6 +52,8 @@ const taskInput = z.object({
   propertyId: z.string().nullable().optional(),
   clientId: z.string().nullable().optional(),
   salesRequestId: z.string().nullable().optional(),
+  /** A furniture, cleaning… contractor it is about (doc §3.11). */
+  contractorId: z.string().nullable().optional(),
 });
 
 type Loaded = Prisma.TaskGetPayload<{ include: typeof include }>;
@@ -69,6 +72,7 @@ const readable = (task: Loaded) => ({
   property: task.property?.name ?? null,
   client: task.client?.name ?? null,
   salesRequest: task.salesRequest ? `${task.salesRequest.client.name}'s request` : null,
+  contractor: task.contractor?.name ?? null,
 });
 const historyFields = [
   { key: "title", label: "Task" },
@@ -83,6 +87,7 @@ const historyFields = [
   { key: "property", label: "Property" },
   { key: "client", label: "Client" },
   { key: "salesRequest", label: "Sales request" },
+  { key: "contractor", label: "Contractor" },
 ] as const;
 
 /** A sales request ties the task to its client and event as well, unless they were said. */
@@ -108,6 +113,7 @@ function dataFrom(input: z.infer<typeof taskInput>) {
     ...(input.propertyId !== undefined && { propertyId: input.propertyId }),
     ...(input.clientId !== undefined && { clientId: input.clientId }),
     ...(input.salesRequestId !== undefined && { salesRequestId: input.salesRequestId }),
+    ...(input.contractorId !== undefined && { contractorId: input.contractorId }),
   };
 }
 
@@ -130,6 +136,7 @@ export const taskRouter = createTRPCRouter({
           propertyId: z.string().optional(),
           clientId: z.string().optional(),
           salesRequestId: z.string().optional(),
+          contractorId: z.string().optional(),
           /** Leave out what was finished more than this many days ago. */
           doneWithinDays: z.number().int().min(1).max(3650).optional(),
         })
@@ -147,6 +154,7 @@ export const taskRouter = createTRPCRouter({
           propertyId: input.propertyId,
           clientId: input.clientId,
           salesRequestId: input.salesRequestId,
+          contractorId: input.contractorId,
           requestedById: input.requestedById,
           ...(input.assigneeId && { assignees: { some: { id: input.assigneeId } } }),
           AND: [

@@ -16,6 +16,7 @@ import { rateCardRouter } from "~/server/api/routers/rate-card";
 import { placeRouter } from "~/server/api/routers/place";
 import { propertyRouter } from "~/server/api/routers/property";
 import { providerRouter } from "~/server/api/routers/provider";
+import { contractorRouter } from "~/server/api/routers/contractor";
 import { reportingRouter } from "~/server/api/routers/reporting";
 import { salesRouter } from "~/server/api/routers/sales";
 import { scoutingRouter } from "~/server/api/routers/scouting";
@@ -36,6 +37,7 @@ export const appRouter = createTRPCRouter({
   place: placeRouter,
   property: propertyRouter,
   provider: providerRouter,
+  contractor: contractorRouter,
   scouting: scoutingRouter,
   quotation: quotationRouter,
   amenity: amenityRouter,

@@ -15,10 +15,11 @@ import { renderUpdateBody } from "~/lib/updates";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Scope =
-  | { propertyId: string; clientId?: undefined; salesRequestId?: undefined; providerId?: undefined }
-  | { clientId: string; propertyId?: undefined; salesRequestId?: undefined; providerId?: undefined }
-  | { salesRequestId: string; propertyId?: undefined; clientId?: undefined; providerId?: undefined }
-  | { providerId: string; propertyId?: undefined; clientId?: undefined; salesRequestId?: undefined };
+  | { propertyId: string; clientId?: undefined; salesRequestId?: undefined; providerId?: undefined; contractorId?: undefined }
+  | { clientId: string; propertyId?: undefined; salesRequestId?: undefined; providerId?: undefined; contractorId?: undefined }
+  | { salesRequestId: string; propertyId?: undefined; clientId?: undefined; providerId?: undefined; contractorId?: undefined }
+  | { providerId: string; propertyId?: undefined; clientId?: undefined; salesRequestId?: undefined; contractorId?: undefined }
+  | { contractorId: string; propertyId?: undefined; clientId?: undefined; salesRequestId?: undefined; providerId?: undefined };
 
 export type UpdateRow = RouterOutputs["update"]["list"][number];
 
@@ -161,7 +162,7 @@ export function UpdateList({
   newSince,
 }: {
   updates: UpdateRow[] | undefined;
-  hide?: Partial<Record<"propertyId" | "clientId" | "salesRequestId" | "providerId", string>>;
+  hide?: Partial<Record<"propertyId" | "clientId" | "salesRequestId" | "providerId" | "contractorId", string>>;
   empty?: string;
   /** On the board: more are loaded from the server, not shown ten at a time. */
   hasMore?: boolean;
@@ -416,7 +417,7 @@ export function UpdateList({
  * §2.6): the property, the chain, the client, the request — and a provider
  * kept by name. The page it is shown on is left out.
  */
-function UpdateTags({ entry, hide = {} }: { entry: UpdateRow; hide?: Partial<Record<"propertyId" | "clientId" | "salesRequestId" | "providerId", string>> }) {
+function UpdateTags({ entry, hide = {} }: { entry: UpdateRow; hide?: Partial<Record<"propertyId" | "clientId" | "salesRequestId" | "providerId" | "contractorId", string>> }) {
   const tag = "text-brand-700 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium hover:underline";
   return (
     <>
@@ -428,6 +429,11 @@ function UpdateTags({ entry, hide = {} }: { entry: UpdateRow; hide?: Partial<Rec
       {entry.provider && entry.provider.id !== hide.providerId && (
         <Link href={`/providers/${entry.provider.id}`} className={tag}>
           {hide.propertyId ? `via ${entry.provider.name}` : entry.provider.name}
+        </Link>
+      )}
+      {entry.contractor && entry.contractor.id !== hide.contractorId && (
+        <Link href={`/contractors/${entry.contractor.id}`} className={tag}>
+          {entry.contractor.name}
         </Link>
       )}
       {entry.client && entry.client.id !== hide.clientId && (

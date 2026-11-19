@@ -16,6 +16,7 @@ import {
   WhereItIsCard,
 } from "~/app/_components/property-cards";
 import { PropertyContracts } from "~/app/_components/finance";
+import { PropertyContractors } from "~/app/_components/contractors";
 import { PropertyMedia } from "~/app/_components/property-media";
 import { PropertyTabs } from "~/app/_components/property-tabs";
 import { PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
@@ -131,6 +132,8 @@ export default async function PropertyPage({
                 count: property._count.contracts,
                 content: <PropertyContracts propertyId={property.id} events={entries.map((entry) => entry.event)} />,
               },
+              // Furniture, cleaning… companies serving it (doc §3.11, 2026-11-19).
+              { key: "contractors", label: "Contractors", count: property._count.contractors, content: <PropertyContractors propertyId={property.id} /> },
               // Kept for the record, rarely read: a tab of its own, out of the way.
               { key: "log", label: "Log", content: <ActivityLog entity="Property" entityId={property.id} /> },
             ]}
