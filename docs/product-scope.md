@@ -3331,6 +3331,70 @@ offer opens it as a document, as it will print.
 
 ---
 
+### 4.12 Stagger Planner — phased arrivals for an apartment owner
+
+> **Built** (2026-11-19). Shows an apartment owner — the first is Decron Properties, for OBS at
+> LA28 — how our client's apartments arrive and leave in staggered waves rather than as one
+> block, and the rent the owner earns. The team edits scenarios live; the owner gets a
+> read-only link. It reproduces the reference page `docs/reference/stagger-planner-reference.html`
+> (its sums, charts, settings and words), with scenarios kept in the system instead of one
+> browser.
+
+**Where.** *Sales › Stagger planner* (`/stagger`): every scenario, last edited first, with its
+owner, event, number of apartments and who last edited it when; *Open*, *Duplicate*, *Rename*,
+*Archive* (brought back from *Show archived*), *Copy link* and *Manage* for the share link;
+*+ New scenario* (a name, the owner, the event) starts at the 50-unit scenario. One scenario is
+there from the start: **Decron – OBS 50 units**.
+
+**The editor** (`/stagger/<id>`) is the reference page: the settings panel beside the story,
+charts and tables, and *Hide settings* to see it as the owner will (each person's own choice,
+kept in their browser, never saved to the scenario). The scenario's name, owner and event are
+edited in the bar above. **It saves as you go**, 600 ms after the last change, showing *Saving…*
+and *Saved · when, by whom*. Each save names the version it was made from: **if a colleague
+saved in between, nothing is overwritten** — the editor says *Someone else changed this
+scenario – reload* and saves nothing more until reloaded. Turning the share link on or off does
+not count as an edit.
+
+**The owner's view** (`/stagger/view/<link>`): the same page in presenting mode, with no
+settings, no OS menu and no editing; only *We Lodge × the owner* in the header; hidden from
+search engines; light or dark as the owner's device is set (the editor stays light like the rest
+of OS). It shows the scenario as last saved. The link is long and random; *New link* replaces it
+(the old one stops at once), *Stop sharing* or archiving the scenario makes it a not-found page.
+The link returns only the scenario's name, the owner and its plan.
+
+**What a scenario holds** — exactly the reference's settings: total apartments, first move-in,
+number of waves, days between waves, months per stay, the waves themselves (move-in, apartments,
+months), the unit mix (studio, 1-bed, 2-bed, as percentages), the owner's rent per type (US$ a
+month, entered monthly or nightly), *Compare with a single block* and *Show rent figures*.
+**Only the owner's rent** — never our margins, selling rates, client prices or costs.
+
+**The sums** (one module, `src/lib/stagger-model.ts`, used by the editor, the owner's view and
+the tests; unit-tested against the 50-unit scenario):
+
+- Days are calendar days in UTC; a month later is clamped to the month's end (31 Jan + 1 month
+  = 29 Feb 2028).
+- Apartments are spread across waves, and across unit types, by largest remainder (50 over six
+  waves = 9, 9, 8, 8, 8, 8).
+- A wave leaves its months of stay after it arrives; an apartment is in-house for the nights
+  from arrival up to, not including, departure.
+- **Blended rent** = Σ (apartments of a type × its monthly rent) ÷ all apartments; the nightly
+  equivalent is the monthly ÷ 30.4 (365 ÷ 12). **Total rent** = Σ apartments × months × blended
+  rent. In the month-by-month table each lease month is spread over the calendar months it
+  covers, by day.
+- **The settings' rules**: changing the number of waves, the gap, the first move-in rebuilds the
+  waves evenly; changing the stay sets it on every wave; changing only the total keeps the wave
+  dates and rescales the apartments in proportion.
+- The charts mark the Games (14–30 July 2028), the same apartments as a single block (dashed),
+  the stretch with every apartment in-house, and the most handed back on one day.
+- The 50-unit scenario: waves of 9, 9, 8, 8, 8, 8 arriving 1 Mar – 10 May 2028, handed back
+  1 Sep – 10 Nov; all 50 in-house 10 May – 31 Aug; at most 9 back on one day; 10 studios, 30
+  1-beds, 10 2-beds; 300 lease months; $4,600 a month blended (≈ $151 a night); $1,380,000 rent.
+
+**Words.** Where the reference names Decron, the scenario's owner is used ("Decron" for
+"Decron Properties"); "OBS" stays fixed — a scenario has no field for whose apartments they are.
+The notes under *How these figures are built* keep the reference's *Scenario*, *Structure*,
+*Proposed* and *Hand-back* labels.
+
 ## 5. Reporting and derived views
 
 ### 5.1 Position per property/category/night
@@ -4224,6 +4288,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates; room types renamed or added on the card (added to the property too) properties added to a card later and put in order; rooms offered at "Rate to be confirmed"; the client's link full width with the map beside it, "I like it!" on each room, rates include and payment & cancellation terms, and "Request a proposal" at the end (switchable to look-only); the client's map shows only the properties plus the layers and places chosen on the card, and the distance beside each property is to the nearest of them; new cards remember each property's description and client rates; Sales › Rate cards lists and makes every card, each sent to a client (kept on their page) or any client (2026-11-17), which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09); a click anywhere on a row opens the request (2026-11-18) |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
+| §4.12 Stagger Planner | **Built** (2026-11-19) | Sales › Stagger planner: scenarios listed, made, copied, renamed, archived; the editor saves as you go and refuses to overwrite a colleague's newer save; a read-only, unindexed owner's link (on/off, replaced); the reference page's sums in one tested module; Decron – OBS 50 units made by the migration |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
