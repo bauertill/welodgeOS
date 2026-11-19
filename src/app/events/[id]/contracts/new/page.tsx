@@ -29,7 +29,7 @@ export default async function NewContractPage({
           request
             ? { href: `/sales/${request.id}`, label: "The sales request" }
             : contractor
-              ? { href: `/contractors/${contractor}`, label: "The contractor" }
+              ? { href: `/events/${event.id}/contractors/${contractor}`, label: "The contractor" }
               : property
               ? { href: `/properties/${property}?back=${encodeURIComponent(`/events/${event.id}`)}#contracts`, label: "The property" }
               : { href: `/events/${event.id}`, label: event.name }

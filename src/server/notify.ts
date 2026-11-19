@@ -33,15 +33,20 @@ export async function notify(
   });
 }
 
-/** The colleagues @mentioned in a text, found by the name written in it. */
+/**
+ * The colleagues @mentioned in a text, found by the name written in it — and
+ * every member of a team tag written there (@LA, doc §2.7), each told as if
+ * mentioned by name.
+ */
 export async function mentionedIn(db: Db, body: string) {
   const names = [...body.matchAll(MENTION_PATTERN)].map((match) => match[1]!.trim()).filter(Boolean);
   if (names.length === 0) return [];
-  const people = await db.user.findMany({
-    where: { OR: names.map((name) => ({ name: { equals: name, mode: "insensitive" as const } })) },
-    select: { id: true },
-  });
-  return people.map((person) => person.id);
+  const byName = names.map((name) => ({ name: { equals: name, mode: "insensitive" as const } }));
+  const [people, tags] = await Promise.all([
+    db.user.findMany({ where: { OR: byName }, select: { id: true } }),
+    db.teamTag.findMany({ where: { OR: byName }, select: { members: { select: { id: true } } } }),
+  ]);
+  return [...new Set([...people.map((person) => person.id), ...tags.flatMap((tag) => tag.members.map((member) => member.id))])];
 }
 
 /** A mention as a reader sees it: "@[Ami Rossi]" → "@Ami Rossi". */

@@ -9,6 +9,13 @@ export const metadata = { title: "Guides" };
 /** One guide per team; more are added here as they are written (doc §2.11). */
 const guides = [
   {
+    href: "/guide/welcome",
+    title: "Welcome to We Lodge OS",
+    team: "Everyone — start here",
+    text: "What OS is, monday.com now view only, your daily habit, how you're told about things, and where everything lives.",
+    size: "A five-minute read",
+  },
+  {
     href: "/guide/sales",
     title: "Sales guide",
     team: "Sales team",

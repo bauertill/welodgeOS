@@ -317,6 +317,17 @@ the first is the one to try first. The email shown is the Google account the per
 in with (§2.5). It cannot be changed from the profile, because it is not a contact detail
 the person chose but the identity that lets them in; changing it would lock them out.
 
+**Team tags** (the owner, 2026-11-19: "team tags, for example @LA … then it sends a
+notification to everybody instead of having to tag each individual person"). At the top of
+the Team page: each tag is a short name and the colleagues in it, made, changed or deleted by
+**anyone signed in** (no admin step, as everywhere else on the team pages). Typing @ in an
+update, a reply, a task's details or a comment offers the team tags first (*LA · team · 5
+people*), then colleagues; **@LA tells every member exactly as if each had been @mentioned by
+name** — in the bell, and by email to those who get mention emails (§2.9) — the writer
+excepted. A name is unique and can never be a colleague's name, so a mention means one thing.
+Membership is read when the post is written: someone added to @LA later is not told about
+older posts, and deleting a tag leaves the words in posts that used it.
+
 **The team directory** lists everyone who has ever signed in, with their title, email and
 numbers, and a *Message* button that opens a private conversation with that person.
 
@@ -557,6 +568,7 @@ about what they did themselves.
 | A task becomes overdue | The same people. Once |
 | A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card |
 | Someone is `@mentioned` in an update or a reply (§2.6, 2026-11-17) | Each person mentioned — **emailed** |
+| A team tag (`@LA`, §2.7) is written in any of the above | Each of its members, as if mentioned by name — **emailed** |
 | Someone replies to an update (§2.6) | Whoever wrote the update and whoever replied before, apart from those mentioned |
 
 **The bell** in the header shows how many are unread and the latest thirty, newest first;
@@ -650,6 +662,20 @@ of several) — and *How this works* on the Sales requests page goes straight to
   by stage, each linking to its section.
 - **It never mentions staging** (the owner, 2026-11-10): the team works on the live site
   only; staging is for testing changes to the system, not for the team to practise on.
+- **Welcome to We Lodge OS** (the owner, 2026-11-19: "the team can start shifting over all
+  of their work onto OS … monday.com should be view only, and all updates and reports need to
+  be filled out on OS"), at `/guide/welcome` and first on the Guides page: one page for the
+  whole team, for the owner to send as a link. It says what OS is; that **monday.com is view
+  only from Friday 20 November 2026** and every update, report and task is made in OS — after
+  **a full import from monday.com** (every client and contact, and all the LA28 work), so it
+  should all be found in OS; the daily habit (the
+  bell, my tasks, the Updates feed); how people are told (an email at once only when
+  `@mentioned`, everything else in the bell and the 7:00 morning summary, §2.9); where things
+  live, menu by menu (contractors on each event's Contractors tab); team tags; five house rules;
+  the onboarding call (no presenter named — it is for a large team); and that
+  this is the first launch — notifications and more still being worked through — so problems
+  and ideas go to the owner by chat message with a screenshot until a bug-reporting system
+  exists. Who to ask: the owner.
 - **I'm stuck**: the questions people ask most — the link that cannot be made, the request
   that will not move on, the offer that ran out — each answered in two sentences and pointing
   to its section.
@@ -1689,13 +1715,17 @@ its one period** and nothing below shows.
 ### 3.11 Contractors
 
 > **Built** (2026-11-19). The owner: "we are also using other contractors like furniture
-> companies, cleaning companies etc, we should have a space for this."
+> companies, cleaning companies etc, we should have a space for this" — and, the same day:
+> "they form part of an event and don't cross from event to event. It should be a tab in the
+> event."
 
-A **contractor** is a company we use besides the hotels: furniture rental, cleaning, linen and
-laundry, maintenance, transport, security, catering, or *Other* with what it does in words.
-It is global, like a client — the same company comes back for the next event — and is reached
-from **Contractors** in the left menu, and from the **Contractors** tab on each event, which
-lists the ones working on that event, puts an existing one on it, or makes a new one there.
+A **contractor** is a company working on an event besides the hotels: furniture rental,
+cleaning, linen and laundry, maintenance, transport, security, catering, or *Other* with what
+it does in words. **It belongs to one event** and lives on that event's **Contractors** tab,
+which lists them and makes new ones; there is no Contractors menu item and no list across
+events (the first version, global like a client, lasted a morning with none made). The same
+company working on two events is two contractors, one on each; its name is unique within an
+event. Older links to a contractor open it on its event.
 
 Each contractor's page holds:
 
@@ -1703,21 +1733,22 @@ Each contractor's page holds:
   notes; its **contacts** (name, role, email, phone); and its **contracting details** (the
   same fields as a hotel's, §3.9: trade name, VAT and registration numbers, IBAN, BIC,
   signatory, contract email), visible to every colleague.
-- **Events** it works on — put on or taken off; taking it off an event keeps its contracts.
-- **Properties it serves**, each with what it does there ("Furnishes the 12 apartments"); each
+- **Properties it serves** — chosen from its event's properties — each with what it does there ("Furnishes the 12 apartments"); each
   property's page has a *Contractors* tab listing them back.
-- **Contracts and payments**, one list per event it is on, each with *+ New contract*. A
+- **Contracts and payments** for its event, with *+ New contract*; a contract can only name a
+  contractor of the contract's own event. A
   contractor's contract is a **supplier contract** (§7.1) with the contractor in the hotel's
   place — the new-contract form asks *With: a hotel · a contractor · a client* — so its
   payments appear under Finances › Payments *To suppliers*, its cancellation deadlines with the
   suppliers', and a contract in another currency locks its rate at signing like any other (§7).
   It carries no room-nights.
-- **Tasks** about it (a task's *About* can now name a contractor, §2.8), with *+ Add task*.
+- **Tasks** about it (a task's *About* can now name a contractor, §2.8 — the picker shows the
+  chosen event's contractors, and choosing one fills in its event), with *+ Add task*.
 - **Updates** (§2.6), shown on the board's *Other providers* tab too.
 - Its history.
 
 A contractor is **deleted** only while it has no contract (those are kept); its contacts,
-events, properties and updates go with it, and its tasks stay, about nothing.
+properties and updates go with it, and its tasks stay, about nothing.
 
 ## 4. Phase 2 — Acquisition & Sales
 
@@ -4130,7 +4161,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
-| §3.11 Contractors | **Built** (2026-11-19) | Contractors menu item and a Contractors tab per event; each with what it does, contacts, contracting details, events, properties it serves (shown on the property too), supplier contracts and payments per event, tasks and updates (board's Other providers tab) |
+| §3.11 Contractors | **Built** (2026-11-19) | A Contractors tab per event — each contractor belongs to one event (no menu item since the same day); each with what it does, contacts, contracting details, properties it serves among the event's (shown on the property too), supplier contracts and payments, tasks and updates (board's Other providers tab) |
 | §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
@@ -4141,12 +4172,14 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Reactions, replies, emoji | **Built** | Quick reactions (your three most used), the full emoji picker with search and skin tones, the team's own emoji (added by anyone, kept in the database, not yet removable), quote replies that jump to the original, emoji in the text |
 | §2.7 GIFs | **Built, needs a key** | GIPHY search and trending, sent as a link, PG-13. Needs `GIPHY_API_KEY` on the live site (`docs/todos.md`) |
 | §2.7 File sharing in chat | **Not built** | Needs file storage switched on first (e.g. Vercel Blob) |
+| §2.7 Team tags | **Built** (2026-11-19) | On the Team page; @LA in an update, reply, task or comment tells every member as a mention (bell and email); made and changed by anyone |
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | Files uploaded onto a task, kept in the private file store (2026-11-18). One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
+| §2.11 Welcome to We Lodge OS | **Built** (2026-11-19) | /guide/welcome, first on the Guides page: what OS is, monday.com view only, the daily habit, how people are told, where things live, five house rules |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 More property types | **Built** (2026-11-11) | Motel, extended stay, student housing, hostel, bed & breakfast and other, beside hotel, apartment and aparthotel — for the LA28 move from monday.com (the owner). Each behaves as a hotel (rooms with beds, stars), an apartment (units with bedrooms, no stars: student housing) or both (extended stay, like an aparthotel). monday's furnished, luxury and complex apartments come in as Apartment, budget hotels as Hotel. Rating is stars only — monday's review scores (4.3/5) are not brought over (the owner) |

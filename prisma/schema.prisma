@@ -115,8 +115,9 @@ model Event {
   salesRequests         SalesRequest[]
   contracts             Contract[]
   tasks                 Task[]
-  /// Furniture, cleaning and other contractors working on it (doc §3.11).
-  contractors           ContractorEvent[]
+  /// Furniture, cleaning and other contractors working on it — each belongs
+  /// to this event alone (doc §3.11, the owner 2026-11-19).
+  contractors           Contractor[]
   /// The event's team (doc §2.3): who leads it, and who sources its
   /// accommodation — given each new sales request's sourcing task (§4.11).
   projectLead           User?           @relation("EventProjectLead", fields: [projectLeadId], references: [id], onDelete: SetNull)
@@ -404,6 +405,19 @@ model ProviderContact {
   @@index([providerId])
 }
 
+/// A team tag (doc §2.7, the owner 2026-11-19: "team tags, for example @LA
+/// … then it sends a notification to everybody instead of having to tag each
+/// individual person"). Writing @[LA] in an update, reply, task or comment
+/// tells every member, exactly as if each had been @mentioned.
+model TeamTag {
+  id        String   @id @default(cuid())
+  /// Unique, and never a colleague's name, so a mention means one thing.
+  name      String   @unique
+  members   User[]   @relation("TeamTagMembers")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// What a contractor does for us (doc §3.11).
 enum ContractorKind {
   FURNITURE
@@ -416,13 +430,16 @@ enum ContractorKind {
   OTHER
 }
 
-/// A company we use besides the hotels — furniture, cleaning, linen… (the
-/// owner, 2026-11-19, doc §3.11): its contacts and contracting details, the
-/// events it works on, the properties it serves, its contracts and payments,
-/// its tasks and updates.
+/// A company working on one event besides the hotels — furniture, cleaning,
+/// linen… (the owner, 2026-11-19, doc §3.11: "they form part of an event and
+/// don't cross from event to event"): its contacts and contracting details,
+/// the properties it serves, its contracts and payments, its tasks and updates.
 model Contractor {
   id      String         @id @default(cuid())
-  name    String         @unique
+  event   Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  /// Unique within its event.
+  name    String
   kind    ContractorKind @default(OTHER)
   /// What it does, in words, when the kind is Other — or more about it.
   service String?
@@ -445,11 +462,13 @@ model Contractor {
   updatedAt DateTime @updatedAt
 
   contacts   ContractorContact[]
-  events     ContractorEvent[]
   properties ContractorProperty[]
   contracts  Contract[]
   updates    Update[]
   tasks      Task[]
+
+  @@unique([eventId, name])
+  @@index([eventId])
 }
 
 model ContractorContact {
@@ -463,18 +482,6 @@ model ContractorContact {
   contractorId String
 
   @@index([contractorId])
-}
-
-/// A contractor working on an event.
-model ContractorEvent {
-  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
-  contractorId String
-  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  eventId      String
-  createdAt    DateTime   @default(now())
-
-  @@id([contractorId, eventId])
-  @@index([eventId])
 }
 
 /// A property a contractor serves, and what it does there ("Furnishes the 12 apartments").
@@ -1093,6 +1100,8 @@ model User {
   dailySummary       Boolean              @default(true)
   /// Their time zone, as their browser reports it ("Europe/Zurich", "America/Los_Angeles").
   timeZone           String?
+  /// The team tags they belong to — @LA tells all of them (doc §2.7, the owner 2026-11-19).
+  teamTags           TeamTag[]            @relation("TeamTagMembers")
   /// When their last morning summary went — so it goes once a day.
   summarySentAt      DateTime?
   notifications      Notification[]       @relation("NotificationFor")

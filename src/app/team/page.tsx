@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { TeamDirectory } from "~/app/_components/team-directory";
+import { TeamTags } from "~/app/_components/team-tags";
 import { PageHeader } from "~/app/_components/ui";
 import { auth } from "~/server/auth";
 
@@ -25,6 +26,7 @@ export default async function TeamPage() {
           </Link>
         }
       />
+      <TeamTags />
       <TeamDirectory myId={session.user.id} />
     </>
   );

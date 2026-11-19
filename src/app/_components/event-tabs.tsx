@@ -83,7 +83,8 @@ export function EventTabs({ eventId }: { eventId: string }) {
     <nav className="border-ink-200/60 mb-6 flex flex-wrap gap-1 border-b">
       {tabs.map((tab) => {
         const href = tab.slug ? `${base}/${tab.slug}` : base;
-        const active = pathname === href;
+        // A contractor's page sits under its event's Contractors tab (doc §3.11).
+        const active = pathname === href || (tab.slug === "contractors" && pathname.startsWith(`${href}/`));
         return (
           <Link
             key={tab.slug}

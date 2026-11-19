@@ -8,10 +8,11 @@ import { logAudit } from "~/server/audit";
 
 /**
  * Contractors (doc §3.11, the owner 2026-11-19: "we are also using other
- * contractors like furniture companies, cleaning companies"): the companies we
- * use besides the hotels — each with its contacts and contracting details, the
- * events it works on, the properties it serves, and, elsewhere, its contracts
- * and payments (§7.1), tasks (§2.8) and updates (§2.6).
+ * contractors like furniture companies, cleaning companies … they form part of
+ * an event and don't cross from event to event"): the companies working on one
+ * event besides the hotels — each with its contacts and contracting details,
+ * the properties it serves, and, elsewhere, its contracts and payments (§7.1),
+ * tasks (§2.8) and updates (§2.6).
  */
 
 const text = z.string().max(2000).optional();
@@ -27,19 +28,19 @@ const contactInput = z.object({
 const blank = (value: string | null | undefined) => (value?.trim() ? value.trim() : null);
 const nameInput = z.string().trim().min(1, "A contractor needs a name.").max(200);
 
-async function refuseDuplicate(db: { contractor: { findFirst: (args: object) => Promise<{ name: string } | null> } }, name: string, id?: string) {
-  const duplicate = await db.contractor.findFirst({ where: { ...(id && { id: { not: id } }), name: { equals: name, mode: "insensitive" } } });
-  if (duplicate) throw new TRPCError({ code: "BAD_REQUEST", message: `"${duplicate.name}" is already a contractor.` });
+async function refuseDuplicate(db: { contractor: { findFirst: (args: object) => Promise<{ name: string } | null> } }, eventId: string, name: string, id?: string) {
+  const duplicate = await db.contractor.findFirst({ where: { eventId, ...(id && { id: { not: id } }), name: { equals: name, mode: "insensitive" } } });
+  if (duplicate) throw new TRPCError({ code: "BAD_REQUEST", message: `"${duplicate.name}" is already a contractor on this event.` });
 }
 
 export const contractorRouter = createTRPCRouter({
-  /** Every contractor — or one event's — with what it does, its events and how much rests on it. */
+  /** One event's contractors (or, for the task form's picker, every event's), with what each does and how much rests on it. */
   list: protectedProcedure.input(z.object({ eventId: z.string().optional() }).default({})).query(({ ctx, input }) =>
     ctx.db.contractor.findMany({
-      where: input.eventId ? { events: { some: { eventId: input.eventId } } } : undefined,
+      where: input.eventId ? { eventId: input.eventId } : undefined,
       orderBy: { name: "asc" },
       include: {
-        events: { include: { event: { select: { id: true, name: true } } }, orderBy: { event: { startDate: "asc" } } },
+        event: { select: { id: true, name: true } },
         contacts: { orderBy: { name: "asc" }, take: 1 },
         _count: { select: { properties: true, contracts: true, tasks: true } },
       },
@@ -51,7 +52,7 @@ export const contractorRouter = createTRPCRouter({
       where: { id: input.id },
       include: {
         contacts: { orderBy: { name: "asc" } },
-        events: { include: { event: { select: { id: true, name: true } } }, orderBy: { event: { startDate: "asc" } } },
+        event: { select: { id: true, name: true } },
         properties: { include: { property: { select: { id: true, name: true, city: true, type: true } } }, orderBy: { property: { name: "asc" } } },
         _count: { select: { contracts: true } },
       },
@@ -62,22 +63,17 @@ export const contractorRouter = createTRPCRouter({
   forProperty: protectedProcedure.input(z.object({ propertyId: z.string() })).query(({ ctx, input }) =>
     ctx.db.contractorProperty.findMany({
       where: { propertyId: input.propertyId },
-      include: { contractor: { select: { id: true, name: true, kind: true, service: true, phone: true, email: true } } },
+      include: { contractor: { select: { id: true, name: true, kind: true, service: true, phone: true, email: true, eventId: true, event: { select: { name: true } } } } },
       orderBy: { contractor: { name: "asc" } },
     }),
   ),
 
   create: protectedProcedure
-    .input(z.object({ name: nameInput, kind: z.nativeEnum(ContractorKind), service: text, eventId: z.string().optional() }))
+    .input(z.object({ name: nameInput, kind: z.nativeEnum(ContractorKind), service: text, eventId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await refuseDuplicate(ctx.db, input.name);
+      await refuseDuplicate(ctx.db, input.eventId, input.name);
       const created = await ctx.db.contractor.create({
-        data: {
-          name: input.name,
-          kind: input.kind,
-          service: blank(input.service),
-          ...(input.eventId && { events: { create: { eventId: input.eventId } } }),
-        },
+        data: { eventId: input.eventId, name: input.name, kind: input.kind, service: blank(input.service) },
       });
       await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Contractor", entityId: created.id, summary: "Added" });
       return created;
@@ -99,7 +95,8 @@ export const contractorRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, contacts, name, kind, service, website, email, phone, notes, ...details } = input;
-      await refuseDuplicate(ctx.db, name, id);
+      const { eventId } = await ctx.db.contractor.findUniqueOrThrow({ where: { id }, select: { eventId: true } });
+      await refuseDuplicate(ctx.db, eventId, name, id);
       return ctx.db.$transaction(async (tx) => {
         await tx.contractorContact.deleteMany({ where: { contractorId: id } });
         const updated = await tx.contractor.update({
@@ -121,23 +118,6 @@ export const contractorRouter = createTRPCRouter({
         await logAudit(tx, { actorId: ctx.session.user.id, entity: "Contractor", entityId: id, summary: "Updated" });
         return updated;
       });
-    }),
-
-  /** Put a contractor on an event, or take it off. */
-  setEvent: protectedProcedure
-    .input(z.object({ contractorId: z.string(), eventId: z.string(), on: z.boolean() }))
-    .mutation(async ({ ctx, input }) => {
-      const event = await ctx.db.event.findUniqueOrThrow({ where: { id: input.eventId }, select: { name: true } });
-      if (input.on) {
-        await ctx.db.contractorEvent.upsert({
-          where: { contractorId_eventId: { contractorId: input.contractorId, eventId: input.eventId } },
-          create: { contractorId: input.contractorId, eventId: input.eventId },
-          update: {},
-        });
-      } else {
-        await ctx.db.contractorEvent.deleteMany({ where: { contractorId: input.contractorId, eventId: input.eventId } });
-      }
-      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Contractor", entityId: input.contractorId, summary: input.on ? `Put on ${event.name}` : `Taken off ${event.name}` });
     }),
 
   /** A property it serves, and what it does there — added, changed, or (with on: false) removed. */
@@ -164,11 +144,13 @@ export const contractorRouter = createTRPCRouter({
 
   /** Delete a contractor made by mistake. Refused while it has a contract: those are kept. */
   remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const { eventId } = await ctx.db.contractor.findUniqueOrThrow({ where: { id: input.id }, select: { eventId: true } });
     const contracts = await ctx.db.contract.count({ where: { contractorId: input.id } });
     if (contracts) {
       throw new TRPCError({ code: "BAD_REQUEST", message: `It has ${contracts} contract${contracts === 1 ? "" : "s"}. Delete those first — a contract with payments is kept.` });
     }
     await ctx.db.contractor.delete({ where: { id: input.id } });
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Contractor", entityId: input.id, summary: "Deleted" });
+    return { eventId };
   }),
 });

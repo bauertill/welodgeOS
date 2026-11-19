@@ -20,8 +20,6 @@ export const navItems = [
   { href: "/tasks", label: "Tasks" },
   // What the whole team should see (doc §2.6, the team 2026-11-17).
   { href: "/updates", label: "Updates" },
-  // Furniture, cleaning and other companies we use besides the hotels (doc §3.11, 2026-11-19).
-  { href: "/contractors", label: "Contractors" },
 ] as const;
 
 /**
