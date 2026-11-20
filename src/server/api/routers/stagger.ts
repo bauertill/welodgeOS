@@ -14,7 +14,8 @@ import { logAudit } from "~/server/audit";
  */
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date is YYYY-MM-DD.");
-const perType = z.object({ studio: z.number().min(0), one: z.number().min(0), two: z.number().min(0) });
+/** Studios and 1-beds; anything else sent (an old 2-bed figure) is dropped. */
+const perType = z.object({ studio: z.number().min(0), one: z.number().min(0) }).strip();
 /** The planner's state exactly as the reference keeps it; never `presenting`. */
 const dataInput = z
   .object({

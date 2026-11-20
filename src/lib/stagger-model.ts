@@ -13,11 +13,11 @@ export const DAY = 86400000;
 /** Nights per month, for nightly equivalents (365 ÷ 12 ≈ 30.4). */
 export const NPM = 365 / 12;
 
-export type UnitType = "studio" | "one" | "two";
+/** Studios and 1-beds only (the reference dropped 2-beds, 2026-11-20). */
+export type UnitType = "studio" | "one";
 export const TYPES: { k: UnitType; label: string }[] = [
   { k: "studio", label: "Studio" },
   { k: "one", label: "1-bed" },
-  { k: "two", label: "2-bed" },
 ];
 export const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const MONL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -37,6 +37,7 @@ export type StaggerData = {
   /** Owner's rent per apartment, US$ per month (may be fractional). */
   rates: Record<UnitType, number>;
   rateBasis: "month" | "night";
+  /** Kept for scenarios saved before 2026-11-20; the single-block chart it switched is gone. */
   showBlock: boolean;
   showRent: boolean;
   rows: WaveRow[];
@@ -110,8 +111,8 @@ export function defaults(): StaggerData {
     waves: 6,
     gap: 14,
     stay: 6,
-    mix: { studio: 20, one: 60, two: 20 },
-    rates: { studio: 4000, one: 4500, two: 5500 },
+    mix: { studio: 20, one: 80 },
+    rates: { studio: 4000, one: 4500 },
     showBlock: true,
     showRent: true,
     rateBasis: "month",
@@ -121,14 +122,21 @@ export function defaults(): StaggerData {
   return s;
 }
 
-/** Whatever was stored, made whole: anything missing comes from the defaults. */
+/** Only the unit types there are now: a scenario saved with 2-beds keeps its studios and 1-beds, the rest is dropped. */
+const perType = (base: Record<UnitType, number>, stored: unknown): Record<UnitType, number> => {
+  const s = (stored && typeof stored === "object" ? stored : {}) as Partial<Record<string, unknown>>;
+  const pick = (k: UnitType) => (typeof s[k] === "number" && isFinite(s[k]) ? s[k] : base[k]);
+  return { studio: pick("studio"), one: pick("one") };
+};
+
+/** Whatever was stored, made whole: anything missing comes from the defaults; anything no longer used is dropped. */
 export function normalise(input: unknown): StaggerData {
   const base = defaults();
   if (!input || typeof input !== "object") return base;
   const s = input as Partial<StaggerData>;
   if (!Array.isArray(s.rows) || !s.mix || !s.rates) return base;
   const { presenting: _presenting, ...rest } = s as Partial<StaggerData> & { presenting?: unknown };
-  return { ...base, ...rest, mix: { ...base.mix, ...s.mix }, rates: { ...base.rates, ...s.rates }, rows: s.rows.map((r) => ({ date: String(r.date), units: int(r.units), stay: int(r.stay) || 1 })) };
+  return { ...base, ...rest, mix: perType(base.mix, s.mix), rates: perType(base.rates, s.rates), rows: s.rows.map((r) => ({ date: String(r.date), units: int(r.units), stay: int(r.stay) || 1 })) };
 }
 
 // ---------- the generator's rules, as the settings panel applies them ----------
@@ -171,13 +179,8 @@ export type Computed =
       start: Date;
       end: Date;
       days: number;
+      /** Apartments in-house each day from `start` (for the month-end column). */
       occ: number[];
-      events: { date: Date; arr: number; dep: number }[];
-      /** Every apartment in-house, first to last day. */
-      fh: [Date, Date] | null;
-      peak: number;
-      maxIn: number;
-      maxOut: number;
       counts: number[];
       /** Blended monthly rent per apartment. */
       rateEff: number;
@@ -208,30 +211,12 @@ export function compute(state: StaggerData): Computed {
   const end = new Date(Date.UTC(endRaw.getUTCFullYear(), endRaw.getUTCMonth() + 1, 1));
   const days = Math.round((end.getTime() - start.getTime()) / DAY);
   const occ = new Array<number>(days + 1).fill(0);
-  const arr = new Array<number>(days + 1).fill(0);
-  const dep = new Array<number>(days + 1).fill(0);
   // In-house for the nights arrival ≤ d < departure.
   for (const r of rows) {
     const ia = Math.round((r.a.getTime() - start.getTime()) / DAY);
     const id = Math.round((r.d.getTime() - start.getTime()) / DAY);
-    arr[ia]! += r.units;
-    dep[id]! += r.units;
     for (let i = ia; i < id; i++) occ[i]! += r.units;
   }
-  const events: { date: Date; arr: number; dep: number }[] = [];
-  for (let i = 0; i <= days; i++) if (arr[i] || dep[i]) events.push({ date: addDays(start, i), arr: arr[i]!, dep: dep[i]! });
-
-  let fh: [Date, Date] | null = null;
-  let fs = -1;
-  for (let i = 0; i <= days; i++) {
-    if (occ[i] === N) {
-      if (fs < 0) fs = i;
-    } else if (fs >= 0) {
-      fh = [addDays(start, fs), addDays(start, i - 1)];
-      break;
-    }
-  }
-  const peak = max(occ);
 
   const counts = split(N, TYPES.map((t) => state.mix[t.k]));
   const rentSum = TYPES.reduce((s, t, k) => s + counts[k]! * (+state.rates[t.k] || 0), 0);
@@ -283,11 +268,6 @@ export function compute(state: StaggerData): Computed {
     end,
     days,
     occ,
-    events,
-    fh,
-    peak,
-    maxIn: max(arr),
-    maxOut: max(dep),
     counts,
     rateEff,
     months,
@@ -302,47 +282,36 @@ type Full = Extract<Computed, { empty: false }>;
 /** The opening paragraph. */
 export function lede(c: Computed) {
   if (c.empty) return "Add at least one wave with apartments to see the plan.";
-  const nW = c.rows.length;
-  const weeks = Math.round((c.lastA.getTime() - c.minA.getTime()) / DAY / 7);
-  if (nW > 1) {
-    return `${c.N} apartments move in over ${weeks} weeks (${fd(c.minA)} – ${fdy(c.lastA)}) and are handed back the same way (${fd(c.minD)} – ${fdy(c.maxD)}). Instead of one block coming back on a single day, your leasing team gets a steady flow of apartments to re-let.`;
+  const stays = c.rows.map((r) => r.stay);
+  const sMin = Math.min(...stays);
+  const sMax = Math.max(...stays);
+  const stayTxt = sMin === sMax ? `${sMin}${sMin === 1 ? " month" : " months"}` : `${sMin}–${sMax} months`;
+  if (c.rows.length > 1) {
+    return `We take ${c.N} apartments for ${stayTxt}, with staggered arrivals and departures. Move-ins run from ${fd(c.minA)} to ${fdy(c.lastA)} and hand-backs from ${fd(c.minD)} to ${fdy(c.maxD)}.`;
   }
-  return `${c.N} apartments move in on ${fdy(c.minA)} and are handed back on ${fdy(c.maxD)}. Add more waves to spread the hand-back.`;
+  return `We take ${c.N} apartments for ${stayTxt}, all moving in on ${fdy(c.minA)} and handed back on ${fdy(c.maxD)}. Add more waves to stagger arrivals and departures.`;
 }
 
-/** The headline figures. `owner` is the short name in the copy ("Decron"). */
+/** The three headline figures: apartments, lease months, gross rent. `owner` is the short name in the copy ("Decron"). */
 export function facts(c: Full, state: Pick<StaggerData, "showRent">, owner: string) {
   const nW = c.rows.length;
   const out: { big: string; small: string; key?: boolean }[] = [];
   out.push({ big: num(c.N), small: `apartments across ${nW}${nW === 1 ? " wave" : " waves"}` });
-  out.push({ big: num(c.unitMonths), small: "lease months, on 30+ night leases" });
-  if (state.showRent) out.push({ big: moneyShort(c.totalRent), small: `gross rent to ${owner}, averaging ${money(c.rateEff)} a month (${money(c.rateEff / NPM)} a night) per apartment` });
-  if (c.fh) out.push({ big: `${fd(c.fh[0])} – ${fd(c.fh[1])}`, small: "every apartment in-house" });
-  else out.push({ big: num(c.peak), small: "apartments in-house at peak" });
-  out.push({ big: num(c.maxOut), small: `most apartments handed back on one day, against ${c.N} as a single block`, key: true });
+  out.push({ big: num(c.unitMonths), small: "lease months" });
+  if (state.showRent) out.push({ big: moneyShort(c.totalRent), small: `gross rent to ${owner}` });
   return out;
 }
 
-/** "How these figures are built": the tags (Scenario, Structure, Proposed, Hand-back) as in the reference. */
-export function basis(c: Computed, state: Pick<StaggerData, "showRent" | "rates">, owner: string) {
+/** "How these figures are built": the Scenario and Hand-back notes, as in the reference. */
+export function basis() {
   const out: { tag: "assume" | "ok"; label: string; text: string }[] = [];
   out.push({ tag: "assume", label: "Scenario", text: "Move-in dates and wave sizes are a planning scenario to agree the shape of the hand-back. OBS’s final arrival list will set the exact dates." });
-  out.push({ tag: "ok", label: "Structure", text: "Every apartment is let on consecutive month-based leases of 30 nights or more, in line with Los Angeles short-term rental rules, and fully insured." });
-  if (state.showRent && !c.empty) {
-    const mixTxt = TYPES.map((t, k) => `${c.counts[k]} ${t.label}${t.k === "studio" && c.counts[k] !== 1 ? "s" : ""}`).join(", ");
-    const rateTxt = TYPES.map((t) => {
-      const r = +state.rates[t.k] || 0;
-      return `${t.label} ${money(r)}/month (${money(r / NPM)}/night)`;
-    }).join(", ");
-    out.push({
-      tag: "assume",
-      label: "Proposed",
-      text: `Rent uses proposed monthly rates (${rateTxt}) on an illustrative mix of ${mixTxt}. Nightly figures are equivalents at 30.4 nights per month (365 ÷ 12); the leases themselves stay monthly. Figures are gross rent to ${owner}; utilities and any building fees are still to be confirmed.`,
-    });
-  }
   out.push({ tag: "ok", label: "Hand-back", text: "Check-outs are staggered and each apartment is professionally cleaned on departure, so it can be shown to new tenants straight away." });
   return out;
 }
+
+/** The page's title, as the reference's: "Decron Apartments OBS". */
+export const pageTitle = (label: string | null | undefined) => (label?.trim() ? `${ownerShort(label)} Apartments OBS` : "Apartments OBS");
 
 /** The reference's short name for the owner in its copy ("Decron" for "Decron Properties"). */
 export const ownerShort = (label: string) => label.trim().replace(/\s+(Properties|Property|Group|Holdings|LLC|Inc\.?)$/i, "") || "the owner";

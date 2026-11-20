@@ -1,10 +1,17 @@
 import { TRPCError } from "@trpc/server";
+import { type Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { StaggerClientView } from "~/app/_components/stagger/planner";
+import { pageTitle } from "~/lib/stagger-model";
 import { api } from "~/trpc/server";
 
-export const metadata = { title: "Phased arrivals — We Lodge", robots: { index: false, follow: false } };
+/** The reference's title ("Decron Apartments OBS"), which is also the saved PDF's name. */
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const shared = await api.stagger.shared({ token }).catch(() => null);
+  return { title: { absolute: shared ? pageTitle(shared.clientLabel) : "We Lodge" }, robots: { index: false, follow: false } };
+}
 export const dynamic = "force-dynamic";
 
 /**

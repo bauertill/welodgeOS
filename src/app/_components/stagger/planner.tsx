@@ -5,7 +5,7 @@ import "~/styles/stagger.css";
 import { Lato } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { drawGantt, drawMain } from "~/app/_components/stagger/charts";
+import { drawGantt, PRINT_WIDTH } from "~/app/_components/stagger/charts";
 import {
   addWave,
   basis,
@@ -37,7 +37,7 @@ export function StaggerFrame({ presenting, auto, page, children }: { presenting:
   return <div className={`stg ${lato.variable} ${presenting ? "presenting" : ""} ${auto ? "stg-auto" : ""} ${page ? "stg-page" : ""}`}>{children}</div>;
 }
 
-/** The dark band: We Lodge × the owner, and (in the editor) Hide settings. */
+/** The dark band: We Lodge × the owner, Save as PDF, and (in the editor) Hide settings. */
 export function StaggerBand({ owner, presenting, onToggle }: { owner: string; presenting?: boolean; onToggle?: () => void }) {
   return (
     <header className="band">
@@ -48,21 +48,35 @@ export function StaggerBand({ owner, presenting, onToggle }: { owner: string; pr
           <span className="x">×</span>
           <span>{owner}</span>
         </div>
-        {onToggle && (
-          <button className="btn btn-band" type="button" onClick={onToggle}>
-            {presenting ? "Show settings" : "Hide settings"}
+        <div className="band-buttons">
+          {/* The browser's print dialog, with the print layout: two Letter pages, the rent table on the second. */}
+          <button className="btn btn-band no-print" type="button" onClick={() => window.print()}>
+            Save as PDF
           </button>
-        )}
+          {onToggle && (
+            <button className="btn btn-band no-print" type="button" onClick={onToggle}>
+              {presenting ? "Show settings" : "Hide settings"}
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );
 }
 
-/** The page body as the owner sees it: the story, the charts, the tables and how the figures are built. */
+/** "Prepared for … by We Lodge, <today>. Confidential." — printed only; dated in the browser, so the server's day never shows. */
+function Prepared({ owner }: { owner: string }) {
+  const [today, setToday] = useState<Date | null>(null);
+  useEffect(() => setToday(new Date()), []);
+  return <p className="print-only prepared">{today && `Prepared for ${owner} by We Lodge, ${MONL[today.getMonth()]} ${today.getDate()}, ${today.getFullYear()}. Confidential.`}</p>;
+}
+
+/** The page body as the owner sees it: the story, the rental periods, the tables and how the figures are built. */
 export function StaggerBody({ data, owner, c }: { data: StaggerData; owner: string; c: Computed }) {
   const short = ownerShort(owner);
   return (
     <main>
+      <Prepared owner={owner} />
       <h1>OBS in {short} apartments: phased in, phased out</h1>
       <p className="lede">{lede(c)}</p>
       <div className="facts">
@@ -76,16 +90,20 @@ export function StaggerBody({ data, owner, c }: { data: StaggerData; owner: stri
       </div>
 
       <section className="section">
-        <h2>Apartments in use, day by day</h2>
-        <p className="sub">The purple shape is how many apartments OBS occupies on any day. Below it, each check-in wave and each hand-back. The dashed outline is the same number of units taken as a single block.</p>
-        <MainChart c={c} showBlock={data.showBlock} short={short} />
-      </section>
-
-      <section className="section">
-        <h2>Arrival waves</h2>
+        <h2>Rental periods</h2>
         <p className="sub">Each bar is one group of apartments, from move-in to hand-back.</p>
         <div className="chart">
           <Gantt c={c} />
+          <div className="legend">
+            <span>
+              <i className="sw-in" />
+              Apartments in use, from move-in to hand-back
+            </span>
+            <span>
+              <i className="sw-games" />
+              Games period, Jul 14–30
+            </span>
+          </div>
         </div>
       </section>
 
@@ -100,7 +118,7 @@ export function StaggerBody({ data, owner, c }: { data: StaggerData; owner: stri
       </section>
 
       {data.showRent && !c.empty && (
-        <section className="section">
+        <section className="section rates">
           <h2>Rent per apartment</h2>
           <p className="sub">Monthly lease rent by unit type, and what it works out to per night.</p>
           <div className="tablewrap">
@@ -111,7 +129,7 @@ export function StaggerBody({ data, owner, c }: { data: StaggerData; owner: stri
 
       <section className="basis">
         <h2>How these figures are built</h2>
-        {basis(c, data, short).map((p) => (
+        {basis().map((p) => (
           <p key={p.label}>
             <span className={`tag ${p.tag}`}>{p.label}</span>
             {p.text}
@@ -142,51 +160,22 @@ function useWidth(ref: React.RefObject<HTMLElement | null>) {
   return width;
 }
 
-function MainChart({ c, showBlock, short }: { c: Computed; showBlock: boolean; short: string }) {
-  const wrap = useRef<HTMLDivElement>(null);
-  const host = useRef<HTMLDivElement>(null);
-  const tip = useRef<HTMLDivElement>(null);
-  const width = useWidth(host);
-  useEffect(() => {
-    if (host.current && tip.current && wrap.current) drawMain(host.current, tip.current, wrap.current, c, showBlock);
-  }, [c, showBlock, width]);
-  return (
-    <div className="chart" ref={wrap}>
-      <div ref={host} />
-      <div className="tip" ref={tip} />
-      <div className="legend">
-        <span>
-          <i className="sw-in" />
-          In-house
-        </span>
-        <span>
-          <i className="sw-arr" />
-          Check-ins
-        </span>
-        <span>
-          <i className="sw-out" />
-          Handed back to {short}
-        </span>
-        <span>
-          <i className="sw-games" />
-          Games period
-        </span>
-        {showBlock && (
-          <span>
-            <i className="sw-block" />
-            Single block, for comparison
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
+/** The rental periods; redrawn at the printed page's width while printing, as the reference. */
 function Gantt({ c }: { c: Computed }) {
   const host = useRef<HTMLDivElement>(null);
   const width = useWidth(host);
   useEffect(() => {
-    if (host.current) drawGantt(host.current, c);
+    const node = host.current;
+    if (!node) return;
+    drawGantt(node, c);
+    const forPrint = () => drawGantt(node, c, PRINT_WIDTH);
+    const afterPrint = () => drawGantt(node, c);
+    window.addEventListener("beforeprint", forPrint);
+    window.addEventListener("afterprint", afterPrint);
+    return () => {
+      window.removeEventListener("beforeprint", forPrint);
+      window.removeEventListener("afterprint", afterPrint);
+    };
   }, [c, width]);
   return <div ref={host} />;
 }
@@ -445,10 +434,6 @@ export function StaggerPanel({ data, owner, onChange }: { data: StaggerData; own
 
         <div className="group">
           <h3>Display</h3>
-          <label className="check">
-            <input type="checkbox" checked={data.showBlock} onChange={(e) => onChange({ ...data, showBlock: e.target.checked })} />
-            Compare with a single block
-          </label>
           <label className="check">
             <input type="checkbox" checked={data.showRent} onChange={(e) => onChange({ ...data, showRent: e.target.checked })} />
             Show rent figures

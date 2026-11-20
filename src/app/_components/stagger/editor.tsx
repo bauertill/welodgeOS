@@ -127,7 +127,7 @@ export function StaggerEditor({ scenario }: { scenario: Scenario }) {
 
   return (
     <div className="-mx-6 -my-8">
-      <div className="border-ink-200/60 flex flex-wrap items-center gap-3 border-b bg-white px-4 py-3 md:px-8">
+      <div className="border-ink-200/60 flex flex-wrap items-center gap-3 border-b bg-white px-4 py-3 md:px-8 print:hidden">
         <Link href="/stagger" className="text-ink-500 hover:text-brand-700 text-[13px]">
           ← All scenarios
         </Link>
@@ -159,7 +159,7 @@ export function StaggerEditor({ scenario }: { scenario: Scenario }) {
         </Button>
       </div>
       {status === "conflict" && (
-        <div className="flex flex-wrap items-center gap-3 bg-[#fde8ec] px-4 py-3 text-[13px] text-[#a3243d] md:px-8">
+        <div className="flex flex-wrap items-center gap-3 bg-[#fde8ec] px-4 py-3 text-[13px] text-[#a3243d] md:px-8 print:hidden">
           <span className="font-medium">{problem ?? "Someone else changed this scenario – reload."}</span>
           <span className="font-light">Your latest change was not saved, so nothing of theirs was overwritten.</span>
           <button type="button" onClick={() => window.location.reload()} className="ml-auto rounded-full bg-[#a3243d] px-4 py-1.5 font-medium text-white">

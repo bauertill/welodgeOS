@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addMonths, compute, defaults, gen, iso, NPM, regen, setStay, setTotal, split, ud } from "~/lib/stagger-model";
+import { addMonths, basis, compute, defaults, facts, gen, iso, lede, normalise, NPM, pageTitle, regen, setStay, setTotal, split, ud } from "~/lib/stagger-model";
 
 const full = () => {
   const c = compute(defaults());
@@ -19,7 +19,7 @@ describe("dates", () => {
 describe("split", () => {
   it("spreads by largest remainder, ties to the earlier", () => {
     expect(split(50, [1, 1, 1, 1, 1, 1])).toEqual([9, 9, 8, 8, 8, 8]);
-    expect(split(50, [20, 60, 20])).toEqual([10, 30, 10]);
+    expect(split(50, [20, 80])).toEqual([10, 40]);
     expect(split(10, [1, 1, 1])).toEqual([4, 3, 3]);
     expect(split(5, [0, 0])).toEqual([3, 2]);
   });
@@ -32,35 +32,29 @@ describe("the default 50-unit scenario", () => {
     expect(s.rows.map((r) => r.date)).toEqual(["2028-03-01", "2028-03-15", "2028-03-29", "2028-04-12", "2028-04-26", "2028-05-10"]);
   });
 
-  it("departs Sep 1 to Nov 10, with all 50 in-house May 10 – Aug 31", () => {
+  it("departs Sep 1 to Nov 10", () => {
     const c = full();
     expect(iso(c.minD)).toBe("2028-09-01");
     expect(iso(c.maxD)).toBe("2028-11-10");
-    expect(c.fh && c.fh.map(iso)).toEqual(["2028-05-10", "2028-08-31"]);
-    expect(c.peak).toBe(50);
   });
 
-  it("hands back at most 9 on one day", () => {
-    expect(full().maxOut).toBe(9);
-  });
-
-  it("is 10 studios, 30 one-beds, 10 two-beds and 300 lease months", () => {
+  it("is 10 studios, 40 one-beds and 300 lease months", () => {
     const c = full();
-    expect(c.counts).toEqual([10, 30, 10]);
+    expect(c.counts).toEqual([10, 40]);
     expect(c.unitMonths).toBe(300);
   });
 
-  it("blends to $4,600 a month (≈ $151.23 a night) and $1,380,000 in all", () => {
+  it("blends to $4,400 a month (≈ $144.66 a night) and $1,320,000 in all", () => {
     const c = full();
-    expect(c.rateEff).toBe(4600);
-    expect(Math.round((c.rateEff / NPM) * 100) / 100).toBe(151.23);
-    expect(c.totalRent).toBe(1380000);
+    expect(c.rateEff).toBe(4400);
+    expect(Math.round((c.rateEff / NPM) * 100) / 100).toBe(144.66);
+    expect(c.totalRent).toBe(1320000);
   });
 
   it("spreads the rent by day so the months add up to the total", () => {
     const c = full();
     const sum = c.months.reduce((t, m) => t + m.rent, 0);
-    expect(sum).toBeCloseTo(1380000, 6);
+    expect(sum).toBeCloseTo(1320000, 6);
     // March: wave 1 all month, wave 2 from the 15th, wave 3 from the 29th — each lease month split by its days.
     const march = c.months.find((m) => iso(m.m) === "2028-03-01")!;
     expect(march.arr).toBe(26);
@@ -74,6 +68,29 @@ describe("the default 50-unit scenario", () => {
     expect(c.occ[day("2028-08-31")]).toBe(50);
     expect(c.occ[day("2028-09-01")]).toBe(41);
     expect(c.occ[day("2028-11-10")]).toBe(0);
+  });
+});
+
+describe("lede and figures", () => {
+  it("tells the staggered story and keeps three figures", () => {
+    const c = full();
+    expect(lede(c)).toBe("We take 50 apartments for 6 months, with staggered arrivals and departures. Move-ins run from Mar 1 to May 10, 2028 and hand-backs from Sep 1 to Nov 10, 2028.");
+    expect(facts(c, { showRent: true }, "Decron").map((f) => f.small)).toEqual(["apartments across 6 waves", "lease months", "gross rent to Decron"]);
+    expect(facts(c, { showRent: false }, "Decron")).toHaveLength(2);
+    expect(basis().map((b) => b.label)).toEqual(["Scenario", "Hand-back"]);
+    expect(pageTitle("Decron Properties")).toBe("Decron Apartments OBS");
+  });
+});
+
+describe("scenarios saved with 2-beds", () => {
+  it("drops the 2-bed share and rent without failing", () => {
+    const old = { ...defaults(), mix: { studio: 20, one: 60, two: 20 }, rates: { studio: 4000, one: 4500, two: 5500 } };
+    const s = normalise(JSON.parse(JSON.stringify(old)));
+    expect(s.mix).toEqual({ studio: 20, one: 60 });
+    expect(s.rates).toEqual({ studio: 4000, one: 4500 });
+    const c = compute(s);
+    if (c.empty) throw new Error("empty");
+    expect(c.counts).toEqual([13, 37]);
   });
 });
 

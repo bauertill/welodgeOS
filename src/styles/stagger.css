@@ -7,7 +7,7 @@
 .stg {
   --bg: #f5f4fa; --surface: #ffffff; --ink: #1e2e5d; --muted: #5f6789; --line: #e1dfee; --grid: #ecebf4;
   --purple: #614fc9; --purple2: #ab6ce2; --lime: #cefa05; --lime-band: rgba(206, 250, 5, 0.34); --lime-ink: #566600;
-  --band: #1e2e5d; --out: #1e2e5d; --field: #ffffff; --tip: #1e2e5d; --on-purple: #ffffff;
+  --band: #1e2e5d; --out: #1e2e5d; --field: #ffffff; --on-purple: #ffffff;
   color-scheme: light;
   background: var(--bg);
   color: var(--ink);
@@ -20,7 +20,7 @@
   .stg.stg-auto {
     --bg: #0f1530; --surface: #17203f; --ink: #eceefa; --muted: #a2a8c8; --line: #2a3563; --grid: #212b51;
     --purple: #8c7cf0; --purple2: #c99bf2; --lime-band: rgba(206, 250, 5, 0.15); --lime-ink: #cefa05;
-    --band: #0a0f26; --out: #c9cdea; --field: #111934; --tip: #2a3563; --on-purple: #0f1530;
+    --band: #0a0f26; --out: #c9cdea; --field: #111934; --on-purple: #0f1530;
     color-scheme: dark;
   }
 }
@@ -39,6 +39,7 @@
 .stg .btn.on { background: var(--purple); border-color: var(--purple); color: var(--on-purple); }
 .stg .btn-band { border-color: rgba(255, 255, 255, 0.35); color: #fff; white-space: nowrap; }
 .stg .btn-band:hover { border-color: var(--lime); }
+.stg .band-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
 .stg .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 24px 56px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 36px; align-items: start; }
 .stg.presenting .wrap { grid-template-columns: minmax(0, 1fr); }
@@ -58,32 +59,18 @@
 .stg .chart { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 12px 8px; position: relative; }
 .stg .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); padding: 6px 6px 4px; }
 .stg .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-.stg .sw-in { background: var(--purple); } .stg .sw-arr { background: var(--purple2); } .stg .sw-out { background: var(--out); }
-.stg .sw-games { background: var(--lime); } .stg .sw-block { border: 1.5px dashed var(--out); background: transparent; }
+.stg .sw-in { background: var(--purple); }
+.stg .sw-games { background: var(--lime); }
 
 .stg svg { display: block; }
 .stg svg text { font-family: var(--font-lato), Lato, "Helvetica Neue", Arial, sans-serif; }
 .stg .ax text { fill: var(--muted); font-size: 12px; }
 .stg .ax line, .stg .ax path { stroke: var(--line); }
-.stg .gridline { stroke: var(--grid); }
 .stg .games { fill: var(--lime-band); }
-.stg .games-label { fill: var(--lime-ink); font-size: 12px; font-weight: 700; }
-.stg .area { fill: var(--purple); }
-.stg .block { fill: none; stroke: var(--out); stroke-width: 1.5; stroke-dasharray: 6 5; opacity: 0.75; }
-.stg .block-label { fill: var(--ink); font-size: 12px; font-weight: 700; }
-.stg .inside { fill: var(--on-purple); font-weight: 700; font-size: 13px; }
-.stg .inside.small { font-weight: 400; font-size: 12px; }
-.stg .bar-in { fill: var(--purple2); } .stg .bar-out { fill: var(--out); }
-.stg .ev-label { fill: var(--muted); font-size: 11px; font-weight: 700; }
-.stg .baseline { stroke: var(--line); }
-.stg .strip-label { fill: var(--muted); font-size: 12px; }
-.stg .hover-line { stroke: var(--ink); stroke-width: 1; opacity: 0.5; }
 .stg .wave { fill: var(--purple); }
 .stg .wave-label { fill: var(--on-purple); font-size: 12px; font-weight: 700; }
 .stg .wave-out { fill: var(--ink); font-size: 12px; }
 .stg .wave-id { fill: var(--muted); font-size: 12px; }
-.stg .tip { position: absolute; pointer-events: none; background: var(--tip); color: #fff; font-size: 13px; line-height: 1.4; padding: 7px 10px; border-radius: 8px; opacity: 0; transition: opacity 0.12s; white-space: nowrap; z-index: 2; }
-.stg .tip b { display: block; }
 
 .stg .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .stg table.data { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 15px; }
@@ -135,4 +122,51 @@
   .stg .lede { font-size: 16px; }
   .stg .fact b { font-size: 26px; }
 }
-@media (prefers-reduced-motion: reduce) { .stg .tip { transition: none; } }
+
+/*
+ * Printing, or Save as PDF (the reference's print layout): light colours
+ * whatever the device, no settings or buttons, two US Letter pages with the
+ * rent table starting the second. A named page, so OS's other pages keep
+ * their own paper size.
+ */
+.stg .print-only { display: none; }
+.stg .prepared { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+@page stagger { size: letter; margin: 0.45in 0.5in; }
+@media print {
+  .stg, .stg.stg-auto {
+    --bg: #ffffff !important; --surface: #ffffff !important; --ink: #1e2e5d !important; --muted: #5f6789 !important; --line: #dcdaea !important; --grid: #ecebf4 !important;
+    --purple: #614fc9 !important; --purple2: #ab6ce2 !important; --lime-band: rgba(206, 250, 5, 0.38) !important; --lime-ink: #566600 !important;
+    --band: #1e2e5d !important; --out: #1e2e5d !important; --on-purple: #ffffff !important;
+    color-scheme: light !important;
+    page: stagger;
+    background: #ffffff !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+  html:has(.stg), body:has(.stg) { background: #ffffff !important; }
+  .stg * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .stg .panel, .stg .no-print { display: none !important; }
+  .stg .print-only { display: block; }
+  .stg .band { border-radius: 10px; }
+  .stg .band-inner { padding: 10px 18px; max-width: none; }
+  .stg .wrap { display: block; max-width: none; padding: 16px 0 0; }
+  .stg h1 { font-size: 30px; max-width: none; margin-bottom: 8px; }
+  .stg .lede { font-size: 13px; max-width: none; }
+  .stg .facts { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 16px 0 0; }
+  .stg .fact b { font-size: 21px; }
+  .stg .fact span { font-size: 10.5px; }
+  .stg .section { margin-top: 16px; break-inside: avoid; page-break-inside: avoid; }
+  .stg .section h2 { font-size: 15px; }
+  .stg .section .sub { font-size: 11.5px; margin-bottom: 8px; }
+  .stg .chart, .stg .tablewrap { border-radius: 10px; }
+  .stg .chart { padding: 10px 8px 4px; }
+  .stg .section.rates { break-before: page; page-break-before: always; margin-top: 0; }
+  .stg table.data { font-size: 11.5px; }
+  .stg table.data th, .stg table.data td { padding: 3px 10px; }
+  .stg table.data thead th { font-size: 10.5px; }
+  .stg .legend { font-size: 10.5px; }
+  .stg .basis { font-size: 10px; line-height: 1.35; margin-top: 14px; max-width: none; break-inside: avoid; page-break-inside: avoid; }
+  .stg .basis p { margin-bottom: 3px; }
+  .stg .basis .tag { font-size: 9.5px; padding: 0 6px; }
+  .stg .basis h2 { font-size: 12px; margin-bottom: 4px; }
+}

@@ -3389,8 +3389,10 @@ offer opens it as a document, as it will print.
 > LA28 — how our client's apartments arrive and leave in staggered waves rather than as one
 > block, and the rent the owner earns. The team edits scenarios live; the owner gets a
 > read-only link. It reproduces the reference page `docs/reference/stagger-planner-reference.html`
-> (its sums, charts, settings and words), with scenarios kept in the system instead of one
-> browser.
+> (its sums, chart, settings, words and print layout), with scenarios kept in the system instead
+> of one browser. **Updated 2026-11-20** to the revised reference: studios and 1-beds only, the
+> day-by-day chart gone, the rental periods first, a shorter story and three figures, and a
+> two-page print layout with *Save as PDF*.
 
 **Where.** *Sales › Stagger planner* (`/stagger`): every scenario, last edited first, with its
 owner, event, number of apartments and who last edited it when; *Open*, *Duplicate*, *Rename*,
@@ -3399,7 +3401,7 @@ owner, event, number of apartments and who last edited it when; *Open*, *Duplica
 there from the start: **Decron – OBS 50 units**.
 
 **The editor** (`/stagger/<id>`) is the reference page: the settings panel beside the story,
-charts and tables, and *Hide settings* to see it as the owner will (each person's own choice,
+the rental periods and the tables, and *Hide settings* to see it as the owner will (each person's own choice,
 kept in their browser, never saved to the scenario). The scenario's name, owner and event are
 edited in the bar above. **It saves as you go**, 600 ms after the last change, showing *Saving…*
 and *Saved · when, by whom*. Each save names the version it was made from: **if a colleague
@@ -3414,10 +3416,30 @@ of OS). It shows the scenario as last saved. The link is long and random; *New l
 (the old one stops at once), *Stop sharing* or archiving the scenario makes it a not-found page.
 The link returns only the scenario's name, the owner and its plan.
 
+**What the page shows**, top to bottom: the title *OBS in Decron apartments: phased in, phased
+out*; the story — *We take 50 apartments for 6 months, with staggered arrivals and departures.
+Move-ins run from Mar 1 to May 10, 2028 and hand-backs from Sep 1 to Nov 10, 2028* (built from
+the waves; a range of months when the waves' stays differ; a single wave says all move in and
+leave on one day); **three figures** — apartments (across how many waves), lease months, gross
+rent to the owner (only with *Show rent figures*); **Rental periods**, one bar per wave
+(*Wave 1*, *Wave 2*…) from move-in to hand-back over the Games band, with its legend; *Month by
+month*; *Rent per apartment*; and *How these figures are built* with the **Scenario** and
+**Hand-back** notes only.
+
+**Save as PDF / printing.** *Save as PDF* in the header (editor and owner's view) opens the
+browser's print dialog, where *Save as PDF* is the destination; plain printing gives the same.
+The printed layout is the reference's: two US Letter pages, light whatever the device, no
+settings or buttons, *Prepared for <owner> by We Lodge, <today>. Confidential.* above the title,
+the rental periods drawn at the page's width, and the rent table starting page 2. The tab's
+title — and so the PDF's name — is *Decron Apartments OBS* (the owner's short name).
+
 **What a scenario holds** — exactly the reference's settings: total apartments, first move-in,
 number of waves, days between waves, months per stay, the waves themselves (move-in, apartments,
-months), the unit mix (studio, 1-bed, 2-bed, as percentages), the owner's rent per type (US$ a
-month, entered monthly or nightly), *Compare with a single block* and *Show rent figures*.
+months), the unit mix (**studio and 1-bed only**, as percentages), the owner's rent per type
+(US$ a month, entered monthly or nightly) and *Show rent figures*. A scenario saved earlier with
+2-bed figures keeps its studio and 1-bed figures; the 2-bed ones are ignored. (*Compare with a
+single block* went with the day-by-day chart it switched; an old scenario's setting is kept but
+does nothing.)
 **Only the owner's rent** — never our margins, selling rates, client prices or costs.
 
 **The sums** (one module, `src/lib/stagger-model.ts`, used by the editor, the owner's view and
@@ -3428,7 +3450,8 @@ the tests; unit-tested against the 50-unit scenario):
 - Apartments are spread across waves, and across unit types, by largest remainder (50 over six
   waves = 9, 9, 8, 8, 8, 8).
 - A wave leaves its months of stay after it arrives; an apartment is in-house for the nights
-  from arrival up to, not including, departure.
+  from arrival up to, not including, departure (the month-by-month table's *In-house at month
+  end*).
 - **Blended rent** = Σ (apartments of a type × its monthly rent) ÷ all apartments; the nightly
   equivalent is the monthly ÷ 30.4 (365 ÷ 12). **Total rent** = Σ apartments × months × blended
   rent. In the month-by-month table each lease month is spread over the calendar months it
@@ -3436,16 +3459,17 @@ the tests; unit-tested against the 50-unit scenario):
 - **The settings' rules**: changing the number of waves, the gap, the first move-in rebuilds the
   waves evenly; changing the stay sets it on every wave; changing only the total keeps the wave
   dates and rescales the apartments in proportion.
-- The charts mark the Games (14–30 July 2028), the same apartments as a single block (dashed),
-  the stretch with every apartment in-house, and the most handed back on one day.
-- The 50-unit scenario: waves of 9, 9, 8, 8, 8, 8 arriving 1 Mar – 10 May 2028, handed back
-  1 Sep – 10 Nov; all 50 in-house 10 May – 31 Aug; at most 9 back on one day; 10 studios, 30
-  1-beds, 10 2-beds; 300 lease months; $4,600 a month blended (≈ $151 a night); $1,380,000 rent.
+- The rental periods mark the Games (14–30 July 2028).
+- The 50-unit scenario (new scenarios and *Reset*): Studio 20% at $4,000 and 1-bed 80% at
+  $4,500 a month; waves of 9, 9, 8, 8, 8, 8 arriving 1, 15 and 29 Mar, 12 and 26 Apr and 10 May
+  2028, handed back 1 Sep – 10 Nov; 10 studios and 40 1-beds; 300 lease months; $4,400 a month
+  blended (≈ $144.66 a night); $1,320,000 rent. A migration moved *Decron – OBS 50 units* to
+  these figures where it had not been edited since it was made.
 
 **Words.** Where the reference names Decron, the scenario's owner is used ("Decron" for
 "Decron Properties"); "OBS" stays fixed — a scenario has no field for whose apartments they are.
-The notes under *How these figures are built* keep the reference's *Scenario*, *Structure*,
-*Proposed* and *Hand-back* labels.
+The notes under *How these figures are built* keep the reference's *Scenario* and *Hand-back*
+labels.
 
 ## 5. Reporting and derived views
 
@@ -4363,6 +4387,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Not interested on the sales list | **Built** (2026-11-20) | Each open row on the Sales requests list ends in *Not interested* instead of *Delete*: it closes the request as Lost/Declined with the new reason *Not interested* (also under Mark as…), reopenable from its page. Delete stays only on the request's own page |
 | §4.12 Stagger Planner | **Built** (2026-11-19) | Sales › Stagger planner: scenarios listed, made, copied, renamed, archived; the editor saves as you go and refuses to overwrite a colleague's newer save; a read-only, unindexed owner's link (on/off, replaced); the reference page's sums in one tested module; Decron – OBS 50 units made by the migration |
+| §4.12 Stagger Planner, revised reference | **Built on staging** (2026-11-20) | Studio and 1-bed only (old 2-bed figures ignored); defaults 20/80 at $4,000/$4,500; the day-by-day chart, its tooltip and the single-block option removed; *Rental periods* first with *Wave N* rows and a legend; new story, three figures, two notes; title *Decron Apartments OBS*; *Save as PDF* (print) with the two-page Letter layout |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; requests its rooms, all or nothing — blocked until it runs out once its agreement is marked sent (2026-11-20); request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
