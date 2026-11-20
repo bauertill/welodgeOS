@@ -126,3 +126,26 @@ export function contractBack(contract: {
   if (contract.salesRequest) return { href: `/sales/${contract.salesRequest.id}`, label: `${contract.client?.name ?? "The"} sales request` };
   return { href: `/events/${contract.event.id}`, label: contract.event.name };
 }
+
+/**
+ * Deadline reminders (doc §7.1, 2026-11-20): how many days before each payment
+ * and cancellation deadline the contract's account manager is emailed — the
+ * defaults, as the contract form offers them.
+ */
+export const REMINDER_PRESETS = [
+  { days: 30, label: "1 month before" },
+  { days: 7, label: "1 week before" },
+  { days: 0, label: "On the day" },
+] as const;
+
+/** "1 month, 1 week and on the day" — how a contract's reminder days read. */
+export function reminderWords(days: number[]) {
+  const before = [...new Set(days)]
+    .filter((n) => n > 0)
+    .sort((a, b) => b - a)
+    .map((n) => (n === 30 ? "1 month" : n === 7 ? "1 week" : n === 1 ? "1 day" : `${n} days`));
+  const list = before.length > 1 ? `${before.slice(0, -1).join(", ")} and ${before[before.length - 1]}` : (before[0] ?? "");
+  const onTheDay = days.includes(0);
+  if (!list) return onTheDay ? "on the day" : "";
+  return `${list} before${onTheDay ? ", and on the day" : ""}`;
+}

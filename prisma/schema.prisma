@@ -937,6 +937,10 @@ model Contract {
 
   owner   User?   @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   ownerId String?
+  /// How many days before each payment's due date and each cancellation
+  /// deadline the account manager is emailed (doc §7.1, the owner 2026-11-20):
+  /// a month, a week and on the day, unless changed. Empty: no reminders.
+  reminderDays Int[] @default([30, 7, 0])
 
   payments          ContractPayment[]
   cancellations     ContractCancellation[]
@@ -1106,6 +1110,8 @@ model User {
   staggerScenariosEdited  StaggerScenario[] @relation("StaggerUpdatedBy")
   /// When their last morning summary went — so it goes once a day.
   summarySentAt      DateTime?
+  /// When the Friday email of overdue payments last went (doc §7.1, 2026-11-20).
+  overdueSentAt      DateTime?
   notifications      Notification[]       @relation("NotificationFor")
   notificationsSent  Notification[]       @relation("NotificationBy")
   /// Their own link for booking a call (Google Calendar appointment page,
@@ -2068,6 +2074,18 @@ enum NotificationKind {
   UPDATE_REPLY
   /// Someone @mentioned you in an update or a reply — emailed (doc §2.9, 2026-11-17).
   UPDATE_MENTION
+  /// A payment on a contract you manage is due soon or today — emailed (doc §7.1, 2026-11-20).
+  PAYMENT_DUE
+  /// A cancellation deadline on a contract you manage is coming or today — emailed (doc §7.1, 2026-11-20).
+  CANCELLATION_DUE
+}
+
+/// Which deadline reminders have gone out (doc §7.1), so none is sent twice:
+/// "pay:<payment id>:<due date>:<days before>" or "cut:<id>:<date>:<days>".
+/// A date that changes is reminded about afresh.
+model DeadlineReminderSent {
+  key    String   @id
+  sentAt DateTime @default(now())
 }
 
 /// By email: each one as it happens, one summary a day, or none.

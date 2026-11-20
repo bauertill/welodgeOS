@@ -55,9 +55,11 @@ export const plainMentions = (body: string) => body.replace(MENTION_PATTERN, "@$
 /**
  * Only being mentioned (or tagged) is emailed (the owner, 2026-11-17: "I don't
  * want to overwhelm the team with an email every time — when they're tagged or
- * mentioned, yes"). Everything else stays in the bell.
+ * mentioned, yes") — and, since 2026-11-20, payment and cancellation deadline
+ * reminders to the contract's account manager (doc §7.1). Everything else
+ * stays in the bell.
  */
-export const EMAILED_KINDS: NotificationKind[] = ["TASK_MENTION", "UPDATE_MENTION"];
+export const EMAILED_KINDS: NotificationKind[] = ["TASK_MENTION", "UPDATE_MENTION", "PAYMENT_DUE", "CANCELLATION_DUE"];
 
 /**
  * Email the mentions waiting, at once, to everyone who has not turned email
@@ -88,11 +90,11 @@ export async function deliverImmediate(db: PrismaClient) {
 export const DEFAULT_TIME_ZONE = "Europe/Zurich";
 export const SUMMARY_HOUR = 7;
 
-/** The hour (0–23) and the day ("2026-11-17") it is now in a time zone. */
-function localNow(timeZone: string, at = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(at);
+/** The hour (0–23), the day ("2026-11-17") and the weekday ("Fri") it is now in a time zone. */
+export function localNow(timeZone: string, at = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(at);
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return { hour: Number(get("hour")), day: `${get("year")}-${get("month")}-${get("day")}` };
+  return { hour: Number(get("hour")), day: `${get("year")}-${get("month")}-${get("day")}`, weekday: get("weekday").replace(".", "") };
 }
 
 /**
@@ -119,7 +121,8 @@ export async function sendSummaries(db: PrismaClient, at = new Date()) {
     if (person.summarySentAt && localNow(zone, person.summarySentAt).day === now.day) continue;
     const since = person.summarySentAt ?? new Date(at.getTime() - 24 * 60 * 60 * 1000);
     const items = await db.notification.findMany({
-      where: { userId: person.id, readAt: null, createdAt: { gte: since } },
+      // A deadline reminder already emailed is not sent again in the summary (doc §7.1).
+      where: { userId: person.id, readAt: null, createdAt: { gte: since }, NOT: { kind: { in: ["PAYMENT_DUE", "CANCELLATION_DUE"] }, emailedAt: { not: null } } },
       orderBy: { createdAt: "asc" },
       take: 40,
     });
