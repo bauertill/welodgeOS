@@ -1581,7 +1581,7 @@ function NextStep({ request, hasOffer, hasAnswer, goTo }: { request: FullRequest
       ? { text: "The offer is out — draw up the agreement, send it, and register it signed.", button: { label: "Open the offer →", tab: "offer" as const } }
       : hasAnswer
         ? { text: "The client has answered the rate card — make them an offer.", button: { label: "See their answer →", tab: "offer" as const } }
-        : { text: "When the client is ready to go ahead, make them an offer — it blocks the rooms for them.", button: { label: "Make an offer →", tab: "offer" as const } };
+        : { text: "When the client is ready to go ahead, make them an offer — it requests the rooms for them; sending the agreement blocks them.", button: { label: "Make an offer →", tab: "offer" as const } };
   return (
     <div className="border-brand-200 bg-brand-50/60 rounded-2xl border px-5 py-4">
       <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">Next</p>
@@ -1689,8 +1689,8 @@ function AddendumBanner({ request }: { request: FullRequest }) {
 
 /**
  * The way to a sale, shown before there is an offer (doc §4.11, 2026-10-30):
- * the offer blocks the rooms; the agreement — or addendum — is drawn up, sent
- * and registered signed, which sells them. Before this it appeared only once
+ * the offer requests the rooms; the agreement — or addendum — is drawn up and
+ * marked sent, which blocks them, and registered signed, which sells them. Before this it appeared only once
  * the client had answered a rate card, so a request without one had no way on.
  */
 function NoOfferYet({ request }: { request: FullRequest }) {
@@ -1706,8 +1706,8 @@ function NoOfferYet({ request }: { request: FullRequest }) {
         <div className="max-w-2xl">
           <h2 className="text-ink-900 text-[15px] font-medium">{request.amendsContract ? "The addendum" : "The contract"}</h2>
           <p className="text-ink-500 mt-1 text-[13px] font-light">
-            No offer yet. When the client is ready to go ahead, make them an offer — the rooms, the rates and the terms. It blocks the rooms for them until a date you
-            choose; then draw up the {what}, send it (and Mark as… <em>Contract sent</em>), and register it signed, which sells the rooms and makes the contract.
+            No offer yet. When the client is ready to go ahead, make them an offer — the rooms, the rates and the terms. It requests the rooms for them; then draw up
+            the {what} and mark it sent, which blocks the rooms until a date you choose (and Mark as… <em>Contract sent</em>), and register it signed, which sells the rooms and makes the contract.
           </p>
         </div>
         {request.event ? (

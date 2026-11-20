@@ -391,6 +391,8 @@ type ReviewData = {
   fillFrom: string;
   /** Said above the document, when there is something to warn of. */
   notice?: string;
+  /** What marking it sent also does, said beside the button. */
+  sentNote?: string;
 };
 
 /**
@@ -491,7 +493,7 @@ function ReviewShell({
             </>
           ) : (
             <>
-              <span className="text-ink-500 font-light">Not sent yet. Once it has gone by DocuSign:</span>
+              <span className="text-ink-500 font-light">Not sent yet. Once it has gone{data.sentNote ? ` — ${data.sentNote}` : ""}:</span>
               <button type="button" onClick={() => setSending(dayKey(today()))} className="text-brand-700 font-medium hover:underline">
                 Mark as sent
               </button>
@@ -571,7 +573,14 @@ export function AgreementReview({ offerId }: { offerId: string }) {
   const utils = api.useUtils();
   const agreement = api.offer.agreement.useQuery({ id: offerId });
   const save = api.offer.saveAgreement.useMutation({ onSuccess: () => void utils.offer.invalidate() });
-  const markSent = api.offer.markSent.useMutation({ onSuccess: () => void utils.offer.invalidate() });
+  const markSent = api.offer.markSent.useMutation({
+    onSuccess: () => {
+      void utils.offer.invalidate();
+      void utils.sales.invalidate();
+    },
+    // Blocking can be refused — a room taken meanwhile — and says which.
+    onError: (error) => window.alert(friendlyError(error)),
+  });
   if (!agreement.data) return <p className="text-ink-500 text-sm font-light">{agreement.error ? friendlyError(agreement.error) : "Loading…"}</p>;
   const data = agreement.data;
   return (
@@ -581,6 +590,7 @@ export function AgreementReview({ offerId }: { offerId: string }) {
         backLabel: `${data.clientName} · ${data.eventName}`,
         title: data.amends ? "Addendum" : "Agreement",
         fileName: `${data.clientName} — ${data.eventName} ${data.amends ? "addendum" : "agreement"}`,
+        sentNote: data.status === "OPEN" ? `marking it sent blocks the offer's rooms for the client until ${formatDate(data.validUntil)}` : undefined,
         party: "client",
         // No addendum wording is in the system yet: say so rather than pass the framework off as one (doc §4.11).
         notice: data.amends

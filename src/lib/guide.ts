@@ -201,7 +201,7 @@ export const guideSections: GuideSection[] = [
     id: "offer",
     number: 8,
     title: "The offer",
-    lead: "The offer is binding — these rooms, rates and terms, held until a date — and making it blocks the rooms for the client.",
+    lead: "The offer is binding — these rooms, rates and terms, held until a date. Making it requests the rooms for the client; marking the agreement sent blocks them.",
     steps: [
       "When a client answers a rate card, a **Contract task** comes to you. Open the request's **Offer & contract** tab.",
       "Click **Make an offer →** beside their answer. The lines are filled from what they chose. No answer? Use **+ Make another offer**.",
@@ -212,8 +212,10 @@ export const guideSections: GuideSection[] = [
       "Make the offer.",
     ],
     points: [
-      "The rooms are now **Blocked** for the client, the request moves to **Negotiation**, and its value becomes the offer's total.",
+      "The rooms are now **Requested** for the client, the request moves to **Negotiation**, and its value becomes the offer's total.",
+      "When you **Mark as sent** on the agreement, the rooms become **Blocked** for the client until the offer's date. If someone took one meanwhile, another free room of the type is blocked instead — or, if none is free, nothing changes and it says which.",
       "**All or nothing**: if any line's rooms are not free every night, nothing is made and the popup says how many are free.",
+      "Signed or vouched for before the agreement was marked sent? The requested rooms are sold all the same.",
     ],
     tips: ["**An offer that runs out is flagged in red, never released on its own.** You decide: **Extend the hold** or **Withdraw**, which frees the rooms."],
     shots: [

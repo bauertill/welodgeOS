@@ -3064,24 +3064,37 @@ follow-up and the signing come next and are not built yet (§12).
   cut-offs, in the same editor as a hotel's quotation (§3.10); what the rate includes and any
   special conditions, one per line. They start as the **last offer made on the same event**,
   since an event's terms rarely change from one client to the next.
-- **Making it blocks the rooms** for the client until the offer runs out — **Blocked** on the
-  inventory with that expiry and the offered rate, so no one else is offered them — through
-  the same rules, ledger and undo as the stock sheet (§4.8), picking rooms the way *Add rooms*
-  does (§4.11, Selling from the request). **All or nothing**: if a line's rooms are not free
-  for every night, nothing is made and the popup says how many are. The request moves to
-  **Negotiation** (from *Initial interest*, *Specify* or *Proposal sent*), its *Blocked until*
-  becomes the offer's date and its value the offer's total.
+- **Making it requests the rooms; marking the agreement sent blocks them** (the owner,
+  2026-11-20: "once we mark the agreement as sent, we can proceed with blocking — it should
+  happen at that step"; until then making the offer blocked them at once). Making the offer
+  puts its rooms on **Requested** for the client — a soft hold, seen on the stock sheet, with
+  the offered rate — through the same rules, ledger and undo as the stock sheet (§4.8),
+  picking rooms the way *Add rooms* does (§4.11, Selling from the request). **All or
+  nothing**: if a line's rooms are not free for every night, nothing is made and the popup
+  says how many are. The request moves to **Negotiation** (from *Initial interest*, *Specify*
+  or *Proposal sent*) and its value becomes the offer's total. **Mark as sent** on the
+  client's agreement then turns them **Blocked** until the offer runs out, so no one else is
+  offered them, and the request's *Blocked until* becomes the offer's date; the agreement page
+  says so beside the button. If one of the requested rooms was blocked or sold to someone else
+  meanwhile, other free rooms of the same type are blocked instead; if there are not enough,
+  **nothing is marked or blocked** and it says which room type and why — edit the offer, then
+  mark it sent. *Not sent after all* leaves the rooms blocked (withdraw the offer to let them
+  go). Signed, or vouched for by trust guarantee, before the agreement was marked sent: the
+  requested rooms are sold all the same. An offer made before 2026-11-20 had its rooms blocked
+  already, and keeps them so.
 - **Offers** on the request lists each one: rooms, total, who made it and when, its lines and
   terms, and where it stands — *Open — rooms held until …*; *Ran out on … — extend or
-  withdraw*, in red; *Withdrawn — rooms released*. **An offer that runs out is only flagged**
+  withdraw*, in red; *Withdrawn — rooms released*. An open offer says whether its rooms are
+  *requested; blocked once the agreement is marked sent* or *blocked until …*. **An offer that runs out is only flagged**
   (the owner, 2026-10-14): the rooms stay blocked until a person decides. **Extend the hold**
-  moves the offer and its blocks to a new date; **Withdraw** releases its rooms for others.
-  Both act on the request's blocked rooms of the offer's room types. **Edit the offer** (the
+  moves the offer and its blocks to a new date (rooms still only requested have no date to
+  move); **Withdraw** lets its rooms go for others — blocks released, requests withdrawn.
+  Both act on the request's rooms of the offer's room types. **Edit the offer** (the
   owner, 2026-11-18) opens it in the same popup it was made in, filled with what it says: its
   rooms, dates, rates, currency, how long it holds, payments, cancellation terms, what the rate
   includes and special conditions. When the rooms, dates, rates or currency change, the
-  request's blocked rooms of the offer's room types are released and the new ones blocked **in
-  one step** — if a room is no longer free, nothing changes and the old rooms stay held; a new
+  request's rooms of the offer's room types are let go and the new ones taken the same way —
+  requested, or blocked once the agreement has gone — **in one step** — if a room is no longer free, nothing changes and the old rooms stay held; a new
   hold date alone just moves the blocks. The request's value follows the new total, and the
   change is in its history. Only an open offer can be edited — a signed or vouched-for one is
   the contract. An agreement whose wording was changed by hand for the client is not rewritten:
@@ -3102,8 +3115,8 @@ follow-up and the signing come next and are not built yet (§12).
   phone, say.
 - **Before there is any offer** (2026-10-30), an open request with no rate card answer has a
   card of its own under the stages — *The contract* (*The addendum*, for one) — saying what
-  comes next — make the offer, which blocks the rooms; draw up the agreement, send it, mark
-  it *Contract sent*; register it signed, which sells them — with **Make an offer →**. Until
+  comes next — make the offer, which requests the rooms; draw up the agreement and mark it
+  sent, which blocks them, and *Contract sent*; register it signed, which sells them — with **Make an offer →**. Until
   then the way to an offer was only through a rate card answer or the contract task, so a
   request without one — an addendum, typically — had no visible way to a sale.
 - **Who signs for We Lodge** (the owner, 2026-10-14): **Volkhard Bauer, CEO, for an event
@@ -3142,8 +3155,8 @@ agreement is left as it was.
   to the contract. The list and the client's page tag it **Addendum**; on the client's
   *Contracts* card each contract lists its addenda — *Addendum 1, 2…* in the order made, with
   their stage.
-- **Selling it** is the ordinary way: *Make an offer →* (above) blocks the rooms; the
-  document is drawn up, sent, *Mark as… Contract sent*; *✓ Client signed* sells the rooms.
+- **Selling it** is the ordinary way: *Make an offer →* (above) requests the rooms; the
+  document is drawn up and marked sent, which blocks them, *Mark as… Contract sent*; *✓ Client signed* sells the rooms.
   **The signed addendum is a contract of its own**, named *Addendum to [the original
   contract's name]*, with its own total, payments and cancellation cut-offs, tied to the
   addendum's request — so Finances follows what the addendum adds, and the original contract's
@@ -3281,7 +3294,7 @@ offer opens it as a document, as it will print.
   (it is drawn from the clauses). Answering their comments, and agreeing the final text with
   them, stays outside the system; the final goes by DocuSign as before.
 - **Print or save as PDF**, then send it by DocuSign — outside the system — and **Mark as
-  sent** with the day it went. The offer on the request then shows *Agreement sent …*.
+  sent** with the day it went, which blocks the offer's rooms (above). The offer on the request then shows *Agreement sent …*.
   **Schedule 2.1 prints landscape** (the owner, 2026-11-09: the total broke over two lines):
   a schedule whose table has seven columns or more — the rooms, dates and rates — is printed
   on an A4 landscape page of its own, the rest of the document portrait; in it, words are
@@ -4300,6 +4313,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
+| §4.11 Block on agreement sent | **Built** (2026-11-20) | Making an offer requests its rooms; *Mark as sent* on the client's agreement blocks them until the offer runs out — other free rooms of the type if some were taken, else refused saying why; editing, extending, withdrawing and signing work on requested or blocked rooms |
 | §4.11 Agreement as a Word draft | **Built** (2026-11-20) | *Download Word* on the client's agreement and on our agreement with a hotel: the same text as the page, as a .docx for redlines — numbering, highlighted gaps, contents, signature blocks, wide schedules landscape ; *Upload their redlines* reads the returned Word file — tracked or untracked changes and comments — and takes the ticked changes into the wording |
 | §2.10 Claude: from a PDF | **Built** (2026-11-20) | 13 more connector tools: search, add a property (room types, contacts) and put it on an event, add a room type; list and record a hotel's quotation; list, read, register and fill in contracts with payments and cancellation deadlines. Claude confirms what it will add before writing; never buys/sells rooms, offers, or deletes |
 | §2.11 Welcome to We Lodge OS | **Built** (2026-11-19) | /guide/welcome, first on the Guides page: what OS is, monday.com view only, the daily habit, how people are told, where things live, five house rules |
@@ -4351,7 +4365,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.12 Stagger Planner | **Built** (2026-11-19) | Sales › Stagger planner: scenarios listed, made, copied, renamed, archived; the editor saves as you go and refuses to overwrite a colleague's newer save; a read-only, unindexed owner's link (on/off, replaced); the reference page's sums in one tested module; Decron – OBS 50 units made by the migration |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
-| §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; blocks its rooms until it runs out, all or nothing; request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
+| §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; requests its rooms, all or nothing — blocked until it runs out once its agreement is marked sent (2026-11-20); request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
 | §4.11 The agreement | **Built** (2026-10-14) | The framework agreement filled from the contracting details, the offer and the event — payment schedule in words, Schedules 1, 2 and 2.1, validity line; neutral wording for signatories; gaps highlighted and listed; wording changed per client or for every client; print/save as PDF; marked as sent. USD account only |
 | §4.11 Rate card for any client | **Built** (2026-10-26) | From the event's properties board, Contracted properties ticked to start; not tied to a request; each answer (with the company) finds or adds the client and starts its own sales request at Proposal sent with lines, contact and a Contract task; no one sees another's answer; a resend from the same browser stays on its request |
 | §4.11 Addenda, Mark as…, the offer before there is one | **Built** (2026-10-30) | A request can be an addendum to one of the client's contracts for the same event — started with + Addendum from the client's new *Contracts* card or a request's *Contract* card, chosen on the new-request form, or set afterwards on the request; banner, *Addendum* tags, addenda listed under each contract; signed, it is its own contract named *Addendum to …*. *Close as…* became *Mark as…*, adding *Contract sent*, *Waiting for approval* and *Pending* beside the stage, cleared on closing. *Make an offer →* shown on any open request with no offer or rate card answer. Registering a request stays busy until its page opens. Not yet: addendum wording (§9.13) |
