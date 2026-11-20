@@ -232,7 +232,7 @@ export const guideSections: GuideSection[] = [
       "On the open offer, click **The agreement** (Draw up the agreement →). It opens as it will print.",
       "Anything unknown shows as **[missing: …]**, highlighted and listed at the top. Fill it on the request or the offer, or type it in.",
       "**Edit the wording for this client** changes only this client's copy.",
-      "For a draft, send it as a PDF (**Print or save as PDF**) and in Word (**Download Word**), so the client can mark their changes. Type what is agreed in with **Edit the wording for this client**.",
+      "For a draft, send it as a PDF (**Print or save as PDF**) and in Word (**Download Word**), so the client can mark their changes. When their marked-up Word file comes back, click **Upload their redlines**: untick any change you don't accept and take the rest into the agreement. Their comments are listed to answer.",
       "For signing, **Print or save as PDF** and send it by **DocuSign**.",
       "Click **Mark as sent** with the date, and set **Mark as… → Contract sent** on the request.",
       "When it comes back signed, click **✓ Client signed**, give the date and paste the **Google Drive link** to the signed PDF.",
