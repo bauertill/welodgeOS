@@ -26,7 +26,8 @@ export function ClaudeConnectionCard() {
       <h2 className="text-ink-900 text-[15px] font-medium">Claude</h2>
       <p className="text-ink-500 mt-1 mb-3 text-sm font-light">
         Connect Claude to WeLodge OS and ask it to look things up or make everyday changes for you — in your name, each one in the history &ldquo;via
-        Claude&rdquo;. It cannot delete anything, buy, block or sell rooms, or make contracts.
+        Claude&rdquo;. Share a PDF with it — a hotel&rsquo;s quotation, a signed contract — and it adds it to OS after you confirm. It cannot delete
+        anything, or buy, block or sell rooms.
       </p>
       <ol className="text-ink-700 mb-3 list-decimal space-y-1 pl-5 text-sm font-light">
         <li>

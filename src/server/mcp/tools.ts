@@ -11,7 +11,9 @@ import { db } from "~/server/db";
  * it: look things up, and make everyday changes. Every tool calls the same
  * action the site's own pages call — so the same rules apply, and every
  * change is written to the history in that person's name, "via Claude". No
- * tool deletes, buys, blocks or sells rooms, or makes a contract.
+ * tool deletes, buys, blocks or sells rooms, or makes an offer. Since
+ * 2026-11-20 it can add properties, hotel quotations and contracts (with their
+ * payments and deadlines) from a PDF the person shares (the owner's choice).
  */
 
 type Person = { id: string; name: string | null; email: string | null; image: string | null };
@@ -36,7 +38,8 @@ export function welodgeServer(person: Person, headers: Headers) {
         `You are working in WeLodge OS for ${person.name ?? person.email} of We Lodge, who buys accommodation from hotels and sells it to B2B clients for events.`,
         "Words matter: a room-night is Bought / Option / In progress with the hotel, and Sold / Blocked / Requested with the client. A sales request moves Initial interest → Specify → Proposal sent → Negotiation → Contracted, or is Lost/Declined.",
         "Look things up before changing them, use ids from what you found, and say what you changed. Every change is recorded as made by this person via Claude.",
-        "You cannot delete, buy, block or sell rooms, or make contracts — point the person to the site for those.",
+        "You cannot delete anything, or buy, block or sell rooms, or make offers — point the person to the site for those.",
+        "When the person shares a PDF — a hotel's quotation (their proposal to us), a signed contract, a property's fact sheet — read it, find the event, property, client or contract it belongs to (search before adding, so nothing is added twice), then show the person in a short list what you will add and ask them to confirm before writing. Never guess a figure or a date the PDF does not give: leave it out and say so. Terms that do not fit a field go, in words, into the notes or terms. Afterwards say what you added, with the link.",
       ].join("\n"),
     },
   );
@@ -232,11 +235,11 @@ export function welodgeServer(person: Person, headers: Headers) {
 
   tool(
     "set_sales_stage",
-    "Move a sales request to a stage. LOST needs a reason: DECLINED, NO_REPLY or RELEASED. CONTRACTED needs the client's contract registered on the site first.",
+    "Move a sales request to a stage. LOST needs a reason: NOT_INTERESTED, DECLINED, NO_REPLY or RELEASED. CONTRACTED needs the client's contract registered on the site first.",
     {
       id: z.string(),
       stage: z.enum(["INITIAL_INTEREST", "SPECIFY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACTED", "LOST"]),
-      lostReason: z.enum(["DECLINED", "NO_REPLY", "RELEASED"]).optional(),
+      lostReason: z.enum(["NOT_INTERESTED", "DECLINED", "NO_REPLY", "RELEASED"]).optional(),
     },
     write,
     async (input) => {
@@ -328,6 +331,425 @@ export function welodgeServer(person: Person, headers: Headers) {
     await caller.task.comment(input);
     return "Commented.";
   });
+
+  // ── From a PDF: properties, hotel quotations and contracts (the owner, 2026-11-20) ──
+
+  /** Money as the PDF says it — 198450.5 — into cents. */
+  const cents = (amount: number | null | undefined) => (amount === null || amount === undefined ? null : Math.round(amount * 100));
+  /** A percentage as the PDF says it — 20 or 12.5 — into hundredths of a percent. */
+  const bp = (pct: number | null | undefined) => (pct === null || pct === undefined ? null : Math.round(pct * 100));
+  const money = z.number().min(0).max(1_000_000_000);
+  const pct = z.number().min(0).max(100);
+
+  /** The event's entry for a property — put on the event's board first if it is not yet. */
+  const entryFor = async (eventId: string, propertyId: string) => {
+    const found = await db.scoutingEntry.findFirst({ where: { eventId, propertyId }, select: { id: true } });
+    return found ?? (await caller.scouting.add({ eventId, propertyId }));
+  };
+
+  /** A room type by name on a property — added (with these rooms) if it is not there yet. */
+  const categoryFor = async (propertyId: string, name: string, rooms: number, capacity: number) => {
+    const existing = await db.roomCategory.findFirst({ where: { propertyId, name: { equals: name.trim(), mode: "insensitive" } }, select: { id: true } });
+    if (existing) return existing.id;
+    const made = await caller.property.saveCategory({ propertyId, category: { name: name.trim(), unitCount: rooms, capacity, currency: "USD" } });
+    return made.id;
+  };
+
+  tool(
+    "search_properties",
+    "Find properties (hotels, apartments…) already in the system by name, city or address — always look before adding one, so it is not added twice. Returns property ids and the events each is on.",
+    { query: z.string().min(2).max(200) },
+    read,
+    async ({ query }) => {
+      const words = query.trim();
+      const found = await db.property.findMany({
+        where: { OR: [{ name: { contains: words, mode: "insensitive" } }, { city: { contains: words, mode: "insensitive" } }, { address: { contains: words, mode: "insensitive" } }] },
+        select: { id: true, name: true, type: true, city: true, address: true, scoutingEntries: { select: { event: { select: { id: true, name: true } } } } },
+        take: 25,
+        orderBy: { name: "asc" },
+      });
+      return found.map(({ scoutingEntries, ...property }) => ({ ...property, events: scoutingEntries.map((entry) => entry.event) }));
+    },
+  );
+
+  tool(
+    "create_property",
+    "Add a new property to the system — and, with an event id, onto that event's properties board. Search first. Refused if it looks like one already there; pass confirmedDifferent only when the person has said it is a different property. Room types can be given here or added later.",
+    {
+      name: z.string().min(1).max(300),
+      type: z.enum(["HOTEL", "APARTHOTEL", "FURNISHED_APARTMENT", "UNFURNISHED_APARTMENT", "MOTEL", "HOSTEL", "BED_AND_BREAKFAST", "EXTENDED_STAY", "STUDENT_HOUSING", "GUEST_HOUSE", "INDIVIDUAL_HOME", "RESORT_LODGE", "OTHER"]),
+      eventId: z.string().optional(),
+      address: z.string().max(500).optional(),
+      city: z.string().max(200).optional(),
+      country: z.string().max(200).optional(),
+      stars: z.number().int().min(1).max(5).optional(),
+      totalRooms: z.number().int().min(0).optional(),
+      website: z.string().max(500).optional(),
+      phone: z.string().max(100).optional(),
+      generalEmail: z.string().max(300).optional(),
+      checkInTime: z.string().max(50).optional(),
+      checkOutTime: z.string().max(50).optional(),
+      tradeName: z.string().max(300).optional(),
+      vatNumber: z.string().max(100).optional(),
+      registrationNumber: z.string().max(100).optional(),
+      signatoryName: z.string().max(200).optional(),
+      signatoryTitle: z.string().max(200).optional(),
+      contractEmail: z.string().max(300).optional(),
+      notes: z.string().max(5000).optional(),
+      roomTypes: z
+        .array(z.object({ name: z.string().min(1).max(200), rooms: z.number().int().min(0), sleeps: z.number().int().min(1).default(2), bedConfiguration: z.string().max(200).optional(), size: z.string().max(200).optional() }))
+        .max(40)
+        .default([]),
+      contacts: z.array(z.object({ name: z.string().min(1).max(200), role: z.string().max(200).optional(), email: z.string().email().optional(), phone: z.string().max(100).optional() })).max(20).default([]),
+      confirmedDifferent: z.boolean().optional(),
+    },
+    write,
+    async ({ eventId, roomTypes, contacts, ...property }) => {
+      const created = await caller.property.create({
+        ...property,
+        categories: roomTypes.map((room) => ({ name: room.name, unitCount: room.rooms, capacity: room.sleeps, bedConfiguration: room.bedConfiguration, size: room.size, currency: "USD" })),
+        contacts,
+      });
+      if (eventId) await caller.scouting.add({ eventId, propertyId: created.id });
+      return { propertyId: created.id, name: created.name, onEvent: eventId ?? null };
+    },
+  );
+
+  tool(
+    "add_property_to_event",
+    "Put a property that is already in the system onto an event's properties board.",
+    { eventId: z.string(), propertyId: z.string() },
+    write,
+    async ({ eventId, propertyId }) => {
+      const entry = await entryFor(eventId, propertyId);
+      return { onEvent: true, entryId: entry.id };
+    },
+  );
+
+  tool(
+    "add_room_type",
+    "Add a room type to a property (Double, 1-bedroom apartment…), with how many rooms and how many people one sleeps.",
+    {
+      propertyId: z.string(),
+      name: z.string().min(1).max(200),
+      rooms: z.number().int().min(0),
+      sleeps: z.number().int().min(1).default(2),
+      bedConfiguration: z.string().max(200).optional(),
+      bedrooms: z.number().int().min(0).optional(),
+      bathrooms: z.number().min(0).optional(),
+      size: z.string().max(200).optional(),
+    },
+    write,
+    async ({ propertyId, name, rooms, sleeps, ...rest }) => {
+      const made = await caller.property.saveCategory({ propertyId, category: { name, unitCount: rooms, capacity: sleeps, currency: "USD", ...rest } });
+      return { roomTypeId: made.id, name: made.name };
+    },
+  );
+
+  tool(
+    "list_quotations",
+    "The quotations a hotel or apartment sent us for an event, with their lines and totals.",
+    { eventId: z.string(), propertyId: z.string() },
+    read,
+    async ({ eventId, propertyId }) => {
+      const entry = await db.scoutingEntry.findFirst({ where: { eventId, propertyId }, select: { id: true } });
+      if (!entry) return "That property is not on this event's board yet, so it has no quotations for it.";
+      return caller.quotation.forEntry({ scoutingEntryId: entry.id });
+    },
+  );
+
+  tool(
+    "add_quotation",
+    [
+      "Record a hotel's or apartment's quotation (their proposal to us) for an event — from the PDF they sent. The property is put on the event's board if it is not yet.",
+      "Each line is rooms of one room type, for one stay (checkIn–checkOut), at one rate per room per night in the quotation's currency. A room type is matched by name; one not on the property yet is added with that many rooms.",
+      "Payments and cancellation terms as the hotel quotes them; anything that does not fit goes, in words, into paymentTerms, cancellationTerms or notes. Amounts are plain numbers (189.5), percentages plain numbers (20).",
+    ].join(" "),
+    {
+      eventId: z.string(),
+      propertyId: z.string(),
+      name: z.string().min(1).max(300).describe("The group or scenario, like 'Austria House staff' or 'Main block'"),
+      currency: z.string().length(3).default("USD"),
+      receivedOn: day.optional(),
+      validUntil: day.optional(),
+      lines: z
+        .array(
+          z.object({
+            roomType: z.string().min(1).max(200),
+            checkIn: day,
+            checkOut: day,
+            rooms: z.number().int().min(1),
+            ratePerNight: money,
+            sleeps: z.number().int().min(1).max(20).optional(),
+          }),
+        )
+        .min(1)
+        .max(200),
+      rateIncludes: z.array(z.enum(["BREAKFAST", "WIFI", "TAXES", "PARKING"])).default([]),
+      rateIncludesOther: z.string().max(2000).default(""),
+      cleaning: z.enum(["DAILY", "WEEKLY", "OTHER"]).nullable().default(null),
+      cleaningOther: z.string().max(500).default(""),
+      taxes: z
+        .array(
+          z.object({
+            kind: z.enum(["OCCUPANCY", "CITY", "VAT", "SALES", "ISS", "SERVICE_CHARGE", "TOURISM", "TOURISM_DISTRICT", "RESORT_FEE", "OTHER"]),
+            label: z.string().max(200).default(""),
+            percent: pct.optional(),
+            amountPerNight: money.optional(),
+          }),
+        )
+        .max(20)
+        .default([]),
+      otherTaxes: z.string().max(2000).default(""),
+      payments: z.array(z.object({ onSignature: z.boolean().default(false), dueOn: day.optional(), percent: pct, plusTaxes: z.boolean().default(false) })).max(20).default([]),
+      cancellations: z
+        .array(
+          z.object({
+            kind: z.enum(["ATTRITION", "RELEASE", "OTHER"]),
+            cutoffOn: day.optional(),
+            rooms: z.number().int().min(1).optional(),
+            roomType: z.string().max(200).default(""),
+            percent: pct.optional(),
+            feePercent: pct.optional(),
+            remarks: z.string().max(500).default(""),
+          }),
+        )
+        .max(20)
+        .default([]),
+      paymentTerms: z.string().max(5000).default(""),
+      cancellationTerms: z.string().max(5000).default(""),
+      documentUrl: z.string().max(2000).default("").describe("A Google Drive link to the PDF, if the person gives one"),
+      notes: z.string().max(5000).default(""),
+      salesRequestId: z.string().optional().describe("The client request it was quoted for, if any"),
+    },
+    write,
+    async (input) => {
+      const entry = await entryFor(input.eventId, input.propertyId);
+      const lines = [];
+      for (const line of input.lines) {
+        const categoryId = await categoryFor(input.propertyId, line.roomType, line.rooms, line.sleeps ?? 2);
+        lines.push({ categoryId, checkIn: line.checkIn, checkOut: line.checkOut, rooms: line.rooms, rateCents: cents(line.ratePerNight)!, occupancy: line.sleeps ?? null });
+      }
+      const saved = await caller.quotation.save({
+        scoutingEntryId: entry.id,
+        quotation: {
+          name: input.name,
+          receivedOn: input.receivedOn ?? "",
+          validUntil: input.validUntil ?? "",
+          rooms: null,
+          currency: input.currency.toUpperCase(),
+          paymentTerms: input.paymentTerms,
+          cancellationTerms: input.cancellationTerms,
+          rateIncludes: input.rateIncludes,
+          rateIncludesOther: input.rateIncludesOther,
+          cleaning: input.cleaning,
+          cleaningOther: input.cleaningOther,
+          taxes: input.taxes.map((tax) => ({ kind: tax.kind, label: tax.label, basisPoints: bp(tax.percent), amountCents: tax.percent === undefined ? cents(tax.amountPerNight) : null })),
+          otherTaxes: input.otherTaxes,
+          documentUrl: input.documentUrl,
+          notes: input.notes,
+          salesRequestId: input.salesRequestId ?? null,
+          agreementOn: null,
+          payments: input.payments.map((payment) => ({ onSignature: payment.onSignature, dueOn: payment.dueOn ?? "", percentBasisPoints: bp(payment.percent)!, plusTaxes: payment.plusTaxes })),
+          cancellations: input.cancellations.map((cut) => ({
+            kind: cut.kind,
+            cutoffOn: cut.cutoffOn ?? "",
+            rooms: cut.rooms ?? null,
+            roomType: cut.roomType,
+            percentBasisPoints: bp(cut.percent),
+            feeBasisPoints: bp(cut.feePercent),
+            remarks: cut.remarks,
+          })),
+          lines,
+        },
+      });
+      const quotation = saved as { id: string; totalCents?: number; payableCents?: number };
+      return { quotationId: quotation.id, total: quotation.totalCents !== undefined ? quotation.totalCents / 100 : undefined, payable: quotation.payableCents !== undefined ? quotation.payableCents / 100 : undefined };
+    },
+  );
+
+  tool(
+    "list_contracts",
+    "Contracts, filtered by event, property, client, contractor or sales request — each with what it still lacks (payment terms, cancellation terms, total, signed PDF).",
+    {
+      eventId: z.string().optional(),
+      propertyId: z.string().optional(),
+      clientId: z.string().optional(),
+      contractorId: z.string().optional(),
+      salesRequestId: z.string().optional(),
+      party: z.enum(["SUPPLIER", "CLIENT"]).optional(),
+    },
+    read,
+    async (input) =>
+      (await caller.finance.contracts(input)).map((contract) => ({
+        id: contract.id,
+        name: contract.name,
+        party: contract.party,
+        event: contract.event.name,
+        with: contract.property?.name ?? contract.contractor?.name ?? contract.client?.name,
+        signedOn: contract.signedOn,
+        total: contract.totalCents === null ? null : contract.totalCents / 100,
+        currency: contract.currency,
+        accountManager: contract.owner?.name,
+        payments: contract._count.payments,
+        cancellationDeadlines: contract._count.cancellations,
+        missing: contract.missing,
+      })),
+  );
+
+  tool("get_contract", "One contract in full: total, taxes, signed date, account manager, reminders, every payment (with its amount and status) and cancellation deadline.", { id: z.string() }, read, async ({ id }) => {
+    const contract = await caller.finance.contract({ id });
+    if (!contract) return "No such contract.";
+    return {
+      ...contract,
+      totalCents: undefined,
+      taxCents: undefined,
+      total: contract.totalCents === null ? null : contract.totalCents / 100,
+      taxes: contract.taxCents === null ? null : contract.taxCents / 100,
+      payments: contract.payments.map((payment) => ({ ...payment, amountCents: undefined, amount: payment.amount === null ? null : payment.amount / 100 })),
+    };
+  });
+
+  const paymentShape = z.object({
+    description: z.string().min(1).max(500).describe("Like '1st deposit' or 'Final payment + tax'"),
+    dueOn: day,
+    percent: pct.optional().describe("A share of the contract total, like 20"),
+    amount: money.optional().describe("Or a set amount instead of a share"),
+    plusTaxes: z.boolean().default(false).describe("This payment also takes all of the contract's taxes"),
+    status: z.enum(["TO_BE_PAID", "INVOICE_REQUESTED", "INVOICE_RECEIVED", "INVOICE_ISSUED", "PAID", "REFUND"]).default("TO_BE_PAID"),
+    paidOn: day.optional(),
+  });
+  const deadlineShape = z.object({
+    kind: z.enum(["ATTRITION", "RELEASE", "CLIENT_CANCELLATION", "OTHER"]).describe("ATTRITION/RELEASE on a hotel contract, CLIENT_CANCELLATION on a client contract"),
+    cutoffOn: day,
+    percent: pct.optional().describe("The share that may go by this date"),
+    appliesTo: z.string().max(500).default("").describe("Or in words, like '63 room-nights'"),
+    roomType: z.string().max(200).default(""),
+    feePercent: pct.optional(),
+    remarks: z.string().max(5000).default(""),
+  });
+  const addPayment = (contractId: string, payment: z.infer<typeof paymentShape>) =>
+    caller.finance.savePayment({
+      contractId,
+      payment: {
+        description: payment.description,
+        dueOn: payment.dueOn,
+        percentBasisPoints: bp(payment.percent),
+        amountCents: payment.percent === undefined ? cents(payment.amount) : null,
+        plusTaxes: payment.plusTaxes,
+        status: payment.status,
+        paidOn: payment.paidOn ?? "",
+        invoiceUrl: "",
+        proofUrl: "",
+        beneficiary: "",
+      },
+    });
+  const addDeadline = (contractId: string, cut: z.infer<typeof deadlineShape>) =>
+    caller.finance.saveCancellation({
+      contractId,
+      cancellation: { kind: cut.kind, cutoffOn: cut.cutoffOn, percentBasisPoints: bp(cut.percent), appliesTo: cut.appliesTo, roomType: cut.roomType, feeBasisPoints: bp(cut.feePercent), remarks: cut.remarks },
+    });
+
+  tool(
+    "create_contract",
+    [
+      "Register a signed contract from its PDF: with a hotel or apartment (SUPPLIER + propertyId), a contractor (SUPPLIER + contractorId) or a client (CLIENT + clientId, and the salesRequestId if it came from one), with its payments and cancellation deadlines.",
+      "Look first with list_contracts that it is not there already. The total is the rooms before tax; taxes on top go in taxes; each payment is a share of the total (percent) or a set amount.",
+      "It never buys or sells rooms and never moves a sales request to Contracted — say so, and point the person to the site for that.",
+    ].join(" "),
+    {
+      party: z.enum(["SUPPLIER", "CLIENT"]),
+      eventId: z.string(),
+      propertyId: z.string().optional(),
+      contractorId: z.string().optional(),
+      clientId: z.string().optional(),
+      salesRequestId: z.string().optional(),
+      name: z.string().min(1).max(300).describe("Like 'Group Sales Agreement — Courtyard Culver City'"),
+      signedOn: day.optional(),
+      total: money.optional(),
+      taxes: money.optional(),
+      currency: z.string().length(3).default("USD"),
+      documentUrl: z.string().max(2000).optional().describe("A Google Drive link to the signed PDF, if the person gives one"),
+      notes: z.string().max(5000).optional(),
+      accountManagerId: z.string().optional().describe("Defaults to the person you are working for; they get the payment and deadline reminders"),
+      noCancellationTerms: z.boolean().optional().describe("Only when the contract truly has no cancellation deadlines"),
+      payments: z.array(paymentShape).max(30).default([]),
+      cancellationDeadlines: z.array(deadlineShape).max(30).default([]),
+    },
+    write,
+    async (input) => {
+      const contract = await caller.finance.createContract({
+        party: input.party,
+        eventId: input.eventId,
+        propertyId: input.propertyId,
+        contractorId: input.contractorId,
+        clientId: input.clientId,
+        salesRequestId: input.salesRequestId,
+        name: input.name,
+        signedOn: input.signedOn ?? "",
+        totalCents: cents(input.total),
+        taxCents: cents(input.taxes),
+        currency: input.currency.toUpperCase(),
+        documentUrl: input.documentUrl ?? "",
+        notes: input.notes ?? "",
+        ownerId: input.accountManagerId ?? person.id,
+        noCancellationTerms: input.noCancellationTerms,
+      });
+      const problems: string[] = [];
+      for (const payment of input.payments) {
+        await addPayment(contract.id, payment).catch((error: Error) => problems.push(`Payment "${payment.description}": ${error.message}`));
+      }
+      for (const cut of input.cancellationDeadlines) {
+        await addDeadline(contract.id, cut).catch((error: Error) => problems.push(`Deadline ${cut.cutoffOn}: ${error.message}`));
+      }
+      return { contractId: contract.id, link: `/events/${input.eventId}/contracts/${contract.id}`, notAdded: problems };
+    },
+  );
+
+  tool(
+    "update_contract",
+    "Fill in or correct a contract's own details from its PDF — name, signed date, total, taxes, currency, signed PDF link, notes, account manager. Only what is given changes.",
+    {
+      id: z.string(),
+      name: z.string().min(1).max(300).optional(),
+      signedOn: day.optional(),
+      total: money.nullable().optional(),
+      taxes: money.nullable().optional(),
+      currency: z.string().length(3).optional(),
+      documentUrl: z.string().max(2000).optional(),
+      notes: z.string().max(5000).optional(),
+      accountManagerId: z.string().nullable().optional(),
+      noCancellationTerms: z.boolean().optional(),
+    },
+    write,
+    async ({ id, total, taxes, accountManagerId, ...rest }) => {
+      await caller.finance.updateContract({
+        id,
+        ...rest,
+        ...(rest.currency && { currency: rest.currency.toUpperCase() }),
+        ...(total !== undefined && { totalCents: cents(total) }),
+        ...(taxes !== undefined && { taxCents: cents(taxes) }),
+        ...(accountManagerId !== undefined && { ownerId: accountManagerId }),
+      });
+      return "Contract updated.";
+    },
+  );
+
+  tool("add_contract_payment", "Add a payment to a contract — its share of the total or a set amount, and its due date.", { contractId: z.string(), payment: paymentShape }, write, async ({ contractId, payment }) => {
+    const saved = await addPayment(contractId, payment);
+    return { paymentId: (saved as { id: string }).id };
+  });
+
+  tool(
+    "add_contract_deadline",
+    "Add a cancellation deadline to a contract — attrition, release or client cancellation, its date, share and fee.",
+    { contractId: z.string(), deadline: deadlineShape },
+    write,
+    async ({ contractId, deadline }) => {
+      const saved = await addDeadline(contractId, deadline);
+      return { deadlineId: (saved as { id: string }).id };
+    },
+  );
 
   return server;
 }

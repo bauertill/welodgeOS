@@ -637,10 +637,25 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | An event's properties board, and a property in full | A request's stage, and what it is waiting on (Mark as…) |
 | An event's stock-sheet position (bought, option, sold, blocked, short, warnings) | Add a contact to a client |
 | Tasks on the board; a request's or client's emails | Post an update on a sales request, client or property; create a task, move it, comment on it |
+| Properties (search by name, city, address); a hotel's quotations for an event | Add a property (with room types and contacts), put it on an event's board, add a room type |
+| Contracts (by event, property, client, contractor or request), and one in full | Record a hotel's quotation; register a contract with its payments and cancellation deadlines; fill in or correct a contract, add a payment or a deadline |
 
-**It cannot** delete anything, buy, block or sell rooms, take or extend options, or make
-contracts or offers — those stay on the site, by hand. Widening that is a decision for the
-owner, tool by tool.
+**From a PDF** (the owner, 2026-11-20: "I will upload a PDF and it should read it and add the
+data onto OS" — for the whole team). In Claude, with the WeLodge OS connector on, the person
+drops in a **hotel's quotation** (their proposal to us), a **signed contract** or a property's
+fact sheet and says what it is. Claude reads it, finds the event, property, client or contract
+it belongs to — searching first, so nothing is added twice — **lists what it will add and waits
+for the person to confirm**, then adds it and gives the link. A figure or date the PDF does not
+give is left out and said; terms that do not fit a field go in words into the terms or notes.
+A quotation's room types are matched by name, and one the property lacks is added with the
+quoted rooms; the property is put on the event's board if it is not yet. A contract's account
+manager is the person, unless another is named — they get its deadline reminders (§7.1). The
+PDF itself is not stored by Claude: paste its Google Drive link and Claude puts it on the
+contract or quotation.
+
+**It cannot** delete anything, buy, block or sell rooms, take or extend options, make offers,
+or mark a request Contracted on registering its contract — those stay on the site, by hand.
+Widening that is a decision for the owner, tool by tool.
 
 **Keys.** Allowing gives Claude a key good for an hour, which it renews by itself with a second
 key good for 60 days of disuse; each renewal replaces both, and the old ones stop working.
@@ -4264,6 +4279,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
+| §2.10 Claude: from a PDF | **Built** (2026-11-20) | 13 more connector tools: search, add a property (room types, contacts) and put it on an event, add a room type; list and record a hotel's quotation; list, read, register and fill in contracts with payments and cancellation deadlines. Claude confirms what it will add before writing; never buys/sells rooms, offers, or deletes |
 | §2.11 Welcome to We Lodge OS | **Built** (2026-11-19) | /guide/welcome, first on the Guides page: what OS is, monday.com view only, the daily habit, how people are told, where things live, five house rules |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
