@@ -241,6 +241,32 @@ export function DeleteRequest({ request, subtle = false, onDeleted }: { request:
   );
 }
 
+/**
+ * Close a request from its row as Lost/Declined — Not interested (the owner,
+ * 2026-11-20: most requests should not be deleted). It stays on record under
+ * Closed and can be reopened from its page; Delete is kept on the page itself.
+ */
+function NotInterested({ request }: { request: { id: string; client: { name: string } } }) {
+  const utils = api.useUtils();
+  const setStage = api.sales.setStage.useMutation({
+    onSuccess: () => void utils.sales.invalidate(),
+    onError: (error) => window.alert(friendlyError(error)),
+  });
+  return (
+    <button
+      type="button"
+      disabled={setStage.isPending}
+      onClick={() =>
+        window.confirm(`Close ${request.client.name}'s sales request as Not interested? It moves to Closed and can be reopened from its page.`) &&
+        setStage.mutate({ id: request.id, stage: "LOST", lostReason: "NOT_INTERESTED" })
+      }
+      className="text-ink-300 text-xs font-light whitespace-nowrap group-hover:text-[#a3243d] hover:underline"
+    >
+      {setStage.isPending ? "Closing…" : "Not interested"}
+    </button>
+  );
+}
+
 /** The red count of client answers nobody has opened yet (doc §4.11). */
 export function NewAnswers({ count }: { count: number }) {
   return (
@@ -339,7 +365,7 @@ function StageGroup({ stage, requests, colours }: { stage: SalesRequestStage; re
   /*
    * Anywhere on a row opens the request (the owner, 2026-11-18: "having to
    * click on the name is hard") — except its own buttons and links, the
-   * manager picker and delete, and anything in a popup they open, which is
+   * manager picker and Not interested, and anything in a popup they open, which is
    * not inside the row on the page. Text being selected is left alone, and a
    * Cmd/Ctrl-click opens it in a new tab, as on the name.
    */
@@ -368,7 +394,7 @@ function StageGroup({ stage, requests, colours }: { stage: SalesRequestStage; re
               <th className={th}>Follow up</th>
               <th className={th} title="Account manager — click to hand it over">Manager</th>
               <th className={th}>
-                <span className="sr-only">Delete</span>
+                <span className="sr-only">Not interested</span>
               </th>
             </tr>
           </thead>
@@ -427,7 +453,7 @@ function StageGroup({ stage, requests, colours }: { stage: SalesRequestStage; re
                   <OwnerPicker request={request} compact />
                 </td>
                 <td className={`${td} text-right`}>
-                  <DeleteRequest request={request} subtle />
+                  {!isClosed(request.stage) && <NotInterested request={request} />}
                 </td>
               </tr>
               );
@@ -961,7 +987,7 @@ function SignNeedsContract({
 /** The way a request goes when it goes well (doc §4.11) — Blocked is a step some skip. */
 const pipeline: SalesRequestStage[] = ["INITIAL_INTEREST", "SPECIFY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACTED"];
 /** Why it ended without being contracted — chosen under Mark as…. */
-const lostReasons: LostReason[] = ["DECLINED", "NO_REPLY", "RELEASED"];
+const lostReasons: LostReason[] = ["NOT_INTERESTED", "DECLINED", "NO_REPLY", "RELEASED"];
 const moveOnLabels: Partial<Record<SalesRequestStage, string>> = {
   SPECIFY: "Mark specify",
   PROPOSAL_SENT: "Mark proposal sent",
