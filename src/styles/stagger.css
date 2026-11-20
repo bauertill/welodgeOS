@@ -1,0 +1,172 @@
+/*
+ * The Stagger Planner (doc §4.12), styled as the reference page
+ * (docs/reference/stagger-planner-reference.html), scoped under .stg so it
+ * touches nothing else in OS. The editor stays light like the rest of OS; the
+ * owner's view (.stg-auto) follows the device into dark mode.
+ */
+.stg {
+  --bg: #f5f4fa; --surface: #ffffff; --ink: #1e2e5d; --muted: #5f6789; --line: #e1dfee; --grid: #ecebf4;
+  --purple: #614fc9; --purple2: #ab6ce2; --lime: #cefa05; --lime-band: rgba(206, 250, 5, 0.34); --lime-ink: #566600;
+  --band: #1e2e5d; --out: #1e2e5d; --field: #ffffff; --on-purple: #ffffff;
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-lato), Lato, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: dark) {
+  .stg.stg-auto {
+    --bg: #0f1530; --surface: #17203f; --ink: #eceefa; --muted: #a2a8c8; --line: #2a3563; --grid: #212b51;
+    --purple: #8c7cf0; --purple2: #c99bf2; --lime-band: rgba(206, 250, 5, 0.15); --lime-ink: #cefa05;
+    --band: #0a0f26; --out: #c9cdea; --field: #111934; --on-purple: #0f1530;
+    color-scheme: dark;
+  }
+}
+.stg.stg-page { min-height: 100vh; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.stg *, .stg *::before, .stg *::after { box-sizing: border-box; }
+.stg button, .stg input { font: inherit; color: inherit; }
+.stg :focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+
+.stg .band { background: var(--band); color: #fff; }
+.stg .band-inner { max-width: 1280px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.stg .brand { display: flex; align-items: baseline; gap: 10px; font-weight: 700; font-size: 17px; flex-wrap: wrap; }
+.stg .slash { color: var(--lime); font-weight: 900; font-size: 24px; letter-spacing: -3px; margin-right: 4px; }
+.stg .brand .x { opacity: 0.6; font-weight: 400; }
+.stg .btn { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 14px; line-height: 1.3; }
+.stg .btn:hover { border-color: var(--purple); }
+.stg .btn.on { background: var(--purple); border-color: var(--purple); color: var(--on-purple); }
+.stg .btn-band { border-color: rgba(255, 255, 255, 0.35); color: #fff; white-space: nowrap; }
+.stg .btn-band:hover { border-color: var(--lime); }
+.stg .band-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+.stg .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 24px 56px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 36px; align-items: start; }
+.stg.presenting .wrap { grid-template-columns: minmax(0, 1fr); }
+.stg.presenting .panel { display: none; }
+
+.stg h1 { font-weight: 900; font-size: clamp(28px, 4.2vw, 46px); line-height: 1.08; letter-spacing: -0.01em; margin: 0 0 14px; max-width: 20ch; }
+.stg .lede { color: var(--muted); font-size: 18px; max-width: 62ch; margin: 0; }
+.stg .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px 24px; margin: 30px 0 8px; }
+.stg .fact { border-left: 2px solid var(--line); padding-left: 14px; }
+.stg .fact.key { border-left-color: var(--lime); }
+.stg .fact b { display: block; font-weight: 900; font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stg .fact span { display: block; color: var(--muted); font-size: 14px; line-height: 1.35; margin-top: 4px; }
+
+.stg .section { margin-top: 40px; }
+.stg .section h2 { font-size: 21px; font-weight: 700; margin: 0 0 4px; }
+.stg .section .sub { color: var(--muted); font-size: 15px; margin: 0 0 14px; max-width: 70ch; }
+.stg .chart { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 12px 8px; position: relative; }
+.stg .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); padding: 6px 6px 4px; }
+.stg .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.stg .sw-in { background: var(--purple); }
+.stg .sw-games { background: var(--lime); }
+
+.stg svg { display: block; }
+.stg svg text { font-family: var(--font-lato), Lato, "Helvetica Neue", Arial, sans-serif; }
+.stg .ax text { fill: var(--muted); font-size: 12px; }
+.stg .ax line, .stg .ax path { stroke: var(--line); }
+.stg .games { fill: var(--lime-band); }
+.stg .wave { fill: var(--purple); }
+.stg .wave-label { fill: var(--on-purple); font-size: 12px; font-weight: 700; }
+.stg .wave-out { fill: var(--ink); font-size: 12px; }
+.stg .wave-id { fill: var(--muted); font-size: 12px; }
+
+.stg .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.stg table.data { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 15px; }
+.stg table.data th, .stg table.data td { padding: 10px 14px; text-align: right; white-space: nowrap; }
+.stg table.data th:first-child, .stg table.data td:first-child { text-align: left; }
+.stg table.data thead th { font-weight: 700; color: var(--muted); font-size: 13px; border-bottom: 1px solid var(--line); }
+.stg table.data tbody td { border-bottom: 1px solid var(--grid); }
+.stg table.data tfoot td { font-weight: 900; border-top: 2px solid var(--line); }
+.stg td.zero { color: var(--muted); opacity: 0.6; }
+
+.stg .basis { margin-top: 40px; color: var(--muted); font-size: 14px; max-width: 78ch; }
+.stg .basis h2 { font-size: 16px; color: var(--ink); margin: 0 0 8px; }
+.stg .basis p { margin: 0 0 8px; }
+.stg .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; }
+.stg .tag.assume { background: var(--lime-band); color: var(--lime-ink); }
+.stg .tag.ok { background: rgba(97, 79, 201, 0.14); color: var(--purple); }
+
+.stg .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 6px 18px 18px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+.stg .panel summary { cursor: pointer; font-weight: 900; font-size: 17px; padding: 12px 0; list-style: none; }
+.stg .panel summary::-webkit-details-marker { display: none; }
+.stg .panel summary::after { content: "–"; float: right; color: var(--muted); }
+.stg .panel details:not([open]) summary::after { content: "+"; }
+.stg .group { border-top: 1px solid var(--line); padding: 14px 0 4px; }
+.stg .group h3 { font-size: 14px; margin: 0 0 10px; font-weight: 700; }
+.stg .field { display: block; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.stg .field input { display: block; width: 100%; margin-top: 4px; border: 1px solid var(--line); background: var(--field); border-radius: 8px; padding: 8px 10px; font-size: 15px; color: var(--ink); }
+.stg .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stg .quick { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.stg .quick .btn { padding: 4px 10px; font-size: 13px; }
+.stg .waves { width: 100%; font-size: 13px; border-collapse: collapse; }
+.stg .waves th { color: var(--muted); font-weight: 700; font-size: 12px; padding: 0 4px 6px; text-align: left; border: 0; }
+.stg .waves td { padding: 2px 4px; border: 0; text-align: left; }
+.stg .waves input { width: 100%; border: 1px solid var(--line); background: var(--field); border-radius: 6px; padding: 5px 6px; font-size: 13px; color: var(--ink); }
+.stg .waves .del { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 2px 6px; }
+.stg .waves .del:hover { color: var(--purple); }
+.stg .mix { width: 100%; font-size: 13px; border-collapse: collapse; }
+.stg .mix th { font-size: 12px; color: var(--muted); text-align: left; font-weight: 700; }
+.stg .mix td { padding: 3px 4px; border: 0; text-align: left; }
+.stg .mix input { width: 100%; border: 1px solid var(--line); background: var(--field); border-radius: 6px; padding: 5px 6px; font-size: 13px; color: var(--ink); }
+.stg .eq { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
+.stg .check { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-bottom: 8px; cursor: pointer; }
+.stg .hint { font-size: 12px; color: var(--muted); margin: 6px 0 10px; }
+.stg .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .stg .wrap { grid-template-columns: minmax(0, 1fr); padding: 22px 16px 48px; gap: 24px; }
+  .stg .panel { order: -1; position: static; max-height: none; }
+  .stg .band-inner { padding: 12px 16px; }
+  .stg .lede { font-size: 16px; }
+  .stg .fact b { font-size: 26px; }
+}
+
+/*
+ * Printing, or Save as PDF (the reference's print layout): light colours
+ * whatever the device, no settings or buttons, two US Letter pages with the
+ * rent table starting the second. A named page, so OS's other pages keep
+ * their own paper size.
+ */
+.stg .print-only { display: none; }
+.stg .prepared { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+@page stagger { size: letter; margin: 0.45in 0.5in; }
+@media print {
+  .stg, .stg.stg-auto {
+    --bg: #ffffff !important; --surface: #ffffff !important; --ink: #1e2e5d !important; --muted: #5f6789 !important; --line: #dcdaea !important; --grid: #ecebf4 !important;
+    --purple: #614fc9 !important; --purple2: #ab6ce2 !important; --lime-band: rgba(206, 250, 5, 0.38) !important; --lime-ink: #566600 !important;
+    --band: #1e2e5d !important; --out: #1e2e5d !important; --on-purple: #ffffff !important;
+    color-scheme: light !important;
+    page: stagger;
+    background: #ffffff !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+  html:has(.stg), body:has(.stg) { background: #ffffff !important; }
+  .stg * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .stg .panel, .stg .no-print { display: none !important; }
+  .stg .print-only { display: block; }
+  .stg .band { border-radius: 10px; }
+  .stg .band-inner { padding: 10px 18px; max-width: none; }
+  .stg .wrap { display: block; max-width: none; padding: 16px 0 0; }
+  .stg h1 { font-size: 30px; max-width: none; margin-bottom: 8px; }
+  .stg .lede { font-size: 13px; max-width: none; }
+  .stg .facts { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 16px 0 0; }
+  .stg .fact b { font-size: 21px; }
+  .stg .fact span { font-size: 10.5px; }
+  .stg .section { margin-top: 16px; break-inside: avoid; page-break-inside: avoid; }
+  .stg .section h2 { font-size: 15px; }
+  .stg .section .sub { font-size: 11.5px; margin-bottom: 8px; }
+  .stg .chart, .stg .tablewrap { border-radius: 10px; }
+  .stg .chart { padding: 10px 8px 4px; }
+  .stg .section.rates { break-before: page; page-break-before: always; margin-top: 0; }
+  .stg table.data { font-size: 11.5px; }
+  .stg table.data th, .stg table.data td { padding: 3px 10px; }
+  .stg table.data thead th { font-size: 10.5px; }
+  .stg .legend { font-size: 10.5px; }
+  .stg .basis { font-size: 10px; line-height: 1.35; margin-top: 14px; max-width: none; break-inside: avoid; page-break-inside: avoid; }
+  .stg .basis p { margin-bottom: 3px; }
+  .stg .basis .tag { font-size: 9.5px; padding: 0 6px; }
+  .stg .basis h2 { font-size: 12px; margin-bottom: 4px; }
+}

@@ -14,9 +14,9 @@
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "db:seed": "tsx prisma/seed.ts",
-    "db:seed:amenities": "tsx prisma/seed.ts --amenities-only",
-    "test": "vitest run"
+    "db:seed:amenities": "tsx prisma/seed.ts --amenities-only"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",
@@ -30,6 +30,7 @@
     "@trpc/server": "^11.0.0",
     "@vercel/blob": "2.8.2",
     "@vis.gl/react-google-maps": "^1.10.0",
+    "d3": "7.9.0",
     "docx": "9.15.3",
     "emoji-mart": "^5.6.0",
     "jszip": "3.10.1",
@@ -43,6 +44,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.15",
+    "@types/d3": "7.4.3",
     "@types/node": "^20.14.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
