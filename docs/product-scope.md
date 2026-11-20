@@ -3259,6 +3259,15 @@ offer opens it as a document, as it will print.
   this client's agreement only. From then on, changes to the offer or the contracting
   details are not filled in — the page says so, and *Back to the framework's wording, filled
   afresh* refills it.
+- **A draft in PDF and in Word** (the owner, 2026-11-20: "we send the client a draft in PDF
+  and Word, this allows them to make redline changes"). **Download Word**, beside *Print or
+  save as PDF*, gives the same agreement as a Word file — named after the client and the
+  event — for the client to mark their changes in with track changes. It says exactly what
+  the page says, as it stands (with this client's edited wording, if any): the same clauses
+  and numbering, *[missing: …]* highlighted in yellow, the contents, the signature blocks,
+  and a wide schedule on a landscape page. It is made on the spot and not kept. Their redlines
+  come back outside the system; what is agreed is typed in with *Edit the wording for this
+  client*. The same button is on our agreement with a hotel.
 - **Print or save as PDF**, then send it by DocuSign — outside the system — and **Mark as
   sent** with the day it went. The offer on the request then shows *Agreement sent …*.
   **Schedule 2.1 prints landscape** (the owner, 2026-11-09: the total broke over two lines):
@@ -4279,6 +4288,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
+| §4.11 Agreement as a Word draft | **Built** (2026-11-20) | *Download Word* on the client's agreement and on our agreement with a hotel: the same text as the page, as a .docx for redlines — numbering, highlighted gaps, contents, signature blocks, wide schedules landscape |
 | §2.10 Claude: from a PDF | **Built** (2026-11-20) | 13 more connector tools: search, add a property (room types, contacts) and put it on an event, add a room type; list and record a hotel's quotation; list, read, register and fill in contracts with payments and cancellation deadlines. Claude confirms what it will add before writing; never buys/sells rooms, offers, or deletes |
 | §2.11 Welcome to We Lodge OS | **Built** (2026-11-19) | /guide/welcome, first on the Guides page: what OS is, monday.com view only, the daily habit, how people are told, where things live, five house rules |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |

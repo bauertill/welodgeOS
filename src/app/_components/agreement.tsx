@@ -179,10 +179,46 @@ function drawBlock(block: AgreementBlock, index: number, wide: boolean) {
         }
 }
 
+/**
+ * The draft as a Word file beside the PDF (the owner, 2026-11-20), so the
+ * other side can mark their changes in it with track changes. Made in the
+ * browser from exactly the text shown; the Word builder is loaded only when
+ * asked for.
+ */
+function WordButton({ text, title }: { text: string; title: string }) {
+  const [making, setMaking] = useState(false);
+  const download = async () => {
+    setMaking(true);
+    try {
+      const { agreementDocx } = await import("~/lib/agreement-docx");
+      const blob = await agreementDocx(text, title);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${title.replace(/[\\/:*?"<>|]+/g, "-").trim()} — draft.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      window.alert("The Word version could not be made. Try again, or save the PDF instead.");
+    } finally {
+      setMaking(false);
+    }
+  };
+  return (
+    <Button type="button" variant="ghost" onClick={() => void download()} disabled={making}>
+      {making ? "Making Word…" : "Download Word"}
+    </Button>
+  );
+}
+
 type ReviewData = {
   backHref: string;
   backLabel: string;
   title: string;
+  /** What the Word draft is called when downloaded, without ".docx". */
+  fileName?: string;
   /** "client" or "hotel" — whose agreement it is, in the page's words. */
   party: "client" | "hotel";
   text: string;
@@ -235,6 +271,7 @@ function ReviewShell({
             <button type="button" onClick={() => setEditing(true)} className="text-brand-700 text-[13px] font-medium hover:underline">
               Edit the wording for this {them}
             </button>
+            <WordButton text={data.text} title={data.fileName ?? data.title} />
             <PrintButton />
           </div>
         </div>
@@ -253,7 +290,7 @@ function ReviewShell({
             </p>
           </div>
         ) : (
-          <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-[13px] text-[#0a7a47]">✓ Nothing missing. Check it reads right, save it as a PDF and send it by DocuSign.</p>
+          <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-[13px] text-[#0a7a47]">✓ Nothing missing. Check it reads right, then send the draft as a PDF and in Word (for their redlines) — or save it as a PDF and send it by DocuSign.</p>
         )}
 
         {data.notice && <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 text-[13px] text-[#7a5410]">{data.notice}</p>}
@@ -366,6 +403,7 @@ export function AgreementReview({ offerId }: { offerId: string }) {
         backHref: `/sales/${data.salesRequestId}`,
         backLabel: `${data.clientName} · ${data.eventName}`,
         title: data.amends ? "Addendum" : "Agreement",
+        fileName: `${data.clientName} — ${data.eventName} ${data.amends ? "addendum" : "agreement"}`,
         party: "client",
         // No addendum wording is in the system yet: say so rather than pass the framework off as one (doc §4.11).
         notice: data.amends
