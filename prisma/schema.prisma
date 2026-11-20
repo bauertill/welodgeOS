@@ -1462,6 +1462,7 @@ enum SalesRequestStage {
 
 /// Why a request was lost or declined (doc §4.11).
 enum LostReason {
+  NOT_INTERESTED
   DECLINED
   NO_REPLY
   RELEASED

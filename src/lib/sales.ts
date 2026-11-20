@@ -43,11 +43,13 @@ export const salesStageStyles: Record<SalesRequestStage, string> = {
 
 /** Why a request was lost or declined, chosen when it is closed that way. */
 export const lostReasonLabels: Record<LostReason, string> = {
+  NOT_INTERESTED: "Not interested",
   DECLINED: "Declined",
   NO_REPLY: "No reply",
   RELEASED: "Released",
 };
 export const lostReasonHints: Record<LostReason, string> = {
+  NOT_INTERESTED: "Not one to take further — closed rather than deleted, so it stays on record.",
   DECLINED: "The client went elsewhere or dropped the plan.",
   NO_REPLY: "The client never came back to us.",
   RELEASED: "The client let their block go.",
