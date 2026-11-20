@@ -26,6 +26,8 @@ import {
   newContractHref,
   paymentAmount,
   percent,
+  REMINDER_PRESETS,
+  reminderWords,
   withTaxes,
 } from "~/lib/finance";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -739,9 +741,13 @@ function ContractDetails({ contract }: { contract: FullContract }) {
     ownerId: contract.owner?.id ?? "",
     notes: contract.notes ?? "",
     noCancellationTerms: contract.noCancellationTerms,
+    reminderDays: contract.reminderDays.filter((n) => REMINDER_PRESETS.some((preset) => preset.days === n)),
+    otherDays: contract.reminderDays.filter((n) => !REMINDER_PRESETS.some((preset) => preset.days === n)).join(", "),
   });
   const [problem, setProblem] = useState<string | null>(null);
   const set = (key: keyof typeof draft) => (value: string | boolean) => setDraft((current) => ({ ...current, [key]: value }));
+  const togglePreset = (days: number, on: boolean) =>
+    setDraft((current) => ({ ...current, reminderDays: on ? [...current.reminderDays, days] : current.reminderDays.filter((n) => n !== days) }));
 
   return (
     <Card>
@@ -763,6 +769,8 @@ function ContractDetails({ contract }: { contract: FullContract }) {
             if (Number.isNaN(cents)) return setProblem("The total should be a number, like 198450.");
             const taxCents = parseMoney(draft.taxes);
             if (Number.isNaN(taxCents)) return setProblem("The taxes should be a number, like 80822.85.");
+            const other = draft.otherDays.split(/[\s,]+/).filter(Boolean).map(Number);
+            if (other.some((n) => !Number.isInteger(n) || n < 0 || n > 365)) return setProblem("Other reminder days should be whole numbers of days before, like 14 or 60, 3.");
             update.mutate({
               id: contract.id,
               name: draft.name,
@@ -774,6 +782,7 @@ function ContractDetails({ contract }: { contract: FullContract }) {
               ownerId: draft.ownerId || null,
               notes: draft.notes,
               noCancellationTerms: draft.noCancellationTerms,
+              reminderDays: [...draft.reminderDays, ...other],
             });
           }}
         >
@@ -812,6 +821,24 @@ function ContractDetails({ contract }: { contract: FullContract }) {
                 </option>
               ))}
             </Select>
+          </Field>
+          <Field label="Email reminders to the account manager" hint="Before each payment's due date and each cancellation deadline. Untick all for none.">
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {REMINDER_PRESETS.map((preset) => (
+                <label key={preset.days} className="flex items-center gap-2 text-[13px] font-light">
+                  <input
+                    type="checkbox"
+                    className="accent-brand-400 h-4 w-4"
+                    checked={draft.reminderDays.includes(preset.days)}
+                    onChange={(e) => togglePreset(preset.days, e.target.checked)}
+                  />
+                  {preset.label}
+                </label>
+              ))}
+            </div>
+            <div className="mt-2">
+              <Input value={draft.otherDays} onChange={(e) => set("otherDays")(e.target.value)} placeholder="Other days before — like 14 or 60, 3" aria-label="Other reminder days" />
+            </div>
           </Field>
           <Field label="Notes">
             <Textarea rows={3} value={draft.notes} onChange={(e) => set("notes")(e.target.value)} />
@@ -892,6 +919,20 @@ function ContractDetails({ contract }: { contract: FullContract }) {
             />
           )}
           <Row label="Account manager" value={contract.owner ? <Manager person={contract.owner} /> : null} />
+          <Row
+            label="Reminders"
+            value={
+              contract.reminderDays.length === 0 ? (
+                <span className="text-ink-500">None</span>
+              ) : contract.owner ? (
+                <span title="Emailed before each payment's due date and each cancellation deadline, until it is paid or handled; overdue payments every Friday morning.">
+                  Emailed {reminderWords(contract.reminderDays)}
+                </span>
+              ) : (
+                <span className="text-[#a3243d]">Nobody gets them — choose an account manager</span>
+              )
+            }
+          />
           {!contract.contractor && <Row label="Room-nights" value={String(contract.party === "SUPPLIER" ? contract._count.acquisitionNights : contract._count.salesNights)} />}
           {contract.notes && <Row label="Notes" value={contract.notes} />}
         </dl>

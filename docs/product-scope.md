@@ -570,13 +570,16 @@ about what they did themselves.
 | Someone is `@mentioned` in an update or a reply (§2.6, 2026-11-17) | Each person mentioned — **emailed** |
 | A team tag (`@LA`, §2.7) is written in any of the above | Each of its members, as if mentioned by name — **emailed** |
 | Someone replies to an update (§2.6) | Whoever wrote the update and whoever replied before, apart from those mentioned |
+| A contract's payment is due, or a cancellation deadline comes — 1 month, 1 week and on the day unless changed on the contract (§7.1, 2026-11-20) | The contract's account manager — **emailed** |
+| Friday 7:00, their own time — payments overdue on their contracts (§7.1, 2026-11-20) | Each account manager with any — **one email** |
 
 **The bell** in the header shows how many are unread and the latest thirty, newest first;
 opening one marks it read and goes to the task; *Mark all read* clears the count. It checks
 for new ones every half minute.
 
 **By email: only mentions** (the owner, 2026-11-17: "I don't want to overwhelm the team with
-an email every time — when they're tagged or mentioned, yes"). Being `@mentioned` — in a task
+an email every time — when they're tagged or mentioned, yes") — **and, since 2026-11-20,
+contract deadline reminders and the Friday overdue payments** to the account manager (§7.1). Being `@mentioned` — in a task
 or its comments, an update or a reply — sends an email **at once**, linking to the page.
 Everything else (a task given to you, comments, replies, status changes, deadlines, rate card
 answers) is in the bell — **and in the morning summary**. On *My profile* each person chooses
@@ -3868,6 +3871,24 @@ and *Release* (we may hand rooms back, or an exclusivity lapses) on a supplier c
 type, the fee ("30%"), and remarks. **A cut-off is a reminder**: nothing is released or
 cancelled on its own (§2.4). Someone ticks it once it has been dealt with.
 
+**Deadline reminders by email** (the owner, 2026-11-20: "on payment and cancellation
+deadlines we need to get notified… send an email to the person who sets up the agreement.
+But we should be able to change it"). The contract's **account manager** — whoever added
+the contract, unless changed under *Edit* — is emailed **1 month (30 days) before, 1 week
+before and on the day** of each payment's due date and each cancellation deadline, until the
+payment is *Paid* (or *Refund*) or the deadline is ticked as dealt with. Both who and when
+can be changed on each contract: *Account manager*, and under *Edit* → *Email reminders to
+the account manager*, the three ticks plus any other days before ("14, 3"); unticking all
+turns them off. The contract's details say *Reminders: Emailed 1 month and 1 week before,
+and on the day* — or, in red, that nobody gets them while it has no account manager. Each
+reminder goes once (into the bell, and by email at once, but not again in the morning
+summary); a deadline added late gets only the nearest reminder reached (a payment due in
+five days: one email now, then on the day); a date that changes is reminded about afresh.
+They are written once a day at 06:00 UTC. **Every Friday at 7:00** in their own time, each
+account manager also gets **one email of the payments overdue** on their contracts — not
+paid, the due date gone — with the amount, how late and the status; nothing on a week with
+none. *No email* on *My profile* stops both.
+
 **Deleting a contract** (2026-11-05) is for one made by mistake or twice — as when a
 quotation's *Accept and make the contract* made a second contract for a hotel whose signed
 one was already typed in. *Delete this contract*, at the foot of its details, asks first,
@@ -4250,6 +4271,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
 | §4.11 Editing an offer | **Built** (2026-11-18) | *Edit the offer* on an open offer: rooms, dates, rates, hold date and terms; changed rooms released and re-blocked in one all-or-nothing step; a hand-edited agreement flagged to check |
 | §3.10 / §4.11 Cancellation by rooms, terms in words | **Built** (2026-11-18) | A cut-off can be a number of rooms (with an optional room type) that may be cancelled until a date, free or for a fee; or a term in words with or without a date; on quotations and offers, written into the agreement, carried to the contract (words without a date as notes) |
+| §7.1 Deadline reminders | **Built** (2026-11-20) | The contract's account manager is emailed 1 month, 1 week and on the day of each payment due date and cancellation deadline until paid or handled — the days changeable per contract under Edit (ticks + other days), the manager changeable; every Friday at 7:00 their time, one email of their overdue payments |
 | §7 Margin across currencies | **Built** (2026-11-19) | A night bought in one currency and sold in another (BRL bought, USD sold) has its margin in the selling currency at the European Central Bank rate locked when its contract was signed (shown on the contract), today's until then; the event report's money totals show ≈ USD in all beneath. Payments do not lock their own rate |
 | §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. *Delete this contract* for one made by mistake or twice, refused once rooms, a signed offer, a contracted request (unless another contract of the request remains, 2026-11-18) or an addendum rest on it (2026-11-05). PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |

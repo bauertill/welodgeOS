@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { addDays, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney } from "~/lib/format";
-import { cancellationKindLabels, isSettled, missingTerms, paymentAmount, paymentStatusLabels, percent } from "~/lib/finance";
+import { cancellationKindLabels, isSettled, missingTerms, paymentAmount, paymentStatusLabels, percent, reminderWords } from "~/lib/finance";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { moveStage } from "~/server/api/routers/sales";
 import { diffFields, logAudit } from "~/server/audit";
@@ -59,6 +59,12 @@ const contractInput = z.object({
   notes: text.optional(),
   ownerId: z.string().nullable().optional(),
   noCancellationTerms: z.boolean().optional(),
+  /** Days before each payment and cancellation deadline the account manager is emailed (doc §7.1); empty for none. */
+  reminderDays: z
+    .array(z.number().int().min(0, "Reminder days are 0 (on the day) or more.").max(365, "A reminder can be at most 365 days before."))
+    .max(8, "At most 8 reminders.")
+    .transform((days) => [...new Set(days)].sort((a, b) => b - a))
+    .optional(),
 });
 
 const paymentInput = z.object({
@@ -248,6 +254,7 @@ export const financeRouter = createTRPCRouter({
         ...(input.notes !== undefined && { notes: blank(input.notes) }),
         ...(input.ownerId !== undefined && { ownerId: input.ownerId }),
         ...(input.noCancellationTerms !== undefined && { noCancellationTerms: input.noCancellationTerms }),
+        ...(input.reminderDays !== undefined && { reminderDays: input.reminderDays }),
       };
       const after = await ctx.db.contract.update({ where: { id: input.id }, data, include: { owner: person } });
       await lockContractRates(ctx.db, [input.id]);
@@ -260,6 +267,7 @@ export const financeRouter = createTRPCRouter({
         notes: c.notes,
         owner: c.owner?.name ?? c.owner?.email ?? null,
         noCancellationTerms: c.noCancellationTerms ? "No cancellation terms" : null,
+        reminders: reminderWords(c.reminderDays) || "None",
       });
       const changes = describe(readable(before), readable(after), {
         name: "Name",
@@ -270,6 +278,7 @@ export const financeRouter = createTRPCRouter({
         notes: "Notes",
         owner: "Account manager",
         noCancellationTerms: "Cancellation terms",
+        reminders: "Reminders",
       });
       if (changes) {
         await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Contract", entityId: input.id, summary: "Contract updated", changes });
