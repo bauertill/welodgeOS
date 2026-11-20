@@ -7,6 +7,7 @@ import { Button, FormError, friendlyError, Input, Textarea } from "~/app/_compon
 import { Popup } from "~/app/_components/popup";
 import { PrintButton } from "~/app/_components/print-button";
 import { agreementGaps, readAgreement, type AgreementBlock } from "~/lib/agreement";
+import { applyRedlines, readRedlines, wordDiff, type RedlineReading } from "~/lib/agreement-redlines";
 import { dayKey, today } from "~/lib/dates";
 import { formatDate, formatMomentInWords } from "~/lib/format";
 import { api } from "~/trpc/react";
@@ -179,10 +180,206 @@ function drawBlock(block: AgreementBlock, index: number, wide: boolean) {
         }
 }
 
+/**
+ * The draft as a Word file beside the PDF (the owner, 2026-11-20), so the
+ * other side can mark their changes in it with track changes. Made in the
+ * browser from exactly the text shown; the Word builder is loaded only when
+ * asked for.
+ */
+function WordButton({ text, title }: { text: string; title: string }) {
+  const [making, setMaking] = useState(false);
+  const download = async () => {
+    setMaking(true);
+    try {
+      const { agreementDocx } = await import("~/lib/agreement-docx");
+      const blob = await agreementDocx(text, title);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${title.replace(/[\\/:*?"<>|]+/g, "-").trim()} — draft.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      window.alert("The Word version could not be made. Try again, or save the PDF instead.");
+    } finally {
+      setMaking(false);
+    }
+  };
+  return (
+    <Button type="button" variant="ghost" onClick={() => void download()} disabled={making}>
+      {making ? "Making Word…" : "Download Word"}
+    </Button>
+  );
+}
+
+/**
+ * Their redlines read back (the owner, 2026-11-20): the Word draft returned
+ * with tracked changes is uploaded, each change they made is lined up with the
+ * agreement and shown the way Word shows it, and the ones ticked are taken
+ * into this agreement's wording. Their comments are listed to answer.
+ */
+function UploadRedlines({ text, onRead }: { text: string; onRead: (reading: RedlineReading, fileName: string) => void }) {
+  const [reading, setReading] = useState(false);
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setReading(true);
+    try {
+      const { readWordFile } = await import("~/lib/agreement-word-read");
+      onRead(readRedlines(text, await readWordFile(file)), file.name);
+    } catch (error) {
+      window.alert(error instanceof Error && error.message ? error.message : "That file could not be read. Upload the Word (.docx) file they sent back.");
+    } finally {
+      setReading(false);
+    }
+  };
+  return (
+    <label className={`text-brand-700 cursor-pointer text-[13px] font-medium hover:underline ${reading ? "opacity-50" : ""}`}>
+      {reading ? "Reading…" : "Upload their redlines"}
+      <input
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="sr-only"
+        disabled={reading}
+        onChange={(e) => {
+          void pick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+    </label>
+  );
+}
+
+function Diff({ before, after }: { before: string; after: string }) {
+  return (
+    <p className="text-[13px] leading-relaxed whitespace-pre-wrap">
+      {wordDiff(before, after).map((part, i) =>
+        part.kind === "same" ? (
+          <Fragment key={i}>{part.text}</Fragment>
+        ) : part.kind === "del" ? (
+          <del key={i} className="bg-[#fde8ec] text-[#a3243d]">
+            {part.text}
+          </del>
+        ) : (
+          <ins key={i} className="bg-[#e3f8ee] text-[#0a7a47] no-underline">
+            {part.text}
+          </ins>
+        ),
+      )}
+    </p>
+  );
+}
+
+function RedlineReview({
+  text,
+  reading,
+  fileName,
+  them,
+  saving,
+  error,
+  onApply,
+}: {
+  text: string;
+  reading: RedlineReading;
+  fileName: string;
+  them: string;
+  saving: boolean;
+  error: string | null;
+  onApply: (text: string) => void;
+}) {
+  const [taken, setTaken] = useState(() => new Set(reading.changes.map((change) => change.id)));
+  const lowMatch = reading.matched / reading.total < 0.5;
+  const toggle = (id: number, on: boolean) =>
+    setTaken((current) => {
+      const next = new Set(current);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const label = { change: "Changed", insert: "Added", delete: "Struck out" } as const;
+  return (
+    <div className="space-y-4 text-[13px]">
+      {lowMatch && (
+        <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-4 py-3 text-[#7a5410]">
+          Only {reading.matched} of {reading.total} paragraphs line up with this agreement — is {fileName} the draft of this one? Check each change before taking it.
+        </p>
+      )}
+      {reading.changes.length === 0 ? (
+        <p className="text-ink-500 font-light">No changes found in {fileName}{reading.comments.length ? " — only comments, below" : ""}. If they changed the text without tracking, the differences still show here; nothing did.</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-ink-700">
+              {reading.changes.length} {reading.changes.length === 1 ? "change" : "changes"} from the {them}, in {fileName}. Untick any you do not accept.
+            </span>
+            <button type="button" className="text-brand-700 hover:underline" onClick={() => setTaken(new Set(reading.changes.map((c) => c.id)))}>
+              Tick all
+            </button>
+            <button type="button" className="text-ink-500 hover:underline" onClick={() => setTaken(new Set())}>
+              Untick all
+            </button>
+          </div>
+          <ul className="space-y-2">
+            {reading.changes.map((change) => (
+              <li key={change.id} className={`rounded-xl border px-4 py-3 ${taken.has(change.id) ? "border-ink-200 bg-white" : "border-ink-100 bg-ink-50/50 opacity-70"}`}>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" className="accent-brand-400 mt-1 h-4 w-4 shrink-0" checked={taken.has(change.id)} onChange={(e) => toggle(change.id, e.target.checked)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-ink-500 mb-1 block text-xs">
+                      {label[change.kind]} · {change.where}
+                    </span>
+                    <Diff before={change.before} after={change.after} />
+                    {change.comments.map((comment, i) => (
+                      <span key={i} className="bg-brand-50 text-brand-800 mt-2 block rounded-lg px-3 py-2 text-xs">
+                        💬 {comment.author ? `${comment.author}: ` : ""}
+                        {comment.text}
+                      </span>
+                    ))}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {reading.comments.length > 0 && (
+        <div>
+          <h3 className="text-ink-900 mb-2 font-medium">Their comments on text they did not change — to answer</h3>
+          <ul className="space-y-2">
+            {reading.comments.map((comment, i) => (
+              <li key={i} className="bg-brand-50 rounded-xl px-4 py-3">
+                <span className="text-ink-500 block text-xs">
+                  {comment.where} · “{comment.on}”
+                </span>
+                <span className="text-brand-800">
+                  💬 {comment.author ? `${comment.author}: ` : ""}
+                  {comment.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <FormError message={error} />
+      {reading.changes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-4">
+          <Button type="button" disabled={saving || taken.size === 0} onClick={() => onApply(applyRedlines(text, reading.changes.filter((c) => taken.has(c.id))))}>
+            {saving ? "Saving…" : `Take ${taken.size} ${taken.size === 1 ? "change" : "changes"} into the agreement`}
+          </Button>
+          <span className="text-ink-500 text-xs font-light">Saved as this {them}&rsquo;s wording, as with “Edit the wording” — check it reads right after.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type ReviewData = {
   backHref: string;
   backLabel: string;
   title: string;
+  /** What the Word draft is called when downloaded, without ".docx". */
+  fileName?: string;
   /** "client" or "hotel" — whose agreement it is, in the page's words. */
   party: "client" | "hotel";
   text: string;
@@ -217,6 +414,7 @@ function ReviewShell({
   marking: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [redlines, setRedlines] = useState<{ reading: RedlineReading; fileName: string } | null>(null);
   const [sending, setSending] = useState<string | null>(null);
   const gaps = agreementGaps(data.text);
   const them = data.party === "client" ? "client" : "hotel";
@@ -235,6 +433,8 @@ function ReviewShell({
             <button type="button" onClick={() => setEditing(true)} className="text-brand-700 text-[13px] font-medium hover:underline">
               Edit the wording for this {them}
             </button>
+            <UploadRedlines text={data.text} onRead={(reading, fileName) => setRedlines({ reading, fileName })} />
+            <WordButton text={data.text} title={data.fileName ?? data.title} />
             <PrintButton />
           </div>
         </div>
@@ -253,7 +453,7 @@ function ReviewShell({
             </p>
           </div>
         ) : (
-          <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-[13px] text-[#0a7a47]">✓ Nothing missing. Check it reads right, save it as a PDF and send it by DocuSign.</p>
+          <p className="rounded-xl bg-[#e3f8ee] px-5 py-3 text-[13px] text-[#0a7a47]">✓ Nothing missing. Check it reads right, then send the draft as a PDF and in Word (for their redlines) — or save it as a PDF and send it by DocuSign.</p>
         )}
 
         {data.notice && <p className="rounded-xl border border-[#f0d9a8] bg-[#fdf6e7] px-5 py-3 text-[13px] text-[#7a5410]">{data.notice}</p>}
@@ -304,6 +504,20 @@ function ReviewShell({
       </div>
 
       <AgreementDocument text={data.text} />
+
+      {redlines && (
+        <Popup title={`The ${them}'s redlines`} subtitle="What they changed, added or struck out, lined up with this agreement." onClose={() => setRedlines(null)}>
+          <RedlineReview
+            text={data.text}
+            reading={redlines.reading}
+            fileName={redlines.fileName}
+            them={them}
+            saving={saving}
+            error={saveError}
+            onApply={(text) => onSave(text, () => setRedlines(null))}
+          />
+        </Popup>
+      )}
 
       {editing && (
         <Popup
@@ -366,6 +580,7 @@ export function AgreementReview({ offerId }: { offerId: string }) {
         backHref: `/sales/${data.salesRequestId}`,
         backLabel: `${data.clientName} · ${data.eventName}`,
         title: data.amends ? "Addendum" : "Agreement",
+        fileName: `${data.clientName} — ${data.eventName} ${data.amends ? "addendum" : "agreement"}`,
         party: "client",
         // No addendum wording is in the system yet: say so rather than pass the framework off as one (doc §4.11).
         notice: data.amends

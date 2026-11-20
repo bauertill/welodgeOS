@@ -15,7 +15,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "db:seed": "tsx prisma/seed.ts",
-    "db:seed:amenities": "tsx prisma/seed.ts --amenities-only"
+    "db:seed:amenities": "tsx prisma/seed.ts --amenities-only",
+    "test": "vitest run"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",
@@ -29,7 +30,9 @@
     "@trpc/server": "^11.0.0",
     "@vercel/blob": "2.8.2",
     "@vis.gl/react-google-maps": "^1.10.0",
+    "docx": "9.15.3",
     "emoji-mart": "^5.6.0",
+    "jszip": "3.10.1",
     "next": "^15.2.3",
     "next-auth": "5.0.0-beta.25",
     "react": "^19.0.0",
@@ -47,7 +50,8 @@
     "prisma": "^6.6.0",
     "tailwindcss": "^4.0.15",
     "tsx": "^4.23.12",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "3.2.4"
   },
   "ct3aMetadata": {
     "initVersion": "7.40.0"
