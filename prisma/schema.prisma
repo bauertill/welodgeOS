@@ -1106,6 +1106,8 @@ model User {
   timeZone           String?
   /// The team tags they belong to — @LA tells all of them (doc §2.7, the owner 2026-11-19).
   teamTags           TeamTag[]            @relation("TeamTagMembers")
+  staggerScenariosMade    StaggerScenario[] @relation("StaggerCreatedBy")
+  staggerScenariosEdited  StaggerScenario[] @relation("StaggerUpdatedBy")
   /// When their last morning summary went — so it goes once a day.
   summarySentAt      DateTime?
   /// When the Friday email of overdue payments last went (doc §7.1, 2026-11-20).
@@ -2586,4 +2588,32 @@ model EmailCopy {
 
   @@unique([connectionId, gmailId])
   @@index([emailId])
+}
+
+/// A Stagger Planner scenario (doc §4.12): how a client's apartments arrive
+/// and leave in waves, and the rent the owner earns. `data` is the planner's
+/// state exactly as the reference page keeps it (units, first, waves, gap,
+/// stay, mix, rates in US$ per month, rateBasis, showBlock, showRent, rows) —
+/// never a viewer's "Hide settings". Only the owner's rent: no margins, sell
+/// rates or costs belong here.
+model StaggerScenario {
+  id           String   @id @default(cuid())
+  name         String
+  /// The event it is for, in words ("LA28").
+  event        String?
+  /// Whose apartments — the owner shown on the client's view ("Decron Properties").
+  clientLabel  String?
+  data         Json
+  /// The read-only link for the owner; unguessable, made when first shared.
+  shareToken   String?  @unique
+  shareEnabled Boolean  @default(false)
+  archived     Boolean  @default(false)
+  createdBy    User?    @relation("StaggerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById  String?
+  updatedBy    User?    @relation("StaggerUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([archived, updatedAt])
 }

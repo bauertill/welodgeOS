@@ -140,6 +140,55 @@ async function filledAgreement(db: PrismaClient, offerId: string) {
  * contracted, the rooms go in progress with each hotel and each hotel gets an
  * acquire task; the account manager is told.
  */
+/**
+ * Where an offer's rooms of one room type stand on its request: blocked (the
+ * agreement has gone), requested (made, agreement not sent yet), or neither.
+ */
+async function heldAs(tx: Prisma.TransactionClient, salesRequestId: string, categoryId: string) {
+  const blocked = await tx.roomNight.count({ where: { salesRequestId, salesState: "BLOCKED", slot: { categoryId } } });
+  if (blocked) return "BLOCKED" as const;
+  const requested = await tx.roomNightRequest.count({ where: { salesRequestId, roomNight: { slot: { categoryId } } } });
+  return requested ? ("REQUESTED" as const) : null;
+}
+
+/** The offer's rooms let go, however they are held: blocks released, requests withdrawn. */
+async function letGo(tx: Prisma.TransactionClient, actorId: string, salesRequestId: string, categoryIds: Iterable<string>) {
+  for (const categoryId of new Set(categoryIds)) {
+    const held = await heldAs(tx, salesRequestId, categoryId);
+    if (held === "BLOCKED") await changeRoomsTx(tx, actorId, { id: salesRequestId, categoryId, state: "BLOCKED", action: "RELEASE_HOLD" });
+    else if (held === "REQUESTED") await changeRoomsTx(tx, actorId, { id: salesRequestId, categoryId, state: "REQUESTED", action: "WITHDRAW_REQUEST" });
+  }
+}
+
+/**
+ * The offer's rooms taken: requested while the agreement has not gone (the
+ * owner, 2026-11-20: "once we mark the agreement as sent, we can proceed with
+ * blocking"), blocked until the offer runs out once it has.
+ */
+async function takeRooms(
+  tx: Prisma.TransactionClient,
+  actorId: string,
+  salesRequestId: string,
+  lines: { categoryId: string; rooms: number; checkIn: string; checkOut: string; rateCents: number }[],
+  currency: string,
+  validUntil: string,
+  firm: boolean,
+) {
+  for (const line of lines) {
+    await addRoomsTx(tx, actorId, {
+      id: salesRequestId,
+      categoryId: line.categoryId,
+      rooms: line.rooms,
+      checkIn: line.checkIn,
+      checkOut: line.checkOut,
+      action: firm ? "BLOCK" : "REQUEST",
+      blockExpiry: firm ? validUntil : undefined,
+      sellPriceCents: line.rateCents,
+      sellCurrency: currency,
+    });
+  }
+}
+
 async function closeOffer(
   tx: Prisma.TransactionClient,
   actor: { id: string; name: string | null },
@@ -197,17 +246,18 @@ async function closeOffer(
       },
     },
   });
-  // The blocked rooms are sold under it.
+  // The offer's rooms are sold under it — blocked ones, or still requested ones when it is
+  // signed or vouched for before the agreement was marked sent.
   for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) {
-    const held = await tx.roomNight.count({ where: { salesRequestId: request.id, salesState: "BLOCKED", slot: { categoryId } } });
+    const held = await heldAs(tx, request.id, categoryId);
     if (!held) {
       const line = offer.lines.find((one) => one.categoryId === categoryId)!;
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: `Nothing was changed. The ${line.category.name} rooms at ${line.category.property.name} are not blocked for this client any more — block them again from the request first.`,
+        message: `Nothing was changed. The ${line.category.name} rooms at ${line.category.property.name} are not held for this client any more — edit the offer to take them again first.`,
       });
     }
-    await changeRoomsTx(tx, actor.id, { id: request.id, categoryId, state: "BLOCKED", action: "SELL", salesContractId: contract.id });
+    await changeRoomsTx(tx, actor.id, { id: request.id, categoryId, state: held, action: "SELL", salesContractId: contract.id });
   }
   await tx.offer.update({ where: { id: offer.id }, data: { status: how.signed ? "SIGNED" : "TRUSTED", contractId: contract.id, closedById: actor.id, closedAt: new Date() } });
   await tx.salesRequest.update({ where: { id: request.id }, data: { blockedUntil: null } });
@@ -365,9 +415,10 @@ export const offerRouter = createTRPCRouter({
   }),
 
   /**
-   * Make an offer: its rooms are blocked for the client until it runs out,
-   * through the same rules, ledger and undo as the stock sheet — all or
-   * nothing — and the request moves to Negotiation.
+   * Make an offer: its rooms are requested for the client — blocked only once
+   * the agreement is marked sent (the owner, 2026-11-20) — through the same
+   * rules, ledger and undo as the stock sheet, all or nothing; the request
+   * moves to Negotiation.
    */
   create: protectedProcedure.input(offerInput).mutation(({ ctx, input }) =>
     ctx.db.$transaction(
@@ -421,30 +472,18 @@ export const offerRouter = createTRPCRouter({
             },
           },
         });
-        // The rooms, blocked until the offer runs out — or nothing is made.
-        for (const line of input.lines) {
-          await addRoomsTx(tx, actorId, {
-            id: input.salesRequestId,
-            categoryId: line.categoryId,
-            rooms: line.rooms,
-            checkIn: line.checkIn,
-            checkOut: line.checkOut,
-            action: "BLOCK",
-            blockExpiry: input.validUntil,
-            sellPriceCents: line.rateCents,
-            sellCurrency: input.currency,
-          });
-        }
+        // The rooms, requested for the client — or nothing is made. They are blocked when the agreement is marked sent.
+        await takeRooms(tx, actorId, input.salesRequestId, input.lines, input.currency, input.validUntil, false);
         const total = offerTotal(input.lines.map((line) => ({ ...line, checkIn: parseDay(line.checkIn), checkOut: parseDay(line.checkOut) })));
         await tx.salesRequest.update({
           where: { id: input.salesRequestId },
-          data: { blockedUntil: validUntil, valueCents: total, valueCurrency: input.currency },
+          data: { valueCents: total, valueCurrency: input.currency },
         });
         await logAudit(tx, {
           actorId,
           entity: "SalesRequest",
           entityId: input.salesRequestId,
-          summary: `Offer made: ${input.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms, ${formatMoney(total, input.currency)}, holding until ${formatDate(validUntil)}`,
+          summary: `Offer made: ${input.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms requested, ${formatMoney(total, input.currency)}, holding until ${formatDate(validUntil)} — blocked once the agreement is sent`,
         });
         if (["INITIAL_INTEREST", "SPECIFY", "PROPOSAL_SENT"].includes(request.stage)) await moveStage(tx, actorId, input.salesRequestId, "NEGOTIATION");
         await moveContractTask(tx, actorId, input.salesRequestId, "IN_PROGRESS", "the offer is made");
@@ -478,28 +517,18 @@ export const offerRouter = createTRPCRouter({
           [line.categoryId, line.rooms, line.checkIn, line.checkOut, line.rateCents].join("|");
         const before = offer.lines.map((line) => key({ ...line, checkIn: dayKey(line.checkIn), checkOut: dayKey(line.checkOut) }));
         const roomsChanged = before.join("\n") !== input.lines.map(key).join("\n") || input.currency !== offer.currency;
+        // Blocked once the agreement has gone (or for an offer made before 2026-11-20, which blocked at once); requested before.
+        let firm = offer.agreementSentOn !== null;
+        for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) if ((await heldAs(tx, offer.salesRequestId, categoryId)) === "BLOCKED") firm = true;
         if (roomsChanged) {
-          // The old rooms go back, then the new ones are blocked — in one step.
-          for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) {
-            const held = await tx.roomNight.count({ where: { salesRequestId: offer.salesRequestId, salesState: "BLOCKED", slot: { categoryId } } });
-            if (held) await changeRoomsTx(tx, actorId, { id: offer.salesRequestId, categoryId, state: "BLOCKED", action: "RELEASE_HOLD" });
-          }
-          for (const line of input.lines) {
-            await addRoomsTx(tx, actorId, {
-              id: offer.salesRequestId,
-              categoryId: line.categoryId,
-              rooms: line.rooms,
-              checkIn: line.checkIn,
-              checkOut: line.checkOut,
-              action: "BLOCK",
-              blockExpiry: input.validUntil,
-              sellPriceCents: line.rateCents,
-              sellCurrency: input.currency,
-            });
-          }
+          // The old rooms go back, then the new ones are taken the same way — in one step.
+          await letGo(tx, actorId, offer.salesRequestId, offer.lines.map((line) => line.categoryId));
+          await takeRooms(tx, actorId, offer.salesRequestId, input.lines, input.currency, input.validUntil, firm);
         } else if (validUntil.getTime() !== offer.validUntil.getTime()) {
           for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) {
-            await changeRoomsTx(tx, actorId, { id: offer.salesRequestId, categoryId, state: "BLOCKED", action: "EXTEND_BLOCK", blockExpiry: input.validUntil });
+            if ((await heldAs(tx, offer.salesRequestId, categoryId)) === "BLOCKED") {
+              await changeRoomsTx(tx, actorId, { id: offer.salesRequestId, categoryId, state: "BLOCKED", action: "EXTEND_BLOCK", blockExpiry: input.validUntil });
+            }
           }
         }
         await tx.offerLine.deleteMany({ where: { offerId: offer.id } });
@@ -545,12 +574,12 @@ export const offerRouter = createTRPCRouter({
           },
         });
         const total = offerTotal(input.lines.map((line) => ({ ...line, checkIn: parseDay(line.checkIn), checkOut: parseDay(line.checkOut) })));
-        await tx.salesRequest.update({ where: { id: offer.salesRequestId }, data: { blockedUntil: validUntil, valueCents: total, valueCurrency: input.currency } });
+        await tx.salesRequest.update({ where: { id: offer.salesRequestId }, data: { ...(firm && { blockedUntil: validUntil }), valueCents: total, valueCurrency: input.currency } });
         await logAudit(tx, {
           actorId,
           entity: "SalesRequest",
           entityId: offer.salesRequestId,
-          summary: `Offer changed: ${input.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms, ${formatMoney(total, input.currency)}, holding until ${formatDate(validUntil)}${roomsChanged ? " — rooms re-blocked" : ""}`,
+          summary: `Offer changed: ${input.lines.reduce((sum, line) => sum + line.rooms, 0)} rooms, ${formatMoney(total, input.currency)}, holding until ${formatDate(validUntil)}${roomsChanged ? (firm ? " — rooms re-blocked" : " — rooms requested afresh") : ""}`,
           changes: offer.agreementText !== null ? "The agreement's wording had been changed by hand: check it still matches." : undefined,
         });
         return { id: offer.id, agreementEdited: offer.agreementText !== null };
@@ -593,15 +622,69 @@ export const offerRouter = createTRPCRouter({
   }),
 
   /** The agreement went to the client — by DocuSign, outside the system — on this day. */
-  markSent: protectedProcedure.input(z.object({ id: z.string(), sentOn: day.nullable() })).mutation(async ({ ctx, input }) => {
-    const offer = await ctx.db.offer.update({ where: { id: input.id }, data: { agreementSentOn: input.sentOn ? parseDay(input.sentOn) : null } });
-    await logAudit(ctx.db, {
-      actorId: ctx.session.user.id,
-      entity: "SalesRequest",
-      entityId: offer.salesRequestId,
-      summary: input.sentOn ? `Agreement sent to the client on ${formatDate(parseDay(input.sentOn))}` : "Agreement no longer marked as sent",
-    });
-  }),
+  /**
+   * The agreement went to the client — and so the offer's requested rooms are
+   * blocked for them until the offer runs out (the owner, 2026-11-20: "once we
+   * mark the agreement as sent, we can proceed with blocking"). All or
+   * nothing: a room someone else blocked or sold meanwhile refuses it, saying
+   * which, and nothing is marked. Unmarking leaves the rooms blocked; withdraw
+   * the offer to let them go.
+   */
+  markSent: protectedProcedure.input(z.object({ id: z.string(), sentOn: day.nullable() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(
+      async (tx) => {
+        const actorId = ctx.session.user.id;
+        const before = await tx.offer.findUniqueOrThrow({
+          where: { id: input.id },
+          include: { lines: { orderBy: { position: "asc" }, include: { category: { select: { name: true, property: { select: { name: true } } } } } } },
+        });
+        let blocked = false;
+        if (input.sentOn && before.status === "OPEN" && !before.agreementSentOn) {
+          for (const categoryId of new Set(before.lines.map((line) => line.categoryId))) {
+            if ((await heldAs(tx, before.salesRequestId, categoryId)) !== "REQUESTED") continue;
+            const line = before.lines.find((one) => one.categoryId === categoryId)!;
+            try {
+              await changeRoomsTx(tx, actorId, { id: before.salesRequestId, categoryId, state: "REQUESTED", action: "BLOCK", blockExpiry: dayKey(before.validUntil) });
+            } catch {
+              // Some of the requested rooms were blocked or sold to someone else meanwhile: block any free ones of the type instead.
+              try {
+                await changeRoomsTx(tx, actorId, { id: before.salesRequestId, categoryId, state: "REQUESTED", action: "WITHDRAW_REQUEST" });
+                const lines = before.lines.filter((one) => one.categoryId === categoryId);
+                await takeRooms(
+                  tx,
+                  actorId,
+                  before.salesRequestId,
+                  lines.map((one) => ({ categoryId, rooms: one.rooms, checkIn: dayKey(one.checkIn), checkOut: dayKey(one.checkOut), rateCents: one.rateCents })),
+                  before.currency,
+                  dayKey(before.validUntil),
+                  true,
+                );
+              } catch (error) {
+                const why = (error instanceof Error ? error.message : "").replace(/^Nothing was changed\.\s*/, "").replace(/\.$/, "");
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: `Nothing was changed — the ${line.category.name} rooms at ${line.category.property.name} could not be blocked: ${why || "they are no longer free"}. Edit the offer, then mark it sent.`,
+                });
+              }
+            }
+            blocked = true;
+          }
+          if (blocked) await tx.salesRequest.update({ where: { id: before.salesRequestId }, data: { blockedUntil: before.validUntil } });
+        }
+        const offer = await tx.offer.update({ where: { id: input.id }, data: { agreementSentOn: input.sentOn ? parseDay(input.sentOn) : null } });
+        await logAudit(tx, {
+          actorId,
+          entity: "SalesRequest",
+          entityId: offer.salesRequestId,
+          summary: input.sentOn
+            ? `Agreement sent to the client on ${formatDate(parseDay(input.sentOn))}${blocked ? ` — rooms blocked until ${formatDate(before.validUntil)}` : ""}`
+            : "Agreement no longer marked as sent — its rooms stay blocked",
+        });
+        return { blocked };
+      },
+      { timeout: 60_000 },
+    ),
+  ),
 
   /** An agreement's wording, for every client — or every hotel at a US event (doc §4.11). */
   template: protectedProcedure.input(z.object({ kind: agreementKind })).query(async ({ ctx, input }) => {
@@ -718,11 +801,15 @@ export const offerRouter = createTRPCRouter({
         if (offer.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: "Only an open offer can be extended." });
         const validUntil = parseDay(input.validUntil);
         if (validUntil < today()) throw new TRPCError({ code: "BAD_REQUEST", message: "Extend it to today or later." });
+        // Blocks run to the new date; rooms still only requested have no date to move.
+        let blocked = false;
         for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) {
+          if ((await heldAs(tx, offer.salesRequestId, categoryId)) !== "BLOCKED") continue;
           await changeRoomsTx(tx, ctx.session.user.id, { id: offer.salesRequestId, categoryId, state: "BLOCKED", action: "EXTEND_BLOCK", blockExpiry: input.validUntil });
+          blocked = true;
         }
         await tx.offer.update({ where: { id: offer.id }, data: { validUntil } });
-        await tx.salesRequest.update({ where: { id: offer.salesRequestId }, data: { blockedUntil: validUntil } });
+        if (blocked) await tx.salesRequest.update({ where: { id: offer.salesRequestId }, data: { blockedUntil: validUntil } });
         await logAudit(tx, {
           actorId: ctx.session.user.id,
           entity: "SalesRequest",
@@ -740,10 +827,7 @@ export const offerRouter = createTRPCRouter({
       async (tx) => {
         const offer = await tx.offer.findUniqueOrThrow({ where: { id: input.id }, include: { lines: { select: { categoryId: true } } } });
         if (offer.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: "Only an open offer can be withdrawn." });
-        for (const categoryId of new Set(offer.lines.map((line) => line.categoryId))) {
-          const held = await tx.roomNight.count({ where: { salesRequestId: offer.salesRequestId, salesState: "BLOCKED", slot: { categoryId } } });
-          if (held) await changeRoomsTx(tx, ctx.session.user.id, { id: offer.salesRequestId, categoryId, state: "BLOCKED", action: "RELEASE_HOLD" });
-        }
+        await letGo(tx, ctx.session.user.id, offer.salesRequestId, offer.lines.map((line) => line.categoryId));
         await tx.offer.update({ where: { id: offer.id }, data: { status: "WITHDRAWN" } });
         await tx.salesRequest.update({ where: { id: offer.salesRequestId }, data: { blockedUntil: null } });
         await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: offer.salesRequestId, summary: "Offer withdrawn: its rooms released" });

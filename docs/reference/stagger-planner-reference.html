@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Decron Apartments OBS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+:root{
+  --bg:#f5f4fa; --surface:#ffffff; --ink:#1e2e5d; --muted:#5f6789; --line:#e1dfee; --grid:#ecebf4;
+  --purple:#614fc9; --purple2:#ab6ce2; --lime:#cefa05; --lime-band:rgba(206,250,5,.34); --lime-ink:#566600;
+  --band:#1e2e5d; --out:#1e2e5d; --field:#ffffff; --tip:#1e2e5d; --on-purple:#ffffff;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1530; --surface:#17203f; --ink:#eceefa; --muted:#a2a8c8; --line:#2a3563; --grid:#212b51;
+    --purple:#8c7cf0; --purple2:#c99bf2; --lime-band:rgba(206,250,5,.15); --lime-ink:#cefa05;
+    --band:#0a0f26; --out:#c9cdea; --field:#111934; --tip:#2a3563; --on-purple:#0f1530;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1530; --surface:#17203f; --ink:#eceefa; --muted:#a2a8c8; --line:#2a3563; --grid:#212b51;
+  --purple:#8c7cf0; --purple2:#c99bf2; --lime-band:rgba(206,250,5,.15); --lime-ink:#cefa05;
+  --band:#0a0f26; --out:#c9cdea; --field:#111934; --tip:#2a3563; --on-purple:#0f1530;
+  color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Lato,"Helvetica Neue",Arial,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+
+.band{background:var(--band);color:#fff}
+.band-inner{max-width:1280px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:baseline;gap:10px;font-weight:700;font-size:17px}
+.slash{color:var(--lime);font-weight:900;font-size:24px;letter-spacing:-3px;margin-right:4px}
+.brand .x{opacity:.6;font-weight:400}
+.btn{border:1px solid var(--line);background:transparent;border-radius:999px;padding:6px 14px;cursor:pointer;font-size:14px;line-height:1.3}
+.btn:hover{border-color:var(--purple)}
+.btn.on{background:var(--purple);border-color:var(--purple);color:var(--on-purple)}
+.btn-band{border-color:rgba(255,255,255,.35);color:#fff}
+.btn-band:hover{border-color:var(--lime)}
+
+.wrap{max-width:1280px;margin:0 auto;padding:32px 24px 56px;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:36px;align-items:start}
+.presenting .wrap{grid-template-columns:minmax(0,1fr)}
+.presenting .panel{display:none}
+
+h1{font-weight:900;font-size:clamp(28px,4.2vw,46px);line-height:1.08;letter-spacing:-.01em;margin:0 0 14px;max-width:20ch}
+.lede{color:var(--muted);font-size:18px;max-width:62ch;margin:0}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:20px 24px;margin:30px 0 8px}
+.fact{border-left:2px solid var(--line);padding-left:14px}
+.fact.key{border-left-color:var(--lime)}
+.fact b{display:block;font-weight:900;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
+.fact span{display:block;color:var(--muted);font-size:14px;line-height:1.35;margin-top:4px}
+
+.section{margin-top:40px}
+.section h2{font-size:21px;font-weight:700;margin:0 0 4px}
+.section .sub{color:var(--muted);font-size:15px;margin:0 0 14px;max-width:70ch}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 12px 8px;position:relative}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);padding:6px 6px 4px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.sw-in{background:var(--purple)}.sw-arr{background:var(--purple2)}.sw-out{background:var(--out)}
+.sw-games{background:var(--lime)}.sw-block{border:1.5px dashed var(--out);background:transparent}
+
+svg text{font-family:Lato,"Helvetica Neue",Arial,sans-serif}
+.ax text{fill:var(--muted);font-size:12px}
+.ax line,.ax path{stroke:var(--line)}
+.gridline{stroke:var(--grid)}
+.games{fill:var(--lime-band)}
+.games-label{fill:var(--lime-ink);font-size:12px;font-weight:700}
+.area{fill:var(--purple)}
+.block{fill:none;stroke:var(--out);stroke-width:1.5;stroke-dasharray:6 5;opacity:.75}
+.block-label{fill:var(--ink);font-size:12px;font-weight:700}
+.inside{fill:var(--on-purple);font-weight:700;font-size:13px}
+.inside.small{font-weight:400;font-size:12px}
+.bar-in{fill:var(--purple2)}.bar-out{fill:var(--out)}
+.ev-label{fill:var(--muted);font-size:11px;font-weight:700}
+.baseline{stroke:var(--line)}
+.strip-label{fill:var(--muted);font-size:12px}
+.hover-line{stroke:var(--ink);stroke-width:1;opacity:.5}
+.wave{fill:var(--purple)}
+.wave-label{fill:var(--on-purple);font-size:12px;font-weight:700}
+.wave-out{fill:var(--ink);font-size:12px}
+.wave-id{fill:var(--muted);font-size:12px}
+.tip{position:absolute;pointer-events:none;background:var(--tip);color:#fff;font-size:13px;line-height:1.4;padding:7px 10px;border-radius:8px;opacity:0;transition:opacity .12s;white-space:nowrap;z-index:2}
+.tip b{display:block}
+
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:15px}
+th,td{padding:10px 14px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{font-weight:700;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line)}
+tbody td{border-bottom:1px solid var(--grid)}
+tfoot td{font-weight:900;border-top:2px solid var(--line)}
+td.zero{color:var(--muted);opacity:.6}
+
+.basis{margin-top:40px;color:var(--muted);font-size:14px;max-width:78ch}
+.basis h2{font-size:16px;color:var(--ink);margin:0 0 8px}
+.basis p{margin:0 0 8px}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:1px 8px;border-radius:999px;margin-right:6px;vertical-align:1px}
+.tag.assume{background:var(--lime-band);color:var(--lime-ink)}
+.tag.ok{background:rgba(97,79,201,.14);color:var(--purple)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 18px 18px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);max-height:calc(100vh - 32px);overflow:auto}
+.panel summary{cursor:pointer;font-weight:900;font-size:17px;padding:12px 0;list-style:none}
+.panel summary::-webkit-details-marker{display:none}
+.panel summary::after{content:"–";float:right;color:var(--muted)}
+.panel details:not([open]) summary::after{content:"+"}
+.group{border-top:1px solid var(--line);padding:14px 0 4px}
+.group h3{font-size:14px;margin:0 0 10px}
+.field{display:block;margin-bottom:12px;font-size:13px;color:var(--muted)}
+.field input{display:block;width:100%;margin-top:4px;border:1px solid var(--line);background:var(--field);border-radius:8px;padding:8px 10px;font-size:15px;color:var(--ink)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quick{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 12px}
+.quick .btn{padding:4px 10px;font-size:13px}
+.waves{width:100%;font-size:13px}
+.waves th{color:var(--muted);font-weight:700;font-size:12px;padding:0 4px 6px;text-align:left;border:0}
+.waves td{padding:2px 4px;border:0;text-align:left}
+.waves input{width:100%;border:1px solid var(--line);background:var(--field);border-radius:6px;padding:5px 6px;font-size:13px;color:var(--ink)}
+.waves .del{border:0;background:none;cursor:pointer;color:var(--muted);font-size:16px;padding:2px 6px}
+.waves .del:hover{color:var(--purple)}
+.mix{width:100%;font-size:13px}
+.mix td{padding:3px 4px;border:0;text-align:left}
+.mix input{width:100%;border:1px solid var(--line);background:var(--field);border-radius:6px;padding:5px 6px;font-size:13px;color:var(--ink)}
+.eq{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap}
+.check{display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:8px;cursor:pointer}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 10px}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+
+@media (max-width:900px){
+  .wrap{grid-template-columns:minmax(0,1fr);padding:22px 16px 48px;gap:24px}
+  .panel{order:-1;position:static;max-height:none}
+  .band-inner{padding:12px 16px}
+  .lede{font-size:16px}
+  .fact b{font-size:26px}
+}
+.print-only{display:none}
+.prepared{font-size:12px;color:var(--muted);margin:0 0 8px}
+@page{size:letter;margin:0.45in 0.5in}
+@media (prefers-reduced-motion: reduce){.tip{transition:none}}
+.pdf-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#ffffff;color:#1e2e5d;font-weight:700;font-size:18px;z-index:50}
+</style>
+<style id="printcss" media="print">
+  :root{--bg:#ffffff !important;--surface:#ffffff !important;--ink:#1e2e5d !important;--muted:#5f6789 !important;--line:#dcdaea !important;--grid:#ecebf4 !important;--purple:#614fc9 !important;--purple2:#ab6ce2 !important;--lime-band:rgba(206,250,5,.38) !important;--lime-ink:#566600 !important;--band:#1e2e5d !important;--out:#1e2e5d !important;--on-purple:#ffffff !important;color-scheme:light !important;padding:0 !important}
+  html,body{background:#ffffff !important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .panel,.tip,.no-print,.hover-line,.pdf-overlay{display:none !important}
+  .print-only{display:block}
+  .band{border-radius:10px}
+  .band-inner{padding:10px 18px;max-width:none}
+  .wrap{display:block;max-width:none;padding:16px 0 0}
+  h1{font-size:30px;max-width:none;margin-bottom:8px}
+  .lede{font-size:13px;max-width:none}
+  .facts{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:16px 0 0}
+  .fact b{font-size:21px}
+  .fact span{font-size:10.5px}
+  .section{margin-top:16px;break-inside:avoid;page-break-inside:avoid}
+  .section h2{font-size:15px}
+  .section .sub{font-size:11.5px;margin-bottom:8px}
+  .chart,.tablewrap{border-radius:10px}
+  .chart{padding:10px 8px 4px}
+  #rates{break-before:page;page-break-before:always;margin-top:0}
+  table{font-size:11.5px}
+  th,td{padding:3px 10px}
+  thead th{font-size:10.5px}
+  .legend{font-size:10.5px}
+  .basis{font-size:10px;line-height:1.35;margin-top:14px;max-width:none;break-inside:avoid;page-break-inside:avoid}
+  .basis p{margin-bottom:3px}
+  .basis .tag{font-size:9.5px;padding:0 6px}
+  .basis h2{font-size:12px;margin-bottom:4px}
+  html.pdfmode body{width:720px;margin:0}
+  html.pdfmode .pdf-overlay{display:flex !important}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-inner">
+    <div class="brand"><span class="slash">//</span><span>We Lodge</span><span class="x">×</span><span>Decron Properties</span></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-band no-print" id="pdfBtn" type="button">Save as PDF</button><button class="btn btn-band no-print" id="presentBtn" type="button">Hide settings</button></div>
+  </div>
+</header>
+
+<div class="pdf-overlay" id="pdfOverlay" role="status">Creating PDF…</div>
+
+<div class="wrap">
+  <main>
+    <p class="print-only prepared" id="prepared"></p>
+    <h1>OBS in Decron apartments: phased in, phased out</h1>
+    <p class="lede" id="lede"></p>
+    <div class="facts" id="facts"></div>
+
+    <section class="section" id="waves-section">
+      <h2>Rental periods</h2>
+      <p class="sub">Each bar is one group of apartments, from move-in to hand-back.</p>
+      <div class="chart"><div id="gantt"></div><div class="legend"><span><i class="sw-in"></i>Apartments in use, from move-in to hand-back</span><span><i class="sw-games"></i>Games period, Jul 14–30</span></div></div>
+    </section>
+
+    <section class="section" id="monthly">
+      <h2>Month by month</h2>
+      <p class="sub" id="monthlySub">Units moving in and handed back each month, and the rent Decron receives.</p>
+      <div class="tablewrap"><table id="table"></table></div>
+    </section>
+
+    <section class="section" id="rates">
+      <h2>Rent per apartment</h2>
+      <p class="sub">Monthly lease rent by unit type, and what it works out to per night.</p>
+      <div class="tablewrap"><table id="rateTable"></table></div>
+    </section>
+
+    <section class="basis" id="basis"></section>
+  </main>
+
+  <aside class="panel" aria-label="Scenario settings">
+    <details open id="panelDetails">
+      <summary>Scenario settings</summary>
+
+      <div class="group">
+        <h3>Size and timing</h3>
+        <label class="field">Total apartments<input type="number" id="units" min="0" max="2000" step="1"></label>
+        <div class="quick" id="quick"></div>
+        <label class="field">First move-in<input type="date" id="first"></label>
+        <div class="row2">
+          <label class="field">Arrival waves<input type="number" id="nwaves" min="1" max="40" step="1"></label>
+          <label class="field">Days between waves<input type="number" id="gap" min="1" max="60" step="1"></label>
+        </div>
+        <label class="field">Stay per apartment (months)<input type="number" id="stay" min="1" max="12" step="1"></label>
+        <p class="hint">Changing these rebuilds the waves evenly. Changing only the total keeps your wave dates and rescales the numbers.</p>
+      </div>
+
+      <div class="group">
+        <h3>Waves</h3>
+        <table class="waves"><thead><tr><th>Move-in</th><th>Units</th><th>Months</th><th></th></tr></thead><tbody id="waveRows"></tbody></table>
+        <button class="btn" type="button" id="addWave" style="margin-top:8px">Add wave</button>
+      </div>
+
+      <div class="group">
+        <h3>Unit mix and rent</h3>
+        <div class="quick" id="basisBtns" style="margin:0 0 10px"></div>
+        <table class="mix"><thead><tr><th></th><th style="font-size:12px;color:var(--muted);text-align:left">Share %</th><th id="rateHead" style="font-size:12px;color:var(--muted);text-align:left">Rent / month</th></tr></thead><tbody id="mixRows"></tbody></table>
+        <p class="hint">Rents are proposed rates, not yet agreed with Decron. Enter them per month or per night; nightly equivalents use 30.4 nights per month (365 ÷ 12).</p>
+      </div>
+
+      <div class="group">
+        <h3>Display</h3>
+        <label class="check"><input type="checkbox" id="showBlock">Compare with a single block</label>
+        <label class="check"><input type="checkbox" id="showRent">Show rent figures</label>
+        <button class="btn" type="button" id="reset" style="margin-top:6px">Reset to 50-unit scenario</button>
+      </div>
+    </details>
+  </aside>
+</div>
+
+<script>
+(function(){
+  var DAY = 86400000;
+  var KEY = 'welodge-obs-decron-stagger-v1';
+  var TYPES = [{k:'studio',label:'Studio'},{k:'one',label:'1-bed'}];
+  var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function ud(s){ var p = String(s).split('-').map(Number); return new Date(Date.UTC(p[0], p[1]-1, p[2])); }
+  function iso(dt){ return dt.toISOString().slice(0,10); }
+  function addDays(dt,n){ return new Date(dt.getTime() + n*DAY); }
+  function dim(y,m){ return new Date(Date.UTC(y, m+1, 0)).getUTCDate(); }
+  function addMonths(dt,n){
+    var t = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth()+n, 1));
+    return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), Math.min(dt.getUTCDate(), dim(t.getUTCFullYear(), t.getUTCMonth()))));
+  }
+  function firstOfMonth(dt){ return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1)); }
+  function fd(dt){ return MON[dt.getUTCMonth()] + ' ' + dt.getUTCDate(); }
+  function fdy(dt){ return fd(dt) + ', ' + dt.getUTCFullYear(); }
+  function money(n){ return '$' + Math.round(n).toLocaleString('en-US'); }
+  function moneyShort(n){
+    if (n >= 1e6) return '$' + (n/1e6).toFixed(2).replace(/\.?0+$/,'') + 'M';
+    if (n >= 1e3) return '$' + Math.round(n/1e3) + 'k';
+    return money(n);
+  }
+  function num(n){ return Math.round(n).toLocaleString('en-US'); }
+  function clampInt(v, lo, hi, dflt){ v = parseInt(v, 10); if (isNaN(v)) return dflt; return Math.max(lo, Math.min(hi, v)); }
+
+  var GAMES = [ud('2028-07-14'), ud('2028-07-31')];
+  var NPM = 365/12; // nights per month, for nightly equivalents
+
+  function split(total, weights){
+    var w = weights.map(function(x){ return Math.max(0, +x || 0); });
+    var s = w.reduce(function(a,b){ return a+b; }, 0);
+    if (!s){ w = w.map(function(){ return 1; }); s = w.length; }
+    var raw = w.map(function(x){ return x/s*total; });
+    var base = raw.map(Math.floor);
+    var rem = total - base.reduce(function(a,b){ return a+b; }, 0);
+    var order = raw.map(function(r,i){ return [r - Math.floor(r), i]; }).sort(function(a,b){ return b[0]-a[0] || a[1]-b[1]; });
+    for (var j = 0; j < rem; j++) base[order[j % order.length][1]]++;
+    return base;
+  }
+
+  function gen(s){
+    var n = clampInt(s.waves, 1, 40, 6);
+    var u = split(s.units, new Array(n).fill(1));
+    var f = ud(s.first);
+    return u.map(function(x,i){ return {date: iso(addDays(f, i*s.gap)), units: x, stay: s.stay}; });
+  }
+  function defaults(){
+    var s = {units:50, first:'2028-03-01', waves:6, gap:14, stay:6,
+      mix:{studio:20, one:80}, rates:{studio:4000, one:4500},
+      showBlock:true, showRent:true, presenting:false, rateBasis:'month', rows:[]};
+    s.rows = gen(s);
+    return s;
+  }
+  function load(){
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw){
+        var s = JSON.parse(raw);
+        if (s && Array.isArray(s.rows) && s.mix && s.rates) return Object.assign(defaults(), s);
+      }
+    } catch(e){}
+    return defaults();
+  }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
+
+  var state = load();
+
+  // ---------- model ----------
+  function compute(){
+    var rows = state.rows.filter(function(r){ return (r.units|0) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.date); })
+      .map(function(r){ var a = ud(r.date); var st = clampInt(r.stay, 1, 24, 6); return {a:a, d:addMonths(a, st), units:r.units|0, stay:st}; })
+      .sort(function(x,y){ return x.a - y.a; });
+    if (!rows.length) return {empty:true};
+    var N = rows.reduce(function(t,r){ return t + r.units; }, 0);
+    var minA = rows[0].a, lastA = rows[rows.length-1].a;
+    var maxD = d3.max(rows, function(r){ return r.d; });
+    var minD = d3.min(rows, function(r){ return r.d; });
+    var start = firstOfMonth(new Date(Math.min(addDays(minA, -10), GAMES[0])));
+    var endRaw = new Date(Math.max(addDays(maxD, 10), GAMES[1]));
+    var end = new Date(Date.UTC(endRaw.getUTCFullYear(), endRaw.getUTCMonth()+1, 1));
+    var days = Math.round((end - start)/DAY);
+    var occ = new Array(days+1).fill(0), arr = new Array(days+1).fill(0), dep = new Array(days+1).fill(0);
+    rows.forEach(function(r){
+      var ia = Math.round((r.a - start)/DAY), id = Math.round((r.d - start)/DAY);
+      arr[ia] += r.units; dep[id] += r.units;
+      for (var i = ia; i < id; i++) occ[i] += r.units;
+    });
+    var events = [];
+    for (var i = 0; i <= days; i++) if (arr[i] || dep[i]) events.push({date:addDays(start,i), arr:arr[i], dep:dep[i]});
+
+    var fh = null, fs = -1;
+    for (i = 0; i <= days; i++){
+      if (occ[i] === N){ if (fs < 0) fs = i; }
+      else if (fs >= 0){ fh = [addDays(start, fs), addDays(start, i-1)]; break; }
+    }
+    var peak = d3.max(occ);
+
+    var counts = split(N, TYPES.map(function(t){ return state.mix[t.k]; }));
+    var rentSum = TYPES.reduce(function(s,t,k){ return s + counts[k]*(+state.rates[t.k] || 0); }, 0);
+    var rateEff = N ? rentSum/N : 0;
+
+    var months = [], idx = {};
+    for (var m = new Date(start); m < end; m = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth()+1, 1))){
+      idx[m.getUTCFullYear()*12 + m.getUTCMonth()] = months.length;
+      months.push({m:m, arr:0, dep:0, endOcc:0, rent:0});
+    }
+    function mk(dt){ return months[idx[dt.getUTCFullYear()*12 + dt.getUTCMonth()]]; }
+    rows.forEach(function(r){
+      var A = mk(r.a); if (A) A.arr += r.units;
+      var D = mk(r.d); if (D) D.dep += r.units;
+      for (var k = 0; k < r.stay; k++){
+        var ls = addMonths(r.a, k), le = addMonths(r.a, k+1);
+        var ld = (le - ls)/DAY, perDay = r.units*rateEff/ld;
+        var cur = ls;
+        while (cur < le){
+          var mEnd = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth()+1, 1));
+          var seg = mEnd < le ? mEnd : le;
+          var M = mk(cur); if (M) M.rent += perDay*(seg - cur)/DAY;
+          cur = seg;
+        }
+      }
+    });
+    months.forEach(function(M){
+      var last = new Date(Date.UTC(M.m.getUTCFullYear(), M.m.getUTCMonth()+1, 0));
+      var li = Math.round((last - start)/DAY);
+      M.endOcc = occ[li] || 0;
+    });
+    var unitMonths = rows.reduce(function(t,r){ return t + r.units*r.stay; }, 0);
+    return {rows:rows, N:N, minA:minA, lastA:lastA, minD:minD, maxD:maxD, start:start, end:end, days:days,
+      occ:occ, events:events, fh:fh, peak:peak, maxIn:d3.max(arr), maxOut:d3.max(dep),
+      counts:counts, rateEff:rateEff, months:months, unitMonths:unitMonths, totalRent:unitMonths*rateEff};
+  }
+
+  // ---------- text ----------
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function renderText(c){
+    var lede = document.getElementById('lede'), facts = document.getElementById('facts');
+    facts.innerHTML = '';
+    if (c.empty){ lede.textContent = 'Add at least one wave with apartments to see the plan.'; return; }
+    var nW = c.rows.length;
+    var weeks = Math.round((c.lastA - c.minA)/DAY/7);
+    var stays = c.rows.map(function(r){ return r.stay; });
+    var sMin = Math.min.apply(null, stays), sMax = Math.max.apply(null, stays);
+    var stayTxt = sMin === sMax ? sMin + (sMin === 1 ? ' month' : ' months') : sMin + '–' + sMax + ' months';
+    if (nW > 1){
+      lede.textContent = 'We take ' + c.N + ' apartments for ' + stayTxt + ', with staggered arrivals and departures. Move-ins run from ' +
+        fd(c.minA) + ' to ' + fdy(c.lastA) + ' and hand-backs from ' + fd(c.minD) + ' to ' + fdy(c.maxD) + '.';
+    } else {
+      lede.textContent = 'We take ' + c.N + ' apartments for ' + stayTxt + ', all moving in on ' + fdy(c.minA) + ' and handed back on ' + fdy(c.maxD) + '. Add more waves to stagger arrivals and departures.';
+    }
+    function fact(big, small, key){ var f = el('div', 'fact' + (key ? ' key' : '')); f.appendChild(el('b', null, big)); f.appendChild(el('span', null, small)); facts.appendChild(f); }
+    fact(num(c.N), 'apartments across ' + nW + (nW === 1 ? ' wave' : ' waves'));
+    fact(num(c.unitMonths), 'lease months');
+    if (state.showRent) fact(moneyShort(c.totalRent), 'gross rent to Decron');
+  }
+
+  // ---------- charts ----------
+  var PRINT_W = 0; // fixed drawing width used while printing (US Letter, 0.5in margins)
+
+  function xScale(c, W, l, r){ return d3.scaleUtc().domain([c.start, c.end]).range([l, W - r]); }
+  function monthAxis(g, x, narrow){
+    var ax = d3.axisBottom(x).ticks(d3.utcMonth.every(narrow ? 2 : 1)).tickFormat(d3.utcFormat('%b')).tickSizeOuter(0);
+    g.attr('class','ax').call(ax);
+  }
+
+  function drawGantt(c){
+    var host = document.getElementById('gantt');
+    host.innerHTML = '';
+    if (c.empty){ host.appendChild(el('div','empty','No waves yet.')); return; }
+    var W = PRINT_W || host.clientWidth || 600, narrow = W < 560;
+    var m = {t:10, r:12, b:26, l:62}, rowH = PRINT_W ? 26 : 30;
+    var H = m.t + c.rows.length*rowH + m.b;
+    var svg = d3.select(host).append('svg').attr('width', '100%').style('height', 'auto').style('display', 'block').attr('viewBox','0 0 ' + W + ' ' + H)
+      .attr('role','img').attr('aria-label', c.rows.length + ' rental periods');
+    var x = xScale(c, W, m.l, m.r);
+    svg.append('rect').attr('class','games').attr('x', x(GAMES[0])).attr('width', Math.max(2, x(GAMES[1])-x(GAMES[0]))).attr('y', m.t - 4).attr('height', c.rows.length*rowH + 4);
+    c.rows.forEach(function(r, i){
+      var yy = m.t + i*rowH + 4, h = rowH - 8;
+      var x0 = x(r.a), x1 = x(r.d), w = x1 - x0;
+      svg.append('text').attr('class','wave-id').attr('x', 4).attr('y', yy + h/2 + 4).text('Wave ' + (i+1));
+      svg.append('rect').attr('class','wave').attr('x', x0).attr('y', yy).attr('width', Math.max(2, w)).attr('height', h).attr('rx', 6);
+      var label = r.units + (r.units === 1 ? ' unit' : ' units');
+      var dates = fd(r.a) + ' – ' + fd(r.d);
+      var full = label + ',  ' + dates;
+      var fits = w > (narrow ? 150 : 170);
+      svg.append('text').attr('class','wave-label').attr('x', x0 + 8).attr('y', yy + h/2 + 4).text(fits ? full : (w > 60 ? label : ''));
+      if (!fits){
+        var outside = w > 60 ? dates : full;
+        var tx = x1 + 6, anchor = 'start';
+        if (tx + outside.length*6.2 > W - m.r){ tx = x0 - 6; anchor = 'end'; }
+        svg.append('text').attr('class','wave-out').attr('x', tx).attr('y', yy + h/2 + 4).attr('text-anchor', anchor).text(outside);
+      }
+    });
+    monthAxis(svg.append('g').attr('transform','translate(0,' + (m.t + c.rows.length*rowH) + ')'), x, narrow);
+  }
+
+  function drawTable(c){
+    var t = document.getElementById('table');
+    t.innerHTML = '';
+    document.getElementById('monthlySub').textContent = state.showRent
+      ? 'Apartments moving in and handed back each month, and the rent Decron receives. Part-months are pro-rated by day.'
+      : 'Apartments moving in and handed back each month.';
+    if (c.empty) return;
+    var cols = ['Month','Moving in','Handed back','In-house at month end'];
+    if (state.showRent) cols.push('Rent to Decron');
+    var thead = el('thead'), tr = el('tr');
+    cols.forEach(function(h){ tr.appendChild(el('th', null, h)); });
+    thead.appendChild(tr); t.appendChild(thead);
+    var tb = el('tbody');
+    c.months.filter(function(M){ return M.arr || M.dep || M.endOcc || M.rent > 0.5; }).forEach(function(M){
+      var r = el('tr');
+      r.appendChild(el('td', null, MONL[M.m.getUTCMonth()] + ' ' + M.m.getUTCFullYear()));
+      [M.arr, M.dep, M.endOcc].forEach(function(v){ r.appendChild(el('td', v ? null : 'zero', v ? num(v) : '–')); });
+      if (state.showRent) r.appendChild(el('td', null, money(M.rent)));
+      tb.appendChild(r);
+    });
+    t.appendChild(tb);
+    var tf = el('tfoot'), fr = el('tr');
+    fr.appendChild(el('td', null, 'Total'));
+    fr.appendChild(el('td', null, num(c.N)));
+    fr.appendChild(el('td', null, num(c.N)));
+    fr.appendChild(el('td', null, num(c.unitMonths) + ' lease months'));
+    if (state.showRent) fr.appendChild(el('td', null, money(c.totalRent)));
+    tf.appendChild(fr); t.appendChild(tf);
+  }
+
+  function drawRates(c){
+    var sec = document.getElementById('rates');
+    sec.style.display = state.showRent && !c.empty ? '' : 'none';
+    var t = document.getElementById('rateTable');
+    t.innerHTML = '';
+    if (!state.showRent || c.empty) return;
+    var thead = el('thead'), tr = el('tr');
+    ['Unit type','Apartments','Per month','Per night'].forEach(function(h){ tr.appendChild(el('th', null, h)); });
+    thead.appendChild(tr); t.appendChild(thead);
+    var tb = el('tbody');
+    TYPES.forEach(function(ty, k){
+      var r = el('tr'), rate = +state.rates[ty.k] || 0, n = c.counts[k];
+      r.appendChild(el('td', null, ty.label));
+      r.appendChild(el('td', n ? null : 'zero', n ? num(n) : '–'));
+      r.appendChild(el('td', null, money(rate)));
+      r.appendChild(el('td', null, money(rate/NPM)));
+      tb.appendChild(r);
+    });
+    t.appendChild(tb);
+    var tf = el('tfoot'), fr = el('tr');
+    fr.appendChild(el('td', null, 'Blended average'));
+    fr.appendChild(el('td', null, num(c.N)));
+    fr.appendChild(el('td', null, money(c.rateEff)));
+    fr.appendChild(el('td', null, money(c.rateEff/NPM)));
+    tf.appendChild(fr); t.appendChild(tf);
+  }
+
+  function drawBasis(c){
+    var b = document.getElementById('basis');
+    b.innerHTML = '';
+    b.appendChild(el('h2', null, 'How these figures are built'));
+    function p(tagCls, tagText, text){ var e = el('p'); if (tagText) e.appendChild(el('span', 'tag ' + tagCls, tagText)); e.appendChild(document.createTextNode(text)); b.appendChild(e); }
+    p('assume', 'Scenario', 'Move-in dates and wave sizes are a planning scenario to agree the shape of the hand-back. OBS’s final arrival list will set the exact dates.');
+    p('ok', 'Hand-back', 'Check-outs are staggered and each apartment is professionally cleaned on departure, so it can be shown to new tenants straight away.');
+  }
+
+  // ---------- panel ----------
+  var $ = function(id){ return document.getElementById(id); };
+
+  function renderWaves(){
+    var tb = $('waveRows');
+    tb.innerHTML = '';
+    state.rows.forEach(function(r, i){
+      var tr = el('tr');
+      function cell(type, key, attrs){
+        var td = el('td'), inp = document.createElement('input');
+        inp.type = type; inp.value = r[key];
+        Object.keys(attrs || {}).forEach(function(a){ inp.setAttribute(a, attrs[a]); });
+        inp.setAttribute('aria-label', 'Wave ' + (i+1) + ' ' + key);
+        inp.addEventListener(type === 'date' ? 'change' : 'input', function(){
+          if (type === 'date'){ if (inp.value) r.date = inp.value; }
+          else r[key] = clampInt(inp.value, key === 'stay' ? 1 : 0, key === 'stay' ? 24 : 2000, r[key]);
+          if (key === 'units') syncTotal();
+          update(false);
+        });
+        td.appendChild(inp); tr.appendChild(td);
+      }
+      cell('date', 'date');
+      cell('number', 'units', {min:0, max:2000, step:1, style:'width:58px'});
+      cell('number', 'stay', {min:1, max:24, step:1, style:'width:48px'});
+      var td = el('td'), del = el('button', 'del', '×');
+      del.type = 'button'; del.setAttribute('aria-label', 'Remove wave ' + (i+1));
+      del.addEventListener('click', function(){ state.rows.splice(i, 1); syncTotal(); update(true); });
+      td.appendChild(del); tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+  }
+  function syncTotal(){
+    state.units = state.rows.reduce(function(t,r){ return t + (r.units|0); }, 0);
+    state.waves = state.rows.length || 1;
+    $('units').value = state.units;
+    $('nwaves').value = state.waves;
+  }
+  function renderMix(){
+    var bb = $('basisBtns'); bb.innerHTML = '';
+    [['month','Enter monthly'],['night','Enter nightly']].forEach(function(o){
+      var b = el('button', 'btn' + (state.rateBasis === o[0] ? ' on' : ''), o[1]);
+      b.type = 'button';
+      b.addEventListener('click', function(){ state.rateBasis = o[0]; renderMix(); save(); });
+      bb.appendChild(b);
+    });
+    $('rateHead').textContent = state.rateBasis === 'night' ? 'Rent / night' : 'Rent / month';
+    var tb = $('mixRows');
+    tb.innerHTML = '';
+    TYPES.forEach(function(t){
+      var tr = el('tr');
+      tr.appendChild(el('td', null, t.label));
+      var night = state.rateBasis === 'night';
+      var td1 = el('td'), sh = document.createElement('input');
+      sh.type = 'number'; sh.min = 0; sh.max = 100; sh.step = 1; sh.value = state.mix[t.k];
+      sh.setAttribute('aria-label', t.label + ' share');
+      sh.addEventListener('input', function(){ state.mix[t.k] = clampInt(sh.value, 0, 100, 0); update(false); });
+      td1.appendChild(sh); tr.appendChild(td1);
+      var td2 = el('td'), rt = document.createElement('input');
+      rt.type = 'number'; rt.min = 0; rt.step = night ? 1 : 50;
+      rt.value = night ? Math.round(state.rates[t.k]/NPM) : Math.round(state.rates[t.k]);
+      rt.setAttribute('aria-label', t.label + (night ? ' nightly rent' : ' monthly rent'));
+      var eq = el('div', 'eq');
+      function showEq(){ eq.textContent = night ? '= ' + money(state.rates[t.k]) + '/month' : '= ' + money(state.rates[t.k]/NPM) + '/night'; }
+      rt.addEventListener('input', function(){ var v = parseFloat(rt.value); if (isNaN(v) || v < 0) v = 0; state.rates[t.k] = night ? v*NPM : v; showEq(); update(false); });
+      showEq(); td2.appendChild(rt); td2.appendChild(eq); tr.appendChild(td2);
+      tb.appendChild(tr);
+    });
+  }
+  function fillPanel(){
+    $('units').value = state.units; $('first').value = state.first; $('nwaves').value = state.waves;
+    $('gap').value = state.gap; $('stay').value = state.stay;
+    $('showBlock').checked = state.showBlock; $('showRent').checked = state.showRent;
+    renderWaves(); renderMix(); renderQuick(); applyPresent();
+  }
+  function renderQuick(){
+    var q = $('quick'); q.innerHTML = '';
+    [50, 100, 200, 245].forEach(function(n){
+      var b = el('button', 'btn' + (state.units === n ? ' on' : ''), String(n));
+      b.type = 'button';
+      b.addEventListener('click', function(){ setTotal(n); $('units').value = n; });
+      q.appendChild(b);
+    });
+  }
+  function setTotal(n){
+    state.units = n;
+    if (!state.rows.length) state.rows = gen(state);
+    var u = split(n, state.rows.map(function(r){ return r.units; }));
+    state.rows.forEach(function(r, i){ r.units = u[i]; });
+    update(true);
+  }
+  function regen(){ state.rows = gen(state); update(true); }
+
+  $('units').addEventListener('input', function(){ setTotal(clampInt(this.value, 0, 2000, state.units)); });
+  $('first').addEventListener('change', function(){ if (this.value){ state.first = this.value; regen(); } });
+  $('nwaves').addEventListener('input', function(){ state.waves = clampInt(this.value, 1, 40, state.waves); regen(); });
+  $('gap').addEventListener('input', function(){ state.gap = clampInt(this.value, 1, 60, state.gap); regen(); });
+  $('stay').addEventListener('input', function(){ state.stay = clampInt(this.value, 1, 12, state.stay); state.rows.forEach(function(r){ r.stay = state.stay; }); update(true); });
+  $('showBlock').addEventListener('change', function(){ state.showBlock = this.checked; update(false); });
+  $('showRent').addEventListener('change', function(){ state.showRent = this.checked; update(false); });
+  $('addWave').addEventListener('click', function(){
+    var last = state.rows[state.rows.length-1];
+    var d = last ? iso(addDays(ud(last.date), state.gap)) : state.first;
+    state.rows.push({date:d, units:last ? last.units : 10, stay:state.stay});
+    syncTotal(); update(true);
+  });
+  $('reset').addEventListener('click', function(){ state = defaults(); fillPanel(); update(false); });
+
+  function applyPresent(){
+    document.documentElement.classList.toggle('presenting', !!state.presenting);
+    $('presentBtn').textContent = state.presenting ? 'Show settings' : 'Hide settings';
+  }
+  $('presentBtn').addEventListener('click', function(){ state.presenting = !state.presenting; applyPresent(); save(); draw(); });
+
+  // ---------- render ----------
+  var current = null;
+  function draw(){ if (!current) return; drawGantt(current); }
+  function update(rebuildWaves){
+    current = compute();
+    if (rebuildWaves) renderWaves();
+    renderQuick();
+    renderText(current); drawTable(current); drawRates(current); drawBasis(current); draw();
+    save();
+  }
+
+  var raf = 0, lastW = 0;
+  new ResizeObserver(function(){
+    var w = $('gantt').clientWidth;
+    if (w === lastW) return; lastW = w;
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(draw);
+  }).observe($('gantt'));
+
+  var today = new Date();
+  $('prepared').textContent = 'Prepared for Decron Properties by We Lodge, ' + MONL[today.getMonth()] + ' ' + today.getDate() + ', ' + today.getFullYear() + '. Confidential.';
+  function setPrint(on){ PRINT_W = on ? 720 : 0; draw(); }
+  window.__wlPrint = setPrint;
+  window.addEventListener('beforeprint', function(){ setPrint(true); });
+  window.addEventListener('afterprint', function(){ setPrint(false); });
+
+  // ---------- PDF export ----------
+  var H2C = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+  var JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+  var PDF_NAME = 'We Lodge x Decron - OBS phased arrivals.pdf';
+  var downloadsP = (window.claude && typeof window.claude.use === 'function') ? window.claude.use('downloads').catch(function(){ return null; }) : Promise.resolve(null);
+  function loadScript(src){
+    return new Promise(function(res, rej){
+      if (document.querySelector('script[src="' + src + '"]')) return res();
+      var sc = document.createElement('script'); sc.src = src;
+      sc.onload = function(){ res(); }; sc.onerror = function(){ rej(new Error('Could not load ' + src)); };
+      document.head.appendChild(sc);
+    });
+  }
+  function frame(){ return new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); }); }
+  function inlineSvgStyles(root){
+    root.querySelectorAll('svg').forEach(function(svg){
+      var r = svg.getBoundingClientRect();
+      svg.setAttribute('width', r.width); svg.setAttribute('height', r.height);
+      svg.querySelectorAll('*').forEach(function(n){
+        var cs = getComputedStyle(n);
+        if (cs.display === 'none'){ n.setAttribute('display', 'none'); return; }
+        ['fill','stroke','stroke-width','stroke-dasharray','opacity','font-size','font-weight'].forEach(function(prop){
+          var v = cs.getPropertyValue(prop); if (v) n.setAttribute(prop, v);
+        });
+        if (n.tagName.toLowerCase() === 'text') n.setAttribute('font-family', 'Lato, Helvetica, Arial, sans-serif');
+      });
+    });
+  }
+  var pdfBusy = false;
+  async function makePdf(){
+    if (pdfBusy) return;
+    pdfBusy = true;
+    var btn = $('pdfBtn'), css = $('printcss'), root = document.documentElement;
+    btn.disabled = true; btn.textContent = 'Creating PDF…';
+    try {
+      await Promise.all([loadScript(H2C), loadScript(JSPDF)]);
+      css.media = 'all'; root.classList.add('pdfmode');
+      PRINT_W = 720; draw();
+      await frame();
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      inlineSvgStyles(document.querySelector('.wrap'));
+      var scale = 2.5, body = document.body;
+      var bodyTop = body.getBoundingClientRect().top;
+      var splitEl = $('rates').offsetParent ? $('rates') : $('basis');
+      var split = splitEl.getBoundingClientRect().top - bodyTop;
+      var canvas = await window.html2canvas(body, {
+        scale: scale, backgroundColor: '#ffffff', width: 720, windowWidth: 720,
+        scrollX: 0, scrollY: -window.scrollY, logging: false,
+        ignoreElements: function(e){ return e.id === 'pdfOverlay'; }
+      });
+      var pdf = new window.jspdf.jsPDF({unit:'pt', format:'letter'});
+      var pw = 612, ph = 792, mx = 36, my = 32, cw = pw - 2*mx, chh = ph - 2*my, k = cw/720;
+      function addSlice(y0, y1, first){
+        var sy = Math.round(y0*scale) + (first ? 0 : 3), sh = Math.min(canvas.height - sy, Math.round((y1 - y0)*scale));
+        var c = document.createElement('canvas'); c.width = canvas.width; c.height = sh;
+        var g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+        g.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+        var w = cw, h = (sh/scale)*k;
+        if (h > chh){ w = w*chh/h; h = chh; }
+        if (!first) pdf.addPage();
+        pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', mx + (cw - w)/2, my, w, h);
+      }
+      var totalH = canvas.height/scale;
+      if (totalH*k <= chh){ addSlice(0, totalH, true); }
+      else { addSlice(0, split, true); addSlice(split, totalH, false); }
+      var dl = await downloadsP;
+      restore();
+      if (dl){
+        try { await dl.save({filename: PDF_NAME, data: pdf.output('blob')}); }
+        catch (e){ if (!e || e.code !== 'declined') alertMsg('The PDF could not be saved here (' + ((e && e.code) || 'error') + '). Open the planner on its own page and try again.'); }
+      } else {
+        pdf.save(PDF_NAME);
+      }
+    } catch (err){
+      restore();
+      alertMsg('The PDF could not be created: ' + (err && err.message ? err.message : err));
+    } finally {
+      pdfBusy = false; btn.disabled = false; btn.textContent = 'Save as PDF';
+    }
+    function restore(){
+      css.media = 'print'; root.classList.remove('pdfmode');
+      PRINT_W = 0; draw();
+    }
+  }
+  function alertMsg(text){
+    var ov = $('pdfOverlay'); ov.textContent = text; ov.style.display = 'flex'; ov.style.padding = '24px'; ov.style.textAlign = 'center';
+    setTimeout(function(){ ov.style.display = ''; ov.textContent = 'Creating PDF…'; ov.style.padding = ''; }, 4000);
+  }
+  $('pdfBtn').addEventListener('click', makePdf);
+
+  fillPanel();
+  update(false);
+})();
+</script>
+</body>
+</html>

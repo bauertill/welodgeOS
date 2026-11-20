@@ -39,8 +39,8 @@ const nightsOf = (line: { checkIn: string; checkOut: string }) =>
 /**
  * Make an offer to the client (doc §4.11, 2026-10-14), in a popup: filled
  * from their rate card answer — the rooms, dates and our rates — with how long
- * it holds and the terms of the last offer on this event. Making it blocks
- * the rooms until it runs out.
+ * it holds and the terms of the last offer on this event. Making it requests
+ * the rooms for the client; they are blocked once the agreement is marked sent.
  */
 export function OfferPopup({ salesRequestId, responseId, offer, onClose }: { salesRequestId: string; responseId: string | null; offer?: Offer; onClose: () => void }) {
   const context = api.offer.formContext.useQuery({ salesRequestId, responseId }, { refetchOnWindowFocus: false });
@@ -50,8 +50,8 @@ export function OfferPopup({ salesRequestId, responseId, offer, onClose }: { sal
       title={offer ? "Change the offer" : "Make an offer"}
       subtitle={
         offer
-          ? "Changing the rooms, dates or rates releases the rooms held for this request and blocks the new ones in one step — if a room is no longer free, nothing changes."
-          : "The rooms are blocked for the client until the offer runs out — nobody else is offered them."
+          ? "Changing the rooms, dates or rates lets go of the rooms held for this request and takes the new ones the same way (requested, or blocked once the agreement has gone) in one step — if a room is no longer free, nothing changes."
+          : "The rooms are requested for the client. They are blocked — nobody else offered them — when the agreement is marked sent."
       }
       onClose={onClose}
     >
@@ -295,7 +295,7 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
             ))}
           </Select>
         </Field>
-        <p className="text-ink-500 self-end pb-2 text-xs font-light">Seven days from today to start. The rooms stay blocked until then; past it, the offer is flagged for you to extend or withdraw.</p>
+        <p className="text-ink-500 self-end pb-2 text-xs font-light">Seven days from today to start. Once the agreement is sent, the rooms stay blocked until then; past it, the offer is flagged for you to extend or withdraw.</p>
       </div>
 
       <div className="space-y-4 rounded-xl bg-white px-5 py-4">
@@ -325,7 +325,7 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
         )}
         <FormError message={problem ?? (create.error ?? update.error ? friendlyError((create.error ?? update.error)!) : null)} />
         <Button type="button" onClick={submit} disabled={saving}>
-          {saving ? (offer ? "Saving the offer…" : "Blocking the rooms…") : offer ? "Save the offer" : "Make the offer and block the rooms"}
+          {saving ? (offer ? "Saving the offer…" : "Requesting the rooms…") : offer ? "Save the offer" : "Make the offer"}
         </Button>
       </div>
     </div>
@@ -341,7 +341,9 @@ const offerState = (offer: Offer) =>
         ? { label: "Trusted — will sign", style: "bg-[#e3f8ee] text-[#0a7a47]" }
         : offer.runOut
           ? { label: `Ran out on ${formatDate(offer.validUntil)} — extend or withdraw`, style: "bg-[#fde8ec] text-[#c03654]" }
-          : { label: `Open — rooms held until ${formatDate(offer.validUntil)}`, style: "bg-brand-50 text-brand-800" };
+          : offer.agreementSentOn
+            ? { label: `Open — rooms blocked until ${formatDate(offer.validUntil)}`, style: "bg-brand-50 text-brand-800" }
+            : { label: `Open — rooms requested; blocked once the agreement is marked sent (holds until ${formatDate(offer.validUntil)})`, style: "bg-brand-50 text-brand-800" };
 
 /** The request's offers (doc §4.11): what was offered, until when, and extending or withdrawing one. */
 export function RequestOffers({ salesRequestId }: { salesRequestId: string }) {
@@ -448,7 +450,7 @@ function OfferItem({ offer }: { offer: Offer }) {
             </span>
           ) : withdrawing ? (
             <span className="flex flex-wrap items-center gap-2">
-              <span className="text-[#c03654]">Withdraw the offer and release its rooms for others?</span>
+              <span className="text-[#c03654]">Withdraw the offer and let its rooms go for others?</span>
               <Button type="button" variant="danger" onClick={() => withdraw.mutate({ id: offer.id })} disabled={withdraw.isPending}>
                 {withdraw.isPending ? "Releasing…" : "Yes, withdraw it"}
               </Button>
@@ -660,7 +662,7 @@ export function ContractPanel({ salesRequestId }: { salesRequestId: string }) {
         <div className={box}>
           <h2 className="text-ink-900 mb-1 text-[15px] font-medium">2. The offer</h2>
           <p className="text-ink-500 mb-3 text-[13px] font-light">
-            Made from what they chose on the rate card. Making it blocks the rooms for them; then draw up the agreement, send it, and register it signed.
+            Made from what they chose on the rate card. Making it requests the rooms for them; draw up the agreement and mark it sent, which blocks them; then register it signed, which sells them.
           </p>
           <Button type="button" onClick={() => setMaking(true)}>
             Make an offer →
