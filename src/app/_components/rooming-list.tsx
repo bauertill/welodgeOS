@@ -202,7 +202,7 @@ function ClientRoomingView({ properties, rooming, fields, onUpload }: { properti
             <span>Room</span>
             <div className={lineGrid}>
               <span>Guest</span>
-              <span>Sharing with</span>
+              <span>{property.rooms.every((room) => room.oneBed) ? "Partner" : property.rooms.some((room) => room.oneBed) ? "Sharing with / partner" : "Sharing with"}</span>
               <span>From</span>
               <span>To</span>
               <span>Arriving</span>
@@ -258,6 +258,7 @@ function ClientLine({ room, stay, start, rooming, fields }: { room: Room; stay?:
   const columns = Math.min(4, room.capacity);
   const { draft, setDraft, state, problem, setProblem, dirty, rowId, save, onBlur } = useStayDraft({ room, stay, start, columns, fields, rooming });
   const [more, setMore] = useState(draft.names.slice(2).some(Boolean));
+  const [partner, setPartner] = useState(false);
   const box = "w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-[14px] text-ink-900 outline-none placeholder:text-ink-300 focus:border-brand-400 focus:ring-2 focus:ring-brand-400/15";
   const label = "text-ink-500 mb-0.5 block text-[11px] md:sr-only";
   const setName = (i: number, value: string) => setDraft({ ...draft, names: draft.names.map((one, j) => (j === i ? value : one)) });
@@ -285,8 +286,20 @@ function ClientLine({ room, stay, start, rooming, fields }: { room: Room; stay?:
         {details(0)}
       </div>
       <div className="col-span-2 md:col-span-1">
-        <label className={label}>Sharing with</label>
-        {columns >= 2 ? (
+        <label className={label}>{room.oneBed ? "Partner" : "Sharing with"}</label>
+        {room.oneBed ? (
+          // One bed (a King): one name, and their partner only if there is one.
+          partner || draft.names[1] ? (
+            <>
+              <input value={draft.names[1] ?? ""} onChange={(e) => setName(1, e.target.value)} placeholder="Partner's name" aria-label="Partner" className={box} autoFocus={partner && !draft.names[1]} />
+              {details(1)}
+            </>
+          ) : (
+            <button type="button" onClick={() => setPartner(true)} className="text-brand-700 hover:bg-brand-50 rounded-lg px-2 py-2 text-[13px] font-medium">
+              + partner
+            </button>
+          )
+        ) : columns >= 2 ? (
           <>
             <input value={draft.names[1] ?? ""} onChange={(e) => setName(1, e.target.value)} placeholder={draft.names[0] ? "No one — or a name" : ""} aria-label="Sharing with" className={box} />
             {details(1)}
@@ -721,6 +734,7 @@ function SheetRow({
   last: boolean;
 }) {
   const { draft, setDraft, state, problem, setProblem, dirty, removed, rowId, save, onBlur } = useStayDraft({ room, stay, start, columns, fields, rooming });
+  const [partner, setPartner] = useState(false);
 
   const cell = "px-1 py-1 align-top";
   const input = `w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-[13px] outline-none hover:border-ink-200 focus:border-brand-400 focus:bg-white ${removed ? "line-through text-ink-400" : "text-ink-900"}`;
@@ -745,7 +759,14 @@ function SheetRow({
         </td>
         {draft.names.map((value, i) => (
           <td key={i} className={cell}>
-            {i < room.capacity ? (
+            {room.oneBed && i === 1 && !value && !partner ? (
+              // One bed (a King): a partner only if there is one.
+              <button type="button" disabled={removed} onClick={() => setPartner(true)} className="text-brand-700 px-2 py-1.5 text-xs font-medium hover:underline">
+                + partner
+              </button>
+            ) : room.oneBed && i > 1 ? (
+              <span className="text-ink-300 block px-2 py-1.5 text-xs">—</span>
+            ) : i < room.capacity ? (
               <>
                 <input
                   value={value}

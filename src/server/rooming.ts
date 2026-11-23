@@ -4,7 +4,7 @@ import type { Prisma, PrismaClient } from "generated/prisma";
 
 import { dayKey, eachNight } from "~/lib/dates";
 import { formatRange } from "~/lib/format";
-import { guestName, roomingExtraFields, stayChanges, type Guest, type StaySnapshot } from "~/lib/rooming";
+import { guestName, roomingExtraFields, sharesOneBed, stayChanges, type Guest, type StaySnapshot } from "~/lib/rooming";
 import { logAudit } from "~/server/audit";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { notify } from "~/server/notify";
@@ -111,7 +111,13 @@ export async function roomingFor(db: Db, scope: { clientId: string; eventId: str
       select: {
         slotId: true,
         date: true,
-        slot: { select: { slotNumber: true, unitNumber: true, category: { select: { id: true, name: true, capacity: true, property: { select: { id: true, name: true, type: true, checkInTime: true, checkOutTime: true } } } } } },
+        slot: {
+          select: {
+            slotNumber: true,
+            unitNumber: true,
+            category: { select: { id: true, name: true, capacity: true, bedConfiguration: true, bedrooms: true, property: { select: { id: true, name: true, type: true, checkInTime: true, checkOutTime: true } } } },
+          },
+        },
       },
     }),
     db.roomingStay.findMany({
@@ -128,6 +134,8 @@ export async function roomingFor(db: Db, scope: { clientId: string; eventId: str
     unitNumber: string | null;
     category: string;
     capacity: number;
+    /** A couple's bed (a King): one name, and a partner if there is one — not "sharing with". */
+    oneBed: boolean;
     booked: { checkIn: string; checkOut: string }[];
     nights: number;
     named: number;
@@ -155,7 +163,18 @@ export async function roomingFor(db: Db, scope: { clientId: string; eventId: str
     if (!entry) {
       const property = night.slot.category.property;
       entry = {
-        room: { slotId: night.slotId, slotNumber: night.slot.slotNumber, unitNumber: night.slot.unitNumber, category: night.slot.category.name, capacity: night.slot.category.capacity, booked: [], nights: 0, named: 0, stays: [] },
+        room: {
+          slotId: night.slotId,
+          slotNumber: night.slot.slotNumber,
+          unitNumber: night.slot.unitNumber,
+          category: night.slot.category.name,
+          capacity: night.slot.category.capacity,
+          oneBed: sharesOneBed({ category: night.slot.category.name, bedConfiguration: night.slot.category.bedConfiguration, capacity: night.slot.category.capacity, bedrooms: night.slot.category.bedrooms }),
+          booked: [],
+          nights: 0,
+          named: 0,
+          stays: [],
+        },
         dates: [],
         propertyId: property.id,
         propertyName: property.name,

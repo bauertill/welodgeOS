@@ -4144,7 +4144,12 @@ already? Upload it*, and a bar of how many rooms have their guests. Then per pro
 name and check-in times, **every room they booked**: on the left *Room 1 · No. 101*, its type,
 how many it sleeps and its booked dates, with a dot (green when all named, amber when partly,
 empty when not yet); on the right **a line per stay** — *Guest*, *Sharing with* (more people via
-*+ another person* in larger rooms; *Sleeps one* for singles), *From*, *To*, *Arriving* (time or
+*+ another person* in larger rooms; *Sleeps one* for singles) — or, in a room with **one bed for
+a couple** (a King), just the one name and **+ partner** for a second (the owner, 2026-11-23:
+"when it's a double room it should have sharing with; when it's a King, leave only one name, but a
+plus for a partner"); the team's sheet does the same. One bed is read from the room type's bed
+configuration ("1 King"), else its name: *King* or a single *Queen* is one bed; *Double*, *Twin*,
+*Double Queen*, suites and apartments are sharing; a room type with neither (*ROH*) is sharing — *From*, *To*, *Arriving* (time or
 flight), *Notes* — and an empty line ready for the room's next free dates. On a phone each line
 stacks with its labels.
 

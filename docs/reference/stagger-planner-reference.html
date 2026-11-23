@@ -262,7 +262,7 @@ td.zero{color:var(--muted);opacity:.6}
 (function(){
   var DAY = 86400000;
   var KEY = 'welodge-obs-decron-stagger-v1';
-  var TYPES = [{k:'studio',label:'Studio'},{k:'one',label:'1-bed'}];
+  var TYPES = [{k:'studio',label:'Studio'},{k:'one',label:'1-bed'},{k:'two',label:'2-bed'}];
   var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -309,7 +309,7 @@ td.zero{color:var(--muted);opacity:.6}
   }
   function defaults(){
     var s = {units:50, first:'2028-03-01', waves:6, gap:14, stay:6,
-      mix:{studio:20, one:80}, rates:{studio:4000, one:4500},
+      mix:{studio:20, one:60, two:20}, rates:{studio:4000, one:4500, two:5500},
       showBlock:true, showRent:true, presenting:false, rateBasis:'month', rows:[]};
     s.rows = gen(s);
     return s;
@@ -319,7 +319,14 @@ td.zero{color:var(--muted);opacity:.6}
       var raw = localStorage.getItem(KEY);
       if (raw){
         var s = JSON.parse(raw);
-        if (s && Array.isArray(s.rows) && s.mix && s.rates) return Object.assign(defaults(), s);
+        if (s && Array.isArray(s.rows) && s.mix && s.rates){
+          var out = Object.assign(defaults(), s), dr = defaults().rates;
+          TYPES.forEach(function(t){
+            if (out.mix[t.k] == null) out.mix[t.k] = 0;
+            if (out.rates[t.k] == null) out.rates[t.k] = dr[t.k];
+          });
+          return out;
+        }
       }
     } catch(e){}
     return defaults();
