@@ -128,6 +128,9 @@ model Event {
   /// and the event's own dates are then its one period.
   periods               EventPeriod[]
   rateCards             RateCard[]
+  /// We Lodge's contact for guests at this event — who they call, on the
+  /// client's property information page (doc §6.8).
+  guestContact          String?
 
   @@index([startDate])
 }
@@ -243,6 +246,23 @@ model Property {
   laundry         String?
   gym             String?
   publicTransport String?
+
+  // What guests need to know (doc §6.8, property information for the client,
+  // the owner 2026-11-23): shown on the client's property information page,
+  // with the check-in and check-out times, breakfast and the address above.
+  /// How to check in: where to go, reception hours, how keys are handed over.
+  guestCheckIn   String?
+  /// What guests need at check-in: a credit card, a deposit, their passport.
+  guestPayment   String?
+  guestCityTax   String?
+  guestParking   String?
+  guestWifi      String?
+  /// House rules: smoking, quiet hours, rubbish.
+  guestRules     String?
+  /// Who to call at the property in an emergency.
+  guestEmergency String?
+  /// Anything else guests should know.
+  guestOther     String?
 
   // Contracting details (doc §3.9): the legal entity a contract is signed
   // with. Visible to every colleague — accepted by the business for now.
@@ -1613,6 +1633,10 @@ model SalesRequest {
   rateCardAnswers RateCardResponse[]
   /// Its running notes (doc §2.6).
   updates         Update[]
+  /// The client's property information page (doc §6.8): the unguessable part
+  /// of its link; empty means not made, or switched off.
+  stayToken       String?            @unique
+  stayLinkMadeAt  DateTime?
 
   @@index([clientId])
   @@index([eventId])
