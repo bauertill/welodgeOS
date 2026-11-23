@@ -99,10 +99,6 @@ model Event {
   /// The currency the event's hotels quote in — USD for LA28, BRL for the
   /// Women's World Cup 2027 (doc §2.3). New quotations and rates start in it.
   currency  String      @default("USD")
-  /// The event's folder on the We Lodge shared drive, e.g. "10_FIFA Women's
-  /// World Cup 2027" (doc §3.12). Each property put on the event gets a folder
-  /// under its 1_Accommodation. Empty: no folders are made.
-  driveFolderId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -579,9 +575,6 @@ model ScoutingEntry {
   blockExpiry         DateTime? @db.Date
   roomingListDeadline DateTime? @db.Date
   minimumStayNights   Int?
-  /// This property's folder for this event on the shared drive —
-  /// <event folder> › 1_Accommodation › <property> (doc §3.12).
-  driveFolderId       String?
 
   @@unique([eventId, propertyId])
   @@index([eventId])

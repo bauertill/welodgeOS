@@ -1787,47 +1787,6 @@ Each contractor's page holds:
 A contractor is **deleted** only while it has no contract (those are kept); its contacts,
 properties and updates go with it, and its tasks stay, about nothing.
 
-### 3.12 Drive folders
-
-> **Built on staging** (2026-11-20) — waiting on Google Drive being connected (below).
-> The owner asked: "is there a way we can automatically add a folder on drive when a property
-> is created?"
-
-**Where folders go** — as the team already keeps them on the *We Lodge* shared drive:
-**<event folder> › 1_Accommodation › <property>**, e.g. *10_FIFA Women's World Cup 2027 ›
-1_Accommodation › Othon Palace Copacabana Rio*. Each new property folder gets the five
-subfolders of the templates in *1_Accommodation › 1_Templates*: **1_General Information**,
-**2_Rates, Proposals & Policies**, **3_Agreement & Addenda**, **4_Finance & Confirmations**,
-**5_Rooming Lists** (empty; the templates' files are not copied).
-
-**When.** A folder belongs to a property *on an event*, so it is made when a property is put on
-an event — however that happens: created with an event (the board, the map, a sales request's
-sourcing, Claude), added to the event's list later, or put there by a *Get rate* task. It is
-made just after the save, so nobody waits for Google; if Google fails, the hourly run tries
-again for a week. A property on two events gets a folder under each.
-
-**Rules.**
-- **The event says where.** An event's *Google Drive folder* (event details, *Edit*: paste the
-  folder's address) is its folder on the shared drive. Without one, the event's properties get
-  no folder, and their panel says so. OS refuses a link it cannot open, naming the account that
-  must be a member of the shared drive.
-- *1_Accommodation* is made in the event folder if it is not there.
-- **Never doubled.** A folder already in *1_Accommodation* with the property's name (case and
-  spacing aside) is used as it is — no subfolders added.
-- **Renaming a property in OS renames its folders.** Removing a property from an event or from
-  OS leaves its folders alone: nothing in Drive is ever deleted by OS.
-- **New properties only** (the owner, 2026-11-20): properties already on events get no folder
-  automatically. Their panel has *Make the Drive folder* to make (or find) one on demand.
-- The property's panel on the event's board shows *Open the Drive folder*, or why there is
-  none.
-- Every folder made or linked is in the entry's history ("Drive folder made: 1_Accommodation ›
-  …").
-
-**Connecting Google Drive.** OS works in Drive as a Google *service account* — a company robot
-account, not a person — that is a *Content manager* of the We Lodge shared drive. Its key is
-kept on the server only (`GOOGLE_DRIVE_SERVICE_ACCOUNT` on Vercel, staging and live). Until it
-is set, nothing is made and panels say *Google Drive is not connected to OS yet*.
-
 ## 4. Phase 2 — Acquisition & Sales
 
 ### 4.1 The acquisition axis (supply)
@@ -4393,7 +4352,6 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
 | §3.11 Contractors | **Built** (2026-11-19) | A Contractors tab per event — each contractor belongs to one event (no menu item since the same day); each with what it does, contacts, contracting details, properties it serves among the event's (shown on the property too), supplier contracts and payments, tasks and updates (board's Other providers tab) |
-| §3.12 Drive folders | **Built on staging** (2026-11-20), off until Google Drive is connected | A property put on an event gets <event folder> › 1_Accommodation › <property> with the five standard subfolders, or the existing folder of that name; the event's Drive folder set in its details; renames follow; hourly catch-up for a week; *Make the Drive folder* on older ones; nothing in Drive deleted |
 | §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
@@ -4408,8 +4366,9 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | Files uploaded onto a task, kept in the private file store (2026-11-18). One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
-| §2.8 Private task board | **Built on staging** (2026-11-23) | Each person's own private board beside the team board; private tasks seen only by their maker (lists, task, comments, files, history, sales request and contractor counts), no assignees but the maker and no notifications to others; *Private* tick on the new-task form; *Move to the team board*, one way |
-| §4.8 Blocking task to the supplier | **Built on staging** (2026-11-23) | Blocking rooms for a client on the stock sheet makes a Blocking task per hotel (rooms, nights, client's deadline) for the acquisition rep, else the hotel's contact-task owner, else the accommodation managers; more rooms for the same client add a comment. Not from sales requests or offers, not on extending a block; blocks made before this have no task |
+| Drive folders per property | **Removed** (2026-11-23) | Built on 2026-11-20 to make each property's folder on the shared drive, but never switched on; the owner: "not needed anymore". Files are kept in the site's own file store instead (§2.8) |
+| §2.8 Private task board | **Built** (2026-11-23) | Each person's own private board beside the team board; private tasks seen only by their maker (lists, task, comments, files, history, sales request and contractor counts), no assignees but the maker and no notifications to others; *Private* tick on the new-task form; *Move to the team board*, one way |
+| §4.8 Blocking task to the supplier | **Built** (2026-11-23) | Blocking rooms for a client on the stock sheet makes a Blocking task per hotel (rooms, nights, client's deadline) for the acquisition rep, else the hotel's contact-task owner, else the accommodation managers; more rooms for the same client add a comment. Not from sales requests or offers, not on extending a block; blocks made before this have no task |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
