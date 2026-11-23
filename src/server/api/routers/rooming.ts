@@ -6,7 +6,7 @@ import { z } from "zod";
 import { parseDay } from "~/lib/dates";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
-import { removeStay, roomingList, saveStay } from "~/server/rooming";
+import { applyImport, previewImport, removeStay, roomingList, saveStay } from "~/server/rooming";
 
 /** The rooming list (doc §6.9): the team on the sales request, the client by their link. */
 
@@ -21,6 +21,22 @@ const stayInput = z.object({
   notes: z.string().max(2000).default(""),
 });
 const token = z.string().min(20).max(100);
+const name = z.string().max(100);
+const importRows = z
+  .array(
+    z.object({
+      rows: z.array(z.number().int()).max(50),
+      guests: z.array(z.object({ firstName: name, lastName: name })).max(20),
+      checkIn: day.nullable(),
+      checkOut: day.nullable(),
+      property: z.string().max(200).nullable(),
+      roomType: z.string().max(200).nullable(),
+      roomNumber: z.string().max(40).nullable(),
+      arrival: z.string().max(300).nullable().optional(),
+      notes: z.string().max(2000).nullable().optional(),
+    }),
+  )
+  .max(2000);
 const asStay = (input: z.infer<typeof stayInput>) => ({ ...input, checkIn: parseDay(input.checkIn), checkOut: parseDay(input.checkOut) });
 
 async function byToken(db: Parameters<typeof roomingList>[0], value: string) {
@@ -83,7 +99,29 @@ export const roomingRouter = createTRPCRouter({
     return { ok: true };
   }),
 
+  /** What the client's sheet would change — nothing is saved. */
+  previewImport: protectedProcedure.input(z.object({ salesRequestId: z.string(), sheet: importRows })).mutation(({ ctx, input }) => previewImport(ctx.db, input.salesRequestId, input.sheet)),
+
+  applyImport: protectedProcedure
+    .input(z.object({ salesRequestId: z.string(), sheet: importRows, removeMissing: z.boolean().default(false), fileName: z.string().max(300).default("") }))
+    .mutation(async ({ ctx, input }) => {
+      const done = await applyImport(ctx.db, input.salesRequestId, input.sheet, input.removeMissing, ctx.session.user.id);
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.salesRequestId, summary: `Rooming list read from ${input.fileName || "a spreadsheet"}`, changes: `${done.added} added, ${done.changed} changed, ${done.removed} taken out, ${done.problems + done.failed.length} not placed` });
+      return done;
+    }),
+
   // --- The client, by their link ----------------------------------------------
+
+  previewImportByLink: publicProcedure.input(z.object({ token, sheet: importRows })).mutation(async ({ ctx, input }) => previewImport(ctx.db, await byToken(ctx.db, input.token), input.sheet)),
+
+  applyImportByLink: publicProcedure
+    .input(z.object({ token, sheet: importRows, removeMissing: z.boolean().default(false), fileName: z.string().max(300).default("") }))
+    .mutation(async ({ ctx, input }) => {
+      const id = await byToken(ctx.db, input.token);
+      const done = await applyImport(ctx.db, id, input.sheet, input.removeMissing, null);
+      await logAudit(ctx.db, { actorId: null, entity: "SalesRequest", entityId: id, summary: `Rooming list read from ${input.fileName || "a spreadsheet"}, by the client`, changes: `${done.added} added, ${done.changed} changed, ${done.removed} taken out, ${done.problems + done.failed.length} not placed` });
+      return done;
+    }),
 
   shared: publicProcedure.input(z.object({ token })).query(async ({ ctx, input }) => {
     const id = await byToken(ctx.db, input.token);

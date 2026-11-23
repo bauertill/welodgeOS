@@ -241,3 +241,189 @@ export async function removeStay(tx: Prisma.TransactionClient, salesRequestId: s
     changes: formatRange(stay.checkIn, stay.checkOut),
   });
 }
+
+// --- Importing a client's own rooming list (doc §6.9, the owner 2026-11-23) -------
+
+/** One stay as read from the client's sheet, after its columns were matched. */
+export type ImportRow = {
+  /** The sheet's row numbers it came from — for pointing at problems. */
+  rows: number[];
+  guests: Guest[];
+  checkIn: string | null;
+  checkOut: string | null;
+  property: string | null;
+  roomType: string | null;
+  roomNumber: string | null;
+  /** Undefined: the sheet has no such column, so what we have is kept. */
+  arrival?: string | null;
+  notes?: string | null;
+};
+
+const norm = (text: string) => text.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const alike = (a: string, b: string) => {
+  const [x, y] = [norm(a), norm(b)];
+  return Boolean(x && y) && (x === y || x.includes(y) || y.includes(x));
+};
+const personKey = (guest: Guest) => norm(guestName(guest));
+const covers = (booked: { checkIn: string; checkOut: string }[], checkIn: string, checkOut: string) => booked.some((run) => run.checkIn <= checkIn && run.checkOut >= checkOut);
+const overlaps = (a: { checkIn: string; checkOut: string }, b: { checkIn: string; checkOut: string }) => a.checkIn < b.checkOut && b.checkIn < a.checkOut;
+const fmt = (from: string, to: string) => formatRange(new Date(`${from}T00:00:00Z`), new Date(`${to}T00:00:00Z`));
+
+/**
+ * What a client's sheet would do to the list — nothing is changed. Each stay
+ * in the sheet is matched to a guest already on the list (by name) or placed
+ * in a free room of the right property, type and number; what cannot be is a
+ * problem, saying why (not booked, outside the booking, no room left, too many
+ * for the room). Guests on the list but not in the sheet are listed too.
+ */
+export async function previewImport(db: Db, salesRequestId: string, sheet: ImportRow[]) {
+  const { properties } = await roomingList(db, salesRequestId, { forClient: false });
+  const rooms = properties.flatMap((property) => property.rooms.map((room) => ({ ...room, property: property.name })));
+  const active = rooms.flatMap((room) => room.stays.filter((stay) => !stay.removed).map((stay) => ({ ...stay, slotId: room.slotId })));
+
+  const matched: {
+    rows: number[];
+    guests: Guest[];
+    action: "add" | "update" | "same";
+    stayId: string | null;
+    slotId: string;
+    room: string;
+    checkIn: string;
+    checkOut: string;
+    arrival: string | null;
+    notes: string | null;
+    changes: string[];
+    warning: string | null;
+  }[] = [];
+  const problems: { rows: number[]; guests: string; message: string }[] = [];
+  const usedStays = new Set<string>();
+  // Who is in which room on which dates, as the sheet would leave it.
+  const taken: { slotId: string; checkIn: string; checkOut: string; stayId: string | null }[] = active.map((stay) => ({ slotId: stay.slotId, checkIn: stay.checkIn, checkOut: stay.checkOut, stayId: stay.id }));
+  const label = (room: (typeof rooms)[number]) => `${room.property} · ${room.category} ${room.unitNumber ? `No. ${room.unitNumber}` : `room ${room.slotNumber}`}`;
+
+  for (const row of sheet) {
+    const guests = row.guests.filter((guest) => guest.firstName || guest.lastName);
+    const who = guests.map(guestName).join(", ") || "(no name)";
+    if (!guests.length) {
+      problems.push({ rows: row.rows, guests: who, message: "No guest name on this row." });
+      continue;
+    }
+    const keys = new Set(guests.map(personKey));
+    const existing = active.find((stay) => !usedStays.has(stay.id) && stay.guests.some((guest) => keys.has(personKey(guest))));
+
+    let candidates = rooms;
+    if (row.property) {
+      const byProperty = candidates.filter((room) => alike(room.property, row.property!));
+      if (!byProperty.length) {
+        problems.push({ rows: row.rows, guests: who, message: `No rooms booked at "${row.property}". Booked: ${[...new Set(rooms.map((room) => room.property))].join(", ")}.` });
+        continue;
+      }
+      candidates = byProperty;
+    }
+    if (row.roomType) {
+      const byType = candidates.filter((room) => alike(room.category, row.roomType!));
+      if (!byType.length) {
+        problems.push({ rows: row.rows, guests: who, message: `No "${row.roomType}" booked${row.property ? ` at ${row.property}` : ""}. Booked: ${[...new Set(candidates.map((room) => room.category))].join(", ")}.` });
+        continue;
+      }
+      candidates = byType;
+    }
+    let warning: string | null = null;
+    if (row.roomNumber) {
+      const byNumber = candidates.filter((room) => room.unitNumber && norm(room.unitNumber) === norm(row.roomNumber!));
+      if (byNumber.length) candidates = byNumber;
+      else warning = `Room number ${row.roomNumber} is not one we know yet — placed by room type.`;
+    }
+
+    // Dates: the sheet's, else what the guest has now, else the one stretch these rooms are booked for.
+    let checkIn = row.checkIn ?? existing?.checkIn ?? null;
+    let checkOut = row.checkOut ?? existing?.checkOut ?? null;
+    if (!checkIn || !checkOut) {
+      const stretches = [...new Set(candidates.flatMap((room) => room.booked.map((run) => `${run.checkIn}|${run.checkOut}`)))];
+      if (stretches.length === 1) [checkIn, checkOut] = stretches[0]!.split("|") as [string, string];
+      else {
+        problems.push({ rows: row.rows, guests: who, message: "No dates on this row, and these rooms are booked for more than one stretch — add check-in and check-out." });
+        continue;
+      }
+    }
+    if (checkOut <= checkIn) {
+      problems.push({ rows: row.rows, guests: who, message: `Check-out (${checkOut}) is not after check-in (${checkIn}).` });
+      continue;
+    }
+    const inBooking = candidates.filter((room) => covers(room.booked, checkIn, checkOut));
+    if (!inBooking.length) {
+      const booked = [...new Set(candidates.flatMap((room) => room.booked.map((run) => fmt(run.checkIn, run.checkOut))))].join(", ");
+      problems.push({ rows: row.rows, guests: who, message: `${fmt(checkIn, checkOut)} is outside the booking — these rooms are booked ${booked}.` });
+      continue;
+    }
+    const fits = inBooking.filter((room) => room.capacity >= guests.length);
+    if (!fits.length) {
+      problems.push({ rows: row.rows, guests: who, message: `${guests.length} guests, but these rooms sleep ${Math.max(...inBooking.map((room) => room.capacity))}.` });
+      continue;
+    }
+    const stay = { checkIn, checkOut };
+    const free = (room: (typeof rooms)[number]) => !taken.some((other) => other.slotId === room.slotId && other.stayId !== (existing?.id ?? "-") && overlaps(other, stay));
+    const room = (existing && fits.find((one) => one.slotId === existing.slotId && free(one))) ?? fits.find(free);
+    if (!room) {
+      problems.push({ rows: row.rows, guests: who, message: `No room left: all ${fits.length} matching room${fits.length === 1 ? " is" : "s are"} taken for ${fmt(checkIn, checkOut)}.` });
+      continue;
+    }
+
+    const arrival = row.arrival === undefined ? (existing?.arrival ?? null) : row.arrival;
+    const notes = row.notes === undefined ? (existing?.notes ?? null) : row.notes;
+    const changes: string[] = [];
+    if (existing) {
+      usedStays.add(existing.id);
+      const was = existing.guests.map(guestName).join(", ");
+      if (norm(was) !== norm(who)) changes.push(`guests ${was} → ${who}`);
+      if (existing.checkIn !== checkIn || existing.checkOut !== checkOut) changes.push(`dates ${fmt(existing.checkIn, existing.checkOut)} → ${fmt(checkIn, checkOut)}`);
+      if (existing.slotId !== room.slotId) changes.push(`room → ${label(room)}`);
+      if ((existing.arrival ?? "") !== (arrival ?? "")) changes.push(`arrival ${existing.arrival ?? "—"} → ${arrival ?? "—"}`);
+      if ((existing.notes ?? "") !== (notes ?? "")) changes.push("notes");
+      const index = taken.findIndex((other) => other.stayId === existing.id);
+      if (index >= 0) taken.splice(index, 1);
+    }
+    taken.push({ slotId: room.slotId, checkIn, checkOut, stayId: existing?.id ?? null });
+    matched.push({ rows: row.rows, guests, action: existing ? (changes.length ? "update" : "same") : "add", stayId: existing?.id ?? null, slotId: room.slotId, room: label(room), checkIn, checkOut, arrival, notes, changes, warning });
+  }
+
+  const missing = active
+    .filter((stay) => !usedStays.has(stay.id))
+    .map((stay) => {
+      const room = rooms.find((one) => one.slotId === stay.slotId)!;
+      return { stayId: stay.id, guests: stay.guests.map(guestName).join(", "), room: label(room), dates: fmt(stay.checkIn, stay.checkOut) };
+    });
+  return { matched, problems, missing };
+}
+
+/** Make the sheet's changes: each stay added or changed on its own, so one refusal does not stop the rest. */
+export async function applyImport(db: PrismaClient, salesRequestId: string, sheet: ImportRow[], removeMissing: boolean, actorId: string | null) {
+  const preview = await previewImport(db, salesRequestId, sheet);
+  const failed: { guests: string; message: string }[] = [];
+  let added = 0;
+  let changed = 0;
+  let removed = 0;
+  if (removeMissing) {
+    for (const stay of preview.missing) {
+      await db.$transaction((tx) => removeStay(tx, salesRequestId, stay.stayId, actorId));
+      removed++;
+    }
+  }
+  for (const item of preview.matched.filter((one) => one.action !== "same")) {
+    try {
+      await db.$transaction((tx) =>
+        saveStay(
+          tx,
+          salesRequestId,
+          { id: item.stayId ?? undefined, slotId: item.slotId, checkIn: new Date(`${item.checkIn}T00:00:00Z`), checkOut: new Date(`${item.checkOut}T00:00:00Z`), guests: item.guests, arrival: item.arrival ?? "", notes: item.notes ?? "" },
+          actorId,
+        ),
+      );
+      if (item.action === "add") added++;
+      else changed++;
+    } catch (error) {
+      failed.push({ guests: item.guests.map(guestName).join(", "), message: error instanceof Error ? error.message : "Could not be saved." });
+    }
+  }
+  return { added, changed, removed, failed, problems: preview.problems.length };
+}

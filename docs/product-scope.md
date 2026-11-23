@@ -4067,9 +4067,19 @@ at the event — per property, each room with its type, how many it sleeps, and 
 theirs (*Booked 10 Jul – 30 Jul 2028*). Nobody adds or removes rooms or dates here; that is
 the contract's.
 
+**A sheet** (the owner, 2026-11-23: "the current layout is so hard to add to… maybe a table or
+sheet works better"). Each property is a table to type straight into: one row per stay, the room
+(type, number, how many it sleeps, its booked dates and how many nights are named) beside its
+rows, then check-in, check-out, a column per guest (as many as the property's largest room
+sleeps, up to four; cells beyond a room's beds are greyed), arriving and notes. Every room with
+nights nobody is named for has an empty row, its dates set to the first such stretch — type a
+name and the stay is there. **A row saves when the cursor leaves it** (or with *Save*); × takes
+a stay out. A guest is typed as one full name, kept as first and last name (the last word is the
+last name), as hotels want them.
+
 **Stays.** Into each room go its **stays**: the dates (within what was booked), the **guests
-sharing the room** for those dates (first and last name; as many as the room sleeps), when they
-**arrive** (a time or a flight, as the client gives it) and notes. A room used in turns —
+sharing the room** for those dates (as many as the room sleeps), when they **arrive** (a time or
+a flight, as the client gives it) and notes. A room used in turns —
 one team then another — gets one stay after the other. Each room says how many of its nights
 are named, and the list how many of all of them (*20 of 505 nights named across 25 rooms*). The
 system refuses, saying why:
@@ -4078,6 +4088,30 @@ system refuses, saying why:
   (asking for more nights through the list is the next step);
 - a stay overlapping another in the same room — guests sharing go in the same stay;
 - more guests than the room sleeps.
+
+**Reading the client's own spreadsheet** (the owner, 2026-11-23: "a client might send us a
+rooming list in Excel, can the system automatically view, update and flag any discrepancies…
+if they could upload an Excel they have and map it accordingly"). On the team's list *⬆ Read the
+client's Excel*, and on the client's link *⬆ Upload your own Excel or CSV*: an Excel file
+(.xlsx — the old .xls is refused, asking for .xlsx or CSV) or a CSV, read in the browser. Its
+heading row is found, and **each column is matched** to ours by its heading — guest full name,
+or first and last name; a second guest sharing; check-in; check-out; hotel (when the client has
+rooms at several); room type; room/apartment number; a *sharing group* (rows with the same value
+go in one room together); arriving; notes — each changeable. Dates are read as Excel stores them
+or as written (10/07/2028, 10 Jul 2028, July 10…); where 05/07 could be either, the reader is
+asked which way round. Without dates, a room's booked dates are used.
+
+*Check it against the rooms* then shows, without changing anything: **to add** — each new stay
+and the room it goes in; **to change** — a guest already on the list (matched by name), with what
+differs (dates, room, sharing, arrival); **already right**; **not placed**, in red with the
+sheet's row and why — *no "Suite" booked (booked: ROH)*, *outside the booking (these rooms are
+booked 10 Jul – 30 Jul 2028)*, *no room left: all 5 matching rooms are taken*, *3 guests but these
+rooms sleep 2*, no name, check-out before check-in; and **on the list but not in the file**, with
+a tick to take them out when the file is the whole list. A room number we do not know yet is a
+warning, and the stay is placed by its type. *Apply to the rooming list* makes the changes —
+each on its own, the same rules as typing them in — and says what was added, changed and taken
+out; the request's history records the file. What was not placed stays to be fixed in the file
+or typed into the sheet.
 
 **The client's link** (*Make a link for the client*; copy, open, switch off as the other
 links): no sign-in, works on a phone, shows their rooms and lets them add, change and take out
@@ -4607,7 +4641,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Step 1 is built; step 2's list is built, its extension requests are not |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
-| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link; stays with guests sharing, arrival, notes; refuses dates outside the booking, overlaps and too many guests; room numbers; Excel per property; mark sent, later changes flagged. Not yet: extension requests and the acquisition task, notifying the team when the client changes the list, sending the Excel from OS |
+| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes; reading the client's own Excel/CSV with column matching, a preview of what it adds, changes and cannot place (and why), then apply; refuses dates outside the booking, overlaps and too many guests; room numbers; Excel per property; mark sent, later changes flagged. Not yet: extension requests and the acquisition task, notifying the team when the client changes the list, sending the Excel from OS |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 
