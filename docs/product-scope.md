@@ -2176,6 +2176,19 @@ selected by hand, and a sales request (§4.11), where the rep says a room catego
 number of rooms and a stay and the system picks the rooms. Neither has a rule the other
 lacks.
 
+**A block tells the supplier: the blocking task** (the owner, 2026-11-23: "When we block a
+room for a client on the inventory sheet this should create a blocking task for the
+supplier"). Blocking rooms for a client on the stock sheet makes a *Blocking* task —
+*Block <hotel> for <client> — <event>* — saying which rooms, which nights and the client's
+deadline, and asking for the hotel to hold them. One per hotel, client and event while it is
+open: blocking more rooms there for the same client adds them to it as a comment rather than
+making another. It goes to whoever has those rooms with the hotel (their acquisition rep),
+else whoever handled the hotel's contact task for the event, else the event's accommodation
+managers, else the person who blocked; they are notified. Amending a block already in place
+— a note, a price, a reference — makes no task, since the hotel has nothing new to hold.
+Rooms blocked from a sales request or by an offer do not make one (only the stock sheet, as
+asked); neither does extending a block.
+
 ### 4.9 The general audit trail
 
 The ledger (§4.7) only ever describes a room-night. Everything else that changes — a
@@ -4396,6 +4409,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | Files uploaded onto a task, kept in the private file store (2026-11-18). One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
 | §2.8 Private task board | **Built on staging** (2026-11-23) | Each person's own private board beside the team board; private tasks seen only by their maker (lists, task, comments, files, history, sales request and contractor counts), no assignees but the maker and no notifications to others; *Private* tick on the new-task form; *Move to the team board*, one way |
+| §4.8 Blocking task to the supplier | **Built on staging** (2026-11-23) | Blocking rooms for a client on the stock sheet makes a Blocking task per hotel (rooms, nights, client's deadline) for the acquisition rep, else the hotel's contact-task owner, else the accommodation managers; more rooms for the same client add a comment. Not from sales requests or offers, not on extending a block; blocks made before this have no task |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |
