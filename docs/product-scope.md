@@ -4094,12 +4094,23 @@ rooming list in Excel, can the system automatically view, update and flag any di
 if they could upload an Excel they have and map it accordingly"). On the team's list *⬆ Read the
 client's Excel*, and on the client's link *⬆ Upload your own Excel or CSV*: an Excel file
 (.xlsx — the old .xls is refused, asking for .xlsx or CSV) or a CSV, read in the browser. Its
-heading row is found, and **each column is matched** to ours by its heading — guest full name,
-or first and last name; a second guest sharing; check-in; check-out; hotel (when the client has
-rooms at several); room type; room/apartment number; a *sharing group* (rows with the same value
-go in one room together); arriving; notes — each changeable. Dates are read as Excel stores them
-or as written (10/07/2028, 10 Jul 2028, July 10…); where 05/07 could be either, the reader is
-asked which way round. Without dates, a room's booked dates are used.
+heading row is found — of the first twenty, the one with the most filled cells, so a title and
+the client's name above it are passed over — and **each column is matched** to ours by its
+heading — guest full name, or first and last name; a second guest sharing; check-in; check-out
+(*Actual check-in* is taken over a contract date); hotel (when the client has rooms at
+several); room type; the building's room number; the sheet's own **room line** (*Apt #*);
+arriving (an ETA before a flight number); notes — each changeable. Dates are read as Excel
+stores them or as written (10/07/2028, 10 Jul 2028, 3 March2025, July 10…); where 05/07 could be
+either, the reader is asked which way round. Without dates, a room's booked dates are used.
+
+Written the way our own template is (the owner's Hotel Olympia Cortina list, 2026-11-23): a room
+line's first row carries its number, type and dates, and the rows under it with those cells
+blank **belong to it** — they carry on with its number, type and hotel, and its dates while they
+give none. Rows on the same line and the same dates **share the room** (a twin); on other dates
+they **follow each other in it**, and are kept in the same room of ours where it is free. A row
+with nobody on it (a second contract line) is skipped. **The same person can stay twice** — a
+room change, a second trip: a guest already on the list is matched by name *and* overlapping
+dates, so their second stay is added rather than replacing the first.
 
 *Check it against the rooms* then shows, without changing anything: **to add** — each new stay
 and the room it goes in; **to change** — a guest already on the list (matched by name), with what

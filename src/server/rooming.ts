@@ -254,6 +254,8 @@ export type ImportRow = {
   property: string | null;
   roomType: string | null;
   roomNumber: string | null;
+  /** The sheet's own line for a room ("Apt #"): stays with the same one go in the same room where they can. */
+  roomKey?: string | null;
   /** Undefined: the sheet has no such column, so what we have is kept. */
   arrival?: string | null;
   notes?: string | null;
@@ -297,6 +299,8 @@ export async function previewImport(db: Db, salesRequestId: string, sheet: Impor
   }[] = [];
   const problems: { rows: number[]; guests: string; message: string }[] = [];
   const usedStays = new Set<string>();
+  // The room each of the sheet's room lines went into, so its later stays follow it.
+  const lines = new Map<string, string>();
   // Who is in which room on which dates, as the sheet would leave it.
   const taken: { slotId: string; checkIn: string; checkOut: string; stayId: string | null }[] = active.map((stay) => ({ slotId: stay.slotId, checkIn: stay.checkIn, checkOut: stay.checkOut, stayId: stay.id }));
   const label = (room: (typeof rooms)[number]) => `${room.property} · ${room.category} ${room.unitNumber ? `No. ${room.unitNumber}` : `room ${room.slotNumber}`}`;
@@ -309,7 +313,11 @@ export async function previewImport(db: Db, salesRequestId: string, sheet: Impor
       continue;
     }
     const keys = new Set(guests.map(personKey));
-    const existing = active.find((stay) => !usedStays.has(stay.id) && stay.guests.some((guest) => keys.has(personKey(guest))));
+    // The same person can stay twice (a room change, a second trip): their stay on the list is the one
+    // these dates overlap — or, with no dates in the sheet, their only one.
+    const theirs = active.filter((stay) => !usedStays.has(stay.id) && stay.guests.some((guest) => keys.has(personKey(guest))));
+    const existing =
+      row.checkIn && row.checkOut ? theirs.find((stay) => overlaps(stay, { checkIn: row.checkIn!, checkOut: row.checkOut! })) : theirs.length === 1 ? theirs[0] : undefined;
 
     let candidates = rooms;
     if (row.property) {
@@ -363,7 +371,9 @@ export async function previewImport(db: Db, salesRequestId: string, sheet: Impor
     }
     const stay = { checkIn, checkOut };
     const free = (room: (typeof rooms)[number]) => !taken.some((other) => other.slotId === room.slotId && other.stayId !== (existing?.id ?? "-") && overlaps(other, stay));
-    const room = (existing && fits.find((one) => one.slotId === existing.slotId && free(one))) ?? fits.find(free);
+    const sameLine = row.roomKey ? lines.get(row.roomKey) : undefined;
+    const room =
+      (existing && fits.find((one) => one.slotId === existing.slotId && free(one))) ?? (sameLine && fits.find((one) => one.slotId === sameLine && free(one))) ?? fits.find(free);
     if (!room) {
       problems.push({ rows: row.rows, guests: who, message: `No room left: all ${fits.length} matching room${fits.length === 1 ? " is" : "s are"} taken for ${fmt(checkIn, checkOut)}.` });
       continue;
@@ -384,6 +394,7 @@ export async function previewImport(db: Db, salesRequestId: string, sheet: Impor
       if (index >= 0) taken.splice(index, 1);
     }
     taken.push({ slotId: room.slotId, checkIn, checkOut, stayId: existing?.id ?? null });
+    if (row.roomKey && !lines.has(row.roomKey)) lines.set(row.roomKey, room.slotId);
     matched.push({ rows: row.rows, guests, action: existing ? (changes.length ? "update" : "same") : "add", stayId: existing?.id ?? null, slotId: room.slotId, room: label(room), checkIn, checkOut, arrival, notes, changes, warning });
   }
 

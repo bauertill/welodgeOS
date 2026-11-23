@@ -371,18 +371,23 @@ function SheetRow({
 // --- Reading the client's own spreadsheet -------------------------------------------
 
 type Field = "name" | "firstName" | "lastName" | "name2" | "checkIn" | "checkOut" | "property" | "roomType" | "roomNumber" | "group" | "arrival" | "notes";
-const fields: { key: Field; label: string; hint?: string; guess: RegExp }[] = [
+const fields: { key: Field; label: string; hint?: string; guess: RegExp | RegExp[] }[] = [
   { key: "name", label: "Guest — full name", guess: /^(guest|name|full ?name|guest ?name|passenger|participant|athlete|delegate|person)( ?1)?$/i },
   { key: "firstName", label: "First name", guess: /first|given|vorname|pr[ée]nom/i },
   { key: "lastName", label: "Last name", guess: /last|surname|family|nachname|nom$/i },
   { key: "name2", label: "Second guest (sharing) — full name", guess: /(guest|name|sharing|roommate|room ?mate).*2|sharing ?with|room ?mate/i },
   { key: "checkIn", label: "Check-in", guess: /check.?in|arrival ?date|^arrival$|^from$|^in$|anreise/i },
   { key: "checkOut", label: "Check-out", guess: /check.?out|departure|^to$|^out$|abreise/i },
-  { key: "property", label: "Hotel / property", guess: /hotel|property|accommodation|building|residence/i },
+  { key: "property", label: "Hotel / property", guess: /^(hotel|property|accommodation|building|residence)( name)?$/i },
   { key: "roomType", label: "Room type", guess: /room ?type|category|type/i },
-  { key: "roomNumber", label: "Room / apartment number", guess: /room ?(no|nr|num|number|#)|apartment|^apt|^unit|^room$/i },
-  { key: "group", label: "Sharing group — same value = same room", hint: "Rows with the same value here go in one room together.", guess: /share|group|pair|booking ?(ref|id)|room ?share/i },
-  { key: "arrival", label: "Arriving — time or flight", guess: /flight|arrival ?time|eta|time/i },
+  { key: "roomNumber", label: "The building's room number", guess: /room ?(no|nr|num|number|#)|actual unit|^unit ?(no|#)|^room$/i },
+  {
+    key: "group",
+    label: "Room line — the sheet's own room #",
+    hint: "Rows with the same value are the same room: on the same dates they share it, on other dates they follow each other in it. Blank rows under a line belong to it.",
+    guess: /^apt\b|^apt\.? ?#|^#$|^no\.?$|share|group|pair|booking ?(ref|id)|room ?share|our room/i,
+  },
+  { key: "arrival", label: "Arriving — time or flight", guess: [/^eta\b|arrival ?time|^time$/i, /flight/i] },
   { key: "notes", label: "Notes", guess: /note|comment|remark|special|request/i },
 ];
 
@@ -408,23 +413,25 @@ function ImportSheet({ mode, year, multipleProperties, onClose }: { mode: Mode; 
   const apply = mode.salesRequestId ? applyTeam : applyLink;
 
   const sheet = file?.sheets[sheetIndex] ?? null;
-  // The heading row: the first of the top ten with three or more filled cells.
-  const headerAt = sheet ? Math.max(0, sheet.rows.slice(0, 10).findIndex((row) => row.filter((cell) => cell !== null && cell !== "").length >= 3)) : 0;
-  const headings = sheet ? (sheet.rows[headerAt] ?? []).map((cell, i) => cellText(cell) || `Column ${i + 1}`) : [];
+  const headerAt = sheet ? headingRow(sheet) : 0;
+  const headings = sheet ? (sheet.rows[headerAt] ?? []).map((cell, i) => cellText(cell).replace(/\s+/g, " ") || `Column ${i + 1}`) : [];
   const body = sheet ? sheet.rows.slice(headerAt + 1).map((row, i) => ({ row, number: headerAt + 2 + i })).filter(({ row }) => row.some((cell) => cell !== null && cell !== "")) : [];
 
   const choose = (sheets: ReadSheet[], index: number) => {
     const chosen = sheets[index];
     if (!chosen) return;
-    const at = Math.max(0, chosen.rows.slice(0, 10).findIndex((row) => row.filter((cell) => cell !== null && cell !== "").length >= 3));
-    const heads = (chosen.rows[at] ?? []).map((cell) => cellText(cell));
+    const heads = (chosen.rows[headingRow(chosen)] ?? []).map((cell) => cellText(cell).replace(/\s+/g, " "));
     const guessed: Partial<Record<Field, number>> = {};
     const used = new Set<number>();
     for (const field of fields) {
-      const index = heads.findIndex((head, i) => !used.has(i) && head && field.guess.test(head));
-      if (index >= 0) {
-        guessed[field.key] = index;
-        used.add(index);
+      // Tried in order: the first pattern any free heading matches wins.
+      for (const pattern of Array.isArray(field.guess) ? field.guess : [field.guess]) {
+        const index = heads.findIndex((head, i) => !used.has(i) && head && pattern.test(head));
+        if (index >= 0) {
+          guessed[field.key] = index;
+          used.add(index);
+          break;
+        }
       }
     }
     if (guessed.firstName !== undefined && guessed.lastName !== undefined) delete guessed.name;
@@ -446,32 +453,59 @@ function ImportSheet({ mode, year, multipleProperties, onClose }: { mode: Mode; 
     const text = (row: Cell[], key: Field) => cellText(at(row, key)) || null;
     const date = (row: Cell[], key: Field) => cellDate(at(row, key), order, year);
     const out: ImportRowInput[] = [];
-    const groups = new Map<string, ImportRowInput>();
+    // Rows written under a room line leave its cells blank: they carry on from the line above
+    // (the room line, its type, number and hotel; the dates while the row gives none).
+    let above: { group: string | null; property: string | null; roomType: string | null; roomNumber: string | null; checkIn: string | null; checkOut: string | null } = {
+      group: null,
+      property: null,
+      roomType: null,
+      roomNumber: null,
+      checkIn: null,
+      checkOut: null,
+    };
+    const stays = new Map<string, ImportRowInput>();
     for (const { row, number } of body) {
+      const ownGroup = text(row, "group");
+      const continues = map.group !== undefined && !ownGroup;
+      const here = {
+        group: ownGroup ?? (continues ? above.group : null),
+        property: text(row, "property") ?? (continues || map.group === undefined ? above.property : null),
+        roomType: text(row, "roomType") ?? (continues ? above.roomType : null),
+        roomNumber: text(row, "roomNumber") ?? (continues ? above.roomNumber : null),
+        checkIn: date(row, "checkIn") ?? (continues ? above.checkIn : null),
+        checkOut: date(row, "checkOut") ?? (continues ? above.checkOut : null),
+      };
+      above = here;
       const guests: { firstName: string; lastName: string }[] = [];
       if (map.firstName !== undefined || map.lastName !== undefined) guests.push({ firstName: text(row, "firstName") ?? "", lastName: text(row, "lastName") ?? "" });
       else if (text(row, "name")) guests.push(splitName(text(row, "name")!));
       if (text(row, "name2")) guests.push(splitName(text(row, "name2")!));
+      const named = guests.filter((guest) => guest.firstName || guest.lastName);
+      // A row with no one on it — a second contract line, a spacer — only sets what follows.
+      if (!named.length) continue;
+      const roomKey = here.group ? `${here.property ?? ""}|${here.group}` : null;
+      // Same room line and same dates: sharing the room.
+      const key = roomKey ? `${roomKey}|${here.roomType ?? ""}|${here.checkIn ?? ""}|${here.checkOut ?? ""}` : null;
+      const sharing = key ? stays.get(key) : undefined;
+      if (sharing) {
+        sharing.rows.push(number);
+        sharing.guests.push(...named);
+        continue;
+      }
       const item: ImportRowInput = {
         rows: [number],
-        guests: guests.filter((guest) => guest.firstName || guest.lastName),
-        checkIn: date(row, "checkIn"),
-        checkOut: date(row, "checkOut"),
-        property: text(row, "property"),
-        roomType: text(row, "roomType"),
-        roomNumber: text(row, "roomNumber"),
+        guests: named,
+        checkIn: here.checkIn,
+        checkOut: here.checkOut,
+        property: here.property,
+        roomType: here.roomType,
+        roomNumber: here.roomNumber,
+        roomKey,
         ...(map.arrival !== undefined && { arrival: text(row, "arrival") }),
         ...(map.notes !== undefined && { notes: text(row, "notes") }),
       };
-      const group = text(row, "group");
-      const together = group ? groups.get(`${item.property ?? ""}|${group}`) : undefined;
-      if (together) {
-        together.rows.push(number);
-        together.guests.push(...item.guests);
-      } else {
-        out.push(item);
-        if (group) groups.set(`${item.property ?? ""}|${group}`, item);
-      }
+      out.push(item);
+      if (key) stays.set(key, item);
     }
     return out;
   };
@@ -688,6 +722,23 @@ function ImportSheet({ mode, year, multipleProperties, onClose }: { mode: Mode; 
       </div>
     </Popup>
   );
+}
+
+/**
+ * The heading row: of the first twenty, the one with the most filled cells —
+ * a title, the client's name and the like sit above it with fewer.
+ */
+function headingRow(sheet: ReadSheet) {
+  let best = 0;
+  let most = 0;
+  sheet.rows.slice(0, 20).forEach((row, i) => {
+    const filled = row.filter((cell) => cell !== null && cell !== "").length;
+    if (filled > most) {
+      most = filled;
+      best = i;
+    }
+  });
+  return best;
 }
 
 type ImportRowInput = RouterInputs["rooming"]["previewImport"]["sheet"][number];

@@ -139,9 +139,9 @@ export function cellDate(value: Cell, order: "dmy" | "mdy", year: number): strin
     const dayFirst = a > 12 ? true : b > 12 ? false : order === "dmy";
     return dayFirst ? iso(y, b, a) : iso(y, a, b);
   }
-  m = /^(\d{1,2})[\s-]+([a-z]{3,9})\.?(?:[\s-]+(\d{2,4}))?$/.exec(text);
+  m = /^(\d{1,2})[\s-]*([a-z]{3,9})\.?(?:[\s-]*(\d{2,4}))?$/.exec(text);
   if (m && months[m[2]!.slice(0, m[2] === "sept" ? 4 : 3)]) return iso(m[3] ? fullYear(Number(m[3])) : year, months[m[2]!.slice(0, 3)]!, Number(m[1]));
-  m = /^([a-z]{3,9})\.?\s+(\d{1,2})(?:\s+(\d{2,4}))?$/.exec(text);
+  m = /^([a-z]{3,9})\.?\s*(\d{1,2})(?:\s+(\d{2,4}))?$/.exec(text);
   if (m && months[m[1]!.slice(0, 3)]) return iso(m[3] ? fullYear(Number(m[3])) : year, months[m[1]!.slice(0, 3)]!, Number(m[2]));
   return null;
 }

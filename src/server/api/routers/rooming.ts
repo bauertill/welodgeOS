@@ -32,6 +32,7 @@ const importRows = z
       property: z.string().max(200).nullable(),
       roomType: z.string().max(200).nullable(),
       roomNumber: z.string().max(40).nullable(),
+      roomKey: z.string().max(100).nullable().optional(),
       arrival: z.string().max(300).nullable().optional(),
       notes: z.string().max(2000).nullable().optional(),
     }),
