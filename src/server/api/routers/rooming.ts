@@ -6,7 +6,7 @@ import { z } from "zod";
 import { parseDay } from "~/lib/dates";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
-import { applyImport, markSent, previewImport, removeStay, roomingList, saveStay } from "~/server/rooming";
+import { applyImport, markSent, masterList, previewImport, removeStay, roomingList, saveStay } from "~/server/rooming";
 
 /** The rooming list (doc §6.9): the team on the sales request, the client by their link. */
 
@@ -95,9 +95,23 @@ export const roomingRouter = createTRPCRouter({
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.salesRequestId, summary: "Rooming list link switched off" });
   }),
 
-  /** The property was sent its list: kept as the next version; changes from now on are shown against it. */
-  markSent: protectedProcedure.input(z.object({ salesRequestId: z.string(), propertyId: z.string() })).mutation(({ ctx, input }) =>
-    ctx.db.$transaction((tx) => markSent(tx, input.salesRequestId, input.propertyId, ctx.session.user.id)).then((number) => ({ number })),
+  /**
+   * A property's master rooming list at an event (doc §6.9): every client's
+   * rooms and guests there — and the events it has any at, to choose from.
+   */
+  forProperty: protectedProcedure.input(z.object({ propertyId: z.string(), eventId: z.string().nullable() })).query(async ({ ctx, input }) => {
+    const events = await ctx.db.event.findMany({
+      where: { roomNights: { some: { salesState: "SOLD", slot: { category: { propertyId: input.propertyId } } } } },
+      orderBy: { startDate: "desc" },
+      select: { id: true, name: true },
+    });
+    const eventId = input.eventId && events.some((one) => one.id === input.eventId) ? input.eventId : (events[0]?.id ?? null);
+    return { events, eventId, master: eventId ? await masterList(ctx.db, eventId, input.propertyId) : null };
+  }),
+
+  /** The property was sent its master list: kept as the next version; changes from now on are shown against it. */
+  markSent: protectedProcedure.input(z.object({ eventId: z.string(), propertyId: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction((tx) => markSent(tx, input.eventId, input.propertyId, ctx.session.user.id)).then((number) => ({ number })),
   ),
 
   /** Which extra details this client's list asks for, per guest (doc §6.9). */

@@ -130,17 +130,10 @@ export function RoomingList(mode: Mode) {
 
 type ExtraField = (typeof roomingExtraFields)[number];
 
-/** The guest columns a property's sheet needs: as many as its largest room sleeps, at most four. */
-const guestColumns = (property: Property) => Math.min(4, Math.max(1, ...property.rooms.map((room) => room.capacity)));
-
 function PropertySheet({ property, mode, rooming, fields }: { property: Property; mode: Mode; rooming: ReturnType<typeof useRooming>; fields: readonly ExtraField[] }) {
   const team = Boolean(mode.salesRequestId);
-  const utils = api.useUtils();
-  const markSent = api.rooming.markSent.useMutation({ onSuccess: () => (void utils.rooming.invalidate(), void utils.audit.invalidate()) });
   const changes = property.rooms.flatMap((room) => room.stays).filter((stay) => stay.sinceSent).length;
-  const columns = guestColumns(property);
-  const th = "text-ink-500 border-ink-200/60 border-b px-2 py-2 text-left text-[11px] font-medium tracking-wide whitespace-nowrap uppercase";
-  const download = `/api/rooming/${mode.salesRequestId}/${property.id}`;
+  const eventId = rooming.data?.event?.id;
   return (
     <section className="border-ink-200/60 overflow-hidden rounded-2xl border bg-white">
       <header className="border-ink-200/60 flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
@@ -149,83 +142,193 @@ function PropertySheet({ property, mode, rooming, fields }: { property: Property
           {property.times && <p className="text-ink-500 text-xs font-light">At the property: {property.times}</p>}
           {team && (
             <p className="text-ink-500 mt-0.5 text-xs font-light">
+              The property&rsquo;s master list{" "}
               {property.sentAt ? (
                 <>
-                  V{property.version} sent {formatDate(property.sentAt)}
+                  V{property.version} was sent {formatDate(property.sentAt)}
                   {property.sentBy && <> by {property.sentBy}</>}
                   {changes > 0 ? (
                     <span className="font-medium text-[#b45309]">
                       {" "}
-                      · {changes} change{changes === 1 ? "" : "s"} since — send V{(property.version ?? 0) + 1}
+                      · {changes} of this client&rsquo;s change{changes === 1 ? "" : "s"} since
                     </span>
                   ) : (
-                    " · no changes since"
+                    " · none of this client's changes since"
                   )}
+                </>
+              ) : (
+                "has not been sent yet"
+              )}
+            </p>
+          )}
+        </div>
+        {team && eventId && (
+          <a href={`/properties/${property.id}?event=${eventId}#rooming`} className="text-brand-700 text-[13px] font-medium hover:underline">
+            Master list for the hotel — every client →
+          </a>
+        )}
+      </header>
+      <RoomsTable rooms={property.rooms} team={team} rooming={rooming} fields={fields} />
+    </section>
+  );
+}
+
+/** A property's rooms as a sheet: a row per stay, an empty row for each room's unnamed nights. */
+function RoomsTable({ rooms, team, rooming, fields }: { rooms: Room[]; team: boolean; rooming: ReturnType<typeof useRooming>; fields: readonly ExtraField[] }) {
+  const columns = Math.min(4, Math.max(1, ...rooms.map((room) => room.capacity)));
+  const th = "text-ink-500 border-ink-200/60 border-b px-2 py-2 text-left text-[11px] font-medium tracking-wide whitespace-nowrap uppercase";
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[56rem] border-collapse text-[13px]">
+        <thead className="bg-ink-50/60">
+          <tr>
+            <th className={th}>Room</th>
+            <th className={th}>Check-in</th>
+            <th className={th}>Check-out</th>
+            {Array.from({ length: columns }, (_, i) => (
+              <th key={i} className={th}>
+                {columns === 1 ? "Guest — full name" : `Guest ${i + 1}${i === 0 ? " — full name" : ""}`}
+                {fields.length > 0 && <span className="text-ink-400 block text-[10px] font-light normal-case">with {fields.map((field) => field.label.toLowerCase()).join(", ")}</span>}
+              </th>
+            ))}
+            <th className={th}>Arriving</th>
+            <th className={th}>Notes</th>
+            <th className={th} aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {rooms.map((room) => (
+            <RoomRows key={room.slotId} room={room} columns={columns} team={team} rooming={rooming} fields={fields} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * A property's master rooming list (doc §6.9, the owner 2026-11-23: "1 master
+ * list per property… the hotel's list should show all the rooms booked at the
+ * property"): on the property's page, per event, every client's rooms and
+ * guests — each client still sees only their own. It is the list the hotel
+ * gets: downloaded, marked as sent as V1, V2…, changes shown against the last.
+ */
+export function MasterRoomingList({ propertyId, eventId: chosen }: { propertyId: string; eventId: string | null }) {
+  const [eventId, setEventId] = useState<string | null>(chosen);
+  const utils = api.useUtils();
+  const data = api.rooming.forProperty.useQuery({ propertyId, eventId });
+  const markSent = api.rooming.markSent.useMutation({ onSuccess: () => (void utils.rooming.invalidate(), void utils.audit.invalidate()) });
+  if (!data.data) return <p className="text-ink-500 text-sm font-light">Loading…</p>;
+  const { events, master } = data.data;
+  if (!master || !data.data.eventId) return <p className="text-ink-500 text-sm font-light">No rooms sold to any client here yet — the master rooming list is made from them.</p>;
+  const current = data.data.eventId;
+  const rooms = master.clients.flatMap((client) => client.rooms);
+  const changes = rooms.flatMap((room) => room.stays).filter((stay) => stay.sinceSent).length;
+  const nights = rooms.reduce((sum, room) => sum + room.nights, 0);
+  const named = rooms.reduce((sum, room) => sum + room.named, 0);
+  const download = `/api/rooming/master/${current}/${propertyId}`;
+  const next = (master.version ?? 0) + 1;
+  return (
+    <div className="space-y-4">
+      <div className="border-ink-200/60 rounded-xl border bg-white px-4 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-ink-900 text-[14px] font-medium">Master rooming list — every client here</p>
+            <p className="text-ink-500 text-xs font-light">
+              {master.clients.length} client{master.clients.length === 1 ? "" : "s"} · {rooms.length} rooms · {named} of {nights} booked nights named
+              {master.property.times && <> · {master.property.times}</>}
+            </p>
+            <p className="text-ink-500 mt-0.5 text-xs font-light">
+              {master.sentAt ? (
+                <>
+                  V{master.version} sent {formatDate(master.sentAt)}
+                  {master.sentBy && <> by {master.sentBy}</>}
+                  {changes > 0 ? <span className="font-medium text-[#b45309]"> · {changes} change{changes === 1 ? "" : "s"} since — send V{next}</span> : " · no changes since"}
                 </>
               ) : (
                 "Not sent to the property yet"
               )}
             </p>
+          </div>
+          {events.length > 1 && (
+            <select value={current} onChange={(e) => setEventId(e.target.value)} aria-label="Event" className="border-ink-200 rounded-full border bg-white px-3 py-1 text-xs">
+              {events.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.name}
+                </option>
+              ))}
+            </select>
           )}
         </div>
-        {team && (
-          <div className="flex flex-wrap items-center gap-3 text-[13px]">
-            <a href={download} className="text-brand-700 font-medium hover:underline">
-              ⬇ Download Excel{property.version ? ` (V${property.version + 1}${changes ? ", changes in yellow" : ""})` : ""}
-            </a>
-            <button
-              type="button"
-              disabled={markSent.isPending}
-              onClick={() => markSent.mutate({ salesRequestId: mode.salesRequestId!, propertyId: property.id })}
-              className="border-ink-200 text-ink-700 hover:bg-ink-50 rounded-full border px-3 py-1 text-xs font-light"
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px]">
+          <a href={download} className="text-brand-700 font-medium hover:underline">
+            ⬇ Download Excel for the hotel (V{next}{master.version && changes ? ", changes in yellow" : ""})
+          </a>
+          <button
+            type="button"
+            disabled={markSent.isPending}
+            onClick={() => markSent.mutate({ eventId: current, propertyId })}
+            className="border-ink-200 text-ink-700 hover:bg-ink-50 rounded-full border px-3 py-1 text-xs font-light"
+          >
+            {markSent.isPending ? "Saving…" : `Mark V${next} as sent to the property`}
+          </button>
+          {master.versions.length > 0 && (
+            <select
+              value=""
+              onChange={(e) => e.target.value && (window.location.href = `${download}?version=${e.target.value}`)}
+              aria-label="Download an earlier version"
+              className="border-ink-200 text-ink-700 rounded-full border bg-white px-2 py-1 text-xs"
             >
-              {markSent.isPending ? "Saving…" : `Mark V${(property.version ?? 0) + 1} as sent to the property`}
-            </button>
-            {property.versions.length > 0 && (
-              <select
-                value=""
-                onChange={(e) => e.target.value && (window.location.href = `${download}?version=${e.target.value}`)}
-                aria-label="Download an earlier version"
-                className="border-ink-200 text-ink-700 rounded-full border bg-white px-2 py-1 text-xs"
-              >
-                <option value="">Earlier versions…</option>
-                {property.versions.map((version) => (
-                  <option key={version.number} value={version.number}>
-                    V{version.number} — {formatDate(version.sentAt)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        )}
-      </header>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[56rem] border-collapse text-[13px]">
-          <thead className="bg-ink-50/60">
-            <tr>
-              <th className={th}>Room</th>
-              <th className={th}>Check-in</th>
-              <th className={th}>Check-out</th>
-              {Array.from({ length: columns }, (_, i) => (
-                <th key={i} className={th}>
-                  {columns === 1 ? "Guest — full name" : `Guest ${i + 1}${i === 0 ? " — full name" : ""}`}
-                  {fields.length > 0 && <span className="text-ink-400 block text-[10px] font-light normal-case">with {fields.map((field) => field.label.toLowerCase()).join(", ")}</span>}
-                </th>
+              <option value="">Earlier versions…</option>
+              {master.versions.map((version) => (
+                <option key={version.number} value={version.number}>
+                  V{version.number} — {formatDate(version.sentAt)}
+                </option>
               ))}
-              <th className={th}>Arriving</th>
-              <th className={th}>Notes</th>
-              <th className={th} aria-label="Actions" />
-            </tr>
-          </thead>
-          <tbody>
-            {property.rooms.map((room) => (
-              <RoomRows key={room.slotId} room={room} columns={columns} team={team} rooming={rooming} fields={fields} />
-            ))}
-          </tbody>
-        </table>
+            </select>
+          )}
+        </div>
       </div>
-    </section>
+      {master.clients.map((client) => (
+        <section key={client.clientId} className="border-ink-200/60 overflow-hidden rounded-2xl border bg-white">
+          <header className="border-ink-200/60 flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3">
+            <h3 className="text-ink-900 text-[15px] font-medium">{client.client}</h3>
+            {client.salesRequestId ? (
+              <a href={`/sales/${client.salesRequestId}#rooming`} className="text-brand-700 text-xs hover:underline">
+                Their rooming list and link →
+              </a>
+            ) : (
+              <span className="text-ink-500 text-xs font-light">No sales request at this event — their list cannot be filled in yet</span>
+            )}
+          </header>
+          {client.salesRequestId ? (
+            <ClientRooms salesRequestId={client.salesRequestId} rooms={client.rooms} fields={roomingExtraFields.filter((field) => client.fields.includes(field.key))} />
+          ) : (
+            // Rooms sold without a sales request: shown so the hotel's list is whole, but nobody can name guests in them yet.
+            <ul className="text-ink-700 space-y-0.5 px-5 py-3 text-[13px] font-light">
+              {Object.entries(
+                client.rooms.reduce<Record<string, number>>((all, room) => {
+                  const label = `${room.category}, booked ${room.booked.map((booked) => range(booked.checkIn, booked.checkOut)).join(", ")}`;
+                  all[label] = (all[label] ?? 0) + 1;
+                  return all;
+                }, {}),
+              ).map(([label, count]) => (
+                <li key={label}>
+                  {count} × {label}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
+    </div>
   );
+}
+
+/** One client's rooms on the master list, edited as on their own list. */
+function ClientRooms({ salesRequestId, rooms, fields }: { salesRequestId: string; rooms: Room[]; fields: readonly ExtraField[] }) {
+  const rooming = useRooming({ salesRequestId });
+  return <RoomsTable rooms={rooms} team rooming={rooming} fields={fields} />;
 }
 
 /** The first stretch of a room's booked nights nobody is in yet — what a new row starts as. */
@@ -878,8 +981,8 @@ export function RequestRoomingList({ salesRequestId }: { salesRequestId: string 
         <h3 className="text-ink-900 text-[15px] font-medium">Rooming list</h3>
         <p className="text-ink-500 mt-1 text-[13px] font-light">
           Made from the rooms the client bought: the rooms and their dates are fixed as per the contract, and the client puts in who sleeps where —
-          by their link, or you do it here. Number the rooms once you know them; download each property&rsquo;s list for it, and mark it sent so later
-          changes are flagged.
+          by their link, or you do it here. Number the rooms once you know them. What goes to the hotel — every client&rsquo;s guests there — is the
+          master list on the property&rsquo;s page, where it is downloaded, sent and kept as versions.
         </p>
         <div className="mt-3">
           {url ? (

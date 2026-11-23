@@ -71,6 +71,13 @@ async function requestOf(db: Db, salesRequestId: string) {
   return request;
 }
 
+/**
+ * A client's rooming list at an event is one list, whichever of their sales
+ * requests it is opened from (doc §6.9): an addendum's link shows the same
+ * guests, so nobody is entered twice.
+ */
+const scopeOf = (request: { clientId: string; eventId: string | null }) => ({ salesRequest: { clientId: request.clientId, eventId: request.eventId } });
+
 export const snapshotOf = (stay: { id: string; slotId: string; checkIn: Date; checkOut: Date; guests: unknown; arrival: string | null; notes: string | null }): StaySnapshot => ({
   stayId: stay.id,
   slotId: stay.slotId,
@@ -89,12 +96,18 @@ export const snapshotsOf = (json: unknown) => (Array.isArray(json) ? (json as St
  * version sent — with what changed since that version, and any nights a stay
  * asks for beyond the booking.
  */
-export async function roomingList(db: Db, salesRequestId: string, { forClient }: { forClient: boolean }) {
+export async function roomingList(db: Db, salesRequestId: string, options: { forClient: boolean; propertyId?: string }) {
   const request = await requestOf(db, salesRequestId);
-  if (!request.event) return { request, properties: [] as never[] };
+  if (!request.event) return { request, properties: [] as Awaited<ReturnType<typeof roomingFor>> };
+  return { request, properties: await roomingFor(db, { clientId: request.clientId, eventId: request.event.id }, options) };
+}
+
+/** One client's list at an event — every property, or one. */
+export async function roomingFor(db: Db, scope: { clientId: string; eventId: string }, { forClient, propertyId }: { forClient: boolean; propertyId?: string }) {
+  const request = { clientId: scope.clientId, event: { id: scope.eventId } };
   const [nights, stays, versions] = await Promise.all([
     db.roomNight.findMany({
-      where: { eventId: request.event.id, clientId: request.clientId, salesState: "SOLD" },
+      where: { eventId: request.event.id, clientId: request.clientId, salesState: "SOLD", ...(propertyId && { slot: { category: { propertyId } } }) },
       select: {
         slotId: true,
         date: true,
@@ -102,11 +115,11 @@ export async function roomingList(db: Db, salesRequestId: string, { forClient }:
       },
     }),
     db.roomingStay.findMany({
-      where: { salesRequestId },
+      where: { salesRequest: { clientId: scope.clientId, eventId: scope.eventId } },
       orderBy: [{ checkIn: "asc" }, { createdAt: "asc" }],
       include: { changedBy: { select: { name: true, email: true } } },
     }),
-    db.roomingVersion.findMany({ where: { salesRequestId }, orderBy: { number: "desc" }, include: { sentBy: { select: { name: true, email: true } } } }),
+    db.roomingVersion.findMany({ where: { eventId: scope.eventId, ...(propertyId && { propertyId }) }, orderBy: { number: "desc" }, include: { sentBy: { select: { name: true, email: true } } } }),
   ]);
 
   type Room = {
@@ -191,8 +204,9 @@ export async function roomingList(db: Db, salesRequestId: string, { forClient }:
         arrival: stay.arrival,
         notes: stay.notes,
         removed: Boolean(stay.removedAt),
-        sinceSent: !version ? null : stay.removedAt ? "removed" : !was ? "new" : changes.length ? "changed" : null,
-        changes,
+        // What the hotel has is ours to know, not the client's.
+        sinceSent: forClient || !version ? null : stay.removedAt ? "removed" : !was ? "new" : changes.length ? "changed" : null,
+        changes: forClient ? [] : changes,
         changedBy: forClient ? null : stay.changedBy ? (stay.changedBy.name ?? stay.changedBy.email) : "the client",
         extra: runs(extraNights).map((run) => ({ checkIn: dayKey(run.checkIn), checkOut: dayKey(run.checkOut) })),
         extraNights: extraNights.length,
@@ -237,7 +251,7 @@ export async function roomingList(db: Db, salesRequestId: string, { forClient }:
   }
   const list = [...properties.values()].sort((a, b) => a.name.localeCompare(b.name));
   for (const property of list) property.rooms.sort((a, b) => a.category.localeCompare(b.category) || a.slotNumber - b.slotNumber);
-  return { request, properties: list };
+  return list;
 }
 
 export type StayInput = { id?: string; slotId: string; checkIn: Date; checkOut: Date; guests: Guest[]; arrival: string; notes: string };
@@ -299,7 +313,7 @@ export async function saveStay(tx: Prisma.TransactionClient, salesRequestId: str
     throw new TRPCError({ code: "BAD_REQUEST", message: `This room sleeps ${slot.category.capacity}. Put the others in another room.` });
   }
   const clash = await tx.roomingStay.findFirst({
-    where: { salesRequestId, slotId: input.slotId, removedAt: null, id: input.id ? { not: input.id } : undefined, checkIn: { lt: input.checkOut }, checkOut: { gt: input.checkIn } },
+    where: { ...scopeOf(request), slotId: input.slotId, removedAt: null, id: input.id ? { not: input.id } : undefined, checkIn: { lt: input.checkOut }, checkOut: { gt: input.checkIn } },
     select: { checkIn: true, checkOut: true, guests: true },
   });
   if (clash) {
@@ -309,7 +323,7 @@ export async function saveStay(tx: Prisma.TransactionClient, salesRequestId: str
     });
   }
 
-  const before = input.id ? await tx.roomingStay.findFirst({ where: { id: input.id, salesRequestId, removedAt: null } }) : null;
+  const before = input.id ? await tx.roomingStay.findFirst({ where: { id: input.id, ...scopeOf(request), removedAt: null } }) : null;
   if (input.id && !before) throw new TRPCError({ code: "NOT_FOUND", message: "That stay is not there any more." });
   const sameExtra = before && before.checkIn.getTime() === input.checkIn.getTime() && before.checkOut.getTime() === input.checkOut.getTime() && before.slotId === input.slotId;
   const data = {
@@ -340,7 +354,8 @@ export async function saveStay(tx: Prisma.TransactionClient, salesRequestId: str
 }
 
 export async function removeStay(tx: Prisma.TransactionClient, salesRequestId: string, stayId: string, actorId: string | null) {
-  const stay = await tx.roomingStay.findFirst({ where: { id: stayId, salesRequestId, removedAt: null }, include: { slot: { select: { category: { select: { propertyId: true } } } } } });
+  const request = await requestOf(tx, salesRequestId);
+  const stay = await tx.roomingStay.findFirst({ where: { id: stayId, ...scopeOf(request), removedAt: null }, include: { slot: { select: { category: { select: { propertyId: true } } } } } });
   if (!stay) throw new TRPCError({ code: "NOT_FOUND", message: "That stay is not there any more." });
   await tx.roomingStay.update({ where: { id: stayId }, data: { removedAt: new Date(), changedById: actorId, extraAskedAt: null } });
   await logAudit(tx, {
@@ -353,14 +368,22 @@ export async function removeStay(tx: Prisma.TransactionClient, salesRequestId: s
   if (stay.extraAskedAt) await syncExtensionTask(tx, salesRequestId, stay.slot.category.propertyId, actorId);
 }
 
-/** A property's rooming list as sent now: the next version, with every stay in it. */
-export async function markSent(tx: Prisma.TransactionClient, salesRequestId: string, propertyId: string, actorId: string) {
-  const stays = await tx.roomingStay.findMany({ where: { salesRequestId, removedAt: null, slot: { category: { propertyId } } }, orderBy: [{ checkIn: "asc" }] });
-  const last = await tx.roomingVersion.findFirst({ where: { salesRequestId, propertyId }, orderBy: { number: "desc" }, select: { number: true } });
+/**
+ * A property's master rooming list as sent now (doc §6.9): the next version,
+ * with every client's stays there at the event.
+ */
+export async function markSent(tx: Prisma.TransactionClient, eventId: string, propertyId: string, actorId: string) {
+  const stays = await tx.roomingStay.findMany({
+    where: { removedAt: null, salesRequest: { eventId }, slot: { category: { propertyId } } },
+    include: { salesRequest: { select: { clientId: true, client: { select: { name: true } } } } },
+    orderBy: [{ checkIn: "asc" }],
+  });
+  const last = await tx.roomingVersion.findFirst({ where: { eventId, propertyId }, orderBy: { number: "desc" }, select: { number: true } });
   const number = (last?.number ?? 0) + 1;
-  await tx.roomingVersion.create({ data: { salesRequestId, propertyId, number, stays: stays.map(snapshotOf), sentById: actorId } });
-  const property = await tx.property.findUnique({ where: { id: propertyId }, select: { name: true } });
-  await logAudit(tx, { actorId, entity: "SalesRequest", entityId: salesRequestId, summary: `Rooming list V${number} sent to ${property?.name ?? "the property"}`, changes: `${stays.length} stay${stays.length === 1 ? "" : "s"}` });
+  await tx.roomingVersion.create({
+    data: { eventId, propertyId, number, stays: stays.map((stay) => ({ ...snapshotOf(stay), clientId: stay.salesRequest.clientId, client: stay.salesRequest.client.name })), sentById: actorId },
+  });
+  await logAudit(tx, { actorId, entity: "Property", entityId: propertyId, summary: `Master rooming list V${number} sent to the property`, changes: `${stays.length} stay${stays.length === 1 ? "" : "s"}, ${new Set(stays.map((stay) => stay.salesRequest.clientId)).size} client(s)` });
   return number;
 }
 
@@ -373,7 +396,7 @@ async function askedAt(tx: Prisma.TransactionClient, salesRequestId: string, pro
   const request = await requestOf(tx, salesRequestId);
   if (!request.event) return [];
   const stays = await tx.roomingStay.findMany({
-    where: { salesRequestId, removedAt: null, extraAskedAt: { not: null }, slot: { category: { propertyId } } },
+    where: { ...scopeOf(request), removedAt: null, extraAskedAt: { not: null }, slot: { category: { propertyId } } },
     include: { slot: { select: { slotNumber: true, unitNumber: true, category: { select: { name: true } } } } },
     orderBy: { checkIn: "asc" },
   });
@@ -403,7 +426,8 @@ export async function syncExtensionTask(tx: Prisma.TransactionClient, salesReque
   const request = await requestOf(tx, salesRequestId);
   if (!request.event) return;
   const asked = await askedAt(tx, salesRequestId, propertyId);
-  const open = await tx.task.findFirst({ where: { salesRequestId, propertyId, status: { not: "DONE" }, type: { name: EXTENSION } }, select: { id: true, details: true, assignees: { select: { id: true } } } });
+  // One open task per client, event and property — whichever of their requests asked.
+  const open = await tx.task.findFirst({ where: { clientId: request.clientId, eventId: request.event.id, propertyId, status: { not: "DONE" }, type: { name: EXTENSION } }, select: { id: true, details: true, assignees: { select: { id: true } } } });
   const property = await tx.property.findUniqueOrThrow({ where: { id: propertyId }, select: { name: true } });
   const details = (lines: string[]) =>
     [`${request.client.name} asks for nights beyond their booking at ${property.name}:`, ...lines, "", "Get these nights from the property and sell them to the client — the rooming list then shows them as booked, and this task closes on its own."].join("\n");
@@ -701,4 +725,46 @@ export async function applyImport(db: PrismaClient, salesRequestId: string, shee
     }
   }
   return { added, changed, removed, failed, problems: preview.problems.length };
+}
+
+// --- The master list per property (doc §6.9, the owner 2026-11-23) ------------------
+
+/**
+ * A property's master rooming list at an event: every client with rooms sold
+ * there, each with their rooms and stays as on their own list, and the
+ * property's versions — what the hotel gets.
+ */
+export async function masterList(db: Db, eventId: string, propertyId: string) {
+  const [clients, versions, property] = await Promise.all([
+    db.roomNight.findMany({ where: { eventId, salesState: "SOLD", clientId: { not: null }, slot: { category: { propertyId } } }, select: { clientId: true }, distinct: ["clientId"] }),
+    db.roomingVersion.findMany({ where: { eventId, propertyId }, orderBy: { number: "desc" }, include: { sentBy: { select: { name: true, email: true } } } }),
+    db.property.findUniqueOrThrow({ where: { id: propertyId }, select: { id: true, name: true, checkInTime: true, checkOutTime: true } }),
+  ]);
+  const ids = clients.map((one) => one.clientId!).filter(Boolean);
+  const [names, requests] = await Promise.all([
+    db.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    // The client's list is edited through one of their requests at the event — the latest.
+    db.salesRequest.findMany({ where: { eventId, clientId: { in: ids } }, orderBy: { createdAt: "desc" }, select: { id: true, clientId: true, roomingFields: true } }),
+  ]);
+  const out = [];
+  for (const clientId of ids) {
+    const [list] = await roomingFor(db, { clientId, eventId }, { forClient: false, propertyId });
+    out.push({
+      clientId,
+      client: names.find((one) => one.id === clientId)?.name ?? "A client",
+      salesRequestId: requests.find((one) => one.clientId === clientId)?.id ?? null,
+      fields: requests.find((one) => one.clientId === clientId)?.roomingFields ?? [],
+      rooms: list?.rooms ?? [],
+    });
+  }
+  out.sort((a, b) => a.client.localeCompare(b.client));
+  const last = versions[0];
+  return {
+    property: { id: property.id, name: property.name, times: [property.checkInTime && `check-in from ${property.checkInTime}`, property.checkOutTime && `check-out by ${property.checkOutTime}`].filter(Boolean).join(", ") || null },
+    version: last?.number ?? null,
+    sentAt: last?.sentAt ?? null,
+    sentBy: last?.sentBy ? (last.sentBy.name ?? last.sentBy.email) : null,
+    versions: versions.map((one) => ({ number: one.number, sentAt: one.sentAt, sentBy: one.sentBy ? (one.sentBy.name ?? one.sentBy.email) : null })),
+    clients: out,
+  };
 }

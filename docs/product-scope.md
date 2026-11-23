@@ -4158,22 +4158,37 @@ extra nights. What the extra nights cost the client is the team's to settle, as 
 **Booked but not used.** Each room says how many of its booked nights nobody is named for
 (*2 nights not used*) once anyone is in it, and the list's top counts them all.
 
-**Versions** (the owner, 2026-11-23, after the old way of a new spreadsheet tab per change).
-**Mark V2 as sent to the property** keeps what was sent as that version — V1, V2… — with who and
-when. From then on the team's list highlights every stay **new**, **changed** (saying what: dates,
-room, guests, arrival, details) or **taken out** since that version, and who did it; the property's
-header counts them (*3 changes since — send V2*). *Earlier versions…* downloads any version as it
-was sent.
+**One list per client at an event.** A client's rooming list is the same whichever of their sales
+requests it is opened from — an addendum's tab and link show the same guests — so nobody is entered
+twice. Clients only ever see their own rooms and guests.
 
-**To the property.** Per property, **⬇ Download Excel** gives the list made to be read by a hotel
-at a glance: a few lines first — *Rooming list — Residence Inn Burbank Downtown*, the client and
-event, the version (*V2 — the latest, not yet marked as sent*), the property's check-in and
-check-out times, the number of rooms and guests — then **one row per guest**: room number, room
-type, arrival, departure, nights, last name, first name, **sharing with**, any extra details,
-arriving (time or flight), notes, and our own room reference; booked nights nobody is named for
-yet as *To be named*. With a version sent before, every row changed since is **yellow** with a
-*Change since V1* column, and a second sheet, **Changes since V1**, lists each change — new,
-changed (was → now) and **cancelled** (in red) — so the hotel sees at once what to update.
+**The master list per property** (the owner, 2026-11-23: "1 master list per property, we should be
+able to get the master from the properties page… the hotel's list should show all the rooms booked
+at the property"). On **the property's page, *Rooming list* tab** — per event, chosen when the
+property has rooms sold at several — **every client** with rooms sold there, each with their rooms
+and guests as on their own list (and editable there, as there), linked to their request; a client
+with rooms but no sales request at the event shows their rooms only, as nobody can name guests in
+them yet. Its header counts clients, rooms and booked nights named. **What the hotel gets is sent
+from here**, and **its versions sit here** (the owner: "keep the clients' rooming list on the sales
+request but any versions sent to the hotel should sit on the properties page"): **Mark V2 as sent to
+the property** keeps what was sent — every client's stays — as that version, with who and when;
+*Earlier versions…* downloads any version as it was sent. On each client's own list (the team's
+view, never the client's) the property's header says which version the hotel has, how many of this
+client's stays changed since, and links to the master; every stay **new**, **changed** (saying
+what: dates, room, guests, arrival, details) or **taken out** since that version is highlighted with
+who did it.
+
+**To the property.** **⬇ Download Excel for the hotel** gives the master list made to be read at a
+glance: a few lines first — *Rooming list — Hotel Carmel*, the event and how many clients, the
+version (*V2 — the latest, not yet marked as sent*), the property's check-in and check-out times,
+the number of rooms and guests (and whether anything changed since the last version) — then **one
+row per guest**: client, room number, room type, arrival, departure, nights, last name, first name,
+**sharing with**, any extra details a client's list asks for, arriving (time or flight), notes, and
+our own room reference; every room booked with nights nobody is named for yet as *To be named*, so
+the hotel sees all the rooms we have there. Every row changed since the last version is **yellow**
+with a *Change since V1* column, and a second sheet, **Changes since V1**, lists each change — new,
+changed (was → now) and **cancelled** (in red), with the client — so the hotel sees at once what to
+update.
 
 ---
 
@@ -4687,7 +4702,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
-| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; versions on sending, changes shown against the last; a hotel-readable Excel per property with changes in yellow and a Changes sheet. Not yet: notifying the team when the client changes the list, sending the Excel from OS |
+| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Not yet: notifying the team when the client changes the list, sending the Excel from OS |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 
