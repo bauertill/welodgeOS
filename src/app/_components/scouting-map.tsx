@@ -16,6 +16,7 @@ import { formatDay } from "~/lib/format";
 import { placeIcon } from "~/lib/place-icons";
 import { isApartmentLike, placeCategoryLabels, scoutingStatusLabels } from "~/lib/scouting";
 import { AddPropertyForm } from "~/app/_components/add-property-on-map";
+import { AddressSearch } from "~/app/_components/address-search";
 import { LayersPanel } from "~/app/_components/map-layers";
 import { TravelTimes } from "~/app/_components/travel-times";
 import { api } from "~/trpc/react";
@@ -205,6 +206,17 @@ function Marker({
 }
 
 /** Keeps every pin in frame, including when the filters change the set. */
+/** Takes the map to an address looked up in its search box, close in. */
+function PanTo({ point }: { point: Point | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map || !point) return;
+    map.panTo(point);
+    map.setZoom(16);
+  }, [map, point]);
+  return null;
+}
+
 function FitBounds({ points }: { points: Point[] }) {
   const map = useMap();
 
@@ -443,6 +455,12 @@ export function ScoutingMap({
   // A property added by pointing at the map: the form open, its spot, and whether the next click sets it.
   const [addingProperty, setAddingProperty] = useState(false);
   const [propertyPoint, setPropertyPoint] = useState<{ latitude: number; longitude: number } | null>(null);
+  // The map's own address search (the owner, 2026-11-23): goes there, pins it, and can add it.
+  const [lookupText, setLookupText] = useState("");
+  const [lookedUp, setLookedUp] = useState<{ label: string; latitude: number; longitude: number } | null>(null);
+  const lookedUpPoint = useMemo(() => (lookedUp ? { lat: lookedUp.latitude, lng: lookedUp.longitude } : null), [lookedUp]);
+  // One of ours picked in the search: the map goes to it.
+  const [focusPoint, setFocusPoint] = useState<Point | null>(null);
   const [pickingProperty, setPickingProperty] = useState(false);
   // Full screen takes the whole map — the Layers panel and a property's card with it — not Google's map alone.
   const frame = useRef<HTMLDivElement>(null);
@@ -525,24 +543,76 @@ export function ScoutingMap({
   return (
     <div ref={frame} className="border-ink-200/60 flex flex-col overflow-hidden rounded-xl border bg-white md:flex-row">
       <div className="relative min-w-0 flex-1">
-        {eventId && !addingProperty && (
+        {pickingProperty && (
+          <p className="bg-ink-900 absolute top-16 left-1/2 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs text-white shadow-md">Click the spot on the map</p>
+        )}
+        {/* The map's search and Add, together at the top (the owner, 2026-11-23). */}
+        <div className="absolute top-2.5 left-1/2 z-20 flex w-[min(32rem,calc(100%-23rem))] min-w-56 -translate-x-1/2 items-start gap-2">
+          {eventId && !addingProperty && (
           <button
             type="button"
             onClick={() => {
               setOpenId(null);
               setAddingProperty(true);
               // An address just searched on the map is where the pin goes — no second click (the owner, 2026-11-23).
-              if (searchPoint) setPropertyPoint({ latitude: searchPoint.latitude, longitude: searchPoint.longitude });
-              setPickingProperty(!searchPoint);
+              const spot = lookedUp ?? searchPoint;
+              if (spot) setPropertyPoint({ latitude: spot.latitude, longitude: spot.longitude });
+              setPickingProperty(!spot);
             }}
-            className="bg-brand-400 hover:bg-brand-500 absolute top-2.5 left-1/2 z-10 -translate-x-1/2 rounded-full px-4 py-2 text-[13px] font-medium text-white shadow-md"
+            className="bg-brand-400 hover:bg-brand-500 shrink-0 rounded-full px-4 py-2 text-[13px] font-medium whitespace-nowrap text-white shadow-md"
           >
             ＋ Add to the map
           </button>
-        )}
-        {pickingProperty && (
-          <p className="bg-ink-900 absolute top-14 left-1/2 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs text-white shadow-md">Click the spot on the map</p>
-        )}
+          )}
+          <div className="min-w-0 flex-1 rounded-lg shadow-md">
+          <AddressSearch
+            placeholder="Search an address, or a property on the map"
+            ours={(query) => {
+              const q = query.toLowerCase();
+              return [
+                ...pins.filter((pin) => pin.name.toLowerCase().includes(q)).map((pin) => ({ id: `pin:${pin.id}`, label: pin.name, detail: pin.status ? scoutingStatusLabels[pin.status] : "Property" })),
+                ...places.filter((place) => place.name.toLowerCase().includes(q)).map((place) => ({ id: `place:${place.id}`, label: place.name, detail: place.layerName ?? placeCategoryLabels[place.category] })),
+              ];
+            }}
+            onOurs={(id) => {
+              const [kind, key] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
+              const hit = kind === "pin" ? pins.find((pin) => pin.id === key) : places.find((place) => place.id === key);
+              if (!hit) return;
+              // Shown even if its layer is ticked off, and opened.
+              if (kind === "pin") {
+                const pin = hit as MapPin;
+                const layer = pin.status === "CONTRACTED" ? "contracted" : pin.type && isApartmentLike(pin.type) ? "apartments" : "hotels";
+                if (!shown.isShown(layer)) shown.toggle(layer);
+              } else {
+                const layerId = (hit as MapPlace).layerId;
+                if (layerId && !shown.isShown(layerId)) shown.toggle(layerId);
+              }
+              setLookupText(hit.name);
+              setLookedUp(null);
+              setFocusPoint({ lat: hit.latitude, lng: hit.longitude });
+              pinClickedAt.current = Date.now();
+              setOpenId(key);
+            }}
+            value={lookupText}
+            onChange={(value) => {
+              setLookupText(value);
+              if (!value.trim()) setLookedUp(null);
+            }}
+            onFound={(place) => {
+              if (place.latitude === null || place.longitude === null) return;
+              const spot = { label: place.name ?? place.address ?? lookupText, latitude: place.latitude, longitude: place.longitude };
+              setLookedUp(spot);
+              setOpenId(null);
+              setLookupText(place.address ?? spot.label);
+              // Adding already: the pin goes there.
+              if (addingProperty) {
+                setPropertyPoint({ latitude: spot.latitude, longitude: spot.longitude });
+                setPickingProperty(false);
+              }
+            }}
+          />
+          </div>
+        </div>
         <button
           type="button"
           onClick={toggleFullScreen}
@@ -592,6 +662,30 @@ export function ScoutingMap({
             style={{ height: fullScreen ? "100vh" : "32rem", width: "100%" }}
           >
             <FitBounds points={points} />
+            <PanTo point={lookedUpPoint} />
+            <PanTo point={focusPoint} />
+            {lookedUp && !propertyPoint && (
+              // The address looked up: a click on it adds something there.
+              <AdvancedMarker
+                position={{ lat: lookedUp.latitude, lng: lookedUp.longitude }}
+                title={eventId ? `Add something at ${lookedUp.label}` : lookedUp.label}
+                zIndex={970}
+                clickable
+                onClick={() => {
+                  if (!eventId) return;
+                  pinClickedAt.current = Date.now();
+                  setOpenId(null);
+                  setAddingProperty(true);
+                  setPropertyPoint({ latitude: lookedUp.latitude, longitude: lookedUp.longitude });
+                  setPickingProperty(false);
+                }}
+              >
+                <span className="text-ink-900 flex -translate-y-1/2 items-center gap-2 rounded-full bg-white py-1 pr-1 pl-2.5 text-[12px] font-medium whitespace-nowrap shadow-lg">
+                  📍 {lookedUp.label}
+                  {eventId && <span className="bg-brand-400 rounded-full px-2.5 py-0.5 text-white">＋ Add here</span>}
+                </span>
+              </AdvancedMarker>
+            )}
             <TransitLayer on={shown.isShown("transit")} />
 
             {visiblePlaces.map((place) => (
@@ -685,6 +779,7 @@ export function ScoutingMap({
             layers={layers}
             point={propertyPoint}
             setPoint={setPropertyPoint}
+            known={lookedUp ? { latitude: lookedUp.latitude, longitude: lookedUp.longitude, address: lookupText } : null}
             picking={pickingProperty}
             setPicking={setPickingProperty}
             onClose={() => {

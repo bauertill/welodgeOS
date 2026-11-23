@@ -1014,10 +1014,17 @@ Layers panel — the venues and points come first, before any property — where
 places with an address but no position (a layer built from a spreadsheet) has those places
 skipped: they need a position first.
 
+**Searching the map** (the owner, 2026-11-23). Beside *＋ Add to the map* at the top of the map
+is a search box: **an address or a property on the map**. What is typed is matched first against
+**our own** — the event's properties and the places on its layers, listed *On our map* — then
+against Google Maps. Picking one of ours takes the map to it and opens its panel (its layer is
+ticked on if it was off); picking an address takes the map there and pins it ("📍 Crypto.com
+Arena *＋ Add here*") — a click on that pin starts adding something there, the address kept.
+
 **Adding anything from the map** (2026-10-13): **＋ Add to the map** at the top of the map, then
 a click on the spot, a **search for its address or name** (the pin goes to what is picked), or
 **📍 Use where I am** from a phone in front of it; a red "＋ New here" pin shows the spot. An
-address already picked in *Find hotels not on our list near* is taken as the spot at once, with
+address already picked in the research bar's *Find hotels not on our list near* is taken as the spot at once, with
 no second click; picking another there moves the pin (the owner, 2026-11-23). While adding,
 **clicking anywhere else on the map moves the pin** — a wrong spot is fixed by clicking again —
 and searching another address in the panel moves it too. A clicked spot has its address looked
@@ -1315,7 +1322,10 @@ filters** clears them all. Every filter **stays as set until reset**, per event,
 (as on the Clients list, §4.10). The **Rooms** column also shows the lowest rate quoted or agreed,
 *from US$ 300*.
 
-**Finding hotels from the map** (2026-10-11). The Map view has a bar above the map: **Find
+**Finding hotels from the map** (2026-10-11). Research for an event's early days, so it is kept
+behind a button (the owner, 2026-11-23: "the map for the most part will be used to add properties
+and venues"): **🔎 Research: find hotels not on our list nearby** above the map opens the bar,
+and its × closes it again, clearing the search. The bar: **Find
 hotels not on our list near** one of the event's places of interest (its first venue by
 default) — or **a custom address**, found with the same Google Maps address box as a
 property's, and pinned on the map once chosen ("📍 Santa Monica Pier", 2026-10-13) until
@@ -4492,7 +4502,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |
-| §3.7 Map: Contracted, Hotels and Apartments layers | **Built** (2026-11-19; split on staging 2026-11-23) | The event's map shows its properties as three layers, *Contracted* (hotels and apartments together), *Hotels* and *Apartments* (everything else, by kind), each ticked on or off; all follow the list's filters. Adding to the map: a searched address is the pin, and a click elsewhere moves it (staging 2026-11-23) |
+| §3.7 Map: Contracted, Hotels and Apartments layers | **Built** (2026-11-19; split on staging 2026-11-23) | The event's map shows its properties as three layers, *Contracted* (hotels and apartments together), *Hotels* and *Apartments* (everything else, by kind), each ticked on or off; all follow the list's filters. Adding to the map: a searched address is the pin, and a click elsewhere moves it (2026-11-23). A search box on the map for addresses and our own properties and places (staging 2026-11-23) |
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
