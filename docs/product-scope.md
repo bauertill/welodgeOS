@@ -3484,7 +3484,7 @@ the waves; a range of months when the waves' stays differ; a single wave says al
 leave on one day); **three figures** — apartments (across how many waves), lease months, gross
 rent to the owner (only with *Show rent figures*); **Rental periods**, one bar per wave
 (*Wave 1*, *Wave 2*…) from move-in to hand-back over the Games band, with its legend; *Month by
-month*; *Rent per apartment*; and *How these figures are built* with the **Scenario** and
+month*; *Rent per apartment* (unit type, apartments and rent per month — no nightly column); and *How these figures are built* with the **Scenario** and
 **Hand-back** notes only.
 
 **Save as PDF / printing.** *Save as PDF* in the header (editor and owner's view) opens the
