@@ -4,31 +4,40 @@ import type { Prisma, PrismaClient } from "generated/prisma";
 
 import { dayKey, eachNight } from "~/lib/dates";
 import { formatRange } from "~/lib/format";
+import { guestName, roomingExtraFields, stayChanges, type Guest, type StaySnapshot } from "~/lib/rooming";
 import { logAudit } from "~/server/audit";
+import { HOTEL_CONTACT } from "~/server/hotel-contact";
+import { notify } from "~/server/notify";
+
+export { guestName, type Guest };
 
 /**
  * The rooming list (doc §6.9, the owner 2026-11-23): a *fixed* list made from
  * what the client bought — every room sold to them at the event, with the
  * dates it is theirs — into which they put their people. A room can be used in
  * turns (several stays, one after another) and shared (several guests in one
- * stay). Dates outside what they bought are refused here; asking for more
- * nights is the next step.
+ * stay). Nights asked for beyond the booking are an extension request: the
+ * stay is kept, those nights flagged, and acquisitions gets a task to get them.
  */
 
 type Db = PrismaClient | Prisma.TransactionClient;
-export type Guest = { firstName: string; lastName: string };
 
 const DAY = 864e5;
 
 export function guestsOf(json: unknown): Guest[] {
   if (!Array.isArray(json)) return [];
   return json
-    .filter((item): item is Guest => Boolean(item) && typeof item === "object")
-    .map((item) => ({ firstName: String(item.firstName ?? "").trim(), lastName: String(item.lastName ?? "").trim() }))
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => {
+      const guest: Guest = { firstName: String(item.firstName ?? "").trim(), lastName: String(item.lastName ?? "").trim() };
+      for (const field of roomingExtraFields) {
+        const value = typeof item[field.key] === "string" ? (item[field.key] as string).trim() : "";
+        if (value) guest[field.key] = value;
+      }
+      return guest;
+    })
     .filter((guest) => guest.firstName || guest.lastName);
 }
-
-export const guestName = (guest: Guest) => [guest.firstName, guest.lastName].filter(Boolean).join(" ");
 
 /** Consecutive nights as stays: [first night, check-out). */
 function runs(dates: Date[]) {
@@ -46,35 +55,58 @@ function runs(dates: Date[]) {
 async function requestOf(db: Db, salesRequestId: string) {
   const request = await db.salesRequest.findUnique({
     where: { id: salesRequestId },
-    select: { id: true, clientId: true, eventId: true, roomingToken: true, roomingLinkMadeAt: true, client: { select: { name: true } }, event: { select: { id: true, name: true, startDate: true, endDate: true } } },
+    select: {
+      id: true,
+      clientId: true,
+      eventId: true,
+      ownerId: true,
+      roomingToken: true,
+      roomingLinkMadeAt: true,
+      roomingFields: true,
+      client: { select: { name: true } },
+      event: { select: { id: true, name: true, startDate: true, endDate: true } },
+    },
   });
   if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "That sales request is not there any more." });
   return request;
 }
 
+export const snapshotOf = (stay: { id: string; slotId: string; checkIn: Date; checkOut: Date; guests: unknown; arrival: string | null; notes: string | null }): StaySnapshot => ({
+  stayId: stay.id,
+  slotId: stay.slotId,
+  checkIn: dayKey(stay.checkIn),
+  checkOut: dayKey(stay.checkOut),
+  guests: guestsOf(stay.guests),
+  arrival: stay.arrival,
+  notes: stay.notes,
+});
+
+export const snapshotsOf = (json: unknown) => (Array.isArray(json) ? (json as StaySnapshot[]).map((stay) => ({ ...stay, guests: guestsOf(stay.guests) })) : []);
+
 /**
  * The whole list: per property, each room the client bought, its booked
- * dates and its stays — removed ones too for the team, with whether each
- * changed since the property was sent its list.
+ * dates and its stays — for the team, also those taken out since the last
+ * version sent — with what changed since that version, and any nights a stay
+ * asks for beyond the booking.
  */
 export async function roomingList(db: Db, salesRequestId: string, { forClient }: { forClient: boolean }) {
   const request = await requestOf(db, salesRequestId);
   if (!request.event) return { request, properties: [] as never[] };
-  const [nights, stays, sent] = await Promise.all([
+  const [nights, stays, versions] = await Promise.all([
     db.roomNight.findMany({
       where: { eventId: request.event.id, clientId: request.clientId, salesState: "SOLD" },
       select: {
         slotId: true,
         date: true,
-        slot: { select: { slotNumber: true, unitNumber: true, category: { select: { id: true, name: true, capacity: true, property: { select: { id: true, name: true, type: true } } } } } },
+        slot: { select: { slotNumber: true, unitNumber: true, category: { select: { id: true, name: true, capacity: true, property: { select: { id: true, name: true, type: true, checkInTime: true, checkOutTime: true } } } } } },
       },
     }),
     db.roomingStay.findMany({
-      where: { salesRequestId, ...(forClient && { removedAt: null }) },
+      where: { salesRequestId },
       orderBy: [{ checkIn: "asc" }, { createdAt: "asc" }],
       include: { changedBy: { select: { name: true, email: true } } },
     }),
-    db.roomingSent.findMany({ where: { salesRequestId }, include: { sentBy: { select: { name: true, email: true } } } }),
+    db.roomingVersion.findMany({ where: { salesRequestId }, orderBy: { number: "desc" }, include: { sentBy: { select: { name: true, email: true } } } }),
   ]);
 
   type Room = {
@@ -94,83 +126,113 @@ export async function roomingList(db: Db, salesRequestId: string, { forClient }:
       arrival: string | null;
       notes: string | null;
       removed: boolean;
-      changedSinceSent: boolean;
+      /** New, changed or taken out since the last version sent — and how. */
+      sinceSent: "new" | "changed" | "removed" | null;
+      changes: string[];
       changedBy: string | null;
-      updatedAt: Date;
+      /** Nights asked for beyond the booking, not yet sold to the client. */
+      extra: { checkIn: string; checkOut: string }[];
+      extraNights: number;
     }[];
   };
-  const bySlot = new Map<string, { room: Room; dates: Date[]; propertyId: string; propertyName: string; propertyType: string }>();
+  type Entry = { room: Room; dates: Date[]; propertyId: string; propertyName: string; propertyType: string; times: string | null };
+  const bySlot = new Map<string, Entry>();
   for (const night of nights) {
-    const entry =
-      bySlot.get(night.slotId) ??
-      (() => {
-        const created = {
-          room: {
-            slotId: night.slotId,
-            slotNumber: night.slot.slotNumber,
-            unitNumber: night.slot.unitNumber,
-            category: night.slot.category.name,
-            capacity: night.slot.category.capacity,
-            booked: [],
-            nights: 0,
-            named: 0,
-            stays: [],
-          } as Room,
-          dates: [] as Date[],
-          propertyId: night.slot.category.property.id,
-          propertyName: night.slot.category.property.name,
-          propertyType: night.slot.category.property.type,
-        };
-        bySlot.set(night.slotId, created);
-        return created;
-      })();
+    let entry = bySlot.get(night.slotId);
+    if (!entry) {
+      const property = night.slot.category.property;
+      entry = {
+        room: { slotId: night.slotId, slotNumber: night.slot.slotNumber, unitNumber: night.slot.unitNumber, category: night.slot.category.name, capacity: night.slot.category.capacity, booked: [], nights: 0, named: 0, stays: [] },
+        dates: [],
+        propertyId: property.id,
+        propertyName: property.name,
+        propertyType: property.type,
+        times: [property.checkInTime && `check-in from ${property.checkInTime}`, property.checkOutTime && `check-out by ${property.checkOutTime}`].filter(Boolean).join(", ") || null,
+      };
+      bySlot.set(night.slotId, entry);
+    }
     entry.dates.push(night.date);
   }
 
-  const sentAt = new Map(sent.map((row) => [row.propertyId, row]));
+  const latest = new Map<string, (typeof versions)[number]>();
+  for (const version of versions) if (!latest.has(version.propertyId)) latest.set(version.propertyId, version);
+  const labelOf = (slotId: string) => {
+    const room = bySlot.get(slotId)?.room;
+    return room ? `${room.category} ${room.unitNumber ? `No. ${room.unitNumber}` : `room ${room.slotNumber}`}` : "another room";
+  };
+
   for (const entry of bySlot.values()) {
     entry.room.booked = runs(entry.dates).map((run) => ({ checkIn: dayKey(run.checkIn), checkOut: dayKey(run.checkOut) }));
     entry.room.nights = entry.dates.length;
     const sold = new Set(entry.dates.map((date) => dayKey(date)));
     const covered = new Set<string>();
-    const since = sentAt.get(entry.propertyId)?.sentAt ?? null;
+    const version = latest.get(entry.propertyId);
+    const sent = new Map(snapshotsOf(version?.stays).map((stay) => [stay.stayId, stay]));
     for (const stay of stays.filter((one) => one.slotId === entry.room.slotId)) {
-      if (!stay.removedAt) for (const night of eachNight(stay.checkIn, stay.checkOut)) if (sold.has(dayKey(night))) covered.add(dayKey(night));
-      // Removed before the list was sent: nothing to pass on, so not shown.
-      if (stay.removedAt && (!since || stay.removedAt <= since || stay.createdAt > since)) continue;
+      const was = sent.get(stay.id);
+      if (stay.removedAt) {
+        // Taken out: shown to the team only while the property still has it from the last version.
+        if (forClient || !was) continue;
+      }
+      const extraNights: Date[] = [];
+      if (!stay.removedAt) {
+        for (const night of eachNight(stay.checkIn, stay.checkOut)) {
+          if (sold.has(dayKey(night))) covered.add(dayKey(night));
+          else extraNights.push(night);
+        }
+      }
+      const now = snapshotOf(stay);
+      const changes = version && was && !stay.removedAt ? stayChanges(was, now, labelOf) : [];
       entry.room.stays.push({
         id: stay.id,
-        checkIn: dayKey(stay.checkIn),
-        checkOut: dayKey(stay.checkOut),
-        guests: guestsOf(stay.guests),
+        checkIn: now.checkIn,
+        checkOut: now.checkOut,
+        guests: now.guests,
         arrival: stay.arrival,
         notes: stay.notes,
         removed: Boolean(stay.removedAt),
-        changedSinceSent: Boolean(since && stay.updatedAt > since),
+        sinceSent: !version ? null : stay.removedAt ? "removed" : !was ? "new" : changes.length ? "changed" : null,
+        changes,
         changedBy: forClient ? null : stay.changedBy ? (stay.changedBy.name ?? stay.changedBy.email) : "the client",
-        updatedAt: stay.updatedAt,
+        extra: runs(extraNights).map((run) => ({ checkIn: dayKey(run.checkIn), checkOut: dayKey(run.checkOut) })),
+        extraNights: extraNights.length,
       });
     }
     entry.room.named = covered.size;
   }
 
-  const properties = new Map<string, { id: string; name: string; type: string; sentAt: Date | null; sentBy: string | null; rooms: Room[] }>();
+  type PropertyList = {
+    id: string;
+    name: string;
+    type: string;
+    times: string | null;
+    /** The last version sent, if any — and every one, for downloading again. */
+    sentAt: Date | null;
+    sentBy: string | null;
+    version: number | null;
+    versions: { number: number; sentAt: Date; sentBy: string | null }[];
+    rooms: Room[];
+  };
+  const properties = new Map<string, PropertyList>();
   for (const entry of bySlot.values()) {
-    const property =
-      properties.get(entry.propertyId) ??
-      (() => {
-        const row = sentAt.get(entry.propertyId);
-        const created = {
-          id: entry.propertyId,
-          name: entry.propertyName,
-          type: entry.propertyType,
-          sentAt: forClient ? null : (row?.sentAt ?? null),
-          sentBy: forClient || !row?.sentBy ? null : (row.sentBy.name ?? row.sentBy.email),
-          rooms: [] as Room[],
-        };
-        properties.set(entry.propertyId, created);
-        return created;
-      })();
+    let property = properties.get(entry.propertyId);
+    if (!property) {
+      const last = latest.get(entry.propertyId);
+      property = {
+        id: entry.propertyId,
+        name: entry.propertyName,
+        type: entry.propertyType,
+        times: entry.times,
+        sentAt: forClient ? null : (last?.sentAt ?? null),
+        sentBy: forClient || !last?.sentBy ? null : (last.sentBy.name ?? last.sentBy.email),
+        version: forClient ? null : (last?.number ?? null),
+        versions: forClient
+          ? []
+          : versions.filter((one) => one.propertyId === entry.propertyId).map((one) => ({ number: one.number, sentAt: one.sentAt, sentBy: one.sentBy ? (one.sentBy.name ?? one.sentBy.email) : null })),
+        rooms: [],
+      };
+      properties.set(entry.propertyId, property);
+    }
     property.rooms.push(entry.room);
   }
   const list = [...properties.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -180,25 +242,58 @@ export async function roomingList(db: Db, salesRequestId: string, { forClient }:
 
 export type StayInput = { id?: string; slotId: string; checkIn: Date; checkOut: Date; guests: Guest[]; arrival: string; notes: string };
 
-/** Add or change a stay, by the team (actorId) or the client (null), within what was bought. */
+/** Each guest as kept: the name, and the extra details this list asks for. */
+function cleanGuests(guests: Guest[], fields: string[]) {
+  return guests
+    .map((guest) => {
+      const clean: Guest = { firstName: guest.firstName.trim(), lastName: guest.lastName.trim() };
+      for (const field of roomingExtraFields) {
+        const value = guest[field.key]?.trim();
+        if (value && fields.includes(field.key)) clean[field.key] = value.slice(0, 200);
+      }
+      return clean;
+    })
+    .filter((guest) => guest.firstName || guest.lastName);
+}
+
+/**
+ * Add or change a stay, by the team (actorId) or the client (null). Its dates
+ * may reach beyond the booking — next to or overlapping it, in a room nobody
+ * else holds then: those nights become an extension request.
+ */
 export async function saveStay(tx: Prisma.TransactionClient, salesRequestId: string, input: StayInput, actorId: string | null) {
   const request = await requestOf(tx, salesRequestId);
   if (!request.event) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event first." });
-  const guests = input.guests.map((guest) => ({ firstName: guest.firstName.trim(), lastName: guest.lastName.trim() })).filter((guest) => guest.firstName || guest.lastName);
+  const guests = cleanGuests(input.guests, request.roomingFields);
   if (!guests.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Give at least one guest's name." });
   if (input.checkOut <= input.checkIn) throw new TRPCError({ code: "BAD_REQUEST", message: "Check-out must be after check-in; check-out day is never a night." });
 
-  const slot = await tx.roomSlot.findUnique({ where: { id: input.slotId }, select: { slotNumber: true, unitNumber: true, category: { select: { name: true, capacity: true, property: { select: { name: true } } } } } });
+  const slot = await tx.roomSlot.findUnique({ where: { id: input.slotId }, select: { slotNumber: true, unitNumber: true, category: { select: { name: true, capacity: true, property: { select: { id: true, name: true } } } } } });
   if (!slot) throw new TRPCError({ code: "NOT_FOUND", message: "That room is not there any more." });
   const sold = await tx.roomNight.findMany({ where: { eventId: request.event.id, clientId: request.clientId, salesState: "SOLD", slotId: input.slotId }, select: { date: true } });
   if (!sold.length) throw new TRPCError({ code: "BAD_REQUEST", message: "That room is not one of yours at this event." });
   const soldDays = new Set(sold.map((night) => dayKey(night.date)));
-  if (eachNight(input.checkIn, input.checkOut).some((night) => !soldDays.has(dayKey(night)))) {
-    const booked = runs(sold.map((night) => night.date)).map((run) => formatRange(run.checkIn, run.checkOut)).join(", ");
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Those dates are outside your booking for this room (${booked}). For other nights, please ask your We Lodge contact.`,
+  const booked = runs(sold.map((night) => night.date));
+  const bookedText = booked.map((run) => formatRange(run.checkIn, run.checkOut)).join(", ");
+  const extra = eachNight(input.checkIn, input.checkOut).filter((night) => !soldDays.has(dayKey(night)));
+  if (extra.length) {
+    // More nights in this room: only around its booking, not a stay of its own somewhere else.
+    if (!booked.some((run) => input.checkIn <= run.checkOut && input.checkOut >= run.checkIn)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Those dates do not touch your booking for this room (${bookedText}). Extra nights can be asked for just before or after it; for other dates, please ask your We Lodge contact.`,
+      });
+    }
+    const held = await tx.roomNight.findFirst({
+      where: { slotId: input.slotId, eventId: request.event.id, date: { in: extra }, salesState: { in: ["SOLD", "BLOCKED"] }, clientId: { not: request.clientId } },
+      select: { date: true },
     });
+    if (held) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `This room is taken by another booking on ${formatRange(held.date, new Date(held.date.getTime() + DAY))}. Choose another room for those nights, or ask your We Lodge contact.`,
+      });
+    }
   }
   if (guests.length > slot.category.capacity) {
     throw new TRPCError({ code: "BAD_REQUEST", message: `This room sleeps ${slot.category.capacity}. Put the others in another room.` });
@@ -214,25 +309,40 @@ export async function saveStay(tx: Prisma.TransactionClient, salesRequestId: str
     });
   }
 
-  const data = { checkIn: input.checkIn, checkOut: input.checkOut, guests, arrival: input.arrival.trim() || null, notes: input.notes.trim() || null, changedById: actorId };
-  const where = input.id ? await tx.roomingStay.findFirst({ where: { id: input.id, salesRequestId, removedAt: null }, select: { id: true } }) : null;
-  if (input.id && !where) throw new TRPCError({ code: "NOT_FOUND", message: "That stay is not there any more." });
-  const stay = where ? await tx.roomingStay.update({ where: { id: where.id }, data: { ...data, slotId: input.slotId } }) : await tx.roomingStay.create({ data: { ...data, salesRequestId, slotId: input.slotId } });
+  const before = input.id ? await tx.roomingStay.findFirst({ where: { id: input.id, salesRequestId, removedAt: null } }) : null;
+  if (input.id && !before) throw new TRPCError({ code: "NOT_FOUND", message: "That stay is not there any more." });
+  const sameExtra = before && before.checkIn.getTime() === input.checkIn.getTime() && before.checkOut.getTime() === input.checkOut.getTime() && before.slotId === input.slotId;
+  const data = {
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    guests,
+    arrival: input.arrival.trim() || null,
+    notes: input.notes.trim() || null,
+    changedById: actorId,
+    extraAskedAt: extra.length ? (sameExtra && before?.extraAskedAt ? before.extraAskedAt : new Date()) : null,
+  };
+  const stay = before ? await tx.roomingStay.update({ where: { id: before.id }, data: { ...data, slotId: input.slotId } }) : await tx.roomingStay.create({ data: { ...data, salesRequestId, slotId: input.slotId } });
   const room = `${slot.category.property.name}, ${slot.category.name} ${slot.unitNumber ? slot.unitNumber : `room ${slot.slotNumber}`}`;
   await logAudit(tx, {
     actorId,
     entity: "SalesRequest",
     entityId: salesRequestId,
-    summary: `Rooming list: ${guests.map(guestName).join(", ")} ${where ? "changed" : "added"}${actorId ? "" : " by the client"}`,
+    summary: `Rooming list: ${guests.map(guestName).join(", ")} ${before ? "changed" : "added"}${actorId ? "" : " by the client"}${extra.length ? ` — asks for ${extra.length} extra night${extra.length === 1 ? "" : "s"}` : ""}`,
     changes: `${room}, ${formatRange(input.checkIn, input.checkOut)}`,
   });
+  // The extension task follows what is asked for — made, updated or closed.
+  if (extra.length || before?.extraAskedAt) await syncExtensionTask(tx, salesRequestId, slot.category.property.id, actorId);
+  if (before && before.slotId !== input.slotId && before.extraAskedAt) {
+    const from = await tx.roomSlot.findUnique({ where: { id: before.slotId }, select: { category: { select: { propertyId: true } } } });
+    if (from && from.category.propertyId !== slot.category.property.id) await syncExtensionTask(tx, salesRequestId, from.category.propertyId, actorId);
+  }
   return stay;
 }
 
 export async function removeStay(tx: Prisma.TransactionClient, salesRequestId: string, stayId: string, actorId: string | null) {
-  const stay = await tx.roomingStay.findFirst({ where: { id: stayId, salesRequestId, removedAt: null } });
+  const stay = await tx.roomingStay.findFirst({ where: { id: stayId, salesRequestId, removedAt: null }, include: { slot: { select: { category: { select: { propertyId: true } } } } } });
   if (!stay) throw new TRPCError({ code: "NOT_FOUND", message: "That stay is not there any more." });
-  await tx.roomingStay.update({ where: { id: stayId }, data: { removedAt: new Date(), changedById: actorId } });
+  await tx.roomingStay.update({ where: { id: stayId }, data: { removedAt: new Date(), changedById: actorId, extraAskedAt: null } });
   await logAudit(tx, {
     actorId,
     entity: "SalesRequest",
@@ -240,6 +350,153 @@ export async function removeStay(tx: Prisma.TransactionClient, salesRequestId: s
     summary: `Rooming list: ${guestsOf(stay.guests).map(guestName).join(", ") || "a stay"} taken out${actorId ? "" : " by the client"}`,
     changes: formatRange(stay.checkIn, stay.checkOut),
   });
+  if (stay.extraAskedAt) await syncExtensionTask(tx, salesRequestId, stay.slot.category.propertyId, actorId);
+}
+
+/** A property's rooming list as sent now: the next version, with every stay in it. */
+export async function markSent(tx: Prisma.TransactionClient, salesRequestId: string, propertyId: string, actorId: string) {
+  const stays = await tx.roomingStay.findMany({ where: { salesRequestId, removedAt: null, slot: { category: { propertyId } } }, orderBy: [{ checkIn: "asc" }] });
+  const last = await tx.roomingVersion.findFirst({ where: { salesRequestId, propertyId }, orderBy: { number: "desc" }, select: { number: true } });
+  const number = (last?.number ?? 0) + 1;
+  await tx.roomingVersion.create({ data: { salesRequestId, propertyId, number, stays: stays.map(snapshotOf), sentById: actorId } });
+  const property = await tx.property.findUnique({ where: { id: propertyId }, select: { name: true } });
+  await logAudit(tx, { actorId, entity: "SalesRequest", entityId: salesRequestId, summary: `Rooming list V${number} sent to ${property?.name ?? "the property"}`, changes: `${stays.length} stay${stays.length === 1 ? "" : "s"}` });
+  return number;
+}
+
+// --- Extension requests (doc §6.9, the owner 2026-11-23) ---------------------------
+
+export const EXTENSION = "Extra nights";
+
+/** The extra nights still asked for at a property, per stay, in words. */
+async function askedAt(tx: Prisma.TransactionClient, salesRequestId: string, propertyId: string) {
+  const request = await requestOf(tx, salesRequestId);
+  if (!request.event) return [];
+  const stays = await tx.roomingStay.findMany({
+    where: { salesRequestId, removedAt: null, extraAskedAt: { not: null }, slot: { category: { propertyId } } },
+    include: { slot: { select: { slotNumber: true, unitNumber: true, category: { select: { name: true } } } } },
+    orderBy: { checkIn: "asc" },
+  });
+  const out: { stayId: string; slotId: string; line: string; nights: number }[] = [];
+  for (const stay of stays) {
+    const sold = await tx.roomNight.findMany({ where: { slotId: stay.slotId, eventId: request.event.id, clientId: request.clientId, salesState: "SOLD", date: { gte: stay.checkIn, lt: stay.checkOut } }, select: { date: true } });
+    const soldDays = new Set(sold.map((night) => dayKey(night.date)));
+    const extra = eachNight(stay.checkIn, stay.checkOut).filter((night) => !soldDays.has(dayKey(night)));
+    if (!extra.length) continue;
+    const room = `${stay.slot.category.name} ${stay.slot.unitNumber ? `No. ${stay.slot.unitNumber}` : `room ${stay.slot.slotNumber}`}`;
+    out.push({
+      stayId: stay.id,
+      slotId: stay.slotId,
+      nights: extra.length,
+      line: `• ${room} — ${runs(extra).map((run) => formatRange(run.checkIn, run.checkOut)).join(", ")} (${extra.length} night${extra.length === 1 ? "" : "s"}) for ${guestsOf(stay.guests).map(guestName).join(", ")}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * The extension task at a property (one open per request and property): made
+ * when extra nights are first asked for, its list kept up to date, and closed
+ * — the account manager told — once nothing is asked for any more.
+ */
+export async function syncExtensionTask(tx: Prisma.TransactionClient, salesRequestId: string, propertyId: string, actorId: string | null, settled = false) {
+  const request = await requestOf(tx, salesRequestId);
+  if (!request.event) return;
+  const asked = await askedAt(tx, salesRequestId, propertyId);
+  const open = await tx.task.findFirst({ where: { salesRequestId, propertyId, status: { not: "DONE" }, type: { name: EXTENSION } }, select: { id: true, details: true, assignees: { select: { id: true } } } });
+  const property = await tx.property.findUniqueOrThrow({ where: { id: propertyId }, select: { name: true } });
+  const details = (lines: string[]) =>
+    [`${request.client.name} asks for nights beyond their booking at ${property.name}:`, ...lines, "", "Get these nights from the property and sell them to the client — the rooming list then shows them as booked, and this task closes on its own."].join("\n");
+
+  if (!asked.length) {
+    if (!open) return;
+    await tx.task.update({ where: { id: open.id }, data: { status: "DONE", doneAt: new Date() } });
+    await tx.taskComment.create({ data: { taskId: open.id, authorId: null, body: settled ? "All the extra nights are booked for the client." : "Nothing is asked for any more — the stays were changed or taken out." } });
+    await logAudit(tx, { actorId, entity: "Task", entityId: open.id, summary: settled ? "Done — the extra nights are booked" : "Done — no extra nights asked for any more" });
+    if (settled) {
+      await notify(tx, {
+        to: [request.ownerId],
+        actorId,
+        kind: "TASK_STATUS",
+        title: `Extra nights booked: ${property.name} for ${request.client.name}`,
+        body: "Let the client know — their rooming list now shows them as booked.",
+        link: `/sales/${salesRequestId}#rooming`,
+        taskId: open.id,
+      });
+    }
+    return;
+  }
+
+  const text = details(asked.map((one) => one.line));
+  if (open) {
+    if (open.details !== text) {
+      await tx.task.update({ where: { id: open.id }, data: { details: text } });
+      await tx.taskComment.create({ data: { taskId: open.id, authorId: actorId, body: `What is asked for changed:\n${asked.map((one) => one.line).join("\n")}` } });
+    }
+    return;
+  }
+
+  const type = (await tx.taskType.findFirst({ where: { name: { equals: EXTENSION, mode: "insensitive" } } })) ?? (await tx.taskType.create({ data: { name: EXTENSION } }));
+  // Whoever has these rooms with the property, else whoever handled it, else the event's accommodation managers.
+  const owners = await tx.roomNight.findMany({ where: { slotId: { in: asked.map((one) => one.slotId) }, eventId: request.event.id, acquisitionOwnerId: { not: null } }, select: { acquisitionOwnerId: true }, distinct: ["acquisitionOwnerId"] });
+  let assignees = owners.map((one) => one.acquisitionOwnerId!).filter(Boolean);
+  if (!assignees.length) {
+    const contact = await tx.task.findFirst({ where: { propertyId, eventId: request.event.id, type: { name: HOTEL_CONTACT } }, orderBy: { createdAt: "desc" }, select: { assignees: { select: { id: true } } } });
+    assignees = contact?.assignees.map((person) => person.id) ?? [];
+  }
+  if (!assignees.length) {
+    const event = await tx.event.findUniqueOrThrow({ where: { id: request.event.id }, select: { accommodationManagers: { select: { id: true } } } });
+    assignees = event.accommodationManagers.map((person) => person.id);
+  }
+  if (!assignees.length && request.ownerId) assignees = [request.ownerId];
+  const task = await tx.task.create({
+    data: {
+      title: `Extra nights: ${property.name} for ${request.client.name} — ${request.event.name}`,
+      details: text,
+      status: "TODO",
+      typeId: type.id,
+      requestedById: request.ownerId ?? actorId,
+      createdById: actorId,
+      eventId: request.event.id,
+      propertyId,
+      clientId: request.clientId,
+      salesRequestId,
+      assignees: { connect: assignees.map((id) => ({ id })) },
+    },
+  });
+  await logAudit(tx, { actorId, entity: "Task", entityId: task.id, summary: `Task added: ${task.title}`, changes: actorId ? "Made on its own from the rooming list" : "Made on its own when the client asked for extra nights on their rooming list" });
+  await notify(tx, {
+    to: assignees,
+    actorId,
+    kind: "TASK_ASSIGNED",
+    title: `Extra nights asked for: ${property.name} for ${request.client.name}`,
+    body: "The rooming list asks for nights beyond the booking. Get them from the property.",
+    link: `/tasks/${task.id}`,
+    taskId: task.id,
+  });
+}
+
+/**
+ * Nights were just sold to a client (doc §6.9): any extension of theirs at the
+ * event that is now all booked is settled — its flag cleared, its task closed
+ * and the account manager told.
+ */
+export async function settleExtensions(tx: Prisma.TransactionClient, eventId: string, clientId: string, actorId: string) {
+  const stays = await tx.roomingStay.findMany({
+    where: { removedAt: null, extraAskedAt: { not: null }, salesRequest: { eventId, clientId } },
+    select: { id: true, salesRequestId: true, slotId: true, checkIn: true, checkOut: true, slot: { select: { category: { select: { propertyId: true } } } } },
+  });
+  const touched = new Set<string>();
+  for (const stay of stays) {
+    const sold = await tx.roomNight.count({ where: { slotId: stay.slotId, eventId, clientId, salesState: "SOLD", date: { gte: stay.checkIn, lt: stay.checkOut } } });
+    if (sold < eachNight(stay.checkIn, stay.checkOut).length) continue;
+    await tx.roomingStay.update({ where: { id: stay.id }, data: { extraAskedAt: null } });
+    touched.add(`${stay.salesRequestId}|${stay.slot.category.propertyId}`);
+  }
+  for (const key of touched) {
+    const [salesRequestId, propertyId] = key.split("|") as [string, string];
+    await syncExtensionTask(tx, salesRequestId, propertyId, actorId, true);
+  }
 }
 
 // --- Importing a client's own rooming list (doc §6.9, the owner 2026-11-23) -------
@@ -358,11 +615,18 @@ export async function previewImport(db: Db, salesRequestId: string, sheet: Impor
       problems.push({ rows: row.rows, guests: who, message: `Check-out (${checkOut}) is not after check-in (${checkIn}).` });
       continue;
     }
-    const inBooking = candidates.filter((room) => covers(room.booked, checkIn, checkOut));
+    // Within the booking first; else next to or overlapping it — an extension request.
+    const touches = (room: (typeof rooms)[number]) => room.booked.some((run) => checkIn <= run.checkOut && checkOut >= run.checkIn);
+    const within = candidates.filter((room) => covers(room.booked, checkIn, checkOut));
+    const inBooking = within.length ? within : candidates.filter(touches);
     if (!inBooking.length) {
       const booked = [...new Set(candidates.flatMap((room) => room.booked.map((run) => fmt(run.checkIn, run.checkOut))))].join(", ");
-      problems.push({ rows: row.rows, guests: who, message: `${fmt(checkIn, checkOut)} is outside the booking — these rooms are booked ${booked}.` });
+      problems.push({ rows: row.rows, guests: who, message: `${fmt(checkIn, checkOut)} is outside the booking and does not touch it — these rooms are booked ${booked}.` });
       continue;
+    }
+    if (!within.length) {
+      const booked = [...new Set(inBooking.flatMap((room) => room.booked.map((run) => fmt(run.checkIn, run.checkOut))))].join(", ");
+      warning = `Asks for nights beyond the booking (${booked}) — an extension request for acquisitions.`;
     }
     const fits = inBooking.filter((room) => room.capacity >= guests.length);
     if (!fits.length) {

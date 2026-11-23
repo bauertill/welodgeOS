@@ -5,7 +5,17 @@ import JSZip from "jszip";
  * entry, the first row bold as headings, every cell text or a number. Enough
  * for a rooming list a hotel opens in Excel (doc §6.9).
  */
-export type Sheet = { name: string; rows: (string | number | null)[][]; widths?: number[] };
+export type Sheet = {
+  name: string;
+  rows: (string | number | null)[][];
+  widths?: number[];
+  /** The row of headings, bold and kept in view when scrolling (default the first). */
+  headerRow?: number;
+  /** A row's look: STYLE.bold, STYLE.highlight (yellow), STYLE.title, STYLE.muted. */
+  rowStyles?: Record<number, number>;
+};
+
+export const STYLE = { plain: 0, bold: 1, highlight: 2, title: 3, muted: 4, removed: 5 } as const;
 
 const escape = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");
@@ -34,11 +44,13 @@ function sheetXml(sheet: Sheet) {
     : "";
   const rows = sheet.rows
     .map((row, r) => {
+      const look = sheet.rowStyles?.[r] ?? (r === (sheet.headerRow ?? 0) ? STYLE.bold : STYLE.plain);
       const cells = row
         .map((value, c) => {
-          if (value === null || value === "") return "";
+          if ((value === null || value === "") && look !== STYLE.highlight && look !== STYLE.removed) return "";
           const ref = `${column(c)}${r + 1}`;
-          const style = r === 0 ? ' s="1"' : "";
+          const style = look ? ` s="${look}"` : "";
+          if (value === null || value === "") return `<c r="${ref}"${style}/>`;
           return typeof value === "number"
             ? `<c r="${ref}"${style}><v>${value}</v></c>`
             : `<c r="${ref}" t="inlineStr"${style}><is><t xml:space="preserve">${escape(value)}</t></is></c>`;
@@ -47,7 +59,7 @@ function sheetXml(sheet: Sheet) {
       return `<row r="${r + 1}">${cells}</row>`;
     })
     .join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${rows}</sheetData></worksheet>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="${(sheet.headerRow ?? 0) + 1}" topLeftCell="A${(sheet.headerRow ?? 0) + 2}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${rows}</sheetData></worksheet>`;
 }
 
 export async function workbook(sheets: Sheet[]): Promise<Uint8Array> {
@@ -81,7 +93,7 @@ export async function workbook(sheets: Sheet[]): Promise<Uint8Array> {
   );
   zip.file(
     "xl/styles.xml",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" applyFont="1"/></cellXfs></styleSheet>`,
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="15"/><name val="Calibri"/></font><font><sz val="10"/><color rgb="FF6B7280"/><name val="Calibri"/></font><font><strike/><sz val="11"/><color rgb="FFB91C1C"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFDECEC"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="6"><xf/><xf fontId="1" applyFont="1"/><xf fillId="2" applyFill="1"/><xf fontId="2" applyFont="1"/><xf fontId="3" applyFont="1"/><xf fontId="4" fillId="3" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`,
     { createFolders: false },
   );
   sheets.forEach((sheet, i) => zip.file(`xl/worksheets/sheet${i + 1}.xml`, sheetXml(sheet), { createFolders: false }));

@@ -1085,14 +1085,14 @@ model User {
   sessions      Session[]
 
   scoutedProperties        Property[]
-  propertyContractingLinks Property[]      @relation("PropertyContractingLinkMadeBy")
-  guestLinksMade           Property[]      @relation("PropertyGuestLinkMadeBy")
-  roomingStaysChanged      RoomingStay[]   @relation("RoomingStayChangedBy")
-  roomingSent              RoomingSent[]   @relation("RoomingSentBy")
+  propertyContractingLinks Property[]       @relation("PropertyContractingLinkMadeBy")
+  guestLinksMade           Property[]       @relation("PropertyGuestLinkMadeBy")
+  roomingStaysChanged      RoomingStay[]    @relation("RoomingStayChangedBy")
+  roomingVersions          RoomingVersion[] @relation("RoomingVersionSentBy")
   rateCards                RateCard[]
   photosAdded              PropertyPhoto[]
-  quotationsAdded          Quotation[]     @relation("QuotationAddedBy")
-  scoutingEntries          ScoutingEntry[] @relation("AddedBy")
+  quotationsAdded          Quotation[]      @relation("QuotationAddedBy")
+  scoutingEntries          ScoutingEntry[]  @relation("AddedBy")
 
   acquisitionNights RoomNight[]        @relation("AcquisitionOwner")
   salesNights       RoomNight[]        @relation("SalesOwner")
@@ -1655,7 +1655,10 @@ model SalesRequest {
   roomingToken      String?            @unique
   roomingLinkMadeAt DateTime?
   roomingStays      RoomingStay[]
-  roomingSent       RoomingSent[]
+  roomingVersions   RoomingVersion[]
+  /// Extra guest details this client's list asks for (doc §6.9): any of gender,
+  /// nationality, passport, email — name and arrival are always asked.
+  roomingFields     String[]           @default([])
 
   @@index([clientId])
   @@index([eventId])
@@ -2711,6 +2714,9 @@ model RoomingStay {
   notes          String?
   /// Taken out — kept so a change after the list went to the supplier still shows.
   removedAt      DateTime?
+  /// When nights outside the booking were last asked for on this stay — an
+  /// extension request (doc §6.9); cleared once they are all sold to the client.
+  extraAskedAt   DateTime?
   /// Who last changed it: the team member, or empty for the client by the link.
   changedBy      User?        @relation("RoomingStayChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
   changedById    String?
@@ -2721,16 +2727,20 @@ model RoomingStay {
   @@index([slotId])
 }
 
-/// When the team sent a property's rooming list to it (doc §6.9): changes made
-/// since are flagged, to be passed on.
-model RoomingSent {
+/// A rooming list as sent to a property (doc §6.9, the owner 2026-11-23): each
+/// "Mark as sent" keeps a numbered version — V1, V2… — with what was in it, so
+/// the next download and the team's list show what changed since.
+model RoomingVersion {
   id             String       @id @default(cuid())
   salesRequest   SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
   salesRequestId String
   propertyId     String
+  number         Int
+  /// The stays as sent: [{ stayId, slotId, checkIn, checkOut, guests, arrival, notes }].
+  stays          Json
   sentAt         DateTime     @default(now())
-  sentBy         User?        @relation("RoomingSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  sentBy         User?        @relation("RoomingVersionSentBy", fields: [sentById], references: [id], onDelete: SetNull)
   sentById       String?
 
-  @@unique([salesRequestId, propertyId])
+  @@unique([salesRequestId, propertyId, number])
 }

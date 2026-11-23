@@ -7,6 +7,7 @@ import { Popup } from "~/app/_components/popup";
 import { Card } from "~/app/_components/ui";
 import { parseDay } from "~/lib/dates";
 import { formatDate, formatRange } from "~/lib/format";
+import { isExtraKey, roomingExtraFields, type Guest, type RoomingExtraKey } from "~/lib/rooming";
 import { cellDate, cellText, readSheetFile, type Cell, type ReadSheet } from "~/lib/sheet-read";
 import { api, type RouterInputs, type RouterOutputs } from "~/trpc/react";
 
@@ -38,7 +39,7 @@ function useRooming(mode: Mode) {
   const saveLink = api.rooming.saveStayByLink.useMutation({ onSuccess: refresh });
   const removeTeam = api.rooming.removeStay.useMutation({ onSuccess: refresh });
   const removeLink = api.rooming.removeStayByLink.useMutation({ onSuccess: refresh });
-  type StayFields = { id?: string; slotId: string; checkIn: string; checkOut: string; guests: { firstName: string; lastName: string }[]; arrival: string; notes: string };
+  type StayFields = { id?: string; slotId: string; checkIn: string; checkOut: string; guests: Guest[]; arrival: string; notes: string };
   return {
     data: (mode.salesRequestId ? team.data : shared.data) as (Omit<List, "token" | "madeAt"> & Partial<Pick<List, "token" | "madeAt">>) | undefined,
     error: mode.token ? shared.error : team.error,
@@ -61,9 +62,12 @@ export function RoomingList(mode: Mode) {
   }
   if (!rooming.data) return <p className="text-ink-500 text-sm font-light">Loading…</p>;
   const { properties } = rooming.data;
+  const fields = roomingExtraFields.filter((field) => rooming.data!.fields.includes(field.key));
   const allRooms = properties.flatMap((property) => property.rooms);
   const nights = allRooms.reduce((sum, room) => sum + room.nights, 0);
   const named = allRooms.reduce((sum, room) => sum + room.named, 0);
+  const asked = allRooms.flatMap((room) => room.stays).filter((stay) => !stay.removed && stay.extraNights > 0);
+  const askedNights = asked.reduce((sum, stay) => sum + stay.extraNights, 0);
 
   if (!properties.length) {
     return (
@@ -78,12 +82,28 @@ export function RoomingList(mode: Mode) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-ink-700 text-[13px] font-light">
-          <span className="text-ink-900 font-medium">
-            {named} of {nights} nights named
-          </span>{" "}
-          across {allRooms.length} rooms. Type straight into the sheet — each row saves when you leave it.
-        </p>
+        <div className="text-ink-700 text-[13px] font-light">
+          <p>
+            <span className="text-ink-900 font-medium">
+              {named} of {nights} booked nights named
+            </span>{" "}
+            across {allRooms.length} rooms
+            {named > 0 && named < nights && (
+              <>
+                {" "}
+                · <span className="text-[#8a5a00]">{nights - named} booked nights with nobody in them</span>
+              </>
+            )}
+            {askedNights > 0 && (
+              <>
+                {" "}
+                · <span className="font-medium text-[#2a4f9c]">{askedNights} extra nights asked for</span>
+              </>
+            )}
+            .
+          </p>
+          <p className="text-ink-500 text-xs">Type straight into the sheet — each row saves when you leave it. Dates beyond a room&rsquo;s booking ask us for the extra nights.</p>
+        </div>
         <button
           type="button"
           onClick={() => setImporting(true)}
@@ -93,35 +113,54 @@ export function RoomingList(mode: Mode) {
         </button>
       </div>
       {properties.map((property) => (
-        <PropertySheet key={property.id} property={property} mode={mode} rooming={rooming} />
+        <PropertySheet key={property.id} property={property} mode={mode} rooming={rooming} fields={fields} />
       ))}
-      {importing && <ImportSheet mode={mode} year={rooming.data.event ? new Date(rooming.data.event.startDate).getUTCFullYear() : new Date().getUTCFullYear()} multipleProperties={properties.length > 1} onClose={() => setImporting(false)} />}
+      {importing && (
+        <ImportSheet
+          mode={mode}
+          year={rooming.data.event ? new Date(rooming.data.event.startDate).getUTCFullYear() : new Date().getUTCFullYear()}
+          multipleProperties={properties.length > 1}
+          extras={fields}
+          onClose={() => setImporting(false)}
+        />
+      )}
     </div>
   );
 }
 
+type ExtraField = (typeof roomingExtraFields)[number];
+
 /** The guest columns a property's sheet needs: as many as its largest room sleeps, at most four. */
 const guestColumns = (property: Property) => Math.min(4, Math.max(1, ...property.rooms.map((room) => room.capacity)));
 
-function PropertySheet({ property, mode, rooming }: { property: Property; mode: Mode; rooming: ReturnType<typeof useRooming> }) {
+function PropertySheet({ property, mode, rooming, fields }: { property: Property; mode: Mode; rooming: ReturnType<typeof useRooming>; fields: readonly ExtraField[] }) {
   const team = Boolean(mode.salesRequestId);
   const utils = api.useUtils();
   const markSent = api.rooming.markSent.useMutation({ onSuccess: () => (void utils.rooming.invalidate(), void utils.audit.invalidate()) });
-  const changes = property.rooms.flatMap((room) => room.stays).filter((stay) => stay.changedSinceSent).length;
+  const changes = property.rooms.flatMap((room) => room.stays).filter((stay) => stay.sinceSent).length;
   const columns = guestColumns(property);
   const th = "text-ink-500 border-ink-200/60 border-b px-2 py-2 text-left text-[11px] font-medium tracking-wide whitespace-nowrap uppercase";
+  const download = `/api/rooming/${mode.salesRequestId}/${property.id}`;
   return (
     <section className="border-ink-200/60 overflow-hidden rounded-2xl border bg-white">
       <header className="border-ink-200/60 flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
         <div>
           <h2 className="text-ink-900 text-[16px] font-medium">{property.name}</h2>
+          {property.times && <p className="text-ink-500 text-xs font-light">At the property: {property.times}</p>}
           {team && (
             <p className="text-ink-500 mt-0.5 text-xs font-light">
               {property.sentAt ? (
                 <>
-                  Sent to the property {formatDate(property.sentAt)}
+                  V{property.version} sent {formatDate(property.sentAt)}
                   {property.sentBy && <> by {property.sentBy}</>}
-                  {changes > 0 ? <span className="font-medium text-[#b45309]"> · {changes} change{changes === 1 ? "" : "s"} since — pass them on</span> : " · no changes since"}
+                  {changes > 0 ? (
+                    <span className="font-medium text-[#b45309]">
+                      {" "}
+                      · {changes} change{changes === 1 ? "" : "s"} since — send V{(property.version ?? 0) + 1}
+                    </span>
+                  ) : (
+                    " · no changes since"
+                  )}
                 </>
               ) : (
                 "Not sent to the property yet"
@@ -131,8 +170,8 @@ function PropertySheet({ property, mode, rooming }: { property: Property; mode: 
         </div>
         {team && (
           <div className="flex flex-wrap items-center gap-3 text-[13px]">
-            <a href={`/api/rooming/${mode.salesRequestId}/${property.id}`} className="text-brand-700 font-medium hover:underline">
-              ⬇ Download Excel
+            <a href={download} className="text-brand-700 font-medium hover:underline">
+              ⬇ Download Excel{property.version ? ` (V${property.version + 1}${changes ? ", changes in yellow" : ""})` : ""}
             </a>
             <button
               type="button"
@@ -140,8 +179,23 @@ function PropertySheet({ property, mode, rooming }: { property: Property; mode: 
               onClick={() => markSent.mutate({ salesRequestId: mode.salesRequestId!, propertyId: property.id })}
               className="border-ink-200 text-ink-700 hover:bg-ink-50 rounded-full border px-3 py-1 text-xs font-light"
             >
-              {markSent.isPending ? "Saving…" : property.sentAt ? "Sent again" : "Mark as sent to the property"}
+              {markSent.isPending ? "Saving…" : `Mark V${(property.version ?? 0) + 1} as sent to the property`}
             </button>
+            {property.versions.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => e.target.value && (window.location.href = `${download}?version=${e.target.value}`)}
+                aria-label="Download an earlier version"
+                className="border-ink-200 text-ink-700 rounded-full border bg-white px-2 py-1 text-xs"
+              >
+                <option value="">Earlier versions…</option>
+                {property.versions.map((version) => (
+                  <option key={version.number} value={version.number}>
+                    V{version.number} — {formatDate(version.sentAt)}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
       </header>
@@ -155,6 +209,7 @@ function PropertySheet({ property, mode, rooming }: { property: Property; mode: 
               {Array.from({ length: columns }, (_, i) => (
                 <th key={i} className={th}>
                   {columns === 1 ? "Guest — full name" : `Guest ${i + 1}${i === 0 ? " — full name" : ""}`}
+                  {fields.length > 0 && <span className="text-ink-400 block text-[10px] font-light normal-case">with {fields.map((field) => field.label.toLowerCase()).join(", ")}</span>}
                 </th>
               ))}
               <th className={th}>Arriving</th>
@@ -164,7 +219,7 @@ function PropertySheet({ property, mode, rooming }: { property: Property; mode: 
           </thead>
           <tbody>
             {property.rooms.map((room) => (
-              <RoomRows key={room.slotId} room={room} columns={columns} team={team} rooming={rooming} />
+              <RoomRows key={room.slotId} room={room} columns={columns} team={team} rooming={rooming} fields={fields} />
             ))}
           </tbody>
         </table>
@@ -192,29 +247,33 @@ function freeStretch(room: Room) {
   return null;
 }
 
-function RoomRows({ room, columns, team, rooming }: { room: Room; columns: number; team: boolean; rooming: ReturnType<typeof useRooming> }) {
+function RoomRows({ room, columns, team, rooming, fields }: { room: Room; columns: number; team: boolean; rooming: ReturnType<typeof useRooming>; fields: readonly ExtraField[] }) {
   const free = freeStretch(room);
-  const rows = room.stays.length + (free ? 1 : 0);
   const full = room.named >= room.nights;
+  const unused = room.nights - room.named;
   const roomCell = (
-    <td rowSpan={rows} className="border-ink-200/60 border-b bg-white px-3 py-2 align-top" style={{ minWidth: "15rem" }}>
+    <td className="bg-white px-3 py-2 align-top" style={{ minWidth: "15rem" }}>
       <div className="flex flex-wrap items-baseline gap-x-2 whitespace-nowrap">
         <span className="text-ink-900 font-medium">{room.category}</span>
         {team ? <UnitNumber room={room} /> : room.unitNumber ? <span className="text-ink-700 text-xs">No. {room.unitNumber}</span> : null}
       </div>
       <p className="text-ink-400 text-[11px] font-light whitespace-nowrap">
         {team ? "our room" : "room"} {room.slotNumber} · sleeps {room.capacity} ·{" "}
-        <span className={full ? "text-[#0a7a47]" : ""}>{full ? "✓ all named" : `${room.named}/${room.nights} nights named`}</span>
+        <span className={full ? "text-[#0a7a47]" : room.named > 0 ? "text-[#8a5a00]" : ""}>
+          {full ? "✓ all named" : room.named > 0 ? `${unused} night${unused === 1 ? "" : "s"} not used` : `${room.nights} nights to name`}
+        </span>
       </p>
       <p className="text-ink-400 text-[11px] font-light">Booked {room.booked.map((booked) => range(booked.checkIn, booked.checkOut)).join(", ")}</p>
     </td>
   );
+  const blank = <td className="bg-white" />;
+  const count = room.stays.length + (free ? 1 : 0);
   return (
     <>
       {room.stays.map((stay, index) => (
-        <SheetRow key={stay.id} room={room} stay={stay} columns={columns} team={team} rooming={rooming} lead={index === 0 ? roomCell : null} last={!free && index === room.stays.length - 1} />
+        <SheetRow key={stay.id} room={room} stay={stay} columns={columns} team={team} rooming={rooming} fields={fields} lead={index === 0 ? roomCell : blank} last={index === count - 1} />
       ))}
-      {free && <SheetRow key={`new-${free.checkIn}`} room={room} start={free} columns={columns} team={team} rooming={rooming} lead={room.stays.length === 0 ? roomCell : null} last />}
+      {free && <SheetRow key={`new-${free.checkIn}`} room={room} start={free} columns={columns} team={team} rooming={rooming} fields={fields} lead={room.stays.length === 0 ? roomCell : blank} last />}
     </>
   );
 }
@@ -224,6 +283,8 @@ const splitName = (full: string) => {
   const words = full.trim().split(/\s+/).filter(Boolean);
   return words.length <= 1 ? { firstName: words[0] ?? "", lastName: "" } : { firstName: words.slice(0, -1).join(" "), lastName: words.at(-1)! };
 };
+
+type Details = Partial<Record<RoomingExtraKey, string>>;
 
 /**
  * One stay as a row of the sheet — or, with no stay, the empty row for the
@@ -236,6 +297,7 @@ function SheetRow({
   columns,
   team,
   rooming,
+  fields,
   lead,
   last,
 }: {
@@ -245,6 +307,7 @@ function SheetRow({
   columns: number;
   team: boolean;
   rooming: ReturnType<typeof useRooming>;
+  fields: readonly ExtraField[];
   lead: React.ReactNode;
   last: boolean;
 }) {
@@ -252,6 +315,7 @@ function SheetRow({
     checkIn: stay?.checkIn ?? start?.checkIn ?? "",
     checkOut: stay?.checkOut ?? start?.checkOut ?? "",
     names: Array.from({ length: columns }, (_, i) => (stay?.guests[i] ? name(stay.guests[i]) : "")),
+    details: Array.from({ length: columns }, (_, i) => Object.fromEntries(fields.map((field) => [field.key, stay?.guests[i]?.[field.key] ?? ""])) as Details),
     arrival: stay?.arrival ?? "",
     notes: stay?.notes ?? "",
   });
@@ -263,12 +327,13 @@ function SheetRow({
   useEffect(() => setDraft(initial()), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const dirty = JSON.stringify(draft) !== key;
   const removed = stay?.removed ?? false;
-  const first = room.booked[0]!.checkIn;
-  const lastDay = room.booked.at(-1)!.checkOut;
+  const rowId = stay?.id ?? `new-${room.slotId}`;
 
   const save = () => {
     if (!dirty || removed) return;
-    const guests = draft.names.map(splitName).filter((guest) => guest.firstName || guest.lastName);
+    const guests = draft.names
+      .map((full, i) => ({ ...splitName(full), ...Object.fromEntries(Object.entries(draft.details[i] ?? {}).filter(([, value]) => value)) }))
+      .filter((guest) => guest.firstName || guest.lastName);
     if (!guests.length) {
       if (stay) setProblem("Give at least one name — or take them out with ×.");
       return;
@@ -283,38 +348,62 @@ function SheetRow({
         setProblem(error instanceof Error ? error.message : "Could not save.");
       });
   };
+  // Left the stay's rows altogether — not just moved to another of its cells.
+  const onBlur = (e: React.FocusEvent) => {
+    const next = (e.relatedTarget as HTMLElement | null)?.closest("[data-stay]")?.getAttribute("data-stay");
+    if (next !== rowId) save();
+  };
 
-  const cell = `border-ink-200/60 px-1 py-1 align-top ${last ? "border-b" : ""}`;
+  const cell = "px-1 py-1 align-top";
   const input = `w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-[13px] outline-none hover:border-ink-200 focus:border-brand-400 focus:bg-white ${removed ? "line-through text-ink-400" : "text-ink-900"}`;
-  const tone = removed ? "bg-[#fdecec]" : stay?.changedSinceSent ? "bg-[#fff4e0]" : !stay ? "bg-white" : "";
+  const small = "w-full rounded border border-transparent bg-transparent px-2 py-0.5 text-[11px] text-ink-700 outline-none hover:border-ink-200 focus:border-brand-400 focus:bg-white";
+  const tone = removed ? "bg-[#fdecec]" : stay?.sinceSent ? "bg-[#fff4e0]" : !stay ? "bg-white" : "";
+  const extra = stay && !removed && stay.extraNights > 0;
+  const message =
+    problem ??
+    (extra
+      ? `${team ? "Extension requested" : "You asked for"} ${stay.extraNights} extra night${stay.extraNights === 1 ? "" : "s"} (${stay.extra.map((run) => range(run.checkIn, run.checkOut)).join(", ")}) — ${team ? "acquisitions has a task to get them" : "we are getting them for you and will confirm"}.`
+      : null);
+  const flag = team && stay?.sinceSent ? `${stay.sinceSent === "removed" ? "Taken out" : stay.sinceSent === "new" ? "New" : `Changed (${stay.changes.join("; ")})`} since the version sent — by ${stay.changedBy}` : null;
   return (
     <>
-      <tr
-        className={tone}
-        onBlur={(e) => {
-          // Left the row altogether — not just moved to its next cell.
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) save();
-        }}
-      >
+      <tr className={`${tone} ${last && !message && !flag ? "border-ink-200/60 border-b" : ""}`} data-stay={rowId} onBlur={onBlur}>
         {lead}
         <td className={cell}>
-          <input type="date" value={draft.checkIn} min={first} max={lastDay} disabled={removed} onChange={(e) => setDraft({ ...draft, checkIn: e.target.value })} aria-label="Check-in" className={`${input} w-36`} />
+          <input type="date" value={draft.checkIn} disabled={removed} onChange={(e) => setDraft({ ...draft, checkIn: e.target.value })} aria-label="Check-in" className={`${input} w-36`} />
         </td>
         <td className={cell}>
-          <input type="date" value={draft.checkOut} min={first} max={lastDay} disabled={removed} onChange={(e) => setDraft({ ...draft, checkOut: e.target.value })} aria-label="Check-out" className={`${input} w-36`} />
+          <input type="date" value={draft.checkOut} disabled={removed} onChange={(e) => setDraft({ ...draft, checkOut: e.target.value })} aria-label="Check-out" className={`${input} w-36`} />
         </td>
         {draft.names.map((value, i) => (
           <td key={i} className={cell}>
             {i < room.capacity ? (
-              <input
-                value={value}
-                disabled={removed}
-                onChange={(e) => setDraft({ ...draft, names: draft.names.map((one, j) => (j === i ? e.target.value : one)) })}
-                onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                placeholder={!stay && i === 0 ? "Type a name…" : ""}
-                aria-label={`Guest ${i + 1}`}
-                className={input}
-              />
+              <>
+                <input
+                  value={value}
+                  disabled={removed}
+                  onChange={(e) => setDraft({ ...draft, names: draft.names.map((one, j) => (j === i ? e.target.value : one)) })}
+                  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                  placeholder={!stay && i === 0 ? "Type a name…" : ""}
+                  aria-label={`Guest ${i + 1}`}
+                  className={input}
+                />
+                {fields.length > 0 && (value.trim() || draft.details[i]?.[fields[0]!.key]) && (
+                  <div className="space-y-0.5 pb-1">
+                    {fields.map((field) => (
+                      <input
+                        key={field.key}
+                        value={draft.details[i]?.[field.key] ?? ""}
+                        disabled={removed}
+                        onChange={(e) => setDraft({ ...draft, details: draft.details.map((one, j) => (j === i ? { ...one, [field.key]: e.target.value } : one)) })}
+                        placeholder={field.label}
+                        aria-label={`Guest ${i + 1} ${field.label}`}
+                        className={small}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             ) : (
               <span className="text-ink-300 block px-2 py-1.5 text-xs">—</span>
             )}
@@ -352,15 +441,12 @@ function SheetRow({
           )}
         </td>
       </tr>
-      {(problem ?? (team && stay && (removed || stay.changedSinceSent))) && (
-        <tr className={tone}>
+      {(message ?? flag) && (
+        <tr className={`${tone} ${last ? "border-ink-200/60 border-b" : ""}`} data-stay={rowId}>
+          <td className="bg-white" />
           <td colSpan={columns + 5} className="px-3 pb-2 text-xs">
-            {problem && <span className="text-[#c03654]">{problem}</span>}
-            {!problem && team && stay && (
-              <span className="font-medium text-[#b45309]">
-                {removed ? "Taken out" : "Changed"} since the list was sent — by {stay.changedBy}
-              </span>
-            )}
+            {message && <p className={problem ? "text-[#c03654]" : "font-medium text-[#2a4f9c]"}>{message}</p>}
+            {flag && !problem && <p className="font-medium text-[#b45309]">{flag}</p>}
           </td>
         </tr>
       )}
@@ -370,7 +456,7 @@ function SheetRow({
 
 // --- Reading the client's own spreadsheet -------------------------------------------
 
-type Field = "name" | "firstName" | "lastName" | "name2" | "checkIn" | "checkOut" | "property" | "roomType" | "roomNumber" | "group" | "arrival" | "notes";
+type Field = "name" | "firstName" | "lastName" | "name2" | "checkIn" | "checkOut" | "property" | "roomType" | "roomNumber" | "group" | "arrival" | "notes" | RoomingExtraKey;
 const fields: { key: Field; label: string; hint?: string; guess: RegExp | RegExp[] }[] = [
   { key: "name", label: "Guest — full name", guess: /^(guest|name|full ?name|guest ?name|passenger|participant|athlete|delegate|person)( ?1)?$/i },
   { key: "firstName", label: "First name", guess: /first|given|vorname|pr[ée]nom/i },
@@ -389,6 +475,11 @@ const fields: { key: Field; label: string; hint?: string; guess: RegExp | RegExp
   },
   { key: "arrival", label: "Arriving — time or flight", guess: [/^eta\b|arrival ?time|^time$/i, /flight/i] },
   { key: "notes", label: "Notes", guess: /note|comment|remark|special|request/i },
+  // The extra details, offered when the list asks for them.
+  { key: "gender", label: "Gender", guess: /^(gender|sex)$/i },
+  { key: "nationality", label: "Nationality", guess: /nationality|citizenship|country of/i },
+  { key: "passport", label: "Passport no.", guess: /passport|id ?(no|number)|document/i },
+  { key: "email", label: "Email", guess: /e-?mail/i },
 ];
 
 /**
@@ -397,7 +488,8 @@ const fields: { key: Field; label: string; hint?: string; guess: RegExp | RegExp
  * headings), see what it would add, change and could not place — and why —
  * then apply it. Nothing changes before Apply.
  */
-function ImportSheet({ mode, year, multipleProperties, onClose }: { mode: Mode; year: number; multipleProperties: boolean; onClose: () => void }) {
+function ImportSheet({ mode, year, multipleProperties, extras, onClose }: { mode: Mode; year: number; multipleProperties: boolean; extras: readonly ExtraField[]; onClose: () => void }) {
+  const offered = fields.filter((field) => !isExtraKey(field.key) || extras.some((extra) => extra.key === field.key));
   const utils = api.useUtils();
   const [file, setFile] = useState<{ name: string; sheets: ReadSheet[] } | null>(null);
   const [sheetIndex, setSheetIndex] = useState(0);
@@ -423,7 +515,7 @@ function ImportSheet({ mode, year, multipleProperties, onClose }: { mode: Mode; 
     const heads = (chosen.rows[headingRow(chosen)] ?? []).map((cell) => cellText(cell).replace(/\s+/g, " "));
     const guessed: Partial<Record<Field, number>> = {};
     const used = new Set<number>();
-    for (const field of fields) {
+    for (const field of offered) {
       // Tried in order: the first pattern any free heading matches wins.
       for (const pattern of Array.isArray(field.guess) ? field.guess : [field.guess]) {
         const index = heads.findIndex((head, i) => !used.has(i) && head && pattern.test(head));
@@ -476,9 +568,11 @@ function ImportSheet({ mode, year, multipleProperties, onClose }: { mode: Mode; 
         checkOut: date(row, "checkOut") ?? (continues ? above.checkOut : null),
       };
       above = here;
-      const guests: { firstName: string; lastName: string }[] = [];
+      const guests: Guest[] = [];
       if (map.firstName !== undefined || map.lastName !== undefined) guests.push({ firstName: text(row, "firstName") ?? "", lastName: text(row, "lastName") ?? "" });
       else if (text(row, "name")) guests.push(splitName(text(row, "name")!));
+      // The row's details are its first guest's.
+      if (guests[0]) for (const extra of extras) if (text(row, extra.key)) guests[0][extra.key] = text(row, extra.key)!;
       if (text(row, "name2")) guests.push(splitName(text(row, "name2")!));
       const named = guests.filter((guest) => guest.firstName || guest.lastName);
       // A row with no one on it — a second contract line, a spacer — only sets what follows.
@@ -604,7 +698,7 @@ function ImportSheet({ mode, year, multipleProperties, onClose }: { mode: Mode; 
                   <p className="text-ink-500 text-xs font-light">Guessed from the headings — change any that are wrong. A name is all that is needed; without dates, the room&rsquo;s booked dates are used.</p>
                 </div>
                 <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
-                  {fields
+                  {offered
                     .filter((field) => field.key !== "property" || multipleProperties || map.property !== undefined)
                     .map((field) => (
                       <label key={field.key} className="text-ink-700 flex items-center justify-between gap-2 text-xs" title={field.hint}>
@@ -815,8 +909,40 @@ export function RequestRoomingList({ salesRequestId }: { salesRequestId: string 
           )}
           {error && <FormError message={friendlyError(error)} />}
         </div>
+        <AskFor salesRequestId={salesRequestId} fields={data.data?.fields ?? []} />
       </Card>
       <RoomingList salesRequestId={salesRequestId} />
+    </div>
+  );
+}
+
+/** What else the list asks for, per guest — name and arrival always (doc §6.9). */
+function AskFor({ salesRequestId, fields }: { salesRequestId: string; fields: string[] }) {
+  const utils = api.useUtils();
+  const set = api.rooming.setFields.useMutation({ onSuccess: () => (void utils.rooming.invalidate(), void utils.audit.invalidate()) });
+  return (
+    <div className="border-ink-200/60 mt-3 border-t pt-3">
+      <p className="text-ink-900 text-[13px] font-medium">Also ask for, per guest</p>
+      <p className="text-ink-500 text-xs font-light">Name and arrival are always asked. Some properties and countries need more — Japan, for one, asks for foreign guests&rsquo; passport details.</p>
+      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+        {roomingExtraFields.map((field) => (
+          <label key={field.key} className="text-ink-700 flex items-center gap-1.5 text-[13px]">
+            <input
+              type="checkbox"
+              checked={fields.includes(field.key)}
+              disabled={set.isPending}
+              onChange={(e) =>
+                set.mutate({
+                  salesRequestId,
+                  fields: roomingExtraFields.map((one) => one.key).filter((key) => (key === field.key ? e.target.checked : fields.includes(key))),
+                })
+              }
+              className="accent-brand-500"
+            />
+            {field.label}
+          </label>
+        ))}
+      </div>
     </div>
   );
 }

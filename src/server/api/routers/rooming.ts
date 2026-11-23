@@ -6,27 +6,34 @@ import { z } from "zod";
 import { parseDay } from "~/lib/dates";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
-import { applyImport, previewImport, removeStay, roomingList, saveStay } from "~/server/rooming";
+import { applyImport, markSent, previewImport, removeStay, roomingList, saveStay } from "~/server/rooming";
 
 /** The rooming list (doc §6.9): the team on the sales request, the client by their link. */
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const guestInput = z.object({
+  firstName: z.string().max(100),
+  lastName: z.string().max(100),
+  gender: z.string().max(40).optional(),
+  nationality: z.string().max(100).optional(),
+  passport: z.string().max(60).optional(),
+  email: z.string().max(200).optional(),
+});
 const stayInput = z.object({
   id: z.string().optional(),
   slotId: z.string(),
   checkIn: day,
   checkOut: day,
-  guests: z.array(z.object({ firstName: z.string().max(100), lastName: z.string().max(100) })).max(20),
+  guests: z.array(guestInput).max(20),
   arrival: z.string().max(300).default(""),
   notes: z.string().max(2000).default(""),
 });
 const token = z.string().min(20).max(100);
-const name = z.string().max(100);
 const importRows = z
   .array(
     z.object({
       rows: z.array(z.number().int()).max(50),
-      guests: z.array(z.object({ firstName: name, lastName: name })).max(20),
+      guests: z.array(guestInput).max(20),
       checkIn: day.nullable(),
       checkOut: day.nullable(),
       property: z.string().max(200).nullable(),
@@ -49,7 +56,7 @@ async function byToken(db: Parameters<typeof roomingList>[0], value: string) {
 export const roomingRouter = createTRPCRouter({
   forRequest: protectedProcedure.input(z.object({ salesRequestId: z.string() })).query(async ({ ctx, input }) => {
     const { request, properties } = await roomingList(ctx.db, input.salesRequestId, { forClient: false });
-    return { token: request.roomingToken, madeAt: request.roomingLinkMadeAt, client: request.client.name, event: request.event, properties };
+    return { token: request.roomingToken, madeAt: request.roomingLinkMadeAt, fields: request.roomingFields, client: request.client.name, event: request.event, properties };
   }),
 
   saveStay: protectedProcedure.input(stayInput.extend({ salesRequestId: z.string() })).mutation(({ ctx, input }) =>
@@ -88,15 +95,15 @@ export const roomingRouter = createTRPCRouter({
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.salesRequestId, summary: "Rooming list link switched off" });
   }),
 
-  /** The property was sent its list: changes from now on are flagged for passing on. */
-  markSent: protectedProcedure.input(z.object({ salesRequestId: z.string(), propertyId: z.string() })).mutation(async ({ ctx, input }) => {
-    await ctx.db.roomingSent.upsert({
-      where: { salesRequestId_propertyId: { salesRequestId: input.salesRequestId, propertyId: input.propertyId } },
-      update: { sentAt: new Date(), sentById: ctx.session.user.id },
-      create: { salesRequestId: input.salesRequestId, propertyId: input.propertyId, sentById: ctx.session.user.id },
-    });
-    const property = await ctx.db.property.findUnique({ where: { id: input.propertyId }, select: { name: true } });
-    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.salesRequestId, summary: `Rooming list sent to ${property?.name ?? "the property"}` });
+  /** The property was sent its list: kept as the next version; changes from now on are shown against it. */
+  markSent: protectedProcedure.input(z.object({ salesRequestId: z.string(), propertyId: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction((tx) => markSent(tx, input.salesRequestId, input.propertyId, ctx.session.user.id)).then((number) => ({ number })),
+  ),
+
+  /** Which extra details this client's list asks for, per guest (doc §6.9). */
+  setFields: protectedProcedure.input(z.object({ salesRequestId: z.string(), fields: z.array(z.enum(["gender", "nationality", "passport", "email"])).max(4) })).mutation(async ({ ctx, input }) => {
+    await ctx.db.salesRequest.update({ where: { id: input.salesRequestId }, data: { roomingFields: input.fields } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.salesRequestId, summary: "Rooming list asks for", changes: input.fields.length ? input.fields.join(", ") : "names and arrival only" });
     return { ok: true };
   }),
 
@@ -127,7 +134,7 @@ export const roomingRouter = createTRPCRouter({
   shared: publicProcedure.input(z.object({ token })).query(async ({ ctx, input }) => {
     const id = await byToken(ctx.db, input.token);
     const { request, properties } = await roomingList(ctx.db, id, { forClient: true });
-    return { client: request.client.name, event: request.event, properties };
+    return { fields: request.roomingFields, client: request.client.name, event: request.event, properties };
   }),
 
   saveStayByLink: publicProcedure.input(stayInput.extend({ token })).mutation(async ({ ctx, input }) => {
