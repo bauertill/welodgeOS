@@ -20,6 +20,7 @@ import {
 import { positionOf } from "~/lib/position";
 import type { BlockNight } from "~/lib/stock-blocks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { ensureBlockTasks } from "~/server/block-task";
 import {
   axisOf,
   describeRoom,
@@ -879,9 +880,37 @@ export const inventoryRouter = createTRPCRouter({
       ctx.db.$transaction(
         async (tx) => {
           const { periods, ...change } = input;
-          if (!periods?.length) return applyInventoryChange(tx, ctx.session.user.id, change);
-          checkPeriods(periods, change.checkIn, change.checkOut);
-          return applyByPeriod(tx, ctx.session.user.id, change, periods);
+          // Rooms already blocked for this client on every one of these nights:
+          // amending them tells the hotel nothing new (doc §4.8, blocking task).
+          const blocking = change.action === "BLOCK" && change.clientId;
+          const alreadyBlocked = blocking
+            ? await tx.roomNight.groupBy({
+                by: ["slotId"],
+                where: { eventId: change.eventId, slotId: { in: change.slotIds }, date: { gte: change.checkIn, lt: change.checkOut }, salesState: "BLOCKED", clientId: change.clientId },
+                _count: { _all: true },
+              })
+            : [];
+          let outcome;
+          if (!periods?.length) outcome = await applyInventoryChange(tx, ctx.session.user.id, change);
+          else {
+            checkPeriods(periods, change.checkIn, change.checkOut);
+            outcome = await applyByPeriod(tx, ctx.session.user.id, change, periods);
+          }
+          if (blocking) {
+            const nights = nightsBetween(change.checkIn, change.checkOut);
+            const unchanged = new Set(alreadyBlocked.filter((row) => row._count._all === nights).map((row) => row.slotId));
+            await ensureBlockTasks(tx, {
+              actorId: ctx.session.user.id,
+              eventId: change.eventId,
+              clientId: change.clientId!,
+              salesRequestId: change.salesRequestId,
+              slotIds: change.slotIds.filter((id) => !unchanged.has(id)),
+              checkIn: change.checkIn,
+              checkOut: change.checkOut,
+              blockExpiry: change.blockExpiry,
+            });
+          }
+          return outcome;
         },
         { timeout: 60_000 },
       ),
