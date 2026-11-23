@@ -105,7 +105,7 @@ function useShown(eventId: string | undefined, layers: MapLayer[]) {
       // As above.
     }
   };
-  const ids = [...layers.map((layer) => layer.id), "contracted", "accommodation"];
+  const ids = [...layers.map((layer) => layer.id), "contracted", "hotels", "apartments"];
   return {
     isShown: (id: string) => (id === "transit" ? hidden.includes("transit:on") : !hidden.includes(id)),
     toggle: (id: string) =>
@@ -426,11 +426,17 @@ export function ScoutingMap({
   const visiblePlaces = onlyPlaceId
     ? places.filter((place) => place.id === onlyPlaceId)
     : places.filter((place) => !place.layerId || shown.isShown(place.layerId));
-  // Two layers of properties (the owner, 2026-11-19): Contracted, and
-  // Accommodation for everything else — each ticked on or off.
+  // Three layers of properties (the owner, 2026-11-19, split 2026-11-23): Contracted — hotels and
+  // apartments together — then Hotels and Apartments for everything else, each ticked on or off.
   const contractedPins = pins.filter((pin) => pin.status === "CONTRACTED");
   const otherPins = pins.filter((pin) => pin.status !== "CONTRACTED");
-  const shownPins = [...(shown.isShown("contracted") ? contractedPins : []), ...(shown.isShown("accommodation") ? otherPins : [])];
+  const apartmentPins = otherPins.filter((pin) => pin.type && isApartmentLike(pin.type));
+  const hotelPins = otherPins.filter((pin) => !(pin.type && isApartmentLike(pin.type)));
+  const shownPins = [
+    ...(shown.isShown("contracted") ? contractedPins : []),
+    ...(shown.isShown("hotels") ? hotelPins : []),
+    ...(shown.isShown("apartments") ? apartmentPins : []),
+  ];
   // A place being added from the Layers panel: its spot, and whether the next map click sets it.
   const [draftPoint, setDraftPoint] = useState<{ latitude: number; longitude: number } | null>(null);
   const [picking, setPicking] = useState(false);
@@ -489,6 +495,14 @@ export function ScoutingMap({
     [pins, places, found, searchPoint, onlyPlaceId],
   );
 
+  // Searching another address while adding moves the pin to it.
+  useEffect(() => {
+    if (!addingProperty || !searchPoint) return;
+    setPropertyPoint({ latitude: searchPoint.latitude, longitude: searchPoint.longitude });
+    setPickingProperty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the searched spot itself changes
+  }, [searchPoint?.latitude, searchPoint?.longitude]);
+
   const apiKey = env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
     return <MapNotice>The map needs a Google Maps key — see docs/todos.md.</MapNotice>;
@@ -517,7 +531,9 @@ export function ScoutingMap({
             onClick={() => {
               setOpenId(null);
               setAddingProperty(true);
-              setPickingProperty(true);
+              // An address just searched on the map is where the pin goes — no second click (the owner, 2026-11-23).
+              if (searchPoint) setPropertyPoint({ latitude: searchPoint.latitude, longitude: searchPoint.longitude });
+              setPickingProperty(!searchPoint);
             }}
             className="bg-brand-400 hover:bg-brand-500 absolute top-2.5 left-1/2 z-10 -translate-x-1/2 rounded-full px-4 py-2 text-[13px] font-medium text-white shadow-md"
           >
@@ -542,7 +558,7 @@ export function ScoutingMap({
             layers={layers}
             places={places}
             shown={shown}
-            propertyCounts={{ contracted: contractedPins.length, other: otherPins.length }}
+            propertyCounts={{ contracted: contractedPins.length, hotels: hotelPins.length, apartments: apartmentPins.length }}
             draftPoint={draftPoint}
             setDraftPoint={setDraftPoint}
             picking={picking}
@@ -557,7 +573,8 @@ export function ScoutingMap({
             gestureHandling="greedy"
             clickableIcons={false}
             onClick={(event) => {
-              if (pickingProperty && event.detail.latLng) {
+              // While adding, every click (not on a pin) puts the new pin there — a wrong spot is fixed by clicking again (the owner, 2026-11-23).
+              if ((pickingProperty || addingProperty) && event.detail.latLng && Date.now() - pinClickedAt.current >= 300) {
                 setPropertyPoint({ latitude: event.detail.latLng.lat, longitude: event.detail.latLng.lng });
                 setPickingProperty(false);
                 return;
@@ -570,7 +587,7 @@ export function ScoutingMap({
               if (Date.now() - pinClickedAt.current < 300) return;
               setOpenId(null);
             }}
-            draggableCursor={picking || pickingProperty ? "crosshair" : undefined}
+            draggableCursor={picking || pickingProperty || addingProperty ? "crosshair" : undefined}
             fullscreenControl={false}
             style={{ height: fullScreen ? "100vh" : "32rem", width: "100%" }}
           >

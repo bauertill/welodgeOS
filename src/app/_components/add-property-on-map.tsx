@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { AddressSearch, type FoundPlace } from "~/app/_components/address-search";
 import { friendlyError } from "~/app/_components/form";
 import { api } from "~/trpc/react";
 
@@ -48,11 +49,24 @@ export function AddPropertyForm({
   const [address, setAddress] = useState("");
   const [locating, setLocating] = useState<string | null>(null);
   const [done, setDone] = useState<{ name: string; id: string; taskId: string | null; place?: boolean } | null>(null);
-  const where = api.scouting.addressAt.useQuery(point ?? { latitude: 0, longitude: 0 }, { enabled: Boolean(point), staleTime: Infinity });
+  // A pin dropped from a searched address keeps that address; a clicked spot has its address looked up.
+  const [searched, setSearched] = useState<Point | null>(null);
+  const fromSearch = Boolean(point && searched && point.latitude === searched.latitude && point.longitude === searched.longitude);
+  const where = api.scouting.addressAt.useQuery(point ?? { latitude: 0, longitude: 0 }, { enabled: Boolean(point) && !fromSearch, staleTime: Infinity });
   // The address found at the spot, unless one was typed.
   useEffect(() => {
-    if (where.data?.address) setAddress(where.data.address);
-  }, [where.data]);
+    if (where.data?.address && !fromSearch) setAddress(where.data.address);
+  }, [where.data, fromSearch]);
+  /** An address picked from the search (the owner, 2026-11-23): that is where the pin goes. */
+  const found = (place: FoundPlace) => {
+    if (place.latitude === null || place.longitude === null) return;
+    const spot = { latitude: place.latitude, longitude: place.longitude };
+    setSearched(spot);
+    setPoint(spot);
+    setPicking(false);
+    setAddress(place.address ?? address);
+    if (!name.trim() && place.name && place.name !== place.address) setName(place.name);
+  };
   const add = api.scouting.addFromMap.useMutation({
     onSuccess: (made) => {
       setDone({ name, id: made.id, taskId: made.taskId });
@@ -167,7 +181,11 @@ export function AddPropertyForm({
       {!point ? (
         <div className="bg-brand-50 rounded-lg px-3 py-2.5">
           <p className="text-ink-900 font-medium">{picking ? "Click the spot on the map" : "Where is it?"}</p>
-          <p className="text-ink-500 mt-0.5 text-xs font-light">Or, standing in front of it:</p>
+          <p className="text-ink-500 mt-0.5 text-xs font-light">Or search its address or name — the pin goes there:</p>
+          <div className="mt-1">
+            <AddressSearch value={address} onChange={setAddress} onFound={found} />
+          </div>
+          <p className="text-ink-500 mt-1.5 text-xs font-light">Or, standing in front of it:</p>
           <button type="button" onClick={here} className="text-brand-700 mt-1 text-xs font-medium hover:underline">
             📍 Use where I am
           </button>
@@ -175,10 +193,7 @@ export function AddPropertyForm({
         </div>
       ) : (
         <p className="text-ink-500 text-xs font-light">
-          The red pin is where it goes.{" "}
-          <button type="button" onClick={() => setPicking(true)} className="text-brand-700 hover:underline">
-            Move it
-          </button>
+          The red pin is where it goes — click anywhere else on the map to move it, or search another address below.
         </p>
       )}
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name — even a working one" aria-label="Name" className={field} autoFocus />
@@ -234,7 +249,13 @@ export function AddPropertyForm({
         <input type="checkbox" checked={underDevelopment} onChange={(e) => setUnderDevelopment(e.target.checked)} className="accent-brand-500 h-3.5 w-3.5" />
         Under development
       </label>
-      <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={where.isFetching ? "Finding the address…" : "Address"} aria-label="Address" className={field} />
+      {point && (
+        // Searching another address here moves the pin to it.
+        <div>
+          <AddressSearch value={address} onChange={setAddress} onFound={found} />
+          {where.isFetching && <p className="text-ink-500 mt-0.5 text-[11px] font-light">Finding the address…</p>}
+        </div>
+      )}
       <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={kind === "place" ? "A note — optional" : "What you saw — opening 2027, about 80 rooms, a sign with a number…"} aria-label="Note" className={field} />
       {add.error && <p className="text-xs text-[#c03654]">{friendlyError(add.error)}</p>}
       {(addPlace.error ?? saveLayer.error) && <p className="text-xs text-[#c03654]">{friendlyError(addPlace.error ?? saveLayer.error)}</p>}

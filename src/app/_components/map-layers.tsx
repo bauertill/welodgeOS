@@ -77,8 +77,8 @@ export function LayersPanel({
   layers: MapLayer[];
   places: MapPlace[];
   shown: Shown;
-  /** Properties on the map: contracted, and every other (Accommodation). */
-  propertyCounts?: { contracted: number; other: number };
+  /** Properties on the map: contracted, and every other as Hotels or Apartments. */
+  propertyCounts?: { contracted: number; hotels: number; apartments: number };
   /** Where a new place goes, pinned on the map meanwhile. */
   draftPoint: Point | null;
   setDraftPoint: (point: Point | null) => void;
@@ -282,7 +282,8 @@ export function LayersPanel({
             </div>
           ))}
           {row("contracted", "Contracted", <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#0a7a47] bg-white" />, propertyCounts?.contracted)}
-          {row("accommodation", "Accommodation", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 bg-white" />, propertyCounts?.other)}
+          {row("hotels", "Hotels", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 bg-white" />, propertyCounts?.hotels)}
+          {row("apartments", "Apartments", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2 bg-white" />, propertyCounts?.apartments)}
           {row("transit", "Google public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
           <div className="text-brand-700 flex justify-between px-1.5 pt-1 text-[11px]">
             <button type="button" onClick={shown.showAll} className="hover:underline">

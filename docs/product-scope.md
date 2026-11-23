@@ -1015,8 +1015,13 @@ places with an address but no position (a layer built from a spreadsheet) has th
 skipped: they need a position first.
 
 **Adding anything from the map** (2026-10-13): **＋ Add to the map** at the top of the map, then
-a click on the spot, or **📍 Use where I am** from a phone in front of it; a red "＋ New here"
-pin shows the spot (*Move it* to click again). Beside the map, it is **a property** or **a
+a click on the spot, a **search for its address or name** (the pin goes to what is picked), or
+**📍 Use where I am** from a phone in front of it; a red "＋ New here" pin shows the spot. An
+address already picked in *Find hotels not on our list near* is taken as the spot at once, with
+no second click; picking another there moves the pin (the owner, 2026-11-23). While adding,
+**clicking anywhere else on the map moves the pin** — a wrong spot is fixed by clicking again —
+and searching another address in the panel moves it too. A clicked spot has its address looked
+up; a searched one keeps the address picked. Beside the map, it is **a property** or **a
 place**. **A place** — a nation house, a fan zone, a meeting point, a metro station — has a
 name, the layer it goes on (or *+ A new layer…* named there and then), its address and a note,
 and *Add to the map* puts it there. (Metro stations fetched from Google or OpenStreetMap were
@@ -1041,10 +1046,11 @@ centre a racket 🎾, Dodger Stadium ⚾, the Coliseum's ceremonies 🎆); with 
 squares (2026-10-13): a 🛏️ bed for a hotel or aparthotel, coloured by its stars — five black,
 four blue, three green, two or fewer yellow, grey when the stars are not known — and a 🏠 house
 in purple for an apartment; name and stars on pointing, the panel on clicking (its status
-there, no longer in its colour). **The properties are two layers** (the owner, 2026-11-19): **Contracted** — the
-properties contracted on the event, their squares edged in green — and **Accommodation**,
-every other property on the list;
-each ticked on or off, with its count. Both follow the list's search and filters, as the map
+there, no longer in its colour). **The properties are three layers** (the owner, 2026-11-19; split 2026-11-23): **Contracted** — the
+properties contracted on the event, hotels and apartments together, their squares edged in
+green — then **Hotels** and **Apartments**, every other property on the list by its kind
+(aparthotels and extended-stay count as hotels, as on their pins);
+each ticked on or off, with its count. All follow the list's search and filters, as the map
 always has.
 
 | Field | Notes |
@@ -4486,7 +4492,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |
-| §3.7 Map: Contracted and Accommodation layers | **Built** (2026-11-19) | The event's map shows its properties as two layers, *Contracted* and *Accommodation* (everything else), each ticked on or off; both follow the list's filters |
+| §3.7 Map: Contracted, Hotels and Apartments layers | **Built** (2026-11-19; split on staging 2026-11-23) | The event's map shows its properties as three layers, *Contracted* (hotels and apartments together), *Hotels* and *Apartments* (everything else, by kind), each ticked on or off; all follow the list's filters. Adding to the map: a searched address is the pin, and a click elsewhere moves it (staging 2026-11-23) |
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
