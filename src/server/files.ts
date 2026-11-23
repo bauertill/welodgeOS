@@ -12,6 +12,10 @@ export const MAX_FILE_LABEL = "100 MB";
 /** Where a task's files go in the store: under the task, so an upload can only be recorded on its own task. */
 export const taskFilePrefix = (taskId: string) => `tasks/${taskId}/`;
 
+/** Where documents for records' file fields go, and the upload's marker for them. */
+export const STORED_FILE_PREFIX = "uploads/";
+export const STORE = "store";
+
 export const filesConfigured = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 
 /** What the store holds at that place — its real size and type — or null when nothing was uploaded there. */

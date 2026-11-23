@@ -32,6 +32,8 @@ import {
 } from "~/lib/finance";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { CURRENCIES } from "~/lib/currency";
+import { FileField } from "~/app/_components/file-field";
+import { linkLabel } from "~/lib/file-link";
 
 type FullContract = NonNullable<RouterOutputs["finance"]["contract"]>;
 type Payment = FullContract["payments"][number];
@@ -615,8 +617,8 @@ export function NewContractForm({
         <Field label="Contract name" className="sm:col-span-2">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group Sales Agreement" />
         </Field>
-        <Field label="Signed PDF — Google Drive link" hint="Open the file in Drive, Share → Copy link, and paste it here." className="sm:col-span-2">
-          <Input value={documentUrl} onChange={(e) => setDocumentUrl(e.target.value)} placeholder="https://drive.google.com/file/d/…" />
+        <Field label="Signed PDF — upload it, or paste a link" className="sm:col-span-2">
+          <FileField value={documentUrl} onChange={setDocumentUrl} label="Signed PDF" />
         </Field>
         <Field label="Signed on">
           <Input type="date" value={signedOn} onChange={(e) => setSignedOn(e.target.value)} />
@@ -661,7 +663,7 @@ function useSaved() {
 
 /**
  * Where the signed PDF goes, said and done in one place (2026-11-09: "it says it's missing but
- * there is no clear place to add it"). It is a Google Drive link — the system keeps no files.
+ * there is no clear place to add it"). Uploaded to the site's file store, or a pasted link.
  */
 function AddSignedPdf({ contract, compact = false }: { contract: FullContract; compact?: boolean }) {
   const saved = useSaved();
@@ -676,8 +678,7 @@ function AddSignedPdf({ contract, compact = false }: { contract: FullContract; c
       }}
     >
       <div className={compact ? "" : "min-w-64 flex-1"}>
-        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the Google Drive link to the signed PDF" aria-label="Signed PDF — Google Drive link" />
-        {!compact && <p className="mt-1 text-xs font-light">In Drive: right-click the signed PDF → Share → Copy link, then paste it here.</p>}
+        <FileField value={url} onChange={setUrl} label="Signed PDF" />
       </div>
       <Button type="submit" disabled={!url.trim() || update.isPending}>
         {update.isPending ? "Saving…" : "Add the signed PDF"}
@@ -789,8 +790,8 @@ function ContractDetails({ contract }: { contract: FullContract }) {
           <Field label="Name">
             <Input value={draft.name} onChange={(e) => set("name")(e.target.value)} />
           </Field>
-          <Field label="Signed PDF — Google Drive link">
-            <Input value={draft.documentUrl} onChange={(e) => set("documentUrl")(e.target.value)} placeholder="https://drive.google.com/file/d/…" />
+          <Field label="Signed PDF — upload it, or paste a link">
+            <FileField value={draft.documentUrl} onChange={set("documentUrl")} label="Signed PDF" />
           </Field>
           <Field label="Signed on">
             <Input type="date" value={draft.signedOn} onChange={(e) => set("signedOn")(e.target.value)} />
@@ -895,7 +896,7 @@ function ContractDetails({ contract }: { contract: FullContract }) {
             value={
               contract.documentUrl ? (
                 <a href={contract.documentUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
-                  Open in Drive ↗
+                  {linkLabel(contract.documentUrl, "Open ↗")}
                 </a>
               ) : (
                 <AddSignedPdf contract={contract} compact />
@@ -1151,11 +1152,11 @@ function PaymentEditor({ contract, payment, onDone }: { contract: FullContract; 
             <Input type="date" value={draft.paidOn} onChange={(e) => set("paidOn")(e.target.value)} />
           </Field>
         )}
-        <Field label={contract.party === "SUPPLIER" ? "Invoice from the supplier — link" : "Our invoice — link"} className="sm:col-span-3">
-          <Input value={draft.invoiceUrl} onChange={(e) => set("invoiceUrl")(e.target.value)} placeholder="https://drive.google.com/…" />
+        <Field label={contract.party === "SUPPLIER" ? "Invoice from the supplier" : "Our invoice"} className="sm:col-span-3">
+          <FileField value={draft.invoiceUrl} onChange={set("invoiceUrl")} label="Invoice" />
         </Field>
-        <Field label="Proof of payment — link" className="sm:col-span-3">
-          <Input value={draft.proofUrl} onChange={(e) => set("proofUrl")(e.target.value)} placeholder="https://drive.google.com/…" />
+        <Field label="Proof of payment" className="sm:col-span-3">
+          <FileField value={draft.proofUrl} onChange={set("proofUrl")} label="Proof of payment" />
         </Field>
         {contract.party === "SUPPLIER" && (
           <Field label="Beneficiary" className="sm:col-span-6">

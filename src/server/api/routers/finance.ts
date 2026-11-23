@@ -2,6 +2,8 @@ import { CancellationKind, ContractParty, PaymentStatus, type Prisma } from "gen
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { FILE_LINK_MESSAGE, isFileLink } from "~/lib/file-link";
+
 import { addDays, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney } from "~/lib/format";
 import { cancellationKindLabels, isSettled, missingTerms, paymentAmount, paymentStatusLabels, percent, reminderWords } from "~/lib/finance";
@@ -25,7 +27,7 @@ const link = z
   .string()
   .trim()
   .max(2000)
-  .refine((value) => value === "" || /^https?:\/\//.test(value), "Paste the whole link, starting with https://");
+  .refine(isFileLink, FILE_LINK_MESSAGE);
 const blank = (value: string | undefined) => (value?.trim() ? value.trim() : null);
 const toDay = (value: string | undefined) => (value ? parseDay(value) : null);
 const share = z.number().int().min(0).max(10_000).nullable();

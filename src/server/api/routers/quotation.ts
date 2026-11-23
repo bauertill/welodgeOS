@@ -2,6 +2,8 @@ import { CancellationKind, Cleaning, QuotationStatus, RateInclusion, TaxKind, ty
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { FILE_LINK_MESSAGE, isFileLink } from "~/lib/file-link";
+
 import { nightsBetween, parseDay, today } from "~/lib/dates";
 import { percent } from "~/lib/finance";
 import { formatDate, formatMoney } from "~/lib/format";
@@ -91,7 +93,7 @@ const quotationInput = z.object({
     .string()
     .trim()
     .max(2000)
-    .refine((value) => value === "" || /^https?:\/\//.test(value), "Paste the whole link, starting with https://"),
+    .refine(isFileLink, FILE_LINK_MESSAGE),
   notes: z.string().max(5000),
   /** The client's request it was quoted for, if one (doc §4.11). */
   salesRequestId: z.string().nullable().default(null),
