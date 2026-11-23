@@ -38,23 +38,23 @@ describe("the default 50-unit scenario", () => {
     expect(iso(c.maxD)).toBe("2028-11-10");
   });
 
-  it("is 10 studios, 40 one-beds and 300 lease months", () => {
+  it("is 10 studios, 30 one-beds, 10 two-beds and 300 lease months", () => {
     const c = full();
-    expect(c.counts).toEqual([10, 40]);
+    expect(c.counts).toEqual([10, 30, 10]);
     expect(c.unitMonths).toBe(300);
   });
 
-  it("blends to $4,400 a month (≈ $144.66 a night) and $1,320,000 in all", () => {
+  it("blends to $4,600 a month (≈ $151.23 a night) and $1,380,000 in all", () => {
     const c = full();
-    expect(c.rateEff).toBe(4400);
-    expect(Math.round((c.rateEff / NPM) * 100) / 100).toBe(144.66);
-    expect(c.totalRent).toBe(1320000);
+    expect(c.rateEff).toBe(4600);
+    expect(Math.round((c.rateEff / NPM) * 100) / 100).toBe(151.23);
+    expect(c.totalRent).toBe(1380000);
   });
 
   it("spreads the rent by day so the months add up to the total", () => {
     const c = full();
     const sum = c.months.reduce((t, m) => t + m.rent, 0);
-    expect(sum).toBeCloseTo(1320000, 6);
+    expect(sum).toBeCloseTo(1380000, 6);
     // March: wave 1 all month, wave 2 from the 15th, wave 3 from the 29th — each lease month split by its days.
     const march = c.months.find((m) => iso(m.m) === "2028-03-01")!;
     expect(march.arr).toBe(26);
@@ -82,15 +82,16 @@ describe("lede and figures", () => {
   });
 });
 
-describe("scenarios saved with 2-beds", () => {
-  it("drops the 2-bed share and rent without failing", () => {
-    const old = { ...defaults(), mix: { studio: 20, one: 60, two: 20 }, rates: { studio: 4000, one: 4500, two: 5500 } };
+describe("scenarios saved without 2-beds", () => {
+  it("treat the 2-bed share as 0 and its rate as the default, without failing", () => {
+    const old = { ...defaults(), mix: { studio: 20, one: 80 }, rates: { studio: 4000, one: 4500 } };
     const s = normalise(JSON.parse(JSON.stringify(old)));
-    expect(s.mix).toEqual({ studio: 20, one: 60 });
-    expect(s.rates).toEqual({ studio: 4000, one: 4500 });
+    expect(s.mix).toEqual({ studio: 20, one: 80, two: 0 });
+    expect(s.rates).toEqual({ studio: 4000, one: 4500, two: 5500 });
     const c = compute(s);
     if (c.empty) throw new Error("empty");
-    expect(c.counts).toEqual([13, 37]);
+    expect(c.counts).toEqual([10, 40, 0]);
+    expect(c.totalRent).toBe(1320000);
   });
 });
 

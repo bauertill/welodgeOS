@@ -3450,9 +3450,10 @@ offer opens it as a document, as it will print.
 > block, and the rent the owner earns. The team edits scenarios live; the owner gets a
 > read-only link. It reproduces the reference page `docs/reference/stagger-planner-reference.html`
 > (its sums, chart, settings, words and print layout), with scenarios kept in the system instead
-> of one browser. **Updated 2026-11-20** to the revised reference: studios and 1-beds only, the
+> of one browser. **Updated 2026-11-20** to the revised reference: the
 > day-by-day chart gone, the rental periods first, a shorter story and three figures, and a
-> two-page print layout with *Save as PDF*.
+> two-page print layout with *Save as PDF*. **Updated 2026-11-23**: studios, 1-beds and 2-beds
+> again, as the reference now has them.
 
 **Where.** *Sales › Stagger planner* (`/stagger`): every scenario, last edited first, with its
 owner, event, number of apartments and who last edited it when; *Open*, *Duplicate*, *Rename*,
@@ -3495,9 +3496,10 @@ title — and so the PDF's name — is *Decron Apartments OBS* (the owner's shor
 
 **What a scenario holds** — exactly the reference's settings: total apartments, first move-in,
 number of waves, days between waves, months per stay, the waves themselves (move-in, apartments,
-months), the unit mix (**studio and 1-bed only**, as percentages), the owner's rent per type
-(US$ a month, entered monthly or nightly) and *Show rent figures*. A scenario saved earlier with
-2-bed figures keeps its studio and 1-bed figures; the 2-bed ones are ignored. (*Compare with a
+months), the unit mix (**studio, 1-bed and 2-bed**, as percentages), the owner's rent per type
+(US$ a month, entered monthly or nightly) and *Show rent figures*. A scenario saved while there
+were no 2-beds (20–23 Nov 2026) has no 2-bed share — taken as 0 — and the default 2-bed rate of
+$5,500; nothing fails. (*Compare with a
 single block* went with the day-by-day chart it switched; an old scenario's setting is kept but
 does nothing.)
 **Only the owner's rent** — never our margins, selling rates, client prices or costs.
@@ -3520,11 +3522,11 @@ the tests; unit-tested against the 50-unit scenario):
   waves evenly; changing the stay sets it on every wave; changing only the total keeps the wave
   dates and rescales the apartments in proportion.
 - The rental periods mark the Games (14–30 July 2028).
-- The 50-unit scenario (new scenarios and *Reset*): Studio 20% at $4,000 and 1-bed 80% at
-  $4,500 a month; waves of 9, 9, 8, 8, 8, 8 arriving 1, 15 and 29 Mar, 12 and 26 Apr and 10 May
-  2028, handed back 1 Sep – 10 Nov; 10 studios and 40 1-beds; 300 lease months; $4,400 a month
-  blended (≈ $144.66 a night); $1,320,000 rent. A migration moved *Decron – OBS 50 units* to
-  these figures where it had not been edited since it was made.
+- The 50-unit scenario (new scenarios and *Reset*): Studio 20% at $4,000, 1-bed 60% at $4,500
+  and 2-bed 20% at $5,500 a month; waves of 9, 9, 8, 8, 8, 8 arriving 1, 15 and 29 Mar, 12 and 26
+  Apr and 10 May 2028, handed back 1 Sep – 10 Nov; 10 studios, 30 1-beds and 10 2-beds; 300 lease
+  months; $4,600 a month blended (≈ $151.23 a night); $1,380,000 rent. A migration moved *Decron –
+  OBS 50 units* to these figures where it had not been edited since it was last set.
 
 **Words.** Where the reference names Decron, the scenario's owner is used ("Decron" for
 "Decron Properties"); "OBS" stays fixed — a scenario has no field for whose apartments they are.
@@ -4531,7 +4533,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Not interested on the sales list | **Built** (2026-11-20) | Each open row on the Sales requests list ends in *Not interested* instead of *Delete*: it closes the request as Lost/Declined with the new reason *Not interested* (also under Mark as…), reopenable from its page. Delete stays only on the request's own page |
 | §4.12 Stagger Planner | **Built** (2026-11-19) | Sales › Stagger planner: scenarios listed, made, copied, renamed, archived; the editor saves as you go and refuses to overwrite a colleague's newer save; a read-only, unindexed owner's link (on/off, replaced); the reference page's sums in one tested module; Decron – OBS 50 units made by the migration |
-| §4.12 Stagger Planner, revised reference | **Built on staging** (2026-11-20) | Studio and 1-bed only (old 2-bed figures ignored); defaults 20/80 at $4,000/$4,500; the day-by-day chart, its tooltip and the single-block option removed; *Rental periods* first with *Wave N* rows and a legend; new story, three figures, two notes; title *Decron Apartments OBS*; *Save as PDF* (print) with the two-page Letter layout |
+| §4.12 Stagger Planner, revised reference | **Built** (2026-11-20; 2-beds back on staging 2026-11-23) | Studio, 1-bed and 2-bed (scenarios without 2-beds take a 0 share and the default rate); defaults 20/60/20 at $4,000/$4,500/$5,500; the day-by-day chart, its tooltip and the single-block option removed; *Rental periods* first with *Wave N* rows and a legend; new story, three figures, two notes; title *Decron Apartments OBS*; *Save as PDF* (print) with the two-page Letter layout |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
 | §4.11 The offer | **Built** (2026-10-14) | Made from the client's rate card answer in a popup — lines, rates, holding date (7 days), payment and cancellation terms (the last offer on the event's to start), inclusions and conditions; requests its rooms, all or nothing — blocked until it runs out once its agreement is marked sent (2026-11-20); request to Negotiation; flagged when it runs out, extended or withdrawn by a person |
