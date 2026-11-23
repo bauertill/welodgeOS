@@ -22,8 +22,8 @@ export async function POST(request: Request) {
       request,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
         const taskId = clientPayload ?? "";
-        const task = taskId ? await db.task.findUnique({ where: { id: taskId }, select: { id: true } }) : null;
-        if (!task || !pathname.startsWith(taskFilePrefix(task.id))) throw new Error("That task was not found.");
+        const task = taskId ? await db.task.findUnique({ where: { id: taskId }, select: { id: true, private: true, createdById: true } }) : null;
+        if (!task || (task.private && task.createdById !== session.user.id) || !pathname.startsWith(taskFilePrefix(task.id))) throw new Error("That task was not found.");
         return { maximumSizeInBytes: MAX_FILE_BYTES, addRandomSuffix: true };
       },
     });

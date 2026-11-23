@@ -135,9 +135,24 @@ type Filters = {
 const noFilters: Filters = { search: "", assigneeId: "", requestedById: "", priority: "", typeId: "", eventId: "", clientId: "" };
 
 const viewKey = "welodge.tasks.view";
+const boardKey = "welodge.tasks.board";
 
 export function TaskBoard() {
   const [view, setView] = useState<"board" | "list">("board");
+  // The team's board, or your own private one (doc §2.8) — remembered in this browser.
+  const [board, setBoard] = useState<"team" | "private">("team");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(boardKey) === "private") setBoard("private");
+    } catch {}
+  }, []);
+  const chooseBoard = (next: "team" | "private") => {
+    setBoard(next);
+    try {
+      localStorage.setItem(boardKey, next);
+    } catch {}
+  };
+  const own = board === "private";
   useEffect(() => {
     try {
       const saved = localStorage.getItem(viewKey);
@@ -167,9 +182,10 @@ export function TaskBoard() {
 
   const tasks = api.task.list.useQuery(
     {
+      board,
       search: filters.search || undefined,
-      assigneeId: filters.assigneeId || undefined,
-      requestedById: filters.requestedById || undefined,
+      assigneeId: own ? undefined : filters.assigneeId || undefined,
+      requestedById: own ? undefined : filters.requestedById || undefined,
       priority: filters.priority || undefined,
       typeId: filters.typeId || undefined,
       eventId: filters.eventId || undefined,
@@ -186,13 +202,27 @@ export function TaskBoard() {
   const clients = api.clients.list.useQuery();
 
   const rows = tasks.data ?? [];
-  const mine = me.data && filters.assigneeId === me.data.id;
+  const mine = !own && me.data && filters.assigneeId === me.data.id;
   const filtered = Object.entries(filters).some(([key, value]) => key !== "search" && value) || Boolean(filters.search) || (view === "list" && status);
   const peopleOptions = (people.data ?? []).map((person) => ({ id: person.id, label: person.name ?? person.email ?? "" }));
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
+        <div className="border-ink-200 flex rounded-full border bg-white p-1">
+          {(["team", "private"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => chooseBoard(option)}
+              aria-pressed={board === option}
+              title={option === "private" ? "Tasks only you can see" : "Everyone's tasks"}
+              className={`rounded-full px-4 py-1.5 text-[13px] font-light transition-colors ${board === option ? "bg-ink-900 text-white" : "text-ink-500 hover:text-ink-900"}`}
+            >
+              {option === "team" ? "Team board" : "🔒 My private board"}
+            </button>
+          ))}
+        </div>
         <div className="border-ink-200 flex rounded-full border bg-white p-1">
           {(["board", "list"] as const).map((option) => (
             <button
@@ -206,7 +236,7 @@ export function TaskBoard() {
             </button>
           ))}
         </div>
-        {me.data && (
+        {me.data && !own && (
           <button
             type="button"
             onClick={() => set("assigneeId", mine ? "" : me.data!.id)}
@@ -230,9 +260,10 @@ export function TaskBoard() {
         </button>
       </div>
 
+      {own && <p className="text-ink-500 text-[13px] font-light">🔒 Only you can see these tasks — nobody else, not even an admin, sees them on the board, a page or a notification.</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <Combobox className="w-44" value={filters.assigneeId} onChange={(value) => set("assigneeId", value)} placeholder="Anyone to complete" options={peopleOptions} />
-        <Combobox className="w-44" value={filters.requestedById} onChange={(value) => set("requestedById", value)} placeholder="Requested by anyone" options={peopleOptions} />
+        {!own && <Combobox className="w-44" value={filters.assigneeId} onChange={(value) => set("assigneeId", value)} placeholder="Anyone to complete" options={peopleOptions} />}
+        {!own && <Combobox className="w-44" value={filters.requestedById} onChange={(value) => set("requestedById", value)} placeholder="Requested by anyone" options={peopleOptions} />}
         <div className="w-36">
         <Select value={filters.priority} onChange={(e) => set("priority", e.target.value as Priority | "")} aria-label="Priority">
           <option value="">Any priority</option>
@@ -309,9 +340,9 @@ export function TaskBoard() {
 
       {openId && <TaskPopup id={openId} onClose={() => setOpenId(null)} />}
       {adding && (
-        <Popup title="New task" subtitle="What it is, who completes it, and by when." onClose={() => setAdding(null)}>
+        <Popup title={own ? "New private task" : "New task"} subtitle={own ? "Only you will see it." : "What it is, who completes it, and by when."} onClose={() => setAdding(null)}>
           <div className="border-ink-200/60 rounded-xl border bg-white p-5">
-            <TaskForm preset={{ status: adding, assigneeIds: mine ? [me.data!.id] : undefined }} onDone={() => setAdding(null)} />
+            <TaskForm preset={{ status: adding, assigneeIds: mine ? [me.data!.id] : undefined, private: own }} onDone={() => setAdding(null)} />
           </div>
         </Popup>
       )}
@@ -434,12 +465,19 @@ function TaskCard({
       className={`group border-ink-200/60 hover:border-brand-300 cursor-pointer rounded-lg border bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition ${faded ? "opacity-40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-ink-900 line-clamp-2 text-[13px] leading-snug font-medium">{shortTitle(task)}</p>
+        <p className="text-ink-900 line-clamp-2 text-[13px] leading-snug font-medium">
+          {task.private && <PrivateMark />}
+          {shortTitle(task)}
+        </p>
         <span className="flex shrink-0 items-center gap-1.5">
           <PriorityBadge priority={task.priority} />
-          <AssigneePicker taskId={task.id} assignees={task.assignees}>
+          {task.private ? (
             <Assignees people={task.assignees} />
-          </AssigneePicker>
+          ) : (
+            <AssigneePicker taskId={task.id} assignees={task.assignees}>
+              <Assignees people={task.assignees} />
+            </AssigneePicker>
+          )}
         </span>
       </div>
       <div className="text-ink-500 mt-1 flex items-center gap-x-1.5 overflow-hidden text-[11px] font-light whitespace-nowrap">
@@ -538,6 +576,7 @@ export function TaskTable({
           {tasks.map((task) => (
             <tr key={task.id} className={`hover:bg-ink-50/40 ${onOpen ? "cursor-pointer" : ""}`} onClick={onOpen ? () => onOpen(task.id) : undefined}>
               <td className={`${td} text-ink-900`}>
+                {task.private && <PrivateMark />}
                 {onOpen ? (
                   <button type="button" onClick={() => onOpen(task.id)} className="hover:text-brand-700 text-left font-medium">
                     {task.title}
@@ -625,7 +664,18 @@ export type TaskPreset = {
   contractorId?: string;
   status?: TaskStatus;
   assigneeIds?: string[];
+  /** A private task, seen only by whoever adds it (doc §2.8). */
+  private?: boolean;
 };
+
+/** 🔒 beside a private task's title. */
+function PrivateMark() {
+  return (
+    <span title="Private — only you can see it" aria-label="Private" className="mr-1">
+      🔒
+    </span>
+  );
+}
 
 type Draft = {
   title: string;
@@ -641,6 +691,7 @@ type Draft = {
   clientId: string;
   salesRequestId: string;
   contractorId: string;
+  private: boolean;
 };
 
 /** A task added or changed: what it is, who completes it, by when, and what it is about. */
@@ -669,6 +720,7 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
     clientId: task?.client?.id ?? preset?.clientId ?? "",
     salesRequestId: task?.salesRequest?.id ?? preset?.salesRequestId ?? "",
     contractorId: task?.contractor?.id ?? preset?.contractorId ?? "",
+    private: task?.private ?? preset?.private ?? false,
   });
   // Whoever adds a task asked for it, unless someone else is chosen.
   useEffect(() => {
@@ -736,7 +788,7 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
           contractorId: draft.contractorId || null,
         };
         if (task) update.mutate({ id: task.id, ...input });
-        else create.mutate(input);
+        else create.mutate({ ...input, private: draft.private });
       }}
     >
       <Field label="Task">
@@ -747,7 +799,15 @@ export function TaskForm({ task, preset, onDone }: { task?: NonNullable<RouterOu
         <MentionTextarea value={draft.details} onChange={(value) => set("details", value)} people={peopleList} placeholder="Anything the person completing it needs to know — @ to tag a colleague" rows={3} />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      {!task && (
+        <label className="text-ink-700 flex items-center gap-2 text-[13px] font-light">
+          <input type="checkbox" checked={draft.private} onChange={(e) => set("private", e.target.checked)} className="accent-brand-500" />
+          🔒 Private — only I see it, on my private board
+        </label>
+      )}
+      {task?.private && <p className="text-ink-500 text-[13px] font-light">🔒 Private — only you can see this task.</p>}
+
+      <div className="grid gap-4 sm:grid-cols-2" hidden={draft.private}>
         <div>
           <Label>To complete — who does it</Label>
           <PeopleSelect people={peopleList} value={draft.assigneeIds} onChange={(ids) => set("assigneeIds", ids)} />
@@ -869,6 +929,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
   }
 
   const rows: [string, React.ReactNode][] = [
+    ...(t.private ? ([["Private", <MoveToTeam key="pv" taskId={t.id} />]] as [string, React.ReactNode][]) : []),
     [
       "To complete",
       <AssigneePicker key="to" taskId={t.id} assignees={t.assignees}>
@@ -884,7 +945,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
     ["Type", t.type?.name ?? "—"],
     ["About", <About key="a" task={t as Task} />],
     ["Added", `${formatDay(t.createdAt)}${t.createdBy ? ` by ${t.createdBy.name ?? t.createdBy.email}` : ""}`],
-  ];
+  ].filter(([label]) => !(t.private && ["To complete", "Requested by", "Type"].includes(label as string))) as [string, React.ReactNode][];
 
   const sourcing = t.salesRequest && t.type?.name === "Sourcing";
   const hotelContact = t.property && t.event && t.type?.name === "Hotel contact";
@@ -2086,5 +2147,30 @@ export function RelatedTasks({ preset, empty = "No tasks yet." }: { preset: Task
         </Popup>
       )}
     </div>
+  );
+}
+
+/** On a private task: who sees it, and moving it to the team board — for good (doc §2.8). */
+function MoveToTeam({ taskId }: { taskId: string }) {
+  const utils = api.useUtils();
+  const move = api.task.update.useMutation({
+    onSuccess: () => {
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
+    },
+    onError: (error) => window.alert(friendlyError(error)),
+  });
+  return (
+    <span className="text-ink-900">
+      🔒 Only you can see it
+      <button
+        type="button"
+        disabled={move.isPending}
+        onClick={() => window.confirm("Move this task to the team board? Everyone will see it, and it cannot be made private again.") && move.mutate({ id: taskId, private: false })}
+        className="text-brand-700 ml-2 text-xs hover:underline"
+      >
+        Move to the team board
+      </button>
+    </span>
   );
 }

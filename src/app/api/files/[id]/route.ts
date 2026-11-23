@@ -15,7 +15,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   const { id } = await params;
-  const file = await db.taskFile.findUnique({ where: { id } });
+  const file = await db.taskFile.findUnique({ where: { id }, include: { task: { select: { private: true, createdById: true } } } });
+  // Someone else's private task's file is not there, for them (doc §2.8).
+  if (file?.task.private && file.task.createdById !== session.user.id) return NextResponse.json({ error: "That file is no longer there." }, { status: 404 });
   if (!file) return NextResponse.json({ error: "That file is no longer there." }, { status: 404 });
   const stored = await get(file.pathname, { access: "private" });
   if (!stored || stored.statusCode !== 200) return NextResponse.json({ error: "That file is no longer in the store." }, { status: 404 });

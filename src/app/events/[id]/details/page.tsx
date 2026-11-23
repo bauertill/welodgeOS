@@ -60,6 +60,7 @@ export default async function EventDetailsPage({ params }: { params: Promise<{ i
                   endDate: dayKey(event.endDate),
                   status: event.status,
                   currency: event.currency,
+                  driveFolder: event.driveFolderId ? `https://drive.google.com/drive/folders/${event.driveFolderId}` : "",
                 }}
               />
             </span>
@@ -70,6 +71,16 @@ export default async function EventDetailsPage({ params }: { params: Promise<{ i
             {row("City", event.city ?? "—")}
             {row("Country", event.country ?? "—")}
             {row("Status", statusLabels[event.status])}
+            {row(
+              "Google Drive folder",
+              event.driveFolderId ? (
+                <a href={`https://drive.google.com/drive/folders/${event.driveFolderId}`} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                  Open in Drive
+                </a>
+              ) : (
+                <span className="text-ink-500">Not set — properties get no Drive folder until it is</span>
+              ),
+            )}
           </dl>
         </Card>
 

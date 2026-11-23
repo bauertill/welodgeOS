@@ -10,13 +10,18 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 export const auditRouter = createTRPCRouter({
   list: protectedProcedure
     .input(z.object({ entity: z.string(), entityId: z.string() }))
-    .query(({ ctx, input }) =>
-      ctx.db.auditEntry.findMany({
+    .query(async ({ ctx, input }) => {
+      // A private task's history is its maker's alone (doc §2.8).
+      if (input.entity === "Task") {
+        const task = await ctx.db.task.findUnique({ where: { id: input.entityId }, select: { private: true, createdById: true } });
+        if (task?.private && task.createdById !== ctx.session.user.id) return [];
+      }
+      return ctx.db.auditEntry.findMany({
         where: { entity: input.entity, entityId: input.entityId },
         orderBy: { createdAt: "desc" },
         include: { actor: { select: { name: true, email: true } } },
-      }),
-    ),
+      });
+    }),
 
   /**
    * A scouting entry's own status history, and every one of its category

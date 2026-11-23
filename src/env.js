@@ -41,6 +41,10 @@ export const env = createEnv({
     // GIPHY, for GIFs in chat (doc §2.7). Never sent to the browser; without
     // it the GIF picker says so instead of searching.
     GIPHY_API_KEY: z.string().optional(),
+    // The Google service account that makes property folders on the shared
+    // drive (doc §3.12): its JSON key, as downloaded. Never sent to the
+    // browser; without it no folders are made and the panel says so.
+    GOOGLE_DRIVE_SERVICE_ACCOUNT: z.string().optional(),
     // Who the development-only sign-in button signs you in as, so each
     // person working on the code is themselves locally. Unused outside
     // development: that sign-in does not exist there.
@@ -88,6 +92,7 @@ export const env = createEnv({
     GOOGLE_MAPS_SERVER_KEY: process.env.GOOGLE_MAPS_SERVER_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     GIPHY_API_KEY: process.env.GIPHY_API_KEY,
+    GOOGLE_DRIVE_SERVICE_ACCOUNT: process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
     NEXT_PUBLIC_DROPBOX_APP_KEY: process.env.NEXT_PUBLIC_DROPBOX_APP_KEY,
