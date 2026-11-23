@@ -1087,6 +1087,8 @@ model User {
   scoutedProperties        Property[]
   propertyContractingLinks Property[]      @relation("PropertyContractingLinkMadeBy")
   guestLinksMade           Property[]      @relation("PropertyGuestLinkMadeBy")
+  roomingStaysChanged      RoomingStay[]   @relation("RoomingStayChangedBy")
+  roomingSent              RoomingSent[]   @relation("RoomingSentBy")
   rateCards                RateCard[]
   photosAdded              PropertyPhoto[]
   quotationsAdded          Quotation[]     @relation("QuotationAddedBy")
@@ -1633,22 +1635,27 @@ model SalesRequest {
   nightRequests RoomNightRequest[]
   contracts     Contract[]
 
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  tasks           Task[]
-  rateCards       RateCard[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  tasks             Task[]
+  rateCards         RateCard[]
   /// The hotels' quotations for this request's group (doc §3.10).
-  quotations      Quotation[]
+  quotations        Quotation[]
   /// Binding offers to the client, made from their rate card answer (doc §4.11).
-  offers          Offer[]
+  offers            Offer[]
   /// Answers to rate cards that are on this request — a general card's answer starts one.
-  rateCardAnswers RateCardResponse[]
+  rateCardAnswers   RateCardResponse[]
   /// Its running notes (doc §2.6).
-  updates         Update[]
+  updates           Update[]
   /// The client's property information page (doc §6.8): the unguessable part
   /// of its link; empty means not made, or switched off.
-  stayToken       String?            @unique
-  stayLinkMadeAt  DateTime?
+  stayToken         String?            @unique
+  stayLinkMadeAt    DateTime?
+  /// The client's rooming list link (doc §6.9); empty means not made, or switched off.
+  roomingToken      String?            @unique
+  roomingLinkMadeAt DateTime?
+  roomingStays      RoomingStay[]
+  roomingSent       RoomingSent[]
 
   @@index([clientId])
   @@index([eventId])
@@ -1767,13 +1774,18 @@ model UpdateRevision {
 }
 
 model RoomSlot {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   slotNumber Int
+  /// The building's own number for this room or apartment ("4B", "1203"),
+  /// entered by the acquisitions team once known (doc §6.9) — what guests and
+  /// the front desk use. Our slot number stays ours.
+  unitNumber String?
 
   category   RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   categoryId String
 
-  roomNights RoomNight[]
+  roomNights   RoomNight[]
+  roomingStays RoomingStay[]
 
   @@unique([categoryId, slotNumber])
   @@index([categoryId])
@@ -2676,4 +2688,49 @@ model StaggerScenario {
   updatedAt    DateTime @updatedAt
 
   @@index([archived, updatedAt])
+}
+
+// --- Rooming list (doc §6.9) ---------------------------------------------------
+
+/// Who sleeps in one of the client's rooms, and when (doc §6.9, the owner
+/// 2026-11-23): one stay per arrival in a room — several, one after another,
+/// where the room is used in turns — with its guests sharing it. Entered by
+/// the client through their link, or by the team.
+model RoomingStay {
+  id             String       @id @default(cuid())
+  salesRequest   SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  salesRequestId String
+  slot           RoomSlot     @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slotId         String
+  checkIn        DateTime     @db.Date
+  checkOut       DateTime     @db.Date
+  /// The guests sharing the room for this stay: [{ firstName, lastName }].
+  guests         Json         @default("[]")
+  /// When they arrive — a time, a flight.
+  arrival        String?
+  notes          String?
+  /// Taken out — kept so a change after the list went to the supplier still shows.
+  removedAt      DateTime?
+  /// Who last changed it: the team member, or empty for the client by the link.
+  changedBy      User?        @relation("RoomingStayChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+  changedById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([salesRequestId])
+  @@index([slotId])
+}
+
+/// When the team sent a property's rooming list to it (doc §6.9): changes made
+/// since are flagged, to be passed on.
+model RoomingSent {
+  id             String       @id @default(cuid())
+  salesRequest   SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  salesRequestId String
+  propertyId     String
+  sentAt         DateTime     @default(now())
+  sentBy         User?        @relation("RoomingSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  sentById       String?
+
+  @@unique([salesRequestId, propertyId])
 }

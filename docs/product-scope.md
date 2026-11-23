@@ -3897,7 +3897,8 @@ into a room that is ready for them, and out again without disputes.
    to change the room nights with the supplier, and once they are bought the client is told
    (and invoiced if need be). The finished list is shared with the supplier. Cancellation
    allowances are not calculated: the client's changes are captured, and what they owe is
-   worked out by the team. This replaces the spreadsheet upload of §6.2 below.
+   worked out by the team. This replaces the spreadsheet upload of §6.2 below. *The list itself
+   is built (§6.9); extension requests are next.*
 3. **Inspections and defects — apartments only.** Hotels inspect their own rooms. Before
    check-in (a week before at best, two days usually, the day itself at worst) one of the team
    goes through each apartment: a dump of general photos from every angle, and a checklist
@@ -4057,6 +4058,42 @@ contracting link is; no sign-in, so it goes only to the client.
 with a Google Maps link, the website, their rooms, and the guest information that is filled
 in (empty fields are left out; a property with none says "More details to follow"). It never
 shows prices, the supplier's own contacts or our notes. It works on a phone.
+
+### 6.9 The rooming list
+
+(The owner, 2026-11-23.) Who sleeps where, on **the sales request's *Rooming list* tab** and on
+**the client's own link**. It is a **fixed** list: made from the rooms the client has **sold**
+at the event — per property, each room with its type, how many it sleeps, and the dates it is
+theirs (*Booked 10 Jul – 30 Jul 2028*). Nobody adds or removes rooms or dates here; that is
+the contract's.
+
+**Stays.** Into each room go its **stays**: the dates (within what was booked), the **guests
+sharing the room** for those dates (first and last name; as many as the room sleeps), when they
+**arrive** (a time or a flight, as the client gives it) and notes. A room used in turns —
+one team then another — gets one stay after the other. Each room says how many of its nights
+are named, and the list how many of all of them (*20 of 505 nights named across 25 rooms*). The
+system refuses, saying why:
+- dates outside what was booked for that room — *"Those dates are outside your booking for
+  this room (10 Jul – 30 Jul 2028). For other nights, please ask your We Lodge contact."*
+  (asking for more nights through the list is the next step);
+- a stay overlapping another in the same room — guests sharing go in the same stay;
+- more guests than the room sleeps.
+
+**The client's link** (*Make a link for the client*; copy, open, switch off as the other
+links): no sign-in, works on a phone, shows their rooms and lets them add, change and take out
+stays; every change saves at once and is in the request's history as made by the client. It
+never shows prices or our notes.
+
+**Room numbers.** Beside each room the team types **the building's own number** (*No. 4B*) once
+known — a month before at best, sometimes a week; for hotels often the day before. It belongs to
+the room, so it shows wherever that room does: on the client's link and on the property's list.
+
+**To the property.** Per property, **⬇ Download Excel** gives its rooming list — room type, room
+number, our room, check-in, check-out, nights, each guest, arrival and notes, one row per stay,
+and *To be named* for booked dates nobody is in yet — to email to the hotel or owner. **Mark as
+sent to the property** records when; from then on every stay changed or taken out (by the client
+or the team) is highlighted with who did it, and the property's header counts the changes to pass
+on. *Sent again* starts the count afresh.
 
 ---
 
@@ -4568,8 +4605,9 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
-| §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Only step 1 is built |
-| §6.8 Property information for the client | **Built on staging** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
+| §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Step 1 is built; step 2's list is built, its extension requests are not |
+| §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
+| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link; stays with guests sharing, arrival, notes; refuses dates outside the booking, overlaps and too many guests; room numbers; Excel per property; mark sent, later changes flagged. Not yet: extension requests and the acquisition task, notifying the team when the client changes the list, sending the Excel from OS |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 
