@@ -2,6 +2,8 @@ import { type Prisma, UpdateKind } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { FILE_LINK_MESSAGE, isFileLink } from "~/lib/file-link";
+
 import { parseDay } from "~/lib/dates";
 import { updateKinds } from "~/lib/update-kinds";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -91,7 +93,7 @@ const fileUrl = z
   .string()
   .trim()
   .max(2000)
-  .refine((value) => value === "" || /^https?:\/\//.test(value), "Paste the whole link, starting with https://")
+  .refine(isFileLink, FILE_LINK_MESSAGE)
   .optional();
 
 export const updateRouter = createTRPCRouter({

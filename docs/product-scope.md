@@ -296,8 +296,8 @@ housekeeping, furniture rental — keep being handled in Excel; the board does n
 - **Who wrote it and who is told.** Every update shows its writer. When posting — on the board or on
   any page's Updates — **Notify** picks colleagues to tell: they are told in the bell and **emailed**,
   as when @mentioned (§2.9).
-- **Files — a Google Drive link for now.** *Add a file link* attaches a link that shows as *Open the
-  file*; uploading files into the system comes later, once file storage is switched on.
+- **Files.** *Add a file* uploads one into the site's file store (§2.8, *Documents on records*)
+  — or a link can be pasted instead; the update shows the file's name, opened with a click.
 - Replies, editing one's own, and the update kinds (call summary, meeting feedback…) work as on any
   page's Updates.
 
@@ -568,6 +568,18 @@ only through the site by someone signed in — the store's own address does not 
 live site, staging and the team's computers share the one store, so a file put on a task on
 staging is a real file too; the nightly copy of live onto staging copies the records, not the
 files, which stay where they are.
+
+**Documents on records** (the owner, 2026-11-23: "I want to set up Vercel Blob for file
+storage"). The same store now holds the documents that used to be pasted as Google Drive links:
+**a hotel's quotation** (§3.10), **a signed contract** — client or hotel, wherever it is asked
+for: adding or editing a contract, *Add the signed PDF*, *✓ Client signed* on an offer, *✓ The
+hotel signed* on an acquire task, a contract added from the stock sheet (§7.1) — **a payment's
+invoice and proof of payment**, and **the file on an update** (§2.6). Each of those fields has
+**📎 Upload file** (or drop the file on it), up to 100 MB, beside the box for a link: a pasted
+link (Drive, Dropbox…) still works, and the links already there stay as they are. Once
+uploaded, the field shows the file's name, which opens it for anyone signed in; × takes it off
+the record (the file itself stays in the store). Claude (the connector) cannot upload a file;
+it still takes a link.
 
 Not built yet: each type's own workflow; tasks shown on the property, client and
 sales-request pages they are about. Who is told what about tasks is §2.9.
@@ -1645,7 +1657,7 @@ A quotation has:
 | Taxes and fees | **A line per tax or fee** (Ami, 2026-11-18), as many as the hotel adds: what it is, picked from a list — *Occupancy tax (TOT)*, *City tax*, *VAT*, *Sales tax*, *ISS — municipal service tax*, *Service charge*, *Tourism tax*, *Tourism district fee (TMD / TBID)*, *Resort fee*, or *Other* with its name ("Taxa de turismo") — an optional detail, and either a **% of the rate** or a **fixed amount per room per night** in the quotation's currency. This replaced the one TOT % and one fixed tax per night (2026-11-11): each quotation's TOT became an *Occupancy tax (TOT)* line and its fixed tax an *Other — Tax per room per night* line, so totals did not change. Anything the list cannot say goes in words beside it, and is not added |
 | Taxes, worked out | **Rates are taken as before tax and the taxes are added on top** (the owner, 2026-11-11, Hotel Carmel's agreement) — **unless *Taxes* is ticked under *Rates include***: then nothing is added, the tax lines are not asked for, and the quotation says *Taxes and fees: Included in the rates*. Each line's tax per room per night is each percentage of its rate, rounded to the cent, plus each fixed amount — every percentage of the rate itself, never compounded on another tax: R$ 1,000 with ISS 5%, service charge 10% and R$ 7.50 tourism tax is R$ 157.50; $245 at 15% + $2.30 is $39.05 — times its room-nights. The quotation shows *rooms + taxes = total*, as the form is typed and once saved, with a *Tax per night* column; Hotel Carmel's comes to $508,137.00 + $80,822.85 = $588,959.85. A contract made from the quotation carries the taxes, and lists them in its notes. A room type's rate taken from the quotation (§3.9) keeps one TOT figure — the percentages added together — and the fixed amounts in words |
 | Payments | Shares of the **rooms' total**, due on signature or on a date; a payment can also take **all of the taxes** (*+ all taxes*) — Hotel Carmel's last payment is "30% + tax 100%" |
-| Link | The quotation itself, as a Google Drive link |
+| Link | The quotation itself — uploaded (§2.8), or a link |
 | Notes | Anything else |
 
 **A new quotation starts from the hotel** (the owner, 2026-11-06: "it should recognise that I
@@ -1786,47 +1798,6 @@ Each contractor's page holds:
 
 A contractor is **deleted** only while it has no contract (those are kept); its contacts,
 properties and updates go with it, and its tasks stay, about nothing.
-
-### 3.12 Drive folders
-
-> **Built on staging** (2026-11-20) — waiting on Google Drive being connected (below).
-> The owner asked: "is there a way we can automatically add a folder on drive when a property
-> is created?"
-
-**Where folders go** — as the team already keeps them on the *We Lodge* shared drive:
-**<event folder> › 1_Accommodation › <property>**, e.g. *10_FIFA Women's World Cup 2027 ›
-1_Accommodation › Othon Palace Copacabana Rio*. Each new property folder gets the five
-subfolders of the templates in *1_Accommodation › 1_Templates*: **1_General Information**,
-**2_Rates, Proposals & Policies**, **3_Agreement & Addenda**, **4_Finance & Confirmations**,
-**5_Rooming Lists** (empty; the templates' files are not copied).
-
-**When.** A folder belongs to a property *on an event*, so it is made when a property is put on
-an event — however that happens: created with an event (the board, the map, a sales request's
-sourcing, Claude), added to the event's list later, or put there by a *Get rate* task. It is
-made just after the save, so nobody waits for Google; if Google fails, the hourly run tries
-again for a week. A property on two events gets a folder under each.
-
-**Rules.**
-- **The event says where.** An event's *Google Drive folder* (event details, *Edit*: paste the
-  folder's address) is its folder on the shared drive. Without one, the event's properties get
-  no folder, and their panel says so. OS refuses a link it cannot open, naming the account that
-  must be a member of the shared drive.
-- *1_Accommodation* is made in the event folder if it is not there.
-- **Never doubled.** A folder already in *1_Accommodation* with the property's name (case and
-  spacing aside) is used as it is — no subfolders added.
-- **Renaming a property in OS renames its folders.** Removing a property from an event or from
-  OS leaves its folders alone: nothing in Drive is ever deleted by OS.
-- **New properties only** (the owner, 2026-11-20): properties already on events get no folder
-  automatically. Their panel has *Make the Drive folder* to make (or find) one on demand.
-- The property's panel on the event's board shows *Open the Drive folder*, or why there is
-  none.
-- Every folder made or linked is in the entry's history ("Drive folder made: 1_Accommodation ›
-  …").
-
-**Connecting Google Drive.** OS works in Drive as a Google *service account* — a company robot
-account, not a person — that is a *Content manager* of the We Lodge shared drive. Its key is
-kept on the server only (`GOOGLE_DRIVE_SERVICE_ACCOUNT` on Vercel, staging and live). Until it
-is set, nothing is made and panels say *Google Drive is not connected to OS yet*.
 
 ## 4. Phase 2 — Acquisition & Sales
 
@@ -3382,8 +3353,8 @@ offer opens it as a document, as it will print.
 
 #### Signed — and securing the rooms from the hotels (2026-10-14)
 
-- **✓ Client signed** on an open offer: the day it was signed and the signed agreement — a
-  Google Drive link for now (uploading the file itself waits on Till). Or **Trust
+- **✓ Client signed** on an open offer: the day it was signed and the signed agreement — uploaded,
+  or a pasted link (§2.8). Or **Trust
   guarantee**: **only Volki** (the owner, 2026-10-14; greyed out for everyone else) can
   vouch that the client will sign, so the rooms are sold before the signed copy is back;
   who and when is recorded, and *Add the signed agreement* completes it later.
@@ -3407,7 +3378,7 @@ offer opens it as a document, as it will print.
   and whose agreement** — each quote with *Contract on: their agreement / our agreement /
   not known yet* and *Make the hotel's contract from this quote* (its payments and
   cut-offs become the contract's, §7.1, and the contract is tied to the client's request);
-  **2. The hotel's contract** — *✓ The hotel signed*, with the day and a Drive link, which
+  **2. The hotel's contract** — *✓ The hotel signed*, with the day and the signed contract (uploaded, or a link), which
   marks it signed, **buys the rooms** under it at the quote's rate per room type, and closes
   the task.
 - **What to do, worked out live (the team, 2026-11-12).** The task's *What to do* no longer
@@ -4041,9 +4012,8 @@ of scope here — are now §7.1.
 ### 7.1 Contracts, payments and cancellation deadlines
 
 > **Built, in a first version.** Contracts with their payment and cancellation terms, the
-> Finances section, and buying and selling under a contract. The signed PDF is a pasted
-> Google Drive link; uploading it into the system, into a We Lodge Drive folder, is wanted
-> but waits on a conversation with Till (it needs Google Drive access set up). Reading the
+> Finances section, and buying and selling under a contract. The signed PDF is uploaded
+> into the site's file store or given as a link (§2.8, since 2026-11-23). Reading the
 > terms out of the PDF automatically was considered and left for later. Nothing has been
 > imported from monday.com's *Payables*, *Payments from Clients* or *Cancellation
 > Deadlines* boards.
@@ -4051,7 +4021,7 @@ of scope here — are now §7.1.
 Every contract we sign — with a supplier or with a client — carries payment and
 cancellation deadlines. **A contract is a record of its own**: who it is with (a hotel — or a
 contractor, §3.11 — on a supplier contract; a client, and the sales request it came from, on a client contract), the
-event, its name ("Group Sales Agreement"), the signed PDF as a Google Drive link, when it
+event, its name ("Group Sales Agreement"), the signed PDF (uploaded, or a link), when it
 was signed, its account manager, notes, and **its total** — what the whole contract is worth,
 with its currency (§4.5).
 
@@ -4119,9 +4089,8 @@ says so in red on its page, in the list of contracts, and where it is chosen. It
 used meanwhile — that was the decision (2026-10-01) — but it stays flagged until complete.
 **The signed PDF is added where it is missing** (the owner, 2026-11-09: "it says it's missing
 but there is no clear place to add it"): the red notice on the contract's page, and its
-*Signed PDF* line, each have a box for the PDF's **Google Drive link** — *Add the signed PDF* —
-with how to copy it from Drive (Share → Copy link). It is a link, not an upload: the system
-keeps no files of its own yet (§4.12, parked). The notice also says where the other missing
+*Signed PDF* line, each have **📎 Upload file** for the PDF, or a box for a link — *Add the signed PDF*
+(§2.8, *Documents on records*). The notice also says where the other missing
 parts go.
 
 **Buying and selling can name their contract — they do not wait for it.** *Buy* on the
@@ -4393,7 +4362,6 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
 | §3.11 Contractors | **Built** (2026-11-19) | A Contractors tab per event — each contractor belongs to one event (no menu item since the same day); each with what it does, contacts, contracting details, properties it serves among the event's (shown on the property too), supplier contracts and payments, tasks and updates (board's Other providers tab) |
-| §3.12 Drive folders | **Built on staging** (2026-11-20), off until Google Drive is connected | A property put on an event gets <event folder> › 1_Accommodation › <property> with the five standard subfolders, or the existing folder of that name; the event's Drive folder set in its details; renames follow; hourly catch-up for a week; *Make the Drive folder* on older ones; nothing in Drive deleted |
 | §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
@@ -4408,8 +4376,10 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | Files uploaded onto a task, kept in the private file store (2026-11-18). One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
-| §2.8 Private task board | **Built on staging** (2026-11-23) | Each person's own private board beside the team board; private tasks seen only by their maker (lists, task, comments, files, history, sales request and contractor counts), no assignees but the maker and no notifications to others; *Private* tick on the new-task form; *Move to the team board*, one way |
-| §4.8 Blocking task to the supplier | **Built on staging** (2026-11-23) | Blocking rooms for a client on the stock sheet makes a Blocking task per hotel (rooms, nights, client's deadline) for the acquisition rep, else the hotel's contact-task owner, else the accommodation managers; more rooms for the same client add a comment. Not from sales requests or offers, not on extending a block; blocks made before this have no task |
+| Drive folders per property | **Removed** (2026-11-23) | Built on 2026-11-20 to make each property's folder on the shared drive, but never switched on; the owner: "not needed anymore". Files are kept in the site's own file store instead (§2.8) |
+| §2.8 Private task board | **Built** (2026-11-23) | Each person's own private board beside the team board; private tasks seen only by their maker (lists, task, comments, files, history, sales request and contractor counts), no assignees but the maker and no notifications to others; *Private* tick on the new-task form; *Move to the team board*, one way |
+| §4.8 Blocking task to the supplier | **Built** (2026-11-23) | Blocking rooms for a client on the stock sheet makes a Blocking task per hotel (rooms, nights, client's deadline) for the acquisition rep, else the hotel's contact-task owner, else the accommodation managers; more rooms for the same client add a comment. Not from sales requests or offers, not on extending a block; blocks made before this have no task |
+| §2.8 Documents on records uploaded | **Built on staging** (2026-11-23) | Quotation, signed contract (everywhere it is asked for), payment invoice and proof, and an update's file can be uploaded to the file store (Vercel Blob) or given as a link; the field shows the file's name. Not yet: Claude uploading a file; removing a file from a record leaves it in the store |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |

@@ -3,12 +3,13 @@ import { NextResponse } from "next/server";
 
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
-import { filesConfigured, MAX_FILE_BYTES, taskFilePrefix } from "~/server/files";
+import { filesConfigured, MAX_FILE_BYTES, STORE, STORED_FILE_PREFIX, taskFilePrefix } from "~/server/files";
 
 /**
  * Lets the browser upload a file straight to the private file store (doc
  * §2.8): only for someone signed in, only under an existing task's own place,
- * and no larger than the limit. The file is recorded on the task afterwards
+ * and no larger than the limit. Or, for a record's document field, under
+ * uploads/ (recorded afterwards by files.record). The file is recorded on the task afterwards
  * (task.addFile), which checks it arrived.
  */
 export async function POST(request: Request) {
@@ -21,6 +22,12 @@ export async function POST(request: Request) {
       body,
       request,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
+        // A document for a record's file field (a quotation, a contract, a
+        // payment, an update) — anyone signed in, under uploads/ only.
+        if (clientPayload === STORE) {
+          if (!pathname.startsWith(STORED_FILE_PREFIX)) throw new Error("That is not a place for uploads.");
+          return { maximumSizeInBytes: MAX_FILE_BYTES, addRandomSuffix: true };
+        }
         const taskId = clientPayload ?? "";
         const task = taskId ? await db.task.findUnique({ where: { id: taskId }, select: { id: true, private: true, createdById: true } }) : null;
         if (!task || (task.private && task.createdById !== session.user.id) || !pathname.startsWith(taskFilePrefix(task.id))) throw new Error("That task was not found.");

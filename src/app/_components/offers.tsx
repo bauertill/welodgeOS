@@ -15,6 +15,7 @@ import { cutSummary } from "~/lib/cancellation";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { CURRENCIES } from "~/lib/currency";
+import { FileField } from "~/app/_components/file-field";
 
 /** A line of rooms; `property` only narrows the room types offered (the owner, 2026-11-18: search the property, then pick its room type). */
 type LineDraft = { categoryId: string; rooms: string; checkIn: string; checkOut: string; rate: string; property?: string; /** Lines with the same block are one room type's periods. */ block?: number };
@@ -557,7 +558,7 @@ function OfferItem({ offer }: { offer: Offer }) {
   );
 }
 
-/** When the client signed, and where the signed copy is — a Google Drive link for now. */
+/** When the client signed, and the signed copy — uploaded, or a pasted link. */
 function SignedForm({
   value,
   onChange,
@@ -577,13 +578,7 @@ function SignedForm({
     <span className="flex w-full flex-wrap items-center gap-2">
       Signed on
       <Input type="date" value={value.signedOn} onChange={(e) => onChange({ ...value, signedOn: e.target.value })} aria-label="Signed on" className="w-40 px-2" />
-      <Input
-        value={value.documentUrl}
-        onChange={(e) => onChange({ ...value, documentUrl: e.target.value })}
-        placeholder="The signed agreement — Google Drive link"
-        aria-label="Signed agreement link"
-        className="min-w-56 flex-1 px-2"
-      />
+      <FileField value={value.documentUrl} onChange={(documentUrl) => onChange({ ...value, documentUrl })} label="The signed agreement" placeholder="…or paste a link to the signed agreement" />
       <Button type="button" onClick={onSave} disabled={pending || !value.signedOn}>
         {pending ? "Saving…" : label}
       </Button>

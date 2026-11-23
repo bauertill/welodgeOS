@@ -8,7 +8,6 @@ import { categoryContractStatusLabels, distanceKm, scoutingDetailLabels, scoutin
 import { reverseGeocode } from "~/server/places";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
-import { driveAccount, ensureEntryFolder, folderSoon, googleDrive } from "~/server/drive";
 import { findNearby, knownAlready } from "~/server/discover";
 import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
 import { deliverImmediate } from "~/server/notify";
@@ -46,12 +45,10 @@ export const scoutingRouter = createTRPCRouter({
    * event, and the property's own details, contacts and contracting details —
    * with its provider's, for the fallback.
    */
-  entry: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    const row = await ctx.db.scoutingEntry.findUnique({
+  entry: protectedProcedure.input(z.object({ id: z.string() })).query(({ ctx, input }) =>
+    ctx.db.scoutingEntry.findUnique({
       where: { id: input.id },
       include: {
-        // Where its Drive folder goes (doc §3.12).
-        event: { select: { driveFolderId: true } },
         accountManager: { select: { id: true, name: true, email: true } },
         categoryContracts: true,
         property: {
@@ -63,9 +60,8 @@ export const scoutingRouter = createTRPCRouter({
           },
         },
       },
-    });
-    return row && { ...row, driveConnected: driveAccount() !== null };
-  }),
+    }),
+  ),
 
   /** Save the terms agreed for this property on this event. */
   updateTerms: protectedProcedure
@@ -485,26 +481,9 @@ export const scoutingRouter = createTRPCRouter({
           entityId: entry.id,
           summary: "Added to the scouting list",
         });
-        // Its folder on the shared drive, once this is saved (doc §3.12).
-        folderSoon(entry.id, ctx.session.user.id);
         return entry;
       }),
     ),
-
-  /**
-   * Make (or find) this property's folder for the event on the shared drive
-   * now — for a property put on the event before folders were made, or when
-   * the automatic one could not be (doc §3.12).
-   */
-  makeDriveFolder: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    const outcome = await ensureEntryFolder(ctx.db, input.id, googleDrive(), ctx.session.user.id).catch((error: Error) => {
-      throw new TRPCError({ code: "BAD_REQUEST", message: `Google Drive refused: ${error.message.slice(0, 200)}` });
-    });
-    if (outcome.status === "off") throw new TRPCError({ code: "BAD_REQUEST", message: "Google Drive is not connected to OS yet." });
-    if (outcome.status === "no-event-folder") throw new TRPCError({ code: "BAD_REQUEST", message: "This event has no Drive folder yet — set it in the event's details." });
-    if (outcome.status === "gone") throw new TRPCError({ code: "NOT_FOUND", message: "This property is no longer on the event." });
-    return outcome;
-  }),
 
   /** Move one property, or several at once, into a group (doc §3.9). */
   setStatus: protectedProcedure

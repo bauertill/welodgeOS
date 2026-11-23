@@ -9,6 +9,7 @@ import { dayKey, nightsBetween, today } from "~/lib/dates";
 import { contractHref } from "~/lib/finance";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import { api } from "~/trpc/react";
+import { FileField } from "~/app/_components/file-field";
 
 const box = "border-ink-200/60 rounded-xl border bg-white p-5";
 
@@ -145,13 +146,7 @@ export function AcquirePanel({ taskId, propertyId, propertyName }: { taskId: str
                   <span className="flex w-full flex-wrap items-center gap-2">
                     Signed on
                     <Input type="date" value={signing.signedOn} onChange={(e) => setSigning({ ...signing, signedOn: e.target.value })} aria-label="Hotel signed on" className="w-40 px-2" />
-                    <Input
-                      value={signing.documentUrl}
-                      onChange={(e) => setSigning({ ...signing, documentUrl: e.target.value })}
-                      placeholder="The signed contract — Google Drive link"
-                      aria-label="Signed contract link"
-                      className="min-w-56 flex-1 px-2"
-                    />
+                    <FileField value={signing.documentUrl} onChange={(documentUrl) => setSigning({ ...signing, documentUrl })} label="The signed contract" placeholder="…or paste a link to the signed contract" />
                     <Button type="button" onClick={() => hotelSigned.mutate({ taskId, ...signing })} disabled={hotelSigned.isPending || !signing.signedOn}>
                       {hotelSigned.isPending ? "Buying the rooms…" : "Register — buy the rooms"}
                     </Button>

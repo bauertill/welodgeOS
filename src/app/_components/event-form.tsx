@@ -24,8 +24,6 @@ export type EventFormValues = {
   status: "PLANNING" | "ACTIVE" | "CLOSED";
   /** The currency its hotels quote in — new quotations and rates start in it (doc §2.3). */
   currency?: string;
-  /** The event's folder on the shared drive, as a link (doc §3.12). */
-  driveFolder?: string;
 };
 
 export const emptyEvent: EventFormValues = {
@@ -36,7 +34,6 @@ export const emptyEvent: EventFormValues = {
   endDate: "",
   status: "PLANNING",
   currency: "USD",
-  driveFolder: "",
 };
 
 /**
@@ -99,7 +96,6 @@ export function EventForm({
       endDate,
       status: values.status,
       currency: values.currency,
-      driveFolder: values.driveFolder ?? "",
     };
 
     if (initial.id) update.mutate({ ...payload, id: initial.id });
@@ -182,18 +178,6 @@ export function EventForm({
             </Select>
           </Field>
         </div>
-
-        <Field
-          label="Google Drive folder"
-          hint="The event's folder on the We Lodge shared drive, e.g. 10_FIFA Women's World Cup 2027 — open it in Drive and paste the address. Each property put on the event then gets its folder in 1_Accommodation, with the five standard subfolders."
-          className="mt-4"
-        >
-          <Input
-            value={values.driveFolder ?? ""}
-            onChange={(e) => set("driveFolder", e.target.value)}
-            placeholder="https://drive.google.com/drive/folders/…"
-          />
-        </Field>
 
         <p className="text-ink-500 mt-4 text-xs font-light">
           Venues, airports, stations and the IBC are kept on the event itself,

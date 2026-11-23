@@ -4,7 +4,6 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { logAudit } from "~/server/audit";
-import { folderSoon } from "~/server/drive";
 import { ensureHotelContactTask } from "~/server/hotel-contact";
 
 /**
@@ -67,8 +66,6 @@ export async function createFoundProperty(
   if (input.eventId) {
     const entry = await tx.scoutingEntry.create({ data: { eventId: input.eventId, propertyId: property.id, addedById: input.actorId } });
     await logAudit(tx, { actorId: input.actorId, entity: "ScoutingEntry", entityId: entry.id, summary: "Added to the scouting list" });
-    // Its folder on the shared drive, once this is saved (doc §3.12).
-    folderSoon(entry.id, input.actorId);
     // Someone now reaches out to it, to gather what we need (doc §4.11).
     const task = await ensureHotelContactTask(tx, { propertyId: property.id, eventId: input.eventId, salesRequestId: input.salesRequestId, actorId: input.actorId });
     taskId = task?.id ?? null;

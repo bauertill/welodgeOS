@@ -12,7 +12,6 @@ import { findContacts } from "~/server/find-contacts";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { trimRooms } from "~/server/room-count";
 import { diffFields, logAudit, logFieldChanges } from "~/server/audit";
-import { renamePropertyFolders, soon } from "~/server/drive";
 import { deliverImmediate, notify } from "~/server/notify";
 import { isHotelLike } from "~/lib/scouting";
 
@@ -665,8 +664,6 @@ export const propertyRouter = createTRPCRouter({
           });
         }
 
-        // Renamed: its folders on the shared drive follow (doc §3.12).
-        if (before && before.name !== updated.name) soon(`rename folders of ${updated.id}`, () => renamePropertyFolders(ctx.db, updated.id));
         return updated;
       });
     }),
@@ -747,8 +744,6 @@ export const propertyRouter = createTRPCRouter({
             ...contractingFields,
           ],
         );
-        // Renamed: its folders on the shared drive follow (doc §3.12).
-        if (before && before.name !== updated.name) soon(`rename folders of ${updated.id}`, () => renamePropertyFolders(ctx.db, updated.id));
         return updated;
       });
     }),
