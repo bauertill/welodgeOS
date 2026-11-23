@@ -11,6 +11,7 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
 import { deleteStored, storedFile, taskFilePrefix } from "~/server/files";
 import { GET_RATE } from "~/server/get-rate";
+import { visibleTo } from "~/server/private-tasks";
 import { ensureHotelContactTask, HOTEL_CONTACT, hotelContactItems } from "~/server/hotel-contact";
 import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
 import { isApartmentLike } from "~/lib/scouting";
@@ -19,7 +20,18 @@ import { isApartmentLike } from "~/lib/scouting";
  * Tasks (doc §2.8): a board of work everyone can see — who asked for it, who
  * completes it, by when, and what it is about. Each type will get its own
  * workflow later; for now a task moves Backlog → To do → In progress → Done.
+ *
+ * A private task is seen by its maker alone, on their private board: every
+ * read here asks `visibleTo`, and anything done to one asks `guard` first.
  */
+
+
+/** Someone else's private task does not exist, as far as this person can tell. */
+async function guard(db: Prisma.TransactionClient, taskId: string, userId: string) {
+  const task = await db.task.findUnique({ where: { id: taskId }, select: { private: true, createdById: true } });
+  if (!task || (task.private && task.createdById !== userId)) throw new TRPCError({ code: "NOT_FOUND", message: "This task no longer exists." });
+  return task;
+}
 
 const person = { select: { id: true, name: true, email: true, image: true } } as const;
 
@@ -54,6 +66,8 @@ const taskInput = z.object({
   salesRequestId: z.string().nullable().optional(),
   /** A furniture, cleaning… contractor it is about (doc §3.11). */
   contractorId: z.string().nullable().optional(),
+  /** Only its maker sees it (doc §2.8). A private task can be moved to the team board, not back. */
+  private: z.boolean().optional(),
 });
 
 type Loaded = Prisma.TaskGetPayload<{ include: typeof include }>;
@@ -139,6 +153,8 @@ export const taskRouter = createTRPCRouter({
           contractorId: z.string().optional(),
           /** Leave out what was finished more than this many days ago. */
           doneWithinDays: z.number().int().min(1).max(3650).optional(),
+          /** The team board (no private tasks), or your private board. Left out: everything you may see. */
+          board: z.enum(["team", "private"]).optional(),
         })
         .default({}),
     )
@@ -158,6 +174,7 @@ export const taskRouter = createTRPCRouter({
           requestedById: input.requestedById,
           ...(input.assigneeId && { assignees: { some: { id: input.assigneeId } } }),
           AND: [
+            input.board === "team" ? { private: false } : input.board === "private" ? { private: true, createdById: ctx.session.user.id } : visibleTo(ctx.session.user.id),
             ...(search
               ? [{ OR: [{ title: { contains: search, mode: "insensitive" as const } }, { details: { contains: search, mode: "insensitive" as const } }] }]
               : []),
@@ -432,7 +449,7 @@ export const taskRouter = createTRPCRouter({
     }),
 
   byId: protectedProcedure.input(z.object({ id: z.string() })).query(({ ctx, input }) =>
-    ctx.db.task.findUnique({ where: { id: input.id }, include }),
+    ctx.db.task.findFirst({ where: { id: input.id, ...visibleTo(ctx.session.user.id) }, include }),
   ),
 
   /** The task types the team has named so far. */
@@ -447,6 +464,8 @@ export const taskRouter = createTRPCRouter({
     }),
 
   create: protectedProcedure.input(taskInput).mutation(async ({ ctx, input }) => {
+    const me = ctx.session.user.id;
+    const own = input.private === true;
     const created = await ctx.db.$transaction(async (tx) => {
       const status = input.status ?? "TODO";
       const task = await tx.task.create({
@@ -457,9 +476,11 @@ export const taskRouter = createTRPCRouter({
           status,
           doneAt: status === "DONE" ? new Date() : null,
           // Whoever adds it asked for it, unless someone else is named.
-          requestedById: input.requestedById === undefined ? ctx.session.user.id : input.requestedById,
-          createdById: ctx.session.user.id,
-          assignees: { connect: (input.assigneeIds ?? []).map((id) => ({ id })) },
+          requestedById: own ? me : input.requestedById === undefined ? me : input.requestedById,
+          createdById: me,
+          // Private: no type, and its maker completes it.
+          ...(own && { private: true, typeId: null }),
+          assignees: { connect: (own ? [me] : (input.assigneeIds ?? [])).map((id) => ({ id })) },
         },
         include,
       });
@@ -480,8 +501,8 @@ export const taskRouter = createTRPCRouter({
         link: `/tasks/${task.id}`,
         taskId: task.id,
       });
-      // Someone @mentioned in the details is told (the owner, 2026-11-18) — unless they were just given it.
-      const mentioned = task.details ? await mentionedIn(tx, task.details) : [];
+      // Someone @mentioned in the details is told (the owner, 2026-11-18) — unless they were just given it, or it is private.
+      const mentioned = task.details && !task.private ? await mentionedIn(tx, task.details) : [];
       await notify(tx, {
         to: mentioned.filter((id) => !task.assignees.some((person) => person.id === id)),
         actorId: ctx.session.user.id,
@@ -500,7 +521,11 @@ export const taskRouter = createTRPCRouter({
   /** Change a task: only the fields given. */
   update: protectedProcedure.input(taskInput.partial().extend({ id: z.string() })).mutation(async ({ ctx, input }) => {
     const updated = await ctx.db.$transaction(async (tx) => {
-      const { id, ...fields } = input;
+      const { id, private: makePrivate, ...given } = input;
+      const seen = await guard(tx, id, ctx.session.user.id);
+      if (makePrivate === true && !seen.private) throw new TRPCError({ code: "BAD_REQUEST", message: "A team task cannot be made private — add a private task instead." });
+      // A private task stays its maker's: nobody else is put on it, and it has no type.
+      const fields = seen.private ? { ...given, assigneeIds: undefined, requestedById: undefined, typeId: undefined } : given;
       const before = await tx.task.findUniqueOrThrow({ where: { id }, include });
       const after = await tx.task.update({
         where: { id },
@@ -514,9 +539,12 @@ export const taskRouter = createTRPCRouter({
             ...(fields.status !== "DONE" && { outcome: null, outcomeNote: null }),
           }),
           ...(fields.assigneeIds !== undefined && { assignees: { set: fields.assigneeIds.map((assignee) => ({ id: assignee })) } }),
+          // Moved to the team board: everyone can see it from now on.
+          ...(makePrivate === false && seen.private && { private: false }),
         },
         include,
       });
+      if (makePrivate === false && seen.private) await logAudit(tx, { actorId: ctx.session.user.id, entity: "Task", entityId: id, summary: "Moved from the private board to the team board" });
       const changes = diffFields(readable(before), readable(after), [...historyFields]);
       if (changes) {
         await logAudit(tx, { actorId: ctx.session.user.id, entity: "Task", entityId: id, summary: "Updated", changes });
@@ -534,7 +562,7 @@ export const taskRouter = createTRPCRouter({
         taskId: id,
       });
       // Newly @mentioned in the details (the owner, 2026-11-18): told once, when first named there.
-      if (fields.details !== undefined && after.details) {
+      if (fields.details !== undefined && after.details && !after.private) {
         const earlier = new Set(before.details ? await mentionedIn(tx, before.details) : []);
         const named = (await mentionedIn(tx, after.details)).filter((person) => !earlier.has(person) && !added.includes(person));
         await notify(tx, {
@@ -564,6 +592,7 @@ export const taskRouter = createTRPCRouter({
   }),
 
   remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    await guard(ctx.db, input.id, ctx.session.user.id);
     const files = await ctx.db.taskFile.findMany({ where: { taskId: input.id }, select: { pathname: true } });
     const removed = await ctx.db.task.delete({ where: { id: input.id } });
     // Its files go from the store too.
@@ -574,14 +603,16 @@ export const taskRouter = createTRPCRouter({
 
   // --- Files (doc §2.8, 2026-11-18) -----------------------------------------
 
-  files: protectedProcedure.input(z.object({ taskId: z.string() })).query(({ ctx, input }) =>
-    ctx.db.taskFile.findMany({ where: { taskId: input.taskId }, orderBy: { createdAt: "desc" }, include: { uploadedBy: person } }),
-  ),
+  files: protectedProcedure.input(z.object({ taskId: z.string() })).query(async ({ ctx, input }) => {
+    await guard(ctx.db, input.taskId, ctx.session.user.id);
+    return ctx.db.taskFile.findMany({ where: { taskId: input.taskId }, orderBy: { createdAt: "desc" }, include: { uploadedBy: person } });
+  }),
 
   /** Record a file the browser has just put in the store, under this task's own place — checked to be there. */
   addFile: protectedProcedure
     .input(z.object({ taskId: z.string(), pathname: z.string().max(1000), name: z.string().trim().min(1).max(300) }))
     .mutation(async ({ ctx, input }) => {
+      await guard(ctx.db, input.taskId, ctx.session.user.id);
       if (!input.pathname.startsWith(taskFilePrefix(input.taskId))) throw new TRPCError({ code: "BAD_REQUEST", message: "That file is not this task's." });
       const stored = await storedFile(input.pathname);
       if (!stored) throw new TRPCError({ code: "BAD_REQUEST", message: "The file did not arrive — try uploading it again." });
@@ -595,6 +626,8 @@ export const taskRouter = createTRPCRouter({
 
   /** Take a file off the task — it is deleted from the store as well. */
   removeFile: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const owned = await ctx.db.taskFile.findUniqueOrThrow({ where: { id: input.id }, select: { taskId: true } });
+    await guard(ctx.db, owned.taskId, ctx.session.user.id);
     const file = await ctx.db.taskFile.delete({ where: { id: input.id } });
     await deleteStored([file.pathname]);
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Task", entityId: file.taskId, summary: `File removed: ${file.name}` });
@@ -602,18 +635,20 @@ export const taskRouter = createTRPCRouter({
 
   // --- Comments --------------------------------------------------------------
 
-  comments: protectedProcedure.input(z.object({ taskId: z.string() })).query(({ ctx, input }) =>
-    ctx.db.taskComment.findMany({
+  comments: protectedProcedure.input(z.object({ taskId: z.string() })).query(async ({ ctx, input }) => {
+    await guard(ctx.db, input.taskId, ctx.session.user.id);
+    return ctx.db.taskComment.findMany({
       where: { taskId: input.taskId },
       orderBy: { createdAt: "desc" },
       include: { author: person },
-    }),
-  ),
+    });
+  }),
 
   comment: protectedProcedure
     .input(z.object({ taskId: z.string(), body: z.string().trim().min(1, "A comment needs some text.").max(10_000) }))
     .mutation(async ({ ctx, input }) => {
       const comment = await ctx.db.$transaction(async (tx) => {
+        const seen = await guard(tx, input.taskId, ctx.session.user.id);
         const created = await tx.taskComment.create({
           data: { taskId: input.taskId, body: input.body, authorId: ctx.session.user.id },
           include: { author: person },
@@ -623,7 +658,7 @@ export const taskRouter = createTRPCRouter({
           select: { title: true, requestedById: true, assignees: { select: { id: true } } },
         });
         // Doc §2.9: whoever is @mentioned, then everyone else on the task.
-        const mentioned = await mentionedIn(tx, input.body);
+        const mentioned = seen.private ? [] : await mentionedIn(tx, input.body);
         const who = firstNameOf(ctx.session.user);
         const words = plainMentions(input.body);
         await notify(tx, {

@@ -502,6 +502,25 @@ team asks of each other. **Tasks** in the menu opens **one board that everyone s
 **Filters**, on both views: *My tasks* (the ones you complete), search, who completes it,
 who asked, priority, type, event and client.
 
+**Your private board** (2026-11-23, the owner: "can we have a private task board as well.
+Something that only we see" — each person's own). At the top of Tasks, **Team board** and
+**🔒 My private board** switch between the two, remembered in the browser.
+
+- A **private task** is seen by **the person who added it and nobody else** — not the team,
+  not an admin. It never shows on the team board, on anyone else's *My work*, a sales
+  request's or contractor's tasks, its history or its files; opened by its link by someone
+  else, it says the task no longer exists. Claude, working for that person, sees it as they
+  do.
+- It is added on the private board (*+ New task* there), or with **🔒 Private — only I see
+  it** ticked on the new-task form anywhere. **Its maker completes it**: nobody else can be
+  put on it, nobody is told about it, and an `@mention` in it tells no one. It has no type.
+  Deadline, priority, status, comments, files and what it is about work as on any task, and
+  its maker gets the usual due and overdue reminders.
+- Private tasks show 🔒 beside their title; the person's own *My work* and the pages it is
+  about include them, for them alone.
+- **Move to the team board**, on the task, makes it a normal task everyone sees — for good:
+  a team task cannot be made private (someone may already have seen it).
+
 **On the board, a task opens in a popup** (2026-10-03) — the same as its own page below,
 with *Open as a page* for a link to keep or share; closed with ×, Escape or a click beside
 it. *+ New task* opens the full form in a popup too, and so does **+ Add task** at the
@@ -4376,6 +4395,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.7 Calling | **Not built** | Deliberately left for a later iteration |
 | §2.7 Chat notifications | **Partly built** | A chime and the unread count while the system is open, switchable per browser and silenced by Do not disturb. No email or push |
 | §2.8 Tasks | **Built** | Files uploaded onto a task, kept in the private file store (2026-11-18). One board for everyone, Kanban (drag between Backlog, To do, In progress, Done) and List; filters incl. *My tasks*; task page with comments and Log, opened as a popup on the board; *+ Add task* in each column and the list, opening the form in a popup; types named as needed; links to event, property, client and sales request; *My work* on My profile. Type workflows, notifications and tasks on the linked pages not built |
+| §2.8 Private task board | **Built on staging** (2026-11-23) | Each person's own private board beside the team board; private tasks seen only by their maker (lists, task, comments, files, history, sales request and contractor counts), no assignees but the maker and no notifications to others; *Private* tick on the new-task form; *Move to the team board*, one way |
 | §2.9 Notifications | **Built, email needs Resend** | Bell with unread count and latest thirty; told on being given a task, @mentioned, a comment, a status change, due tomorrow, overdue; email at once / daily summary (default) / none, chosen on My profile; morning run at 06:00 UTC (Vercel cron). Email goes to the server log until `RESEND_API_KEY` is set (Till); off the live site only brandon@, ami@, till@, volki@welodge.net and britz.brandon@gmail.com are emailed, marked [Test] |
 | §2.10 Claude connector | **Built** (2026-11-10) | MCP server at /api/mcp for claude.ai and the Claude app; OAuth 2.1 sign-in with PKCE and dynamic registration, an Allow page; 10 look-up and 9 everyday-change tools, each calling the site's own action as the person, history marked "via Claude"; no deleting, rooms, offers or contracts; My profile → Claude with Disconnect. Connected and working from claude.ai (the owner, 2026-11-10) |
 | §2.11 The guide | **Built** (2026-11-10) | Guide in the team menu: /guide lists the guides, the Sales guide at /guide/sales: twelve sections with steps, notes and screenshots of demo data, Your first day checklist, the journey of a request, I'm stuck answers, search across all of it; linked from Sales requests (How this works) |

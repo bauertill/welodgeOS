@@ -1983,6 +1983,11 @@ model Task {
   /// they said on the call (doc §4.11) — also kept among the hotel's contacts.
   emailToName    String?
   emailToAddress String?
+  /// A private task (doc §2.8, the owner 2026-11-23: "a private task board…
+  /// only we see"): seen only by whoever made it (createdBy), on their own
+  /// private board — never on the team board, anyone else's lists, or in
+  /// anyone else's notifications. It has no type, and its maker completes it.
+  private        Boolean         @default(false)
 
   type   TaskType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
   typeId String?
@@ -2020,6 +2025,7 @@ model Task {
   @@index([propertyId])
   @@index([clientId])
   @@index([salesRequestId])
+  @@index([private, createdById])
 }
 
 /// A comment on a task, with @mentions like an update (doc §2.6). Its author

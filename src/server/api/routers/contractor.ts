@@ -42,7 +42,7 @@ export const contractorRouter = createTRPCRouter({
       include: {
         event: { select: { id: true, name: true } },
         contacts: { orderBy: { name: "asc" }, take: 1 },
-        _count: { select: { properties: true, contracts: true, tasks: true } },
+        _count: { select: { properties: true, contracts: true, tasks: { where: { private: false } } } },
       },
     }),
   ),
