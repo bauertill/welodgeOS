@@ -3,12 +3,12 @@
 import { Photo } from "~/app/_components/photo";
 import { parseDay } from "~/lib/dates";
 import { formatDate, formatRange } from "~/lib/format";
-import { guestFields, type GuestInfo } from "~/lib/guest-info";
+import { guestFields, type CustomField, type GuestInfo } from "~/lib/guest-info";
 import { propertyTypeLabels } from "~/lib/scouting";
 import type { RouterOutputs } from "~/trpc/react";
 
 type Shared = RouterOutputs["guestInfo"]["shared"];
-type StayProperty = Partial<Shared["properties"][number]> & GuestInfo & { name: string; type: Shared["properties"][number]["type"] };
+type StayProperty = Partial<Omit<Shared["properties"][number], "custom">> & GuestInfo & { name: string; type: Shared["properties"][number]["type"]; custom?: CustomField[] };
 
 const mapLink = (property: { latitude?: number | null; longitude?: number | null; address?: string | null; name: string; city?: string | null }) =>
   property.latitude != null && property.longitude != null
@@ -25,7 +25,13 @@ const mapLink = (property: { latitude?: number | null; longitude?: number | null
 export function StayPropertySection({ property }: { property: StayProperty }) {
   const where = [property.address, property.city, property.country].filter(Boolean).join(", ");
   const map = mapLink(property);
-  const shown = guestFields.filter((field) => property[field.key]?.trim());
+  // The team's own fields go after the standard ones, before "Anything else".
+  const filled = guestFields.filter((field) => property[field.key]?.trim());
+  const rows = [
+    ...filled.filter((field) => field.key !== "guestOther").map((field) => ({ key: field.key, label: field.label, value: property[field.key]!, wide: !("short" in field) })),
+    ...(property.custom ?? []).filter((field) => field.value.trim()).map((field) => ({ key: field.id, label: field.label, value: field.value, wide: true })),
+    ...filled.filter((field) => field.key === "guestOther").map((field) => ({ key: field.key, label: field.label, value: property[field.key]!, wide: true })),
+  ];
   return (
     <section className="border-ink-200/60 break-inside-avoid-page overflow-hidden rounded-2xl border bg-white print:rounded-none print:border-0 print:border-t">
       {property.photo && (
@@ -65,12 +71,12 @@ export function StayPropertySection({ property }: { property: StayProperty }) {
           </div>
         )}
 
-        {shown.length > 0 ? (
+        {rows.length > 0 ? (
           <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
-            {shown.map((field) => (
-              <div key={field.key} className={"short" in field ? "" : "sm:col-span-2"}>
-                <dt className="text-ink-500 text-xs font-light">{field.label}</dt>
-                <dd className="text-ink-900 text-[14px] font-light whitespace-pre-line">{property[field.key]}</dd>
+            {rows.map((row) => (
+              <div key={row.key} className={row.wide ? "sm:col-span-2" : ""}>
+                <dt className="text-ink-500 text-xs font-light">{row.label}</dt>
+                <dd className="text-ink-900 text-[14px] font-light whitespace-pre-line">{row.value}</dd>
               </div>
             ))}
           </dl>

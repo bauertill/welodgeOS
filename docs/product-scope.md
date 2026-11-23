@@ -4011,7 +4011,23 @@ tax**, breakfast, parking, Wi-Fi, cleaning, laundry, gym, getting around, house 
 cleaning, laundry, gym and getting around are the same fields as under *More about the
 property*. The tab shows the property exactly as the client will see it, and lists what is
 still to fill in among the essentials (check-in and check-out times, how to check in, what is
-needed at check-in, city tax, emergency contact).
+needed at check-in, city tax, emergency contact). The grey examples in empty boxes start with
+"e.g." so nobody mistakes them for what is saved.
+
+**Extra fields** (the owner, 2026-11-23: "our team should also be able to add custom fields").
+In the editor, *+ Add a field* adds one of the team's own to this property — a name (*Pool
+hours*, *Shuttle to the venue*) and what it says, which can be left for the property to fill
+in. They are this property's only, show after the standard fields (before *Anything else*) on
+the client's page and the property's link, and can be renamed or removed.
+
+**A link for the property** (the owner, 2026-11-23: "a link that we share with the provider —
+easier for them to fill in"). On the tab, *Make a link* gives the property its own private page
+— separate from its contracting-details link (§3.9) — with every field, the extra ones
+included, filled with what we have, to check, correct and complete, and *Send to We Lodge*.
+What it sends lands on the property at once, every change in its Log as sent by the property;
+whoever made the link is told in the bell, and the tab says when it was last sent. The property
+can come back and send again; only the team adds, renames or removes extra fields. Copy,
+Open, Switch off and Make a new link work as for the other links.
 
 **On the sales request — Guest information tab.** The properties the page covers — every
 property where the client has **sold** rooms at the event (blocked rooms are not shown: the
@@ -4537,7 +4553,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Only step 1 is built |
-| §6.8 Property information for the client | **Built on staging** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly. Not yet: emailing it from OS, other languages |
+| §6.8 Property information for the client | **Built on staging** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 

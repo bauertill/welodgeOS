@@ -8,12 +8,13 @@ import { StayPropertySection } from "~/app/_components/stay-page";
 import { Card } from "~/app/_components/ui";
 import { parseDay } from "~/lib/dates";
 import { formatDate, formatRange } from "~/lib/format";
-import { guestFields, missingGuestInfo, type GuestKey } from "~/lib/guest-info";
+import { guestFields, missingGuestInfo, type CustomField, type GuestKey } from "~/lib/guest-info";
 import { api } from "~/trpc/react";
 
 /**
  * A property's Guest information tab (doc §6.8): what guests need to know,
- * shown exactly as the client's page shows it, with Edit in a popup.
+ * shown exactly as the client's page shows it, with Edit in a popup — and a
+ * link for the property to fill it in itself.
  */
 export function PropertyGuestInfo({ propertyId }: { propertyId: string }) {
   const info = api.guestInfo.property.useQuery({ propertyId });
@@ -36,15 +37,67 @@ export function PropertyGuestInfo({ propertyId }: { propertyId: string }) {
           Still to fill in: {missing.join(", ")}.
         </p>
       )}
+      <PropertyLink property={info.data} />
       <StayPropertySection property={info.data} />
       {editing && <GuestInfoEditor info={info.data} onClose={() => setEditing(false)} />}
     </div>
   );
 }
 
-function GuestInfoEditor({ info, onClose }: { info: Record<GuestKey, string | null> & { id: string; name: string }; onClose: () => void }) {
+/** The property's own link to fill in its guest information (doc §6.8): made, copied and switched off here. */
+function PropertyLink({ property }: { property: { id: string; guestToken: string | null; guestLinkMadeAt: Date | null; guestSubmittedAt: Date | null } }) {
+  const utils = api.useUtils();
+  const refresh = () => (void utils.guestInfo.property.invalidate({ propertyId: property.id }), void utils.audit.invalidate());
+  const make = api.guestInfo.makePropertyLink.useMutation({ onSuccess: refresh });
+  const off = api.guestInfo.switchOffPropertyLink.useMutation({ onSuccess: refresh });
+  const [origin, setOrigin] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => setOrigin(window.location.origin), []);
+  const url = property.guestToken ? `${origin}/guest-details/${property.guestToken}` : null;
+  const error = make.error ?? off.error;
+  return (
+    <div className="border-ink-200/60 rounded-xl border bg-white px-4 py-3">
+      <p className="text-ink-900 text-[13px] font-medium">Link for the property</p>
+      {property.guestSubmittedAt && <p className="mt-0.5 text-xs font-light text-[#0a7a47]">The property sent its guest information {formatDate(property.guestSubmittedAt)} — it is below.</p>}
+      {url ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <code className="bg-ink-50 text-ink-700 max-w-full truncate rounded px-2 py-1 text-xs">{url}</code>
+          <button
+            type="button"
+            onClick={() => void navigator.clipboard.writeText(url).then(() => (setCopied(true), setTimeout(() => setCopied(false), 2000)))}
+            className="text-brand-700 text-xs font-medium hover:underline"
+          >
+            {copied ? "Copied" : "Copy link"}
+          </button>
+          <a href={url} target="_blank" rel="noreferrer" className="text-brand-700 text-xs font-light hover:underline">
+            Open ↗
+          </a>
+          <button type="button" disabled={off.isPending} onClick={() => off.mutate({ propertyId: property.id })} className="text-xs font-light text-[#c03654] hover:underline">
+            Switch off
+          </button>
+        </div>
+      ) : (
+        <div className="mt-0.5">
+          <p className="text-ink-500 text-xs font-light">
+            Send the property a link to fill this in themselves — what we have is filled in for them to check, and what they send lands here. No sign-in, so
+            send it only to them.
+          </p>
+          <button type="button" disabled={make.isPending} onClick={() => make.mutate({ propertyId: property.id })} className="text-brand-700 mt-1.5 text-[13px] font-medium hover:underline">
+            {make.isPending ? "Making the link…" : property.guestLinkMadeAt ? "Make a new link" : "Make a link"}
+          </button>
+        </div>
+      )}
+      {error && <FormError message={friendlyError(error)} />}
+    </div>
+  );
+}
+
+const newId = () => Math.random().toString(36).slice(2, 10);
+
+function GuestInfoEditor({ info, onClose }: { info: Record<GuestKey, string | null> & { id: string; name: string; custom: CustomField[] }; onClose: () => void }) {
   const utils = api.useUtils();
   const [values, setValues] = useState(() => Object.fromEntries(guestFields.map((field) => [field.key, info[field.key] ?? ""])) as Record<GuestKey, string>);
+  const [custom, setCustom] = useState<CustomField[]>(info.custom);
   const save = api.guestInfo.saveProperty.useMutation({
     onSuccess: () => {
       void utils.guestInfo.invalidate();
@@ -52,13 +105,14 @@ function GuestInfoEditor({ info, onClose }: { info: Record<GuestKey, string | nu
       onClose();
     },
   });
+  const setField = (id: string, change: Partial<CustomField>) => setCustom(custom.map((field) => (field.id === id ? { ...field, ...change } : field)));
   return (
     <Popup title="Guest information" subtitle={info.name} size="medium" onClose={onClose}>
       <form
         className="grid gap-4 sm:grid-cols-2"
         onSubmit={(e) => {
           e.preventDefault();
-          save.mutate({ propertyId: info.id, ...values });
+          save.mutate({ propertyId: info.id, ...values, custom: custom.filter((field) => field.label.trim()) });
         }}
       >
         {guestFields.map((field) => (
@@ -70,6 +124,26 @@ function GuestInfoEditor({ info, onClose }: { info: Record<GuestKey, string | nu
             )}
           </Field>
         ))}
+
+        <div className="border-ink-200/60 space-y-3 border-t pt-4 sm:col-span-2">
+          <div>
+            <p className="text-ink-900 text-[13px] font-medium">Extra fields for this property</p>
+            <p className="text-ink-500 text-xs font-light">Anything else guests should know here — Pool hours, Shuttle to the venue. The property sees them on its link too.</p>
+          </div>
+          {custom.map((field) => (
+            <div key={field.id} className="flex flex-wrap items-start gap-2">
+              <Input value={field.label} onChange={(e) => setField(field.id, { label: e.target.value })} placeholder="Name of the field — Pool hours" aria-label="Name of the field" className="w-full sm:w-56" />
+              <Textarea rows={1} value={field.value} onChange={(e) => setField(field.id, { value: e.target.value })} placeholder="What it says — or leave it for the property" aria-label={`${field.label || "Field"} — what it says`} className="min-w-0 flex-1" />
+              <button type="button" onClick={() => setCustom(custom.filter((other) => other.id !== field.id))} className="text-ink-400 px-1 pt-2 text-lg leading-none hover:text-[#c03654]" aria-label={`Remove ${field.label || "field"}`}>
+                ×
+              </button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setCustom([...custom, { id: newId(), label: "", value: "" }])} className="text-brand-700 text-[13px] font-medium hover:underline">
+            + Add a field
+          </button>
+        </div>
+
         <div className="flex items-center gap-2 sm:col-span-2">
           <Button type="submit" disabled={save.isPending}>
             {save.isPending ? "Saving…" : "Save"}

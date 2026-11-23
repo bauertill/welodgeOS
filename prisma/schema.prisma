@@ -251,18 +251,29 @@ model Property {
   // the owner 2026-11-23): shown on the client's property information page,
   // with the check-in and check-out times, breakfast and the address above.
   /// How to check in: where to go, reception hours, how keys are handed over.
-  guestCheckIn   String?
+  guestCheckIn      String?
   /// What guests need at check-in: a credit card, a deposit, their passport.
-  guestPayment   String?
-  guestCityTax   String?
-  guestParking   String?
-  guestWifi      String?
+  guestPayment      String?
+  guestCityTax      String?
+  guestParking      String?
+  guestWifi         String?
   /// House rules: smoking, quiet hours, rubbish.
-  guestRules     String?
+  guestRules        String?
   /// Who to call at the property in an emergency.
-  guestEmergency String?
+  guestEmergency    String?
   /// Anything else guests should know.
-  guestOther     String?
+  guestOther        String?
+  /// Fields the team added for this property (doc §6.8): [{ id, label, value }],
+  /// shown after the standard ones; the property fills them in by its link too.
+  guestCustom       Json      @default("[]")
+  /// The property's own link to fill in its guest information (doc §6.8);
+  /// empty means not made, or switched off. Separate from the contracting link.
+  guestToken        String?   @unique
+  guestLinkMadeAt   DateTime?
+  guestLinkMadeById String?
+  guestLinkMadeBy   User?     @relation("PropertyGuestLinkMadeBy", fields: [guestLinkMadeById], references: [id], onDelete: SetNull)
+  /// When the property last sent its guest information through the link.
+  guestSubmittedAt  DateTime?
 
   // Contracting details (doc §3.9): the legal entity a contract is signed
   // with. Visible to every colleague — accepted by the business for now.
@@ -1075,6 +1086,7 @@ model User {
 
   scoutedProperties        Property[]
   propertyContractingLinks Property[]      @relation("PropertyContractingLinkMadeBy")
+  guestLinksMade           Property[]      @relation("PropertyGuestLinkMadeBy")
   rateCards                RateCard[]
   photosAdded              PropertyPhoto[]
   quotationsAdded          Quotation[]     @relation("QuotationAddedBy")
