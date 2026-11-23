@@ -11,8 +11,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   // Migrations go over a direct connection, not the pooler: a pooled one can
   // keep the migration lock after the build ends, and the next release then
   // times out waiting for it (P1002, 2026-11-10 and 2026-11-17).
@@ -99,10 +99,6 @@ model Event {
   /// The currency the event's hotels quote in — USD for LA28, BRL for the
   /// Women's World Cup 2027 (doc §2.3). New quotations and rates start in it.
   currency  String      @default("USD")
-  /// The event's folder on the We Lodge shared drive, e.g. "10_FIFA Women's
-  /// World Cup 2027" (doc §3.12). Each property put on the event gets a folder
-  /// under its 1_Accommodation. Empty: no folders are made.
-  driveFolderId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -130,7 +126,7 @@ model Event {
   /// Named stretches of the event with their own rates, like LA28's Olympics,
   /// the days between and the Paralympics (doc §3.10). Most events have none,
   /// and the event's own dates are then its one period.
-  periods EventPeriod[]
+  periods               EventPeriod[]
   rateCards             RateCard[]
 
   @@index([startDate])
@@ -269,7 +265,7 @@ model Property {
 
   categories      RoomCategory[]
   contacts        PropertyContact[]
-  amenities       Amenity[]         @relation("PropertyAmenities")
+  amenities       Amenity[]            @relation("PropertyAmenities")
   scoutingEntries ScoutingEntry[]
   updates         Update[]
   contracts       Contract[]
@@ -535,8 +531,8 @@ model EventPeriod {
 }
 
 model ScoutingEntry {
-  id     String         @id @default(cuid())
-  status ScoutingStatus @default(PROSPECT)
+  id     String          @id @default(cuid())
+  status ScoutingStatus  @default(PROSPECT)
   /// The detail beneath the group, when set by hand (doc §3.9).
   detail ScoutingDetail?
   notes  String?
@@ -579,9 +575,6 @@ model ScoutingEntry {
   blockExpiry         DateTime? @db.Date
   roomingListDeadline DateTime? @db.Date
   minimumStayNights   Int?
-  /// This property's folder for this event on the shared drive —
-  /// <event folder> › 1_Accommodation › <property> (doc §3.12).
-  driveFolderId       String?
 
   @@unique([eventId, propertyId])
   @@index([eventId])
@@ -800,7 +793,7 @@ model QuotationPayment {
   /// A share of the total, in hundredths of a percent: 20% is 2000.
   percentBasisPoints Int
   /// This payment also takes all of the taxes — "30% + tax 100%" (doc §3.10).
-  plusTaxes Boolean @default(false)
+  plusTaxes          Boolean   @default(false)
   position           Int       @default(0)
 
   @@index([quotationId])
@@ -921,7 +914,7 @@ model Contract {
   totalCents          Int?
   /// Taxes on top of the total, from a quotation's TOT and per-night tax
   /// (doc §7.1). The total stays the rooms; payments are shares of it.
-  taxCents Int?
+  taxCents            Int?
   currency            String?
   /// The rate to the US dollar locked on the day it was signed (the owner,
   /// 2026-11-19: "it needs to lock"), for a contract in another currency:
@@ -929,10 +922,10 @@ model Contract {
   /// 5341200) — the European Central Bank's for `lockedRateFor`, published on
   /// `lockedRateOn` (the business day before, at a weekend). Locked again when
   /// the signing date or the currency changes (doc §7).
-  lockedRateMicros   Int?
-  lockedRateCurrency String?
-  lockedRateFor      DateTime? @db.Date
-  lockedRateOn       DateTime? @db.Date
+  lockedRateMicros    Int?
+  lockedRateCurrency  String?
+  lockedRateFor       DateTime? @db.Date
+  lockedRateOn        DateTime? @db.Date
   notes               String?
   /// Said on purpose when the contract has no cancellation deadlines at all,
   /// so it stops being flagged as missing them.
@@ -942,12 +935,12 @@ model Contract {
   /// When our agreement went to the hotel — by DocuSign, outside the system.
   agreementSentOn     DateTime? @db.Date
 
-  owner   User?   @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  ownerId String?
+  owner        User?   @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId      String?
   /// How many days before each payment's due date and each cancellation
   /// deadline the account manager is emailed (doc §7.1, the owner 2026-11-20):
   /// a month, a week and on the day, unless changed. Empty: no reminders.
-  reminderDays Int[] @default([30, 7, 0])
+  reminderDays Int[]   @default([30, 7, 0])
 
   payments          ContractPayment[]
   cancellations     ContractCancellation[]
@@ -981,7 +974,7 @@ model ContractPayment {
   /// A set amount instead, where the payment is not a plain share of the total.
   amountCents        Int?
   /// This payment also takes all of the contract's taxes (doc §7.1).
-  plusTaxes Boolean @default(false)
+  plusTaxes          Boolean       @default(false)
   status             PaymentStatus @default(TO_BE_PAID)
   paidOn             DateTime?     @db.Date
   invoiceUrl         String?
@@ -1076,66 +1069,67 @@ model User {
 
   // The team profile (doc §2.7). The sign-in email above is the contact
   // email: it is what Google vouches for, so it is shown, never edited.
-  jobTitle           String?
-  phones             UserPhone[]
+  jobTitle               String?
+  phones                 UserPhone[]
   // Presence (doc §2.7). When the person last used the system — "Active" or
   // "Away" is judged from this on read, never stored — and the status they
   // set by hand, if any; empty means automatic. A status whose `statusUntil`
   // has passed is ignored on read rather than cleared: nothing changes on its
   // own.
-  lastSeenAt         DateTime?
-  status             UserStatus?
-  statusUntil        DateTime?
+  lastSeenAt             DateTime?
+  status                 UserStatus?
+  statusUntil            DateTime?
   // A status in the person's own words, shown beside their name, with an
   // emoji and an optional time after which it no longer shows.
-  customStatusEmoji  String?
-  customStatusText   String?
-  customStatusUntil  DateTime?
-  conversations      ConversationMember[]
-  messages           Message[]
-  reactions          MessageReaction[]
-  customEmoji        CustomEmoji[]
-  accountManaged     ScoutingEntry[]      @relation("AccountManager")
-  clientsManaged     Client[]             @relation("ClientAccountManager")
-  contractsManaged   Contract[]           @relation("ContractOwner")
-  salesRequests      SalesRequest[]       @relation("SalesRequestOwner")
-  contactsManaged    ClientContact[]      @relation("ContactAccountManager")
-  tasksAssigned      Task[]               @relation("TaskAssignees")
-  tasksRequested     Task[]               @relation("TaskRequestedBy")
-  tasksCreated       Task[]               @relation("TaskCreatedBy")
-  taskComments       TaskComment[]
+  customStatusEmoji      String?
+  customStatusText       String?
+  customStatusUntil      DateTime?
+  conversations          ConversationMember[]
+  messages               Message[]
+  reactions              MessageReaction[]
+  customEmoji            CustomEmoji[]
+  accountManaged         ScoutingEntry[]      @relation("AccountManager")
+  clientsManaged         Client[]             @relation("ClientAccountManager")
+  contractsManaged       Contract[]           @relation("ContractOwner")
+  salesRequests          SalesRequest[]       @relation("SalesRequestOwner")
+  contactsManaged        ClientContact[]      @relation("ContactAccountManager")
+  tasksAssigned          Task[]               @relation("TaskAssignees")
+  tasksRequested         Task[]               @relation("TaskRequestedBy")
+  tasksCreated           Task[]               @relation("TaskCreatedBy")
+  taskComments           TaskComment[]
   /// How this person wants notifications by email (doc §2.9); the bell in the
   /// app always shows them.
-  emailNotifications EmailPreference      @default(DAILY)
+  emailNotifications     EmailPreference      @default(DAILY)
   /// The morning summary email, at 7:00 in their own time (the owner, 2026-11-17).
-  dailySummary       Boolean              @default(true)
+  dailySummary           Boolean              @default(true)
   /// Their time zone, as their browser reports it ("Europe/Zurich", "America/Los_Angeles").
-  timeZone           String?
+  timeZone               String?
   /// The team tags they belong to — @LA tells all of them (doc §2.7, the owner 2026-11-19).
-  teamTags           TeamTag[]            @relation("TeamTagMembers")
-  staggerScenariosMade    StaggerScenario[] @relation("StaggerCreatedBy")
-  staggerScenariosEdited  StaggerScenario[] @relation("StaggerUpdatedBy")
+  teamTags               TeamTag[]            @relation("TeamTagMembers")
+  staggerScenariosMade   StaggerScenario[]    @relation("StaggerCreatedBy")
+  staggerScenariosEdited StaggerScenario[]    @relation("StaggerUpdatedBy")
   /// When their last morning summary went — so it goes once a day.
-  summarySentAt      DateTime?
+  summarySentAt          DateTime?
   /// When the Friday email of overdue payments last went (doc §7.1, 2026-11-20).
-  overdueSentAt      DateTime?
-  notifications      Notification[]       @relation("NotificationFor")
-  notificationsSent  Notification[]       @relation("NotificationBy")
+  overdueSentAt          DateTime?
+  notifications          Notification[]       @relation("NotificationFor")
+  notificationsSent      Notification[]       @relation("NotificationBy")
   /// Their own link for booking a call (Google Calendar appointment page,
   /// Calendly…), put in the email to a client (doc §4.11).
-  bookingLink        String?
+  bookingLink            String?
   /// The tab an event opens on for them — Properties unless they chose another (doc §3.10, 2026-10-13).
-  eventStartTab      String?
-  eventsLed          Event[]              @relation("EventProjectLead")
-  eventsSourced      Event[]              @relation("EventAccommodationManagers")
-  offersMade         Offer[]              @relation("OfferCreatedBy")
-  offersClosed       Offer[]              @relation("OfferClosedBy")
-  mcpCodes           McpAuthCode[]
-  mcpTokens          McpToken[]
-  gmail              GmailConnection?
-  agreementTemplates AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
-  updatesSeen        UpdateBoardSeen[]
-  taskFiles TaskFile[] @relation("TaskFileUploadedBy")
+  eventStartTab          String?
+  eventsLed              Event[]              @relation("EventProjectLead")
+  eventsSourced          Event[]              @relation("EventAccommodationManagers")
+  offersMade             Offer[]              @relation("OfferCreatedBy")
+  offersClosed           Offer[]              @relation("OfferClosedBy")
+  mcpCodes               McpAuthCode[]
+  mcpTokens              McpToken[]
+  gmail                  GmailConnection?
+  agreementTemplates     AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
+  updatesSeen            UpdateBoardSeen[]
+  taskFiles              TaskFile[]           @relation("TaskFileUploadedBy")
+  storedFiles            StoredFile[]         @relation("StoredFileUploadedBy")
 }
 
 // --- The team: profiles and internal chat (doc §2.7) --------------------------
@@ -1445,7 +1439,7 @@ model ClientContact {
   priority Priority?
   comments String?
   /// The monday.com contact this person was imported from — a second import skips them.
-  mondayId String? @unique
+  mondayId String?      @unique
 
   accountManager   User?   @relation("ContactAccountManager", fields: [accountManagerId], references: [id], onDelete: SetNull)
   accountManagerId String?
@@ -1681,16 +1675,16 @@ model Update {
 
   /// On a hotel chain (doc §2.6, the team 2026-11-17): shown on the chain and on
   /// each of its properties, as monday's provider-level updates were.
-  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  providerId String?
+  provider      Provider?   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId    String?
   /// A provider not kept in the system — housekeeping, furniture rental — by
   /// name, for the Updates board's *Other providers* (doc §2.6).
   otherProvider String?
   /// On a contractor (doc §3.11): on its page and the board's Other providers tab.
-  contractor   Contractor? @relation(fields: [contractorId], references: [id], onDelete: Cascade)
-  contractorId String?
+  contractor    Contractor? @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  contractorId  String?
   /// A file that goes with it — a Google Drive link for now (doc §2.6).
-  fileUrl String?
+  fileUrl       String?
 
   /// A reply to another update (doc §2.6, 2026-11-17): shown beneath it, on the same page.
   parent   Update?  @relation("UpdateReplies", fields: [parentId], references: [id], onDelete: Cascade)
@@ -2052,6 +2046,23 @@ model TaskFile {
   @@index([taskId, createdAt])
 }
 
+/// A file uploaded to the site's own store (Vercel Blob) for a document field —
+/// a hotel's quotation, a signed contract, an invoice or proof of payment, the
+/// file on an update (doc §2.8, the owner 2026-11-23). The field holds its
+/// address, /api/files/stored/<id>/<name>; a pasted link still works instead.
+model StoredFile {
+  id           String   @id @default(cuid())
+  /// Where it is in the file store.
+  pathname     String   @unique
+  /// The file's name, as it was uploaded.
+  name         String
+  contentType  String?
+  size         Int
+  uploadedBy   User?    @relation("StoredFileUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedById String?
+  createdAt    DateTime @default(now())
+}
+
 model TaskComment {
   id        String    @id @default(cuid())
   task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -2233,17 +2244,17 @@ model RateCard {
 }
 
 model RateCardProperty {
-  id          String   @id @default(cuid())
-  rateCard    RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
-  rateCardId  String
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  propertyId  String
-  position    Int      @default(0)
+  id                String   @id @default(cuid())
+  rateCard          RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  rateCardId        String
+  property          Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId        String
+  position          Int      @default(0)
   /// A short description for the client — written by the team, with help if wanted.
-  description String?
+  description       String?
   /// What the rates at this property include, as the client reads it — "Breakfast, Wi-Fi, Taxes"
   /// (doc §4.11, 2026-11-17). Filled from the event's agreed terms or quote when added; changed by hand.
-  rateIncludes String?
+  rateIncludes      String?
   /// This property's own terms, used when the card has terms per property (doc §4.11, 2026-11-17).
   paymentTerms      String?
   cancellationTerms String?

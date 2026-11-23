@@ -13,6 +13,8 @@ import { formatDate, formatDay, formatMomentInWords } from "~/lib/format";
 import { composeBody, isHeading, updateKindOrder, updateKinds } from "~/lib/update-kinds";
 import { renderUpdateBody } from "~/lib/updates";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { FileField } from "~/app/_components/file-field";
+import { linkLabel } from "~/lib/file-link";
 
 type Scope =
   | { propertyId: string; clientId?: undefined; salesRequestId?: undefined; providerId?: undefined; contractorId?: undefined }
@@ -289,7 +291,7 @@ export function UpdateList({
                     {textLines.length === 0 && <p className="text-ink-500 mt-1 text-sm font-light italic">(empty)</p>}
                     {entry.fileUrl && (
                       <a href={entry.fileUrl} target="_blank" rel="noreferrer" className="text-brand-700 mt-1 inline-flex items-center gap-1 text-xs font-medium hover:underline">
-                        📎 Open the file ↗
+                        📎 {linkLabel(entry.fileUrl, "Open the file ↗")}
                       </a>
                     )}
                     <div className="mt-1 flex items-center gap-3">
@@ -499,16 +501,10 @@ export function UpdateExtras({
           ))}
       </select>
       {fileOpen ? (
-        <input
-          value={value.fileUrl}
-          onChange={(e) => onChange({ ...value, fileUrl: e.target.value })}
-          placeholder="Google Drive link — https://drive.google.com/…"
-          aria-label="Link to a file"
-          className="border-ink-200 min-w-64 flex-1 rounded-full border bg-white px-3 py-1 outline-none"
-        />
+        <FileField value={value.fileUrl} onChange={(fileUrl) => onChange({ ...value, fileUrl })} label="File" />
       ) : (
         <button type="button" onClick={() => setFileOpen(true)} className="text-brand-700 font-medium hover:underline">
-          📎 Add a file link
+          📎 Add a file
         </button>
       )}
     </div>

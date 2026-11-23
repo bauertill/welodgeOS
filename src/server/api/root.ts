@@ -24,6 +24,7 @@ import { notificationRouter } from "~/server/api/routers/notification";
 import { offerRouter } from "~/server/api/routers/offer";
 import { staggerRouter } from "~/server/api/routers/stagger";
 import { taskRouter } from "~/server/api/routers/task";
+import { filesRouter } from "~/server/api/routers/files";
 import { teamTagRouter } from "~/server/api/routers/team-tag";
 import { travelRouter } from "~/server/api/routers/travel";
 import { updateRouter } from "~/server/api/routers/update";
@@ -64,6 +65,7 @@ export const appRouter = createTRPCRouter({
   audit: auditRouter,
   chat: chatRouter,
   task: taskRouter,
+  files: filesRouter,
   notification: notificationRouter,
 });
 

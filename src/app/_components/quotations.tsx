@@ -20,6 +20,7 @@ import { contractHref, percent } from "~/lib/finance";
 import { describeRateIncludes } from "~/lib/scouting";
 import { taxesPerNight, taxKindLabels, taxKinds, taxName } from "~/lib/taxes";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { FileField } from "~/app/_components/file-field";
 
 /**
  * The Quotations tab of a property's page (doc §3.10): its quotations for
@@ -1058,8 +1059,8 @@ function QuotationEditor({
         <Field label="Anything else about the taxes, in words — optional">
           <Input value={draft.otherTaxes} onChange={(e) => set("otherTaxes")(e.target.value)} placeholder="TMD: 6.25 USD (ADR 200–300)" aria-label="Other applicable tax" />
         </Field>
-        <Field label="The quotation — Google Drive link">
-          <Input value={draft.documentUrl} onChange={(e) => set("documentUrl")(e.target.value)} placeholder="https://drive.google.com/file/d/…" />
+        <Field label="The quotation — upload it, or paste a link">
+          <FileField value={draft.documentUrl} onChange={set("documentUrl")} label="The quotation" />
         </Field>
         <Field label="Notes" className="sm:col-span-2">
           <Textarea rows={2} value={draft.notes} onChange={(e) => set("notes")(e.target.value)} />

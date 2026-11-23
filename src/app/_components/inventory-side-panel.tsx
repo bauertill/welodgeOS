@@ -30,6 +30,7 @@ import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_c
 import { isClosed, salesStageLabels } from "~/lib/sales";
 import { api } from "~/trpc/react";
 import { CURRENCIES } from "~/lib/currency";
+import { FileField } from "~/app/_components/file-field";
 
 /** What the grid already knows about one selected room-night. */
 export type SelectedCell = {
@@ -1159,7 +1160,7 @@ function ContractPicker({
               ))}
             </Select>
           </div>
-          <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Signed PDF — Google Drive link (can come later)" />
+          <FileField value={link} onChange={setLink} label="Signed PDF" placeholder="…or paste a link to the signed PDF (can come later)" />
           {create.error && <FormError message={create.error.message} />}
           <div className="flex gap-2">
             <Button

@@ -101,7 +101,6 @@ export function PropertyEntryPanel({ entryId, onClose }: { entryId: string; onCl
                   .join(" · ")}
               </p>
             )}
-            {entry.data && <DriveFolder entryId={entryId} entry={entry.data} />}
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-ink-500 hover:text-ink-900 text-xl leading-none">
             ×
@@ -524,34 +523,5 @@ function RoomBreakdown({
         </table>
       </div>
     </div>
-  );
-}
-
-/**
- * This property's folder for the event on the shared drive (doc §3.12): a
- * link once it is there; otherwise why not, and a button to make it now.
- */
-function DriveFolder({ entryId, entry }: { entryId: string; entry: { driveFolderId: string | null; driveConnected: boolean; event: { driveFolderId: string | null } } }) {
-  const utils = api.useUtils();
-  const make = api.scouting.makeDriveFolder.useMutation({ onSuccess: () => void utils.scouting.entry.invalidate({ id: entryId }) });
-  const line = "mt-1 text-[13px] font-light";
-  if (entry.driveFolderId)
-    return (
-      <p className={line}>
-        <a href={`https://drive.google.com/drive/folders/${entry.driveFolderId}`} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
-          Open the Drive folder ↗
-        </a>
-      </p>
-    );
-  if (!entry.driveConnected) return <p className={`${line} text-ink-500`}>No Drive folder — Google Drive is not connected to OS yet.</p>;
-  if (!entry.event.driveFolderId) return <p className={`${line} text-ink-500`}>No Drive folder — set the event&apos;s Drive folder in its details first.</p>;
-  return (
-    <p className={`${line} text-ink-500`}>
-      No Drive folder yet.{" "}
-      <button type="button" disabled={make.isPending} onClick={() => make.mutate({ id: entryId })} className="text-brand-700 font-medium hover:underline disabled:opacity-60">
-        {make.isPending ? "Making it…" : "Make the Drive folder"}
-      </button>
-      {make.error && <span className="ml-2 text-[#c03654]">{make.error.message}</span>}
-    </p>
   );
 }

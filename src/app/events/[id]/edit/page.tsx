@@ -41,7 +41,6 @@ export default async function EditEventPage({
           endDate: dayKey(event.endDate),
           status: event.status,
           currency: event.currency,
-          driveFolder: event.driveFolderId ? `https://drive.google.com/drive/folders/${event.driveFolderId}` : "",
         }}
       />
 
