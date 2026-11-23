@@ -1017,7 +1017,7 @@ skipped: they need a position first.
 **Adding anything from the map** (2026-10-13): **＋ Add to the map** at the top of the map, then
 a click on the spot, a **search for its address or name** (the pin goes to what is picked), or
 **📍 Use where I am** from a phone in front of it; a red "＋ New here" pin shows the spot. An
-address already picked in *Find hotels not on our list near* is taken as the spot at once, with
+address already picked in the research bar's *Find hotels not on our list near* is taken as the spot at once, with
 no second click; picking another there moves the pin (the owner, 2026-11-23). While adding,
 **clicking anywhere else on the map moves the pin** — a wrong spot is fixed by clicking again —
 and searching another address in the panel moves it too. A clicked spot has its address looked
@@ -1315,7 +1315,10 @@ filters** clears them all. Every filter **stays as set until reset**, per event,
 (as on the Clients list, §4.10). The **Rooms** column also shows the lowest rate quoted or agreed,
 *from US$ 300*.
 
-**Finding hotels from the map** (2026-10-11). The Map view has a bar above the map: **Find
+**Finding hotels from the map** (2026-10-11). Research for an event's early days, so it is kept
+behind a button (the owner, 2026-11-23: "the map for the most part will be used to add properties
+and venues"): **🔎 Research: find hotels not on our list nearby** above the map opens the bar,
+and its × closes it again, clearing the search. The bar: **Find
 hotels not on our list near** one of the event's places of interest (its first venue by
 default) — or **a custom address**, found with the same Google Maps address box as a
 property's, and pinned on the map once chosen ("📍 Santa Monica Pier", 2026-10-13) until
