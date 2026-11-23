@@ -13,11 +13,12 @@ export const DAY = 86400000;
 /** Nights per month, for nightly equivalents (365 ÷ 12 ≈ 30.4). */
 export const NPM = 365 / 12;
 
-/** Studios and 1-beds only (the reference dropped 2-beds, 2026-11-20). */
-export type UnitType = "studio" | "one";
+/** Studio, 1-bed and 2-bed (the reference, as updated 2026-11-23). */
+export type UnitType = "studio" | "one" | "two";
 export const TYPES: { k: UnitType; label: string }[] = [
   { k: "studio", label: "Studio" },
   { k: "one", label: "1-bed" },
+  { k: "two", label: "2-bed" },
 ];
 export const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const MONL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -111,8 +112,8 @@ export function defaults(): StaggerData {
     waves: 6,
     gap: 14,
     stay: 6,
-    mix: { studio: 20, one: 80 },
-    rates: { studio: 4000, one: 4500 },
+    mix: { studio: 20, one: 60, two: 20 },
+    rates: { studio: 4000, one: 4500, two: 5500 },
     showBlock: true,
     showRent: true,
     rateBasis: "month",
@@ -122,11 +123,15 @@ export function defaults(): StaggerData {
   return s;
 }
 
-/** Only the unit types there are now: a scenario saved with 2-beds keeps its studios and 1-beds, the rest is dropped. */
-const perType = (base: Record<UnitType, number>, stored: unknown): Record<UnitType, number> => {
+/**
+ * Each unit type's figure as stored, or the fallback where a scenario has
+ * none — a scenario saved before 2-beds came back has no 2-bed share (0) and
+ * takes the default 2-bed rate.
+ */
+const perType = (fallback: Record<UnitType, number>, stored: unknown): Record<UnitType, number> => {
   const s = (stored && typeof stored === "object" ? stored : {}) as Partial<Record<string, unknown>>;
-  const pick = (k: UnitType) => (typeof s[k] === "number" && isFinite(s[k]) ? s[k] : base[k]);
-  return { studio: pick("studio"), one: pick("one") };
+  const pick = (k: UnitType) => (typeof s[k] === "number" && isFinite(s[k]) ? s[k] : fallback[k]);
+  return { studio: pick("studio"), one: pick("one"), two: pick("two") };
 };
 
 /** Whatever was stored, made whole: anything missing comes from the defaults; anything no longer used is dropped. */
@@ -136,7 +141,7 @@ export function normalise(input: unknown): StaggerData {
   const s = input as Partial<StaggerData>;
   if (!Array.isArray(s.rows) || !s.mix || !s.rates) return base;
   const { presenting: _presenting, ...rest } = s as Partial<StaggerData> & { presenting?: unknown };
-  return { ...base, ...rest, mix: perType(base.mix, s.mix), rates: perType(base.rates, s.rates), rows: s.rows.map((r) => ({ date: String(r.date), units: int(r.units), stay: int(r.stay) || 1 })) };
+  return { ...base, ...rest, mix: perType({ studio: 0, one: 0, two: 0 }, s.mix), rates: perType(base.rates, s.rates), rows: s.rows.map((r) => ({ date: String(r.date), units: int(r.units), stay: int(r.stay) || 1 })) };
 }
 
 // ---------- the generator's rules, as the settings panel applies them ----------

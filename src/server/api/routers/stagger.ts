@@ -14,8 +14,8 @@ import { logAudit } from "~/server/audit";
  */
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date is YYYY-MM-DD.");
-/** Studios and 1-beds; anything else sent (an old 2-bed figure) is dropped. */
-const perType = z.object({ studio: z.number().min(0), one: z.number().min(0) }).strip();
+/** Studios, 1-beds and 2-beds; a scenario from before 2-beds came back sends none — its share 0, its rate the default. */
+const perType = (twoDefault: number) => z.object({ studio: z.number().min(0), one: z.number().min(0), two: z.number().min(0).default(twoDefault) }).strip();
 /** The planner's state exactly as the reference keeps it; never `presenting`. */
 const dataInput = z
   .object({
@@ -24,8 +24,8 @@ const dataInput = z
     waves: z.number().int().min(1).max(40),
     gap: z.number().int().min(1).max(60),
     stay: z.number().int().min(1).max(24),
-    mix: perType,
-    rates: perType,
+    mix: perType(0),
+    rates: perType(5500),
     rateBasis: z.enum(["month", "night"]),
     showBlock: z.boolean(),
     showRent: z.boolean(),
