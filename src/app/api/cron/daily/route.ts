@@ -1,5 +1,6 @@
 import { env } from "~/env";
 import { db } from "~/server/db";
+import { catchUpFolders, quietly } from "~/server/drive";
 import { syncAll } from "~/server/gmail";
 import { sendDeadlineReminders, sendOverdueDigests } from "~/server/deadlines";
 import { runDaily, sendSummaries } from "~/server/notify";
@@ -22,10 +23,12 @@ export async function GET(request: Request) {
   // Every hour since 2026-11-17, so each person's summary can come at 7:00 their time. The
   // deadline reminders and the Gmail catch-up stay once a day, at 06:00 UTC.
   const overdue = await sendOverdueDigests(db);
-  if (new Date().getUTCHours() !== 6) return Response.json({ summaries: await sendSummaries(db), overdue });
+  // Drive folders that could not be made at once (doc §3.12).
+  const folders = await quietly("catch-up", () => catchUpFolders(db));
+  if (new Date().getUTCHours() !== 6) return Response.json({ summaries: await sendSummaries(db), overdue, folders });
   // Written before runDaily, which emails them at once with the mentions.
   const deadlines = await sendDeadlineReminders(db);
   const outcome = await runDaily(db);
   const emails = await syncAll(db, { budgetMs: 40_000, force: true });
-  return Response.json({ ...outcome, deadlines, overdue, emails });
+  return Response.json({ ...outcome, deadlines, overdue, folders, emails });
 }

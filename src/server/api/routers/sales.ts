@@ -32,6 +32,7 @@ import { fit } from "~/lib/sourcing-fit";
 import { findNearby, knownAlready, type Source } from "~/server/discover";
 import { eventRates } from "~/server/event-rates";
 import { snapshotNight } from "~/server/inventory";
+import { visibleTo } from "~/server/private-tasks";
 
 /**
  * Sales requests (doc §4.11): a client's interest in accommodation, followed
@@ -1089,8 +1090,9 @@ export const salesRouter = createTRPCRouter({
         include: {
           ...include,
           client: { select: { id: true, name: true, shortName: true, contacts: { orderBy: { name: "asc" }, select: { id: true, name: true, title: true } } } },
-          // Its tasks — the sourcing task, and the hotel contact tasks it led to (doc §4.11).
+          // Its tasks — the sourcing task, and the hotel contact tasks it led to (doc §4.11); someone else's private ones never.
           tasks: {
+            where: visibleTo(ctx.session.user.id),
             orderBy: { createdAt: "asc" },
             select: {
               id: true,

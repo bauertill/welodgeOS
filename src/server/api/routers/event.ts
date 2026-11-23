@@ -6,6 +6,7 @@ import { eventPeriodProblem } from "~/lib/event-periods";
 import { formatRange } from "~/lib/format";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit, logFieldChanges } from "~/server/audit";
+import { driveAccount, folderIdFrom, googleDrive } from "~/server/drive";
 
 const eventInput = z.object({
   name: z.string().min(1, "An event needs a name"),
@@ -16,7 +17,27 @@ const eventInput = z.object({
   status: z.enum(["PLANNING", "ACTIVE", "CLOSED"]).default("PLANNING"),
   /** The currency its hotels quote in (doc §2.3). */
   currency: z.string().length(3).optional(),
+  /** The event's folder on the shared drive, as a pasted link; "" clears it (doc §3.12). Left out, unchanged. */
+  driveFolder: z.string().max(500).optional(),
 });
+
+/**
+ * The pasted Drive link as a folder id, checked: OS must be able to open it
+ * (the service account is a member of the shared drive), or nothing could be
+ * made in it. Undefined: not sent, leave it.
+ */
+async function driveFolderOf(text: string | undefined) {
+  if (text === undefined) return undefined;
+  if (!text.trim()) return null;
+  const id = folderIdFrom(text);
+  if (!id) throw new TRPCError({ code: "BAD_REQUEST", message: "That does not look like a Google Drive folder link. Open the event's folder in Drive and copy the address from the browser." });
+  const drive = googleDrive();
+  if (drive) {
+    const name = await drive.folderName(id).catch(() => null);
+    if (!name) throw new TRPCError({ code: "BAD_REQUEST", message: `OS cannot open that folder. Check it is in the We Lodge shared drive, and that ${driveAccount()} is a member of it.` });
+  }
+  return id;
+}
 
 export const eventRouter = createTRPCRouter({
   list: protectedProcedure.query(({ ctx }) =>
@@ -130,13 +151,16 @@ export const eventRouter = createTRPCRouter({
 
   create: protectedProcedure
     .input(eventInput)
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
+    .mutation(async ({ ctx, input }) => {
+      const { driveFolder, ...fields } = input;
+      const driveFolderId = await driveFolderOf(driveFolder);
+      return ctx.db.$transaction(async (tx) => {
         const event = await tx.event.create({
           data: {
-            ...input,
-            city: input.city?.trim() || null,
-            country: input.country?.trim() || null,
+            ...fields,
+            driveFolderId: driveFolderId ?? null,
+            city: fields.city?.trim() || null,
+            country: fields.country?.trim() || null,
           },
         });
         await logAudit(tx, {
@@ -146,14 +170,16 @@ export const eventRouter = createTRPCRouter({
           summary: "Created",
         });
         return event;
-      }),
-    ),
+      });
+    }),
 
   update: protectedProcedure
     .input(eventInput.extend({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.$transaction(async (tx) => {
-        const { id, ...data } = input;
+    .mutation(async ({ ctx, input }) => {
+      const { id, driveFolder, ...fields } = input;
+      const driveFolderId = await driveFolderOf(driveFolder);
+      return ctx.db.$transaction(async (tx) => {
+        const data = { ...fields, ...(driveFolderId !== undefined && { driveFolderId }) };
         const before = await tx.event.findUniqueOrThrow({ where: { id } });
         const updated = await tx.event.update({ where: { id }, data });
         await logFieldChanges(
@@ -169,9 +195,10 @@ export const eventRouter = createTRPCRouter({
             { key: "endDate", label: "End date" },
             { key: "status", label: "Status" },
             { key: "currency", label: "Currency" },
+            { key: "driveFolderId", label: "Drive folder" },
           ],
         );
         return updated;
-      }),
-    ),
+      });
+    }),
 });

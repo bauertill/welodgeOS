@@ -4,6 +4,7 @@ import { nightsBetween } from "~/lib/dates";
 import { formatMoney, formatRange } from "~/lib/format";
 import { peopleWords } from "~/lib/needs";
 import { logAudit } from "~/server/audit";
+import { folderSoon } from "~/server/drive";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { notify } from "~/server/notify";
 
@@ -41,7 +42,10 @@ export async function ensureGetRateTask(tx: Prisma.TransactionClient, input: { p
 
   // A quote is registered against the property on the event: it goes on the event if not there yet.
   const onEvent = await tx.scoutingEntry.findFirst({ where: { eventId, propertyId: input.propertyId }, select: { id: true } });
-  if (!onEvent) await tx.scoutingEntry.create({ data: { eventId, propertyId: input.propertyId } });
+  if (!onEvent) {
+    const entry = await tx.scoutingEntry.create({ data: { eventId, propertyId: input.propertyId } });
+    folderSoon(entry.id, input.actorId); // its folder on the shared drive (doc §3.12)
+  }
 
   const [property, contact] = await Promise.all([
     tx.property.findUniqueOrThrow({ where: { id: input.propertyId }, select: { name: true } }),
