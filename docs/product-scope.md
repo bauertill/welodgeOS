@@ -4073,7 +4073,8 @@ sheet works better"). Each property is a table to type straight into: one row pe
 rows, then check-in, check-out, a column per guest (as many as the property's largest room
 sleeps, up to four; cells beyond a room's beds are greyed), arriving and notes. Every room with
 nights nobody is named for has an empty row, its dates set to the first such stretch — type a
-name and the stay is there. **A row saves when the cursor leaves it** (or with *Save*); × takes
+name and the stay is there. A room's rows are always **in date order**, the empty row among
+them where its dates fall (the owner, 2026-11-23). **A row saves when the cursor leaves it** (or with *Save*); × takes
 a stay out. A guest is typed as one full name, kept as first and last name (the last word is the
 last name), as hotels want them.
 

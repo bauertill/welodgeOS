@@ -241,10 +241,13 @@ function ClientRoom({ room, rooming, fields }: { room: Room; rooming: ReturnType
         </div>
       </div>
       <div className="space-y-2">
-        {room.stays.map((stay) => (
-          <ClientLine key={stay.id} room={room} stay={stay} rooming={rooming} fields={fields} />
-        ))}
-        {free && <ClientLine key={`new-${free.checkIn}`} room={room} start={free} rooming={rooming} fields={fields} />}
+        {inOrder(room, free).map((line) =>
+          line.stay ? (
+            <ClientLine key={line.stay.id} room={room} stay={line.stay} rooming={rooming} fields={fields} />
+          ) : (
+            <ClientLine key={`new-${line.start.checkIn}`} room={room} start={line.start} rooming={rooming} fields={fields} />
+          ),
+        )}
       </div>
     </div>
   );
@@ -557,6 +560,16 @@ function ClientRooms({ salesRequestId, rooms, fields }: { salesRequestId: string
   return <RoomsTable rooms={rooms} team rooming={rooming} fields={fields} />;
 }
 
+/**
+ * A room's lines in date order (the owner, 2026-11-23): its stays and the
+ * empty line for its next free nights, earliest first.
+ */
+function inOrder(room: Room, free: { checkIn: string; checkOut: string } | null) {
+  const lines: ({ stay: Stay; start?: undefined; at: string } | { stay?: undefined; start: { checkIn: string; checkOut: string }; at: string })[] = room.stays.map((stay) => ({ stay, at: stay.checkIn }));
+  if (free) lines.push({ start: free, at: free.checkIn });
+  return lines.sort((a, b) => a.at.localeCompare(b.at));
+}
+
 /** The first stretch of a room's booked nights nobody is in yet — what a new row starts as. */
 function freeStretch(room: Room) {
   const taken = room.stays.filter((stay) => !stay.removed);
@@ -596,13 +609,16 @@ function RoomRows({ room, columns, team, rooming, fields }: { room: Room; column
     </td>
   );
   const blank = <td className="bg-white" />;
-  const count = room.stays.length + (free ? 1 : 0);
+  const lines = inOrder(room, free);
   return (
     <>
-      {room.stays.map((stay, index) => (
-        <SheetRow key={stay.id} room={room} stay={stay} columns={columns} team={team} rooming={rooming} fields={fields} lead={index === 0 ? roomCell : blank} last={index === count - 1} />
-      ))}
-      {free && <SheetRow key={`new-${free.checkIn}`} room={room} start={free} columns={columns} team={team} rooming={rooming} fields={fields} lead={room.stays.length === 0 ? roomCell : blank} last />}
+      {lines.map((line, index) =>
+        line.stay ? (
+          <SheetRow key={line.stay.id} room={room} stay={line.stay} columns={columns} team={team} rooming={rooming} fields={fields} lead={index === 0 ? roomCell : blank} last={index === lines.length - 1} />
+        ) : (
+          <SheetRow key={`new-${line.start.checkIn}`} room={room} start={line.start} columns={columns} team={team} rooming={rooming} fields={fields} lead={index === 0 ? roomCell : blank} last={index === lines.length - 1} />
+        ),
+      )}
     </>
   );
 }
