@@ -120,7 +120,7 @@ export function StaggerBody({ data, owner, c }: { data: StaggerData; owner: stri
       {data.showRent && !c.empty && (
         <section className="section rates">
           <h2>Rent per apartment</h2>
-          <p className="sub">Monthly lease rent by unit type, and what it works out to per night.</p>
+          <p className="sub">Monthly lease rent by unit type.</p>
           <div className="tablewrap">
             <RateTable c={c} data={data} />
           </div>
@@ -230,7 +230,6 @@ function RateTable({ c, data }: { c: Extract<Computed, { empty: false }>; data: 
           <th>Unit type</th>
           <th>Apartments</th>
           <th>Per month</th>
-          <th>Per night</th>
         </tr>
       </thead>
       <tbody>
@@ -242,7 +241,6 @@ function RateTable({ c, data }: { c: Extract<Computed, { empty: false }>; data: 
               <td>{ty.label}</td>
               <td className={n ? undefined : "zero"}>{n ? num(n) : "–"}</td>
               <td>{money(rate)}</td>
-              <td>{money(rate / NPM)}</td>
             </tr>
           );
         })}
@@ -252,7 +250,6 @@ function RateTable({ c, data }: { c: Extract<Computed, { empty: false }>; data: 
           <td>Blended average</td>
           <td>{num(c.N)}</td>
           <td>{money(c.rateEff)}</td>
-          <td>{money(c.rateEff / NPM)}</td>
         </tr>
       </tfoot>
     </table>
