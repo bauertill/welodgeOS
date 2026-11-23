@@ -16,7 +16,7 @@ const radiusOptions = [5, 10, 20];
 const distance = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
 
 /**
- * The Properties tab's map, with a search for places to stay around one of the
+ * The Properties tab's map, with — behind a Research button (2026-11-23) — a search for places to stay around one of the
  * event's places of interest that are not in our system (doc §3.9) — found on
  * Google Maps, shown as hollow purple dots and listed beneath. Adding one puts
  * it on the event with a hotel contact task (§4.11), its contact details
@@ -49,6 +49,16 @@ export function NearbySearch({
   const [radiusKm, setRadiusKm] = useState(5);
   const [searching, setSearching] = useState<{ placeId?: string; address?: { label: string; latitude: number; longitude: number }; radiusKm: number } | null>(null);
   const [all, setAll] = useState(false);
+  // Research, for the early days of an event (the owner, 2026-11-23): kept behind a button, as the
+  // map is mostly for adding properties and places.
+  const [researchOpen, setResearchOpen] = useState(false);
+  const closeResearch = () => {
+    setResearchOpen(false);
+    setSearching(null);
+    setFocused(false);
+    setAddress(null);
+    setAddressText("");
+  };
   const [added, setAdded] = useState<Record<string, { propertyId: string; taskId: string | null }>>({});
   const search = api.scouting.discoverNear.useQuery(
     { eventId, placeId: searching?.placeId, address: searching?.address, radiusKm: searching?.radiusKm ?? 5 },
@@ -134,7 +144,17 @@ export function NearbySearch({
 
   return (
     <div className="space-y-3">
-      {(
+      {!researchOpen ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setResearchOpen(true)}
+            className="border-ink-200 text-ink-700 hover:border-brand-300 hover:text-brand-700 rounded-full border bg-white px-3.5 py-1.5 text-xs font-light"
+          >
+            🔎 Research: find hotels not on our list nearby
+          </button>
+        </div>
+      ) : (
         <div className="border-ink-200/60 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-white px-4 py-3 text-[13px]">
           <span className="text-ink-900 font-medium">Find hotels not on our list near</span>
           <span className="w-64">
@@ -194,6 +214,9 @@ export function NearbySearch({
           >
             {search.isFetching ? "Searching…" : "Search"}
           </button>
+          <button type="button" onClick={closeResearch} aria-label="Close the research" className="text-ink-400 hover:text-ink-900 px-1 text-lg leading-none">
+            ×
+          </button>
         </div>
       )}
 
@@ -205,8 +228,8 @@ export function NearbySearch({
         eventId={eventId}
         found={found.map((place) => ({ key: place.key, name: place.name, latitude: place.latitude, longitude: place.longitude }))}
         // The custom address, pinned once chosen and while its search lasts.
-        searchPoint={searching?.address ?? (!placeId ? address : null)}
-        onlyPlaceId={searching?.placeId ?? (focused && placeId ? placeId : null)}
+        searchPoint={researchOpen ? (searching?.address ?? (!placeId ? address : null)) : null}
+        onlyPlaceId={researchOpen ? (searching?.placeId ?? (focused && placeId ? placeId : null)) : null}
         renderFound={(key) => {
           const place = byKey.get(key);
           if (!place) return null;
