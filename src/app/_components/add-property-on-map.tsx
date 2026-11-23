@@ -27,7 +27,10 @@ export function AddPropertyForm({
   picking,
   setPicking,
   onClose,
+  known = null,
 }: {
+  /** An address already looked up on the map: when the pin is on it, its address is kept, not looked up again. */
+  known?: { latitude: number; longitude: number; address: string } | null;
   eventId: string;
   layers: { id: string; name: string }[];
   point: Point | null;
@@ -57,6 +60,12 @@ export function AddPropertyForm({
   useEffect(() => {
     if (where.data?.address && !fromSearch) setAddress(where.data.address);
   }, [where.data, fromSearch]);
+  useEffect(() => {
+    if (!known || !point || known.latitude !== point.latitude || known.longitude !== point.longitude) return;
+    setSearched(point);
+    setAddress(known.address);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- when the pin lands on the known spot
+  }, [known?.latitude, known?.longitude, point?.latitude, point?.longitude]);
   /** An address picked from the search (the owner, 2026-11-23): that is where the pin goes. */
   const found = (place: FoundPlace) => {
     if (place.latitude === null || place.longitude === null) return;

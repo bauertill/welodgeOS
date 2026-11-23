@@ -17,10 +17,17 @@ export function AddressSearch({
   value,
   onChange,
   onFound,
+  ours,
+  onOurs,
+  placeholder = "Search Google Maps, or type or paste the address",
 }: {
   value: string;
   onChange: (value: string) => void;
   onFound: (place: FoundPlace) => void;
+  /** Our own matches for what is typed (the map, 2026-11-23: properties and places on it), listed above Google's. */
+  ours?: (query: string) => { id: string; label: string; detail?: string | null }[];
+  onOurs?: (id: string) => void;
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -55,10 +62,19 @@ export function AddressSearch({
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  const suggestions = search.data?.available ? search.data.suggestions : [];
-  const pick = (placeId: string) => {
+  const google = search.data?.available ? search.data.suggestions : [];
+  const own = ours && value.trim().length >= 2 ? ours(value.trim()).slice(0, 6) : [];
+  // One list to move through: ours first, then Google's.
+  const suggestions = [
+    ...own.map((item) => ({ key: `ours:${item.id}`, main: item.label, secondary: item.detail ?? null, ours: item.id })),
+    ...google.map((item) => ({ key: item.placeId, main: item.main, secondary: item.secondary, ours: null as string | null, placeId: item.placeId })),
+  ];
+  const pick = (index: number) => {
+    const item = suggestions[index];
+    if (!item) return;
     setOpen(false);
-    details.mutate({ placeId, sessionToken: session.current });
+    if (item.ours) onOurs?.(item.ours);
+    else details.mutate({ placeId: (item as { placeId: string }).placeId, sessionToken: session.current });
   };
 
   return (
@@ -81,23 +97,27 @@ export function AddressSearch({
             setHighlighted((index) => Math.max(index - 1, 0));
           } else if (e.key === "Enter") {
             e.preventDefault();
-            pick(suggestions[highlighted]!.placeId);
+            pick(highlighted);
           } else if (e.key === "Escape") {
             setOpen(false);
           }
         }}
-        placeholder="Search Google Maps, or type or paste the address"
+        placeholder={placeholder}
         aria-label="Address"
         autoComplete="off"
       />
       {open && suggestions.length > 0 && (
         <ul className="border-ink-200 absolute z-30 mt-1 w-full overflow-hidden rounded-lg border bg-white shadow-lg" role="listbox">
+          {own.length > 0 && <li className="text-brand-700 px-3 pt-1.5 text-[10px] font-medium tracking-wider uppercase">On our map</li>}
           {suggestions.map((suggestion, index) => (
-            <li key={suggestion.placeId} role="option" aria-selected={index === highlighted}>
+            <li key={suggestion.key} role="option" aria-selected={index === highlighted}>
+              {own.length > 0 && index === own.length && google.length > 0 && (
+                <p className="text-ink-400 border-ink-200/60 border-t px-3 pt-1.5 text-[10px] font-medium tracking-wider uppercase">Google Maps</p>
+              )}
               <button
                 type="button"
                 onMouseEnter={() => setHighlighted(index)}
-                onClick={() => pick(suggestion.placeId)}
+                onClick={() => pick(index)}
                 className={`block w-full px-3 py-2 text-left text-sm ${index === highlighted ? "bg-brand-50" : ""}`}
               >
                 <span className="text-ink-900">{suggestion.main}</span>
@@ -105,9 +125,11 @@ export function AddressSearch({
               </button>
             </li>
           ))}
-          <li className="text-ink-400 border-ink-200/60 border-t px-3 py-1.5 text-[11px] font-light">
-            From Google Maps — not there? Keep typing, or paste the address.
-          </li>
+          {google.length > 0 && (
+            <li className="text-ink-400 border-ink-200/60 border-t px-3 py-1.5 text-[11px] font-light">
+              From Google Maps — not there? Keep typing, or paste the address.
+            </li>
+          )}
         </ul>
       )}
       {details.isPending && <p className="text-ink-500 mt-1 text-xs font-light">Filling in from Google Maps…</p>}
