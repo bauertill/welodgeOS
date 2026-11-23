@@ -4133,9 +4133,19 @@ out; the request's history records the file. What was not placed stays to be fix
 or typed into the sheet.
 
 **The client's link** (*Make a link for the client*; copy, open, switch off as the other
-links): no sign-in, works on a phone, shows their rooms and lets them add, change and take out
-stays; every change saves at once and is in the request's history as made by the client. It
-never shows prices or our notes.
+links): no sign-in; every change saves at once and is in the request's history as made by the
+client. It never shows prices, our notes, other clients or what the hotel has been sent. **Made
+for the client** (the owner, 2026-11-23: "why is it boxed… still quite hard to understand"): the
+page uses the whole width with no boxes — the event, three short lines on how it works (*each
+line is a room you booked, with its dates · type who stays in it — it saves by itself · someone
+only part of the time? change the dates — a new line appears for the rest*), *Have it in Excel
+already? Upload it*, and a bar of how many rooms have their guests. Then per property, under its
+name and check-in times, **every room they booked**: on the left *Room 1 · No. 101*, its type,
+how many it sleeps and its booked dates, with a dot (green when all named, amber when partly,
+empty when not yet); on the right **a line per stay** — *Guest*, *Sharing with* (more people via
+*+ another person* in larger rooms; *Sleeps one* for singles), *From*, *To*, *Arriving* (time or
+flight), *Notes* — and an empty line ready for the room's next free dates. On a phone each line
+stacks with its labels.
 
 **Room numbers.** Beside each room the team types **the building's own number** (*No. 4B*) once
 known — a month before at best, sometimes a week; for hotels often the day before. It belongs to

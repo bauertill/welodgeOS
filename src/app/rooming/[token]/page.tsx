@@ -11,16 +11,13 @@ export default async function SharedRoomingPage({ params }: { params: Promise<{ 
   const { token } = await params;
   const list = await api.rooming.shared({ token }).catch(() => null);
   return (
-    <div className="mx-auto max-w-4xl space-y-5 px-4 py-6 sm:py-10">
+    <div className="mx-auto w-full max-w-[1400px] space-y-6 px-4 py-6 sm:px-8 sm:py-10">
       <header>
         <p className="text-brand-700 text-xs font-medium tracking-wide uppercase">We Lodge · Rooming list</p>
         {list?.event && (
           <>
-            <h1 className="text-ink-900 mt-1 text-2xl font-medium">{list.event.name}</h1>
-            <p className="text-ink-500 mt-1 text-[14px] font-light">
-              For {list.client}. These are the rooms you booked, with their dates. Add who sleeps in each — guests sharing a room go together, and a
-              room used in turns gets one entry per stay. Changes save at once and reach our team; you can come back to this link any time.
-            </p>
+            <h1 className="text-ink-900 mt-1 text-3xl font-medium">{list.event.name}</h1>
+            <p className="text-ink-500 mt-1 text-[15px] font-light">Who stays where, for {list.client}. Your changes reach our team straight away; come back to this link any time.</p>
           </>
         )}
       </header>

@@ -69,6 +69,23 @@ export function RoomingList(mode: Mode) {
   const asked = allRooms.flatMap((room) => room.stays).filter((stay) => !stay.removed && stay.extraNights > 0);
   const askedNights = asked.reduce((sum, stay) => sum + stay.extraNights, 0);
 
+  if (mode.token) {
+    return (
+      <>
+        <ClientRoomingView properties={properties} rooming={rooming} fields={fields} onUpload={() => setImporting(true)} />
+        {importing && (
+          <ImportSheet
+            mode={mode}
+            year={rooming.data.event ? new Date(rooming.data.event.startDate).getUTCFullYear() : new Date().getUTCFullYear()}
+            multipleProperties={properties.length > 1}
+            extras={fields}
+            onClose={() => setImporting(false)}
+          />
+        )}
+      </>
+    );
+  }
+
   if (!properties.length) {
     return (
       <Card>
@@ -129,6 +146,215 @@ export function RoomingList(mode: Mode) {
 }
 
 type ExtraField = (typeof roomingExtraFields)[number];
+
+// --- The client's own view (doc §6.9, the owner 2026-11-23: "make it better") ------
+
+/**
+ * The rooming list as the client sees it by their link: no boxes, the whole
+ * width, three lines on how it works, how far along they are, then per
+ * property every room they booked — on the left the room and its dates, on
+ * the right a line per stay: who, who shares, from, to, when they arrive,
+ * notes. A room nobody is in yet has an empty line ready; typing saves.
+ */
+function ClientRoomingView({ properties, rooming, fields, onUpload }: { properties: Property[]; rooming: ReturnType<typeof useRooming>; fields: readonly ExtraField[]; onUpload: () => void }) {
+  const rooms = properties.flatMap((property) => property.rooms);
+  const done = rooms.filter((room) => room.named >= room.nights).length;
+  const asked = rooms.flatMap((room) => room.stays).filter((stay) => stay.extraNights > 0);
+  if (!properties.length) return <p className="text-ink-500 py-10 text-center text-sm font-light">Your rooms will show here once they are confirmed.</p>;
+  return (
+    <div className="space-y-8">
+      <div className="grid gap-x-8 gap-y-3 md:grid-cols-[1fr_auto] md:items-end">
+        <ol className="text-ink-700 grid gap-2 text-[14px] font-light sm:grid-cols-3">
+          <li>
+            <span className="text-brand-700 mr-1.5 font-medium">1</span>Each line is a room you booked, with its dates.
+          </li>
+          <li>
+            <span className="text-brand-700 mr-1.5 font-medium">2</span>Type who stays in it — it saves by itself.
+          </li>
+          <li>
+            <span className="text-brand-700 mr-1.5 font-medium">3</span>Someone only part of the time? Change the dates — a new line appears for the rest.
+          </li>
+        </ol>
+        <button type="button" onClick={onUpload} className="text-brand-700 hover:text-brand-800 justify-self-start text-[13px] font-medium underline-offset-2 hover:underline md:justify-self-end">
+          Have it in Excel already? Upload it →
+        </button>
+      </div>
+
+      <div>
+        <div className="flex items-baseline justify-between gap-3 text-[13px]">
+          <span className="text-ink-900 font-medium">
+            {done} of {rooms.length} rooms have their guests
+          </span>
+          {asked.length > 0 && <span className="text-[#2a4f9c]">{asked.reduce((sum, stay) => sum + stay.extraNights, 0)} extra nights asked for — we will confirm</span>}
+        </div>
+        <div className="bg-ink-100 mt-1.5 h-1.5 overflow-hidden rounded-full">
+          <div className="h-full rounded-full bg-[#0a7a47] transition-all" style={{ width: `${rooms.length ? (done / rooms.length) * 100 : 0}%` }} />
+        </div>
+      </div>
+
+      {properties.map((property) => (
+        <section key={property.id}>
+          <div className="border-ink-900 flex flex-wrap items-baseline justify-between gap-x-4 border-b-2 pb-2">
+            <h2 className="text-ink-900 text-xl font-medium">{property.name}</h2>
+            {property.times && <p className="text-ink-500 text-[13px] font-light">{property.times}</p>}
+          </div>
+          <div className="text-ink-500 hidden grid-cols-[13rem_1fr] gap-4 border-b border-ink-200 py-2 text-[11px] font-medium tracking-wide uppercase md:grid">
+            <span>Room</span>
+            <div className={lineGrid}>
+              <span>Guest</span>
+              <span>Sharing with</span>
+              <span>From</span>
+              <span>To</span>
+              <span>Arriving</span>
+              <span>Notes</span>
+              <span />
+            </div>
+          </div>
+          {property.rooms.map((room) => (
+            <ClientRoom key={room.slotId} room={room} rooming={rooming} fields={fields} />
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** The columns of a stay's line, from md up. */
+const lineGrid = "md:grid md:grid-cols-[minmax(9rem,1.2fr)_minmax(9rem,1.2fr)_9rem_9rem_minmax(7rem,0.8fr)_minmax(7rem,1fr)_3.5rem] md:items-start md:gap-2";
+
+function ClientRoom({ room, rooming, fields }: { room: Room; rooming: ReturnType<typeof useRooming>; fields: readonly ExtraField[] }) {
+  const free = freeStretch(room);
+  const full = room.named >= room.nights;
+  return (
+    <div className="border-ink-200/70 grid gap-x-4 gap-y-2 border-b py-3 md:grid-cols-[13rem_1fr]">
+      <div className="flex items-start gap-2.5">
+        <span className={`mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${full ? "bg-[#0a7a47]" : room.named ? "bg-[#e0a100]" : "border-ink-300 border-2"}`} aria-hidden />
+        <div className="min-w-0">
+          <p className="text-ink-900 text-[14px] font-medium">
+            Room {room.slotNumber}
+            {room.unitNumber && <span className="text-ink-700 font-normal"> · No. {room.unitNumber}</span>}
+          </p>
+          <p className="text-ink-500 text-xs font-light">
+            {room.category} · sleeps {room.capacity}
+          </p>
+          <p className="text-ink-500 text-xs font-light">Booked {room.booked.map((booked) => range(booked.checkIn, booked.checkOut)).join(", ")}</p>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {room.stays.map((stay) => (
+          <ClientLine key={stay.id} room={room} stay={stay} rooming={rooming} fields={fields} />
+        ))}
+        {free && <ClientLine key={`new-${free.checkIn}`} room={room} start={free} rooming={rooming} fields={fields} />}
+      </div>
+    </div>
+  );
+}
+
+/** One stay as a line: guest, who shares, from, to, arriving, notes — labelled on a phone. */
+function ClientLine({ room, stay, start, rooming, fields }: { room: Room; stay?: Stay; start?: { checkIn: string; checkOut: string }; rooming: ReturnType<typeof useRooming>; fields: readonly ExtraField[] }) {
+  const columns = Math.min(4, room.capacity);
+  const { draft, setDraft, state, problem, setProblem, dirty, rowId, save, onBlur } = useStayDraft({ room, stay, start, columns, fields, rooming });
+  const [more, setMore] = useState(draft.names.slice(2).some(Boolean));
+  const box = "w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-[14px] text-ink-900 outline-none placeholder:text-ink-300 focus:border-brand-400 focus:ring-2 focus:ring-brand-400/15";
+  const label = "text-ink-500 mb-0.5 block text-[11px] md:sr-only";
+  const setName = (i: number, value: string) => setDraft({ ...draft, names: draft.names.map((one, j) => (j === i ? value : one)) });
+  const details = (i: number) =>
+    fields.length > 0 && draft.names[i]?.trim() ? (
+      <div className="mt-1 grid grid-cols-2 gap-1">
+        {fields.map((field) => (
+          <input
+            key={field.key}
+            value={draft.details[i]?.[field.key] ?? ""}
+            onChange={(e) => setDraft({ ...draft, details: draft.details.map((one, j) => (j === i ? { ...one, [field.key]: e.target.value } : one)) })}
+            placeholder={field.label}
+            aria-label={`${field.label} — ${draft.names[i]}`}
+            className="border-ink-200 placeholder:text-ink-300 focus:border-brand-400 rounded-md border bg-white px-2 py-1 text-[12px] outline-none"
+          />
+        ))}
+      </div>
+    ) : null;
+  const extra = stay && stay.extraNights > 0;
+  return (
+    <div data-stay={rowId} onBlur={onBlur} className={`grid grid-cols-2 gap-2 ${lineGrid} ${stay ? "" : "opacity-90"}`}>
+      <div className="col-span-2 md:col-span-1">
+        <label className={label}>Guest</label>
+        <input value={draft.names[0] ?? ""} onChange={(e) => setName(0, e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} placeholder={stay ? "" : "Full name"} aria-label="Guest" className={box} />
+        {details(0)}
+      </div>
+      <div className="col-span-2 md:col-span-1">
+        <label className={label}>Sharing with</label>
+        {columns >= 2 ? (
+          <>
+            <input value={draft.names[1] ?? ""} onChange={(e) => setName(1, e.target.value)} placeholder={draft.names[0] ? "No one — or a name" : ""} aria-label="Sharing with" className={box} />
+            {details(1)}
+            {columns > 2 &&
+              (more ? (
+                draft.names.slice(2).map((value, i) => (
+                  <div key={i} className="mt-1">
+                    <input value={value} onChange={(e) => setName(i + 2, e.target.value)} placeholder="Another person" aria-label={`Guest ${i + 3}`} className={box} />
+                    {details(i + 2)}
+                  </div>
+                ))
+              ) : (
+                <button type="button" onClick={() => setMore(true)} className="text-brand-700 mt-1 text-xs hover:underline">
+                  + another person
+                </button>
+              ))}
+          </>
+        ) : (
+          <p className="text-ink-400 px-1 py-2 text-xs">Sleeps one</p>
+        )}
+      </div>
+      <div>
+        <label className={label}>From</label>
+        <input type="date" value={draft.checkIn} onChange={(e) => setDraft({ ...draft, checkIn: e.target.value })} aria-label="From" className={box} />
+      </div>
+      <div>
+        <label className={label}>To</label>
+        <input type="date" value={draft.checkOut} onChange={(e) => setDraft({ ...draft, checkOut: e.target.value })} aria-label="To" className={box} />
+      </div>
+      <div>
+        <label className={label}>Arriving</label>
+        <input value={draft.arrival} onChange={(e) => setDraft({ ...draft, arrival: e.target.value })} placeholder="Time or flight" aria-label="Arriving" className={box} />
+      </div>
+      <div>
+        <label className={label}>Notes</label>
+        <input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} aria-label="Notes" className={box} />
+      </div>
+      <div className="col-span-2 flex items-center justify-end gap-2 md:col-span-1 md:pt-2">
+        {state === "saving" ? (
+          <span className="text-ink-400 text-xs">Saving…</span>
+        ) : dirty ? (
+          <button type="button" onClick={save} className="text-brand-700 text-xs font-medium hover:underline">
+            Save
+          </button>
+        ) : state === "saved" && stay ? (
+          <span className="text-xs text-[#0a7a47]">✓ Saved</span>
+        ) : null}
+        {stay && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!window.confirm(`Take ${stay.guests.map(name).join(", ")} out of this room?`)) return;
+              rooming.remove(stay.id).catch((error: unknown) => setProblem(error instanceof Error ? error.message : "Could not take them out."));
+            }}
+            aria-label="Take out"
+            title="Take out"
+            className="text-ink-400 text-lg leading-none hover:text-[#c03654]"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {(problem ?? extra) && (
+        <p className={`col-span-2 text-xs md:col-span-7 ${problem ? "text-[#c03654]" : "text-[#2a4f9c]"}`}>
+          {problem ??
+            `You asked for ${stay!.extraNights} extra night${stay!.extraNights === 1 ? "" : "s"} (${stay!.extra.map((run) => range(run.checkIn, run.checkOut)).join(", ")}) beyond your booking — we are getting them for you and will confirm.`}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function PropertySheet({ property, mode, rooming, fields }: { property: Property; mode: Mode; rooming: ReturnType<typeof useRooming>; fields: readonly ExtraField[] }) {
   const team = Boolean(mode.salesRequestId);
@@ -390,29 +616,23 @@ const splitName = (full: string) => {
 type Details = Partial<Record<RoomingExtraKey, string>>;
 
 /**
- * One stay as a row of the sheet — or, with no stay, the empty row for the
- * room's next free nights. It saves when the cursor leaves the row.
+ * A stay being typed — or a room's empty line: the draft, kept in step with
+ * the server, saved when the cursor leaves the stay (doc §6.9).
  */
-function SheetRow({
+function useStayDraft({
   room,
   stay,
   start,
   columns,
-  team,
-  rooming,
   fields,
-  lead,
-  last,
+  rooming,
 }: {
   room: Room;
   stay?: Stay;
   start?: { checkIn: string; checkOut: string };
   columns: number;
-  team: boolean;
-  rooming: ReturnType<typeof useRooming>;
   fields: readonly ExtraField[];
-  lead: React.ReactNode;
-  last: boolean;
+  rooming: ReturnType<typeof useRooming>;
 }) {
   const initial = () => ({
     checkIn: stay?.checkIn ?? start?.checkIn ?? "",
@@ -451,11 +671,40 @@ function SheetRow({
         setProblem(error instanceof Error ? error.message : "Could not save.");
       });
   };
-  // Left the stay's rows altogether — not just moved to another of its cells.
+  // Left the stay altogether — not just moved to another of its boxes.
   const onBlur = (e: React.FocusEvent) => {
     const next = (e.relatedTarget as HTMLElement | null)?.closest("[data-stay]")?.getAttribute("data-stay");
     if (next !== rowId) save();
   };
+  return { draft, setDraft, state, problem, setProblem, dirty, removed, rowId, save, onBlur };
+}
+
+/**
+ * One stay as a row of the sheet — or, with no stay, the empty row for the
+ * room's next free nights. It saves when the cursor leaves the row.
+ */
+function SheetRow({
+  room,
+  stay,
+  start,
+  columns,
+  team,
+  rooming,
+  fields,
+  lead,
+  last,
+}: {
+  room: Room;
+  stay?: Stay;
+  start?: { checkIn: string; checkOut: string };
+  columns: number;
+  team: boolean;
+  rooming: ReturnType<typeof useRooming>;
+  fields: readonly ExtraField[];
+  lead: React.ReactNode;
+  last: boolean;
+}) {
+  const { draft, setDraft, state, problem, setProblem, dirty, removed, rowId, save, onBlur } = useStayDraft({ room, stay, start, columns, fields, rooming });
 
   const cell = "px-1 py-1 align-top";
   const input = `w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-[13px] outline-none hover:border-ink-200 focus:border-brand-400 focus:bg-white ${removed ? "line-through text-ink-400" : "text-ink-900"}`;
