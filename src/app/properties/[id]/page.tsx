@@ -16,6 +16,7 @@ import {
   WhereItIsCard,
 } from "~/app/_components/property-cards";
 import { PropertyContracts } from "~/app/_components/finance";
+import { PropertyGuestInfo } from "~/app/_components/guest-info";
 import { PropertyContractors } from "~/app/_components/contractors";
 import { PropertyMedia } from "~/app/_components/property-media";
 import { PropertyTabs } from "~/app/_components/property-tabs";
@@ -132,6 +133,8 @@ export default async function PropertyPage({
                 count: property._count.contracts,
                 content: <PropertyContracts propertyId={property.id} events={entries.map((entry) => entry.event)} />,
               },
+              // What guests need to know, for the client's property information page (doc §6.8, 2026-11-23).
+              { key: "guest", label: "Guest information", content: <PropertyGuestInfo propertyId={property.id} /> },
               // Furniture, cleaning… companies serving it (doc §3.11, 2026-11-19).
               { key: "contractors", label: "Contractors", count: property._count.contractors, content: <PropertyContractors propertyId={property.id} /> },
               // Kept for the record, rarely read: a tab of its own, out of the way.

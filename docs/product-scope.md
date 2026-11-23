@@ -1015,8 +1015,13 @@ places with an address but no position (a layer built from a spreadsheet) has th
 skipped: they need a position first.
 
 **Adding anything from the map** (2026-10-13): **＋ Add to the map** at the top of the map, then
-a click on the spot, or **📍 Use where I am** from a phone in front of it; a red "＋ New here"
-pin shows the spot (*Move it* to click again). Beside the map, it is **a property** or **a
+a click on the spot, a **search for its address or name** (the pin goes to what is picked), or
+**📍 Use where I am** from a phone in front of it; a red "＋ New here" pin shows the spot. An
+address already picked in *Find hotels not on our list near* is taken as the spot at once, with
+no second click; picking another there moves the pin (the owner, 2026-11-23). While adding,
+**clicking anywhere else on the map moves the pin** — a wrong spot is fixed by clicking again —
+and searching another address in the panel moves it too. A clicked spot has its address looked
+up; a searched one keeps the address picked. Beside the map, it is **a property** or **a
 place**. **A place** — a nation house, a fan zone, a meeting point, a metro station — has a
 name, the layer it goes on (or *+ A new layer…* named there and then), its address and a note,
 and *Add to the map* puts it there. (Metro stations fetched from Google or OpenStreetMap were
@@ -1041,10 +1046,11 @@ centre a racket 🎾, Dodger Stadium ⚾, the Coliseum's ceremonies 🎆); with 
 squares (2026-10-13): a 🛏️ bed for a hotel or aparthotel, coloured by its stars — five black,
 four blue, three green, two or fewer yellow, grey when the stars are not known — and a 🏠 house
 in purple for an apartment; name and stars on pointing, the panel on clicking (its status
-there, no longer in its colour). **The properties are two layers** (the owner, 2026-11-19): **Contracted** — the
-properties contracted on the event, their squares edged in green — and **Accommodation**,
-every other property on the list;
-each ticked on or off, with its count. Both follow the list's search and filters, as the map
+there, no longer in its colour). **The properties are three layers** (the owner, 2026-11-19; split 2026-11-23): **Contracted** — the
+properties contracted on the event, hotels and apartments together, their squares edged in
+green — then **Hotels** and **Apartments**, every other property on the list by its kind
+(aparthotels and extended-stay count as hotels, as on their pins);
+each ticked on or off, with its count. All follow the list's search and filters, as the map
 always has.
 
 | Field | Notes |
@@ -3866,9 +3872,45 @@ and the event lists every link made for it, per client, with its state.
 
 ## 6. Phase 3 — Operations
 
-Operations begins when a client sends a rooming list. The job is to prove that what we
-hold can actually accommodate what they are sending, and to keep proving it as the plan
-moves.
+Operations begins **once the client has booked and we have the property under contract**:
+sales introduces the client to the operations team, and the job becomes getting every guest
+into a room that is ready for them, and out again without disputes.
+
+**The plan** (the owner and Till, 2026-11-23), built in this order:
+
+1. **Property information for the client** — one live page per client and event with what
+   guests need to know about each property (§6.8). *Built.*
+2. **Rooming list** — a *fixed* rooming list made by the system from what the client bought:
+   rooms and dates are locked as per the contract and the client fills in their people, through
+   a link, with several ins and outs per room. Anything outside their contract is flagged on
+   their side as they enter it and becomes an **extension request**: acquisitions gets a task
+   to change the room nights with the supplier, and once they are bought the client is told
+   (and invoiced if need be). The finished list is shared with the supplier. Cancellation
+   allowances are not calculated: the client's changes are captured, and what they owe is
+   worked out by the team. This replaces the spreadsheet upload of §6.2 below.
+3. **Inspections and defects — apartments only.** Hotels inspect their own rooms. Before
+   check-in (a week before at best, two days usually, the day itself at worst) one of the team
+   goes through each apartment: a dump of general photos from every angle, and a checklist
+   pre-filled from the supplier's stock sheet ("4/6 knives", "Stove works", "Counter has no
+   visible damage"). Every item that is not right becomes a **defect** with a description
+   (pre-filled for missing items) and photos; cleaning is a defect too. The runner gives its
+   severity — **must fix before check-in**, **must fix**, **just document** — or marks it
+   *not sure* for the office to decide. Defects land in a **defect inbox** and become cleaning,
+   maintenance or other tasks; once fixed and re-checked, the apartment is **Ready for check-in**.
+4. **Check-in** — check-in tasks made from the rooming list (guest, arrival time, contact, room);
+   lights and air-conditioning on before arrival; the guest's email confirmed at the door and
+   the apartment's inspection report sent to them, with 24 hours to add anything we missed.
+5. **Check-out** — simple (the guests leave the keys) or detailed (a set time, the checklist
+   walked through with the guest, signed at the end).
+
+Later: role labels and working schedules, with suggestions of who should take which task.
+
+**Apartment numbers** — the building's own numbers, which the guest and the front desk use —
+are entered by the acquisitions team once they are known: a month before at best, sometimes
+only a week before; for hotels, often only the day before.
+
+The rest of this chapter (§6.1–§6.7) is the earlier design for the rooming list and its
+checks, kept for step 2; it will be revised when that step is built.
 
 ### 6.1 Entities
 
@@ -3959,6 +4001,52 @@ worse than none.
 Validation is continuous, not a one-off gate. Any change to a rooming list, an assignment,
 or the underlying inventory re-runs the checks for the affected event and updates the
 issue list. The operational dashboard is "open issues, by severity, by party".
+
+### 6.8 Property information for the client
+
+(The owner, 2026-11-23.) Before check-in, the client is sent everything their guests need to
+know about each property — what used to be a PDF "property spec sheet", sent with the request
+for the rooming list. It is now **one live web page per sales request**: sent once, always up to
+date, and the client can **Save as PDF** from it.
+
+**On the property — Guest information tab.** What guests need to know, edited in a popup:
+check-in from / check-out by, **how to check in** (where to go, reception hours, how keys are
+handed over), **what is needed at check-in** (a credit card, a deposit, passports), **city
+tax**, breakfast, parking, Wi-Fi, cleaning, laundry, gym, getting around, house rules, the
+**emergency contact at the property**, and anything else. Check-in/out times, breakfast,
+cleaning, laundry, gym and getting around are the same fields as under *More about the
+property*. The tab shows the property exactly as the client will see it, and lists what is
+still to fill in among the essentials (check-in and check-out times, how to check in, what is
+needed at check-in, city tax, emergency contact). The grey examples in empty boxes start with
+"e.g." so nobody mistakes them for what is saved.
+
+**Extra fields** (the owner, 2026-11-23: "our team should also be able to add custom fields").
+In the editor, *+ Add a field* adds one of the team's own to this property — a name (*Pool
+hours*, *Shuttle to the venue*) and what it says, which can be left for the property to fill
+in. They are this property's only, show after the standard fields (before *Anything else*) on
+the client's page and the property's link, and can be renamed or removed.
+
+**A link for the property** (the owner, 2026-11-23: "a link that we share with the provider —
+easier for them to fill in"). On the tab, *Make a link* gives the property its own private page
+— separate from its contracting-details link (§3.9) — with every field, the extra ones
+included, filled with what we have, to check, correct and complete, and *Send to We Lodge*.
+What it sends lands on the property at once, every change in its Log as sent by the property;
+whoever made the link is told in the bell, and the tab says when it was last sent. The property
+can come back and send again; only the team adds, renames or removes extra fields. Copy,
+Open, Switch off and Make a new link work as for the other links.
+
+**On the sales request — Guest information tab.** The properties the page covers — every
+property where the client has **sold** rooms at the event (blocked rooms are not shown: the
+page is for rooms the client has booked) — each with the client's rooms there ("4 × 3 Bedroom
+Apartment, 7 Jul – 31 Jul 2028") and what is still missing, linked to its tab. **Our contact
+for guests** — We Lodge's person on the ground, set once per event, shown at the top of every
+client's page for that event. And the **link**: made, copied, opened and switched off as the
+contracting link is; no sign-in, so it goes only to the client.
+
+**The client's page** shows the event, our contact, and per property: a photo, the address
+with a Google Maps link, the website, their rooms, and the guest information that is filled
+in (empty fields are left out; a property with none says "More details to follow"). It never
+shows prices, the supplier's own contacts or our notes. It works on a phone.
 
 ---
 
@@ -4404,7 +4492,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | Map view | **Built** | Google Maps (§3.8), list-first as specified; pins coloured by scouting status, drawn larger than the places of interest and above them, with the open one ringed. Clicking a pin opens the side panel. Shows a notice instead of a map when no Google key is set, or when Google refuses the one there is |
 | Google My Maps import | **Not built** | Coordinates are typed in by hand for now. Waiting on an export of the current My Map to see what it holds |
 | Booking.com-style price auto-fetch | **Not built** | Moot since 2026-10-06: the indicative price is no longer entered; rates come from quotations |
-| §3.7 Map: Contracted and Accommodation layers | **Built** (2026-11-19) | The event's map shows its properties as two layers, *Contracted* and *Accommodation* (everything else), each ticked on or off; both follow the list's filters |
+| §3.7 Map: Contracted, Hotels and Apartments layers | **Built** (2026-11-19; split on staging 2026-11-23) | The event's map shows its properties as three layers, *Contracted* (hotels and apartments together), *Hotels* and *Apartments* (everything else, by kind), each ticked on or off; all follow the list's filters. Adding to the map: a searched address is the pin, and a click elsewhere moves it (staging 2026-11-23) |
 | §3.7 Places of interest | **Built** | Several per event, by category, replacing the event's single venue. The scouting list's distance column is now to the nearest venue, and names it |
 | §3.8 Travel times | **Built** | Bike, car and public transport, from an opened property to each of the event's places of interest, fetched from Google's Routes API per look and never stored. A mode Google cannot answer for reads "not available" |
 | §3.8 Side panel | **Built** | Replaces the pin bubble: what the property is, rooms still available per category (§5.3, conservative), and the travel times |
@@ -4470,7 +4558,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
-| §6 Operations | **Not built** | Phase 3 |
+| §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Only step 1 is built |
+| §6.8 Property information for the client | **Built on staging** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 
