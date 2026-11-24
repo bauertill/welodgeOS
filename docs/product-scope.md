@@ -1014,6 +1014,25 @@ Layers panel — the venues and points come first, before any property — where
 places with an address but no position (a layer built from a spreadsheet) has those places
 skipped: they need a position first.
 
+**Points only on the map, or on the properties board** (the owner, 2026-11-24: "Sometimes we just
+want things to be seen on the map without creating a property in the system… There should be an
+option to add it to the sheet however"). *Import from Google My Maps* now takes **the map's link
+pasted in** (the map shared so anyone with the link can view — Google gives its KML), or a KML file
+as before. Every point comes in **on the map only**, in its My Maps layer — research hotels and
+apartments too — and **nothing is added to the properties board**. A point with no position of
+its own takes the one in its *WKT* column, or, with only an *Address*, is placed by it (through
+OpenStreetMap, about a second each, at most 120 at a time); one with neither is left out and
+counted. A point named as a property already on the event's board (*5\* Hotel Carmel* is Hotel
+Carmel — stars in front are ignored) is left out, as the property has its pin. Its address is kept,
+and its description — without the empty *Name:* lines a spreadsheet layer leaves — becomes its
+notes. **A point's panel** shows its layer, address and notes, and **＋ Add to properties board**:
+its name (the stars in front read off into its stars), Hotel / Apartments / Aparthotel (apartments
+guessed from the layer or notes) and stars, then *Add* — the property is made on the event's board
+with a hotel contact task, as *＋ Add to the map* makes one, its notes saying which layer it came
+from and what the point said; the point leaves its layer, the property now having its own pin.
+**＋ Add to the map** asks the same question in words: **Add to properties board** or **Only show
+on the map**.
+
 **Searching the map** (the owner, 2026-11-23). Beside *＋ Add to the map* at the top of the map
 is a search box: **an address or a property on the map**. What is typed is matched first against
 **our own** — the event's properties and the places on its layers, listed *On our map* — then

@@ -3,6 +3,9 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { logAudit } from "~/server/audit";
+import { createFoundProperty } from "~/server/found-property";
+import { deliverImmediate } from "~/server/notify";
 
 /**
  * A place of interest: somewhere guests need to get to for one event — a
@@ -100,6 +103,51 @@ export const placeRouter = createTRPCRouter({
           notes: blank(place.notes),
         },
       });
+    }),
+
+  /**
+   * A point that was only on the map — a hotel from research — put on the
+   * properties board after all (the owner, 2026-11-24: "we can either add it
+   * to the property board or not"): the property made from it, on the event's
+   * board with a hotel contact task, and the point taken off its layer, as the
+   * property now has its own pin.
+   */
+  toProperty: protectedProcedure
+    .input(z.object({ id: z.string(), name: z.string().trim().min(1, "Give it a name").max(300), type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]), stars: z.number().int().min(1).max(5).nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const made = await ctx.db.$transaction(async (tx) => {
+        const place = await tx.placeOfInterest.findUnique({ where: { id: input.id }, include: { event: { select: { id: true, name: true } }, layer: { select: { name: true } } } });
+        if (!place) throw new TRPCError({ code: "NOT_FOUND", message: "That point is not on the map any more." });
+        const made = await createFoundProperty(tx, {
+          place: {
+            name: input.name,
+            type: input.type,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            address: place.address,
+            city: null,
+            country: null,
+            website: null,
+            phone: null,
+            stars: input.stars,
+            rooms: null,
+            source: "map",
+          },
+          eventId: place.eventId,
+          salesRequestId: null,
+          foundWhile: `for ${place.event.name}`,
+          actorId: ctx.session.user.id,
+        });
+        // Its notes say where it came from, with what the map said of it.
+        const from = `Was on the map's ${place.layer?.name ?? "places"} layer as "${place.name}".${place.notes ? `\n${place.notes}` : ""}`;
+        const property = await tx.property.findUniqueOrThrow({ where: { id: made.id }, select: { notes: true } });
+        await tx.property.update({ where: { id: made.id }, data: { notes: [property.notes?.replace("Spotted on the ground and added from the map", "Added from the map"), from].filter(Boolean).join("\n") } });
+        await tx.placeOfInterest.delete({ where: { id: place.id } });
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Event", entityId: place.eventId, summary: `Map point put on the properties board: ${input.name}`, changes: place.layer ? `From the ${place.layer.name} layer` : null });
+        return made;
+      });
+      await deliverImmediate(ctx.db);
+      return made;
     }),
 
   /**

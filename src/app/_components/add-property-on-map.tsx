@@ -169,8 +169,8 @@ export function AddPropertyForm({
       <div className="flex gap-1.5">
         {(
           [
-            ["property", "A property"],
-            ["place", "A place"],
+            ["property", "Add to properties board"],
+            ["place", "Only show on the map"],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -185,7 +185,9 @@ export function AddPropertyForm({
         ))}
       </div>
       <p className="text-ink-500 -mt-1 text-[11px] font-light">
-        {kind === "property" ? "A hotel or apartments — onto the properties board, with a contact task." : "Anything else — a nation house, a fan zone, a meeting point — on one of the map's layers."}
+        {kind === "property"
+          ? "A hotel or apartments we want to work on — a property on the event's board, with a contact task."
+          : "A point on one of the map's layers — a hotel from research, a nation house, a fan zone — nothing added to the properties board. A hotel can be added to it later from its pin."}
       </p>
       {!point ? (
         <div className="bg-brand-50 rounded-lg px-3 py-2.5">
