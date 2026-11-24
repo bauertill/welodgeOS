@@ -347,20 +347,13 @@ function LeaseBody({ s, c }: { s: LeaseSettings; c: LeaseComputed }) {
             <b>One tenant, one contact.</b> We Lodge signs as the single corporate tenant, with one point of contact for your team from move-in to the last hand-back.
           </li>
           <li>
-            <b>Rent paid in advance.</b> Rent for each move-in wave is paid in advance, with a deposit held per apartment.
+            <b>Rent in four payments.</b> 10% on signature, 40% on the move-in day, 40% during the stay and 10% at check-out.
           </li>
           <li>
             <b>Damage and liability cover.</b> Every apartment is insured for damage and liability, with a joint inspection at move-in and at hand-back.
           </li>
           <li>
             <b>Professional cleaning.</b> Each apartment is professionally cleaned on departure, so it can be shown straight away.
-          </li>
-          <li>
-            <b>Flexible arrivals, fixed hand-backs.</b>
-            {copy.flex}
-          </li>
-          <li>
-            <b>Proven on large international projects.</b> We Lodge has housed teams on major projects in Qatar, France, Japan and Italy.
           </li>
         </ol>
       </section>
@@ -534,10 +527,6 @@ function Drawer({
                 <option value="g2">End of Games period 2</option>
               </select>
             </label>
-            <div className="f">
-              Arrival flexibility per wave (days)
-              <NumberBox value={s.flex} label="Arrival flexibility per wave (days)" min={0} max={60} step={1} valid={(v) => v >= 0 && v <= 60} onValue={(v) => set("flex", Math.round(v))} />
-            </div>
             {warnings.length > 0 && (
               <p className="warn" role="status">
                 {warnings.join(" ")}
