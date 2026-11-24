@@ -86,6 +86,7 @@ The Provider shall at all times ensure strict and timely compliance with all of 
 - Carriers with minimum A.M. Best rating of A-VII.
 6.3 In addition, Provider shall have Event cancellation insurance protecting both parties and force majeure coverage including pandemic-related cancellations.
 6.4 Default: Failure to maintain required insurance constitutes a material breach allowing immediate Contract termination by We Lodge.
+6.5 We Lodge shall, at its own cost, maintain throughout the Lease Period commercial general liability insurance with limits of US$1,000,000 per occurrence and US$2,000,000 general aggregate, naming the Provider and the owner(s) of the Hotel as additional insureds, and shall deliver a certificate of such insurance to the Provider no later than 30 (thirty) days before the start of the Lease Period. We Lodge shall inform all occupants that the Provider's insurance does not cover occupants' personal property or personal liability.
 
 # 7. ASSIGNMENT AND SUBLETTING
 7.1 The Parties expressly acknowledge that We Lodge obtains the Rooms and Services with the intention of making the Rooms together with the other Provider's obligations available to third parties and accordingly We Lodge shall have the right to:
