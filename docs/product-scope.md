@@ -3639,7 +3639,7 @@ the browser's print dialog with the reference's print layout on US Letter. A mig
 
 **No daily rate on the page** (the owner, 2026-11-24): the notes say rent is charged *pro rata* at the blended monthly rate, and the month table that part-months are charged *pro rata* — the day rate is still how the figures are worked out, but it is not shown.
 
-**Proposed terms** (the owner, 2026-11-24): one tenant, one contact; **rent in four payments — 10% on signature, 40% on the move-in day, 40% during the stay and 10% at check-out** (not the reference's rent in advance with a deposit per apartment); damage and liability cover; professional cleaning. The reference's *Flexible arrivals, fixed hand-backs* and *Proven on large international projects* points are removed, and with them the panel's *Arrival flexibility per wave* box (a saved value is kept but not shown).
+**Proposed terms** (the owner, 2026-11-24): one tenant, one contact; **rent in four payments — 10% on signature, 40% on the move-in day, 40% during the stay and 10% at check-out** (not the reference's rent in advance with a deposit per apartment); damage and liability cover; professional cleaning — *each apartment is professionally cleaned during the stay and on check-out*. The reference's *Flexible arrivals, fixed hand-backs* and *Proven on large international projects* points are removed, and with them the panel's *Arrival flexibility per wave* box (a saved value is kept but not shown).
 
 **Why this shape works** no longer says *None come back before the end of the first Games period* (the owner, 2026-11-24).
 
