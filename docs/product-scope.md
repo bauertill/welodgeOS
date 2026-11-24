@@ -3556,6 +3556,85 @@ the tests; unit-tested against the 50-unit scenario):
 The notes under *How these figures are built* keep the reference's *Scenario* and *Hand-back*
 labels.
 
+#### 4.12.1 Staggered lease — a second kind of scenario (2026-11-24)
+
+The owner asked for a second kind of scenario beside the move-in waves: a **staggered lease**,
+built from a client's real arrivals and departures at a recent event and shaped so the provider
+gets apartments back at a steady weekly pace. Its reference page is
+`docs/reference/staggered-lease-reference.html`; its starting reservation list is
+`docs/reference/obs_reference_reservations_feb2026.csv` (check-in and check-out dates only — no
+names or other personal data).
+
+**Two kinds.** Every scenario now has a type: *Move-in waves* (the planner above — every
+scenario made before this is one, unchanged) or *Staggered lease*. *+ New scenario* asks which;
+the list says which each is. Copying keeps the type and, for a lease, its reservation list.
+
+**What a lease scenario keeps**, in the database, for everyone (never in one browser): every
+box of the reference's *Edit numbers* panel — provider, client and version label; apartments to
+lease and the unit mix (type, count, monthly rent); the weekly hand-back cap; the move-in days
+of the month (default the 1st and 15th); the hand-back weekday (default Monday); the earliest
+move-in and the latest hand-back; *No hand-backs before* (no limit, end of Games period 1 or 2);
+the arrival flexibility per wave; the target event's two Games periods; the reference event's
+opening, first and second closing — and its **reservation list**. The provider's name is also
+the scenario's *Owner* on the list.
+
+**Loading a reservation list.** *Load reservation list (CSV)* reads a file whose lines each
+have a check-in and a check-out as YYYY-MM-DD; lines with no date (a heading, a blank) are
+skipped. A line with one date, a date that does not exist or a check-out not after its check-in
+is refused with its line number, and nothing is loaded; fewer than two stays is refused too. A
+good file **replaces the scenario's list** for everyone. The panel says *Original list: 195
+reservations* or *Your uploaded list: n reservations*; *Use original list* brings the reference
+list back. *Reset everything* (asked first, as it changes the scenario for everyone, the
+provider's link included) puts every number and the list back to the reference.
+
+**How the figures are built** — exactly as the reference, every date a UTC day:
+- **Arrivals**: each stay's target arrival = target opening + (its check-in − reference opening).
+- **Departures**: a check-out on or before the reference's first closing + 14 days is placed the
+  same distance from the target's first closing; a later one from the target's second closing.
+- **Scaling**: the stays sorted by mapped arrival (then departure), and N of them taken, the
+  i-th at position ⌊(i + ½) × n ÷ N⌋ of the n stays.
+- **Lease start**: the latest move-in day of the month on or before the arrival; with none that
+  month, the previous month's last move-in day; never before the earliest move-in.
+- **Check-out**: raised to the *No hand-backs before* date when earlier, then capped at the
+  latest hand-back, and always after the lease start.
+- **Lease end**: the first hand-back weekday on or after the check-out. Apartments are taken in
+  order of check-out, then arrival; when that day already has the weekly cap, the lease runs to
+  the same weekday a week later, and again, until there is a free slot.
+- **Rent**: blended = Σ (count × monthly rent) ÷ Σ count; a day's rent = blended ÷ 30.42; lease
+  days = end − start (the end day is not charged). Each month's rent = days leased in it × a
+  day's rent, **rounded per month**; gross rent is the sum of the rounded months, so the tables
+  always add up.
+- **Month by month**: moving in, handed back, and leased at month end (started on or before its
+  last day, ending after it). **Week by week**: every hand-back weekday from the first to the last,
+  weeks with none included, with a meter of the cap's slots used. **Rental periods**: one bar per
+  group of apartments with the same start and end, thicker for more, over the two Games periods.
+- **Changing the total** rescales the unit mix by largest remainder; **changing a count**
+  changes the total.
+- **Warnings** in the panel and above the page in the editor: unit counts that do not add up to
+  the total (rent still uses the mix's blended rate); hand-backs pushed past the latest date by
+  the cap — counted, as the reference, when a lease ends more than six days after it, since a
+  check-out capped at that date still runs to the next hand-back weekday; any lease under 30
+  nights; totals that do not reconcile; no reservation list.
+- The reference scenario gives 60 apartments (10 Studio $2,400, 40 1-bed $2,700, 10 2-bed
+  $3,200; $2,733.33 blended), 8 move-in waves from Mar 1 to Jun 15, 2028 in 32 bars, hand-backs
+  of 2, 8, 8, 2, 1, 8, 8, 8, 8, 3, 1, 3 on the Mondays Jul 31 – Oct 16, monthly rent Mar–Oct of
+  $43,848 / $105,847 / $154,997 / $160,478 / $166,947 / $128,310 / $57,686 / $5,032, 301.2 lease
+  months, $823,145 gross, and an average lease of 5.02 months (1.74 to 7.53). Tests hold these.
+
+**The pages.** The editor is the reference page under the usual bar (name, *Staggered lease*,
+event, saved status, *Share link*), with *Edit numbers* opening the panel from the side
+(Escape or × closes it); it saves 600 ms after the last change and, like the waves planner,
+refuses to overwrite a colleague's newer save and asks to reload. The **provider's link**
+(`/stagger/view/…`, the same share link as the waves planner) shows the same page read-only — no
+panel, no OS around it, not indexed — following the device into dark mode. *Save as PDF* opens
+the browser's print dialog with the reference's print layout on US Letter. A migration made
+*Decron – OBS staggered lease, 60 units* from the reference defaults and the CSV.
+
+**Rules kept**: only the provider's rent is shown or sent — never our margins, sell rates,
+client prices or costs; "We Lodge" in two words; "Games periods" and "a recent event", never an
+event's protected name; all amounts in USD. The reference's default client label *OBS* is kept,
+as in the waves planner.
+
 ## 5. Reporting and derived views
 
 ### 5.1 Position per property/category/night
@@ -4705,6 +4784,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Not interested on the sales list | **Built** (2026-11-20) | Each open row on the Sales requests list ends in *Not interested* instead of *Delete*: it closes the request as Lost/Declined with the new reason *Not interested* (also under Mark as…), reopenable from its page. Delete stays only on the request's own page |
 | §4.12 Stagger Planner | **Built** (2026-11-19) | Sales › Stagger planner: scenarios listed, made, copied, renamed, archived; the editor saves as you go and refuses to overwrite a colleague's newer save; a read-only, unindexed owner's link (on/off, replaced); the reference page's sums in one tested module; Decron – OBS 50 units made by the migration |
+| §4.12.1 Staggered lease scenarios | **Built** (2026-11-24, staging) | A second scenario type beside move-in waves; settings and reservation list kept with the scenario; CSV upload checked line by line, *Use original list*, *Reset everything*; the reference's calculation in one tested module (the seed's figures held by tests); editor with the *Edit numbers* panel and safe autosave; read-only provider's link, dark mode, Letter print; *Decron – OBS staggered lease, 60 units* made by the migration |
 | §4.12 Stagger Planner, revised reference | **Built** (2026-11-20; 2-beds back on staging 2026-11-23) | Studio, 1-bed and 2-bed (scenarios without 2-beds take a 0 share and the default rate); defaults 20/60/20 at $4,000/$4,500/$5,500; the day-by-day chart, its tooltip and the single-block option removed; *Rental periods* first with *Wave N* rows and a legend; new story, three figures, two notes; title *Decron Apartments OBS*; *Save as PDF* (print) with the two-page Letter layout |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |

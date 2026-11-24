@@ -2712,7 +2712,13 @@ model StaggerScenario {
   event        String?
   /// Whose apartments — the owner shown on the client's view ("Decron Properties").
   clientLabel  String?
+  /// "waves" — the planner of move-in waves; "lease" — a staggered lease built
+  /// from a client's reservations at a recent event (doc §4.12).
+  kind         String   @default("waves")
   data         Json
+  /// A lease scenario's reservation list: [{ checkIn, checkOut }] as
+  /// YYYY-MM-DD, dates only — no names or other personal data.
+  reservations Json?
   /// The read-only link for the owner; unguessable, made when first shared.
   shareToken   String?  @unique
   shareEnabled Boolean  @default(false)
