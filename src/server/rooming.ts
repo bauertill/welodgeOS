@@ -269,7 +269,7 @@ export async function roomingFor(db: Db, scope: { clientId: string; eventId: str
     property.rooms.push(entry.room);
   }
   const list = [...properties.values()].sort((a, b) => a.name.localeCompare(b.name));
-  for (const property of list) property.rooms.sort((a, b) => a.category.localeCompare(b.category) || a.slotNumber - b.slotNumber);
+  for (const property of list) property.rooms.sort((a, b) => a.slotNumber - b.slotNumber);
   return list;
 }
 
