@@ -1060,6 +1060,15 @@ layer's **⋯ › Move points…** lists its points with ticks, a box to find th
 (*ESA Suites*), *All found* to tick every one shown, and **To** another layer or *+ A new layer…*;
 *Move 8 points*. A new layer gets the next colour; the move is in the event's history.
 
+**Removing from the map** (the owner, 2026-11-24: "we should also be able to remove properties").
+A point's panel has **Remove from the map** (after asking); a layer's **⋯ › Move or remove points…**
+has **Remove ticked from the map** for several at once. A **property's** panel on the event's map
+has **Take off this event's board…**: **Take off, keep it on the map** as a point on a layer chosen
+(a layer named for accommodation or hotels offered first; the point named with its stars in front,
+its notes saying it was on the board), or **Take off the board and the map**. Either way the
+property stays in our properties for other events, and its tasks and anything booked stay as they
+are — as *Remove* on the list. Every removal is in the history.
+
 **Searching the map** (the owner, 2026-11-23). Beside *＋ Add to the map* at the top of the map
 is a search box: **an address or a property on the map**. What is typed is matched first against
 **our own** — the event's properties and the places on its layers, listed *On our map* — then

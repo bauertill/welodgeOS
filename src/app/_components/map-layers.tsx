@@ -85,6 +85,7 @@ function MovePoints({ layerId, layers, places, onDone }: { layerId: string; laye
   const [to, setTo] = useState(layers.find((layer) => layer.id !== layerId)?.id ?? "__new__");
   const [newName, setNewName] = useState("");
   const move = api.place.move.useMutation({ onSuccess: (done) => onDone(`${done.moved} moved to ${done.layer}.`) });
+  const removeMany = api.place.removeMany.useMutation({ onSuccess: (done) => onDone(`${done.removed} removed from the map.`) });
   const shownPlaces = mine.filter((place) => place.name.toLowerCase().includes(find.trim().toLowerCase()));
   const allShown = shownPlaces.length > 0 && shownPlaces.every((place) => ticked.has(place.id));
   const flip = (ids: string[], on: boolean) =>
@@ -137,6 +138,15 @@ function MovePoints({ layerId, layers, places, onDone }: { layerId: string; laye
       >
         {move.isPending ? "Moving…" : `Move ${ticked.size || ""} ${ticked.size === 1 ? "point" : "points"}`}
       </button>
+      <button
+        type="button"
+        disabled={removeMany.isPending || ticked.size === 0}
+        onClick={() => window.confirm(`Remove ${ticked.size} ${ticked.size === 1 ? "point" : "points"} from the map?`) && removeMany.mutate({ ids: [...ticked] })}
+        className="ml-2 text-[#c03654] hover:underline disabled:opacity-50"
+      >
+        {removeMany.isPending ? "Removing…" : "Remove ticked from the map"}
+      </button>
+      {removeMany.error && <p className="text-[#c03654]">{friendlyError(removeMany.error)}</p>}
     </div>
   );
 }
@@ -304,7 +314,7 @@ export function LayersPanel({
         {editing.id && (
           <>
             <button type="button" onClick={() => setMoving(moving === editing.id ? null : editing.id!)} className="text-brand-700 text-[11px] font-medium hover:underline">
-              Move points…
+              Move or remove points…
             </button>
             <button
               type="button"

@@ -233,9 +233,29 @@ export const placeRouter = createTRPCRouter({
    */
   remove: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.placeOfInterest.delete({ where: { id: input.id } }),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const place = await ctx.db.placeOfInterest.delete({ where: { id: input.id }, include: { layer: { select: { name: true } } } });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Event", entityId: place.eventId, summary: `Map point removed: ${place.name}`, changes: place.layer ? `From ${place.layer.name}` : null });
+      return place;
+    }),
+
+  /** Several points taken off the map at once, from a layer's ⋯ (the owner, 2026-11-24). */
+  removeMany: protectedProcedure.input(z.object({ ids: z.array(z.string()).min(1, "Tick the points to remove.").max(3000) })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(async (tx) => {
+      const places = await tx.placeOfInterest.findMany({ where: { id: { in: input.ids } }, select: { id: true, name: true, eventId: true } });
+      const eventId = places[0]?.eventId;
+      if (!eventId || places.some((place) => place.eventId !== eventId)) throw new TRPCError({ code: "BAD_REQUEST", message: "Those points are not on one event's map." });
+      await tx.placeOfInterest.deleteMany({ where: { id: { in: places.map((place) => place.id) } } });
+      await logAudit(tx, {
+        actorId: ctx.session.user.id,
+        entity: "Event",
+        entityId: eventId,
+        summary: `${places.length} map ${places.length === 1 ? "point" : "points"} removed`,
+        changes: places.slice(0, 30).map((place) => place.name).join(", ") + (places.length > 30 ? "…" : ""),
+      });
+      return { removed: places.length };
+    }),
+  ),
 });
 
 /**
