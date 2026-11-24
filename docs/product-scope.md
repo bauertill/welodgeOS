@@ -3455,11 +3455,10 @@ offer opens it as a document, as it will print.
   hotel agreement is not in the system for that yet. (Two words were made neutral where the
   draft had "his/her" and "her" for a company — "its".) **Clause 6.5, We Lodge's own
   insurance** (the owner, 2026-11-24): commercial general liability of US$1,000,000 per
-  occurrence and US$2,000,000 aggregate through the Lease Period, the Provider and the Hotel's
-  owner(s) as additional insureds, the certificate to the Provider 30 days before the Lease
+  occurrence and US$2,000,000 aggregate through the Lease Period, the Provider as an additional
+  insured (not the owner — the owner said the Provider is the owner), the certificate to the Provider 30 days before the Lease
   Period, and occupants told the Provider's insurance does not cover their belongings or
-  personal liability. (The owner's draft said "the Properties"; the agreement's own word, "the
-  Hotel", is used. Agreements already drawn up keep their wording.)
+  personal liability. Agreements already drawn up keep their wording.
 - **Whose agreement** is asked in the quoting phase too: the quotation has *The contract will
   be on*, and the hotel contact task's checklist has *Whose agreement the contract is on —
   theirs or ours*.
