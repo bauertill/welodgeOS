@@ -425,7 +425,7 @@ export function leaseCopy(S: LeaseSettings, c: LeaseComputed) {
     why3: `Each lease starts with the move-in wave just before the person arrives and ends on the ${day} after they leave, so there are no empty months before or after. Apartments move in from ${fd(c.minStart)} and are back with you as soon as each person leaves.`,
     flex: ` Each move-in wave can move by up to ${Math.round(+S.flex) || 0} days once the final arrival list is in. The weekly hand-back cap does not change.`,
     note1: `This scenario is based on ${cl}’s arrival and departure pattern at a recent event (${c.resCount} reservations), shifted to the ${new Date(c.T.open).getUTCFullYear()} calendar and scaled to ${c.N} apartments. ${cl}’s final arrival list will set the exact dates.`,
-    note2: `Each lease ends on the first ${day} after the person checks out${c.MINBACK !== null ? `, and not before ${fdy(c.MINBACK)}, the close of ${which} Games period` : ""}. If that ${day} already has ${c.CAP} hand-backs, the lease runs to the next ${day} with a free slot. Rent is charged by the day at the blended rate (${money(c.blended)} a month, about ${money(c.perDay)} a day).`,
+    note2: `Each lease ends on the first ${day} after the person checks out${c.MINBACK !== null ? `, and not before ${fdy(c.MINBACK)}, the close of ${which} Games period` : ""}. If that ${day} already has ${c.CAP} hand-backs, the lease runs to the next ${day} with a free slot. Rent is charged pro rata at the blended rate of ${money(c.blended)} a month.`,
     note3: "All leases are 30 nights or longer and are fully insured. Rates are proposals and are subject to agreement. All amounts in USD.",
   };
 }

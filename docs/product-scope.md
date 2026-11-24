@@ -3632,6 +3632,8 @@ the browser's print dialog with the reference's print layout on US Letter. A mig
 
 **The rental periods' bands** are labelled *Olympics* and *Paralympics* (the owner, 2026-11-24 — a departure from the brief's "Games periods" rule, for the chart labels only; the legend, panel and notes still say Games periods).
 
+**No daily rate on the page** (the owner, 2026-11-24): the notes say rent is charged *pro rata* at the blended monthly rate, and the month table that part-months are charged *pro rata* — the day rate is still how the figures are worked out, but it is not shown.
+
 **The figures at the top** (the owner, 2026-11-24, dropped the reference's average-lease figure): the weekly cap (in lime), the apartments and their move-in waves, and the gross rent over the lease months.
 
 **Rules kept**: only the provider's rent is shown or sent — never our margins, sell rates,
