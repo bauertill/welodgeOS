@@ -73,6 +73,74 @@ export function readKml(text: string): { layers: Imported[]; skipped: number; by
   return { layers: layers.filter((layer) => layer.places.length > 0), skipped, byAddress, unlocated };
 }
 
+/**
+ * Points moved out of a layer (the owner, 2026-11-24): its points listed with
+ * ticks — found by typing part of a name, ticked one by one or all shown —
+ * and moved to another layer, or a new one.
+ */
+function MovePoints({ layerId, layers, places, onDone }: { layerId: string; layers: MapLayer[]; places: MapPlace[]; onDone: (text: string) => void }) {
+  const mine = places.filter((place) => place.layerId === layerId).sort((a, b) => a.name.localeCompare(b.name));
+  const [find, setFind] = useState("");
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [to, setTo] = useState(layers.find((layer) => layer.id !== layerId)?.id ?? "__new__");
+  const [newName, setNewName] = useState("");
+  const move = api.place.move.useMutation({ onSuccess: (done) => onDone(`${done.moved} moved to ${done.layer}.`) });
+  const shownPlaces = mine.filter((place) => place.name.toLowerCase().includes(find.trim().toLowerCase()));
+  const allShown = shownPlaces.length > 0 && shownPlaces.every((place) => ticked.has(place.id));
+  const flip = (ids: string[], on: boolean) =>
+    setTicked((now) => {
+      const next = new Set(now);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  return (
+    <div className="border-ink-200/60 mt-2 space-y-1.5 border-t pt-2 text-[11px]">
+      <input value={find} onChange={(e) => setFind(e.target.value)} placeholder={`Find in its ${mine.length} points — like ESA Suites`} className="border-ink-200 w-full rounded-md border bg-white px-2 py-1 outline-none" />
+      <label className="text-ink-700 flex items-center gap-1.5">
+        <input type="checkbox" checked={allShown} onChange={(e) => flip(shownPlaces.map((place) => place.id), e.target.checked)} className="accent-brand-500 h-3 w-3" />
+        All {find.trim() ? "found" : "of them"} ({shownPlaces.length})
+      </label>
+      <ul className="max-h-48 space-y-0.5 overflow-y-auto rounded border border-ink-200/60 bg-white p-1">
+        {shownPlaces.map((place) => (
+          <li key={place.id}>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={ticked.has(place.id)} onChange={(e) => flip([place.id], e.target.checked)} className="accent-brand-500 h-3 w-3 shrink-0" />
+              <span className="truncate">{place.name}</span>
+            </label>
+          </li>
+        ))}
+        {!shownPlaces.length && <li className="text-ink-500">None</li>}
+      </ul>
+      <div className="flex items-center gap-1">
+        <span className="text-ink-500">To</span>
+        <select value={to} onChange={(e) => setTo(e.target.value)} className="border-ink-200 min-w-0 flex-1 rounded-md border bg-white px-1 py-0.5">
+          {layers
+            .filter((layer) => layer.id !== layerId)
+            .map((layer) => (
+              <option key={layer.id} value={layer.id}>
+                {layer.name}
+              </option>
+            ))}
+          <option value="__new__">+ A new layer…</option>
+        </select>
+      </div>
+      {to === "__new__" && <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New layer's name" className="border-ink-200 w-full rounded-md border bg-white px-2 py-1 outline-none" />}
+      {move.error && <p className="text-[#c03654]">{friendlyError(move.error)}</p>}
+      <button
+        type="button"
+        disabled={move.isPending || ticked.size === 0 || (to === "__new__" && !newName.trim())}
+        onClick={() => move.mutate({ ids: [...ticked], ...(to === "__new__" ? { newLayer: newName } : { layerId: to }) })}
+        className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
+      >
+        {move.isPending ? "Moving…" : `Move ${ticked.size || ""} ${ticked.size === 1 ? "point" : "points"}`}
+      </button>
+    </div>
+  );
+}
+
 type Shown = { isShown: (id: string) => boolean; toggle: (id: string) => void; showAll: () => void; hideAll: () => void };
 type Point = { latitude: number; longitude: number };
 
@@ -140,6 +208,7 @@ export function LayersPanel({
     },
   });
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const refresh = () => {
     void utils.mapLayer.invalidate();
@@ -234,6 +303,9 @@ export function LayersPanel({
         </button>
         {editing.id && (
           <>
+            <button type="button" onClick={() => setMoving(moving === editing.id ? null : editing.id!)} className="text-brand-700 text-[11px] font-medium hover:underline">
+              Move points…
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -257,6 +329,7 @@ export function LayersPanel({
           </>
         )}
       </div>
+      {editing.id && moving === editing.id && <MovePoints layerId={editing.id} layers={layers} places={places} onDone={(text) => (setNote({ text }), setMoving(null), refresh())} />}
     </div>
   );
 

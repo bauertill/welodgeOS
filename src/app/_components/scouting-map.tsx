@@ -308,11 +308,13 @@ function SidePanel({
   places,
   availability,
   eventId,
+  layers = [],
   onClose,
 }: {
   pin?: MapPin;
   place?: MapPlace;
   places: MapPlace[];
+  layers?: MapLayer[];
   availability: MapAvailability[];
   eventId?: string;
   onClose: () => void;
@@ -391,7 +393,7 @@ function SidePanel({
 
       {place && (
         <div className="mt-4">
-          {place.layerName && <p className="text-ink-500 -mt-3 mb-2 text-xs font-light">On the {place.layerName} layer</p>}
+          {eventId && layers.length > 0 ? <MoveToLayer key={place.id} place={place} layers={layers} /> : place.layerName && <p className="text-ink-500 -mt-3 mb-2 text-xs font-light">On the {place.layerName} layer</p>}
           {place.address && <p className="text-ink-700 mb-2 text-[13px] font-light">{place.address}</p>}
           {place.notes && <p className="text-ink-700 mb-3 text-[13px] font-light whitespace-pre-line">{place.notes}</p>}
           {eventId && <PlaceToBoard key={place.id} place={place} onDone={onClose} />}
@@ -410,6 +412,60 @@ function SidePanel({
         </div>
       )}
     </aside>
+  );
+}
+
+/** A point's layer, changed from its panel — one of the map's layers, or a new one (doc §3.7). */
+function MoveToLayer({ place, layers }: { place: MapPlace; layers: MapLayer[] }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const [naming, setNaming] = useState<string | null>(null);
+  const move = api.place.move.useMutation({
+    onSuccess: () => {
+      setNaming(null);
+      void utils.invalidate();
+      router.refresh();
+    },
+  });
+  return (
+    <div className="-mt-2 mb-3 text-xs">
+      <label className="text-ink-500 flex items-center gap-1.5 font-light">
+        Layer
+        <select
+          value={naming !== null ? "__new__" : (place.layerId ?? "")}
+          disabled={move.isPending}
+          onChange={(e) => (e.target.value === "__new__" ? setNaming("") : move.mutate({ ids: [place.id], layerId: e.target.value }))}
+          className="border-ink-200 text-ink-900 min-w-0 flex-1 rounded-md border bg-white px-1.5 py-0.5"
+        >
+          {!place.layerId && <option value="">No layer</option>}
+          {layers.map((layer) => (
+            <option key={layer.id} value={layer.id}>
+              {layer.name}
+            </option>
+          ))}
+          <option value="__new__">+ A new layer…</option>
+        </select>
+      </label>
+      {naming !== null && (
+        <form
+          className="mt-1 flex gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            move.mutate({ ids: [place.id], newLayer: naming });
+          }}
+        >
+          <input value={naming} onChange={(e) => setNaming(e.target.value)} placeholder="New layer's name" autoFocus className="border-ink-200 min-w-0 flex-1 rounded-md border px-1.5 py-0.5" />
+          <button type="submit" disabled={move.isPending || !naming.trim()} className="bg-brand-400 rounded-md px-2 font-medium text-white disabled:opacity-60">
+            Move
+          </button>
+          <button type="button" onClick={() => setNaming(null)} className="text-ink-500 hover:underline">
+            Cancel
+          </button>
+        </form>
+      )}
+      {move.isPending && <p className="text-ink-500 mt-0.5">Moving…</p>}
+      {move.error && <p className="mt-0.5 text-[#c03654]">{move.error.message}</p>}
+    </div>
   );
 }
 
@@ -920,6 +976,7 @@ export function ScoutingMap({
           places={places}
           availability={availability}
           eventId={eventId}
+          layers={layers}
           onClose={() => setOpenId(null)}
         />
       )}
