@@ -1053,6 +1053,13 @@ already in our properties (same name)* with **Put The Tangerine on the board** �
 added to the event's board with a hotel contact task, the point removed — or, when it is on the
 board already, **Remove this point**; *It is a different one* goes on to make a new property.
 
+**Moving points between layers** (the owner, 2026-11-24: "I need to move things between
+layers"). On a point's panel, **Layer** is a dropdown of the map's layers — choosing another moves
+it there at once — with *+ A new layer…* to name one and move it into it. Several at once: a
+layer's **⋯ › Move points…** lists its points with ticks, a box to find them by part of a name
+(*ESA Suites*), *All found* to tick every one shown, and **To** another layer or *+ A new layer…*;
+*Move 8 points*. A new layer gets the next colour; the move is in the event's history.
+
 **Searching the map** (the owner, 2026-11-23). Beside *＋ Add to the map* at the top of the map
 is a search box: **an address or a property on the map**. What is typed is matched first against
 **our own** — the event's properties and the places on its layers, listed *On our map* — then

@@ -108,6 +108,43 @@ export const placeRouter = createTRPCRouter({
     }),
 
   /**
+   * Points moved to another layer (the owner, 2026-11-24: "I need to move
+   * things between layers") — one from its panel, or several from a layer's ⋯ —
+   * into one of the event's layers, or a new one made with the name given.
+   */
+  move: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1, "Tick the points to move.").max(3000),
+        layerId: z.string().optional(),
+        newLayer: z.string().trim().min(1, "Give the new layer a name.").max(100).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!input.layerId === !input.newLayer) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the layer to move them to." });
+      return ctx.db.$transaction(async (tx) => {
+        const places = await tx.placeOfInterest.findMany({ where: { id: { in: input.ids } }, select: { id: true, eventId: true, layer: { select: { name: true } } } });
+        const eventId = places[0]?.eventId;
+        if (!eventId || places.some((place) => place.eventId !== eventId)) throw new TRPCError({ code: "BAD_REQUEST", message: "Those points are not on one event's map." });
+        let layer: { id: string; name: string };
+        if (input.layerId) {
+          const found = await tx.mapLayer.findUnique({ where: { id: input.layerId }, select: { id: true, name: true, eventId: true } });
+          if (found?.eventId !== eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That layer is not on this event's map." });
+          layer = found;
+        } else {
+          const taken = await tx.mapLayer.findFirst({ where: { eventId, name: { equals: input.newLayer!, mode: "insensitive" } }, select: { id: true, name: true } });
+          const count = await tx.mapLayer.count({ where: { eventId } });
+          const palette = ["#614fc9", "#e5533d", "#1d5fa8", "#0a7a47", "#e5a400", "#c03654", "#00838f", "#8a5a00"];
+          layer = taken ?? (await tx.mapLayer.create({ data: { eventId, name: input.newLayer!, color: palette[count % palette.length]!, position: count }, select: { id: true, name: true } }));
+        }
+        await tx.placeOfInterest.updateMany({ where: { id: { in: places.map((place) => place.id) } }, data: { layerId: layer.id } });
+        const from = [...new Set(places.map((place) => place.layer?.name ?? "no layer"))].join(", ");
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Event", entityId: eventId, summary: `${places.length} map ${places.length === 1 ? "point" : "points"} moved to ${layer.name}`, changes: `From ${from}` });
+        return { moved: places.length, layer: layer.name };
+      });
+    }),
+
+  /**
    * The property in our library a point looks to be — the same name, or the
    * same spot (doc §3.7) — and whether it is on the point's event's board.
    */
