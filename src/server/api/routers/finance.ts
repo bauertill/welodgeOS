@@ -50,6 +50,18 @@ const contractInclude = {
 const counterparty = (contract: { property: { name: string } | null; client: { name: string } | null; contractor?: { name: string } | null }) =>
   contract.property?.name ?? contract.contractor?.name ?? contract.client?.name ?? "—";
 
+/**
+ * A new contract remembers how the client (or hotel, or contractor) wanted
+ * invoices last time: the instructions of their latest contract that has any.
+ */
+async function earlierInstructions(tx: Prisma.TransactionClient, input: { party: ContractParty; clientId?: string; propertyId?: string; contractorId?: string }) {
+  const whose =
+    input.party === "CLIENT" ? (input.clientId ? { clientId: input.clientId } : null) : input.propertyId ? { propertyId: input.propertyId } : input.contractorId ? { contractorId: input.contractorId } : null;
+  if (!whose) return null;
+  const last = await tx.contract.findFirst({ where: { ...whose, party: input.party, paymentInstructions: { not: null } }, orderBy: { createdAt: "desc" }, select: { paymentInstructions: true } });
+  return last?.paymentInstructions ?? null;
+}
+
 const contractInput = z.object({
   name: z.string().trim().min(1, "Give the contract a name").max(300),
   documentUrl: link.optional(),
@@ -59,6 +71,8 @@ const contractInput = z.object({
   taxCents: z.number().int().min(0).nullable().optional(),
   currency: z.string().length(3).optional(),
   notes: text.optional(),
+  /** Where the invoice goes, or how payment is made: an address, a portal (doc §7.1, 2026-11-24). */
+  paymentInstructions: text.optional(),
   ownerId: z.string().nullable().optional(),
   noCancellationTerms: z.boolean().optional(),
   /** Days before each payment and cancellation deadline the account manager is emailed (doc §7.1); empty for none. */
@@ -229,6 +243,7 @@ export const financeRouter = createTRPCRouter({
           taxCents: input.totalCents != null ? (input.taxCents ?? null) : null,
           currency: input.totalCents != null ? (input.currency ?? "USD") : null,
           notes: blank(input.notes),
+          paymentInstructions: blank(input.paymentInstructions) ?? (await earlierInstructions(tx, input)),
           ownerId: input.ownerId ?? ctx.session.user.id,
           noCancellationTerms: input.noCancellationTerms ?? false,
         },
@@ -254,6 +269,7 @@ export const financeRouter = createTRPCRouter({
         }),
         ...(input.taxCents !== undefined && { taxCents: input.taxCents }),
         ...(input.notes !== undefined && { notes: blank(input.notes) }),
+        ...(input.paymentInstructions !== undefined && { paymentInstructions: blank(input.paymentInstructions) }),
         ...(input.ownerId !== undefined && { ownerId: input.ownerId }),
         ...(input.noCancellationTerms !== undefined && { noCancellationTerms: input.noCancellationTerms }),
         ...(input.reminderDays !== undefined && { reminderDays: input.reminderDays }),
@@ -267,6 +283,7 @@ export const financeRouter = createTRPCRouter({
         total: c.totalCents !== null && c.currency ? formatMoney(c.totalCents, c.currency) : null,
         taxes: c.taxCents !== null && c.currency ? formatMoney(c.taxCents, c.currency) : null,
         notes: c.notes,
+        paymentInstructions: c.paymentInstructions,
         owner: c.owner?.name ?? c.owner?.email ?? null,
         noCancellationTerms: c.noCancellationTerms ? "No cancellation terms" : null,
         reminders: reminderWords(c.reminderDays) || "None",
@@ -278,6 +295,7 @@ export const financeRouter = createTRPCRouter({
         total: "Total",
         taxes: "Taxes on top",
         notes: "Notes",
+        paymentInstructions: "Invoice and payment instructions",
         owner: "Account manager",
         noCancellationTerms: "Cancellation terms",
         reminders: "Reminders",
@@ -510,6 +528,7 @@ export const financeRouter = createTRPCRouter({
               totalCents: true,
               taxCents: true,
               currency: true,
+              paymentInstructions: true,
               event: { select: { id: true, name: true } },
               property: { select: { id: true, name: true } },
               contractor: { select: { id: true, name: true } },

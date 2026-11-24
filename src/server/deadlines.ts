@@ -24,6 +24,7 @@ const contractSelect = {
   totalCents: true,
   taxCents: true,
   currency: true,
+  paymentInstructions: true,
   eventId: true,
   event: { select: { name: true } },
   property: { select: { name: true } },
@@ -81,6 +82,7 @@ export async function sendDeadlineReminders(db: PrismaClient) {
       body: [
         `${contract.name} · ${contract.event.name}`,
         `${contract.party === "SUPPLIER" ? `We pay${who ? ` ${who}` : ""}` : `${who ?? "The client"} pays us`}${amount !== null && contract.currency ? ` ${formatMoney(amount, contract.currency)}` : ""} on ${formatDate(payment.dueOn)} · ${paymentStatusLabels[payment.status]}`,
+        ...(contract.paymentInstructions ? [`📌 ${contract.paymentInstructions}`] : []),
       ].join("\n"),
       link: contractHref(contract.eventId, contract.id),
     });
@@ -159,6 +161,7 @@ export async function sendOverdueDigests(db: PrismaClient, at = new Date()) {
           body: [
             `${contract.name} · ${contract.event.name}`,
             `${contract.party === "SUPPLIER" ? "We pay" : "They pay us"}${amount !== null && contract.currency ? ` ${formatMoney(amount, contract.currency)}` : ""} · due ${formatDate(payment.dueOn)}, ${late} ${late === 1 ? "day" : "days"} ago · ${paymentStatusLabels[payment.status]}`,
+            ...(contract.paymentInstructions ? [`📌 ${contract.paymentInstructions}`] : []),
           ].join("\n"),
           link: contractHref(contract.eventId, contract.id),
         };
