@@ -1033,6 +1033,26 @@ from and what the point said; the point leaves its layer, the property now havin
 **＋ Add to the map** asks the same question in words: **Add to properties board** or **Only show
 on the map**.
 
+**Nothing twice** (the owner, 2026-11-24: "does it compare what is already there to avoid
+duplicating?"). Before an import, every point is checked against **the points already on the
+event's map**, **the properties on its board** and **every property in our library** — the same
+when the names are the same (stars in front, capitals and punctuation aside: *Hotel Amarano
+Burbank Hollywood* is *Hotel Amarano Burbank-Hollywood*), when one name's main words — three at
+least, so a town alone ("Long Beach") is not enough — are all in the other's within 5 km (*similar
+name*: *Courtyard Culver City* in *Courtyard by Marriott Culver City Los Angeles*), or when it
+stands on the same spot: a property within 40 m, 75 m sharing a main word, 300 m sharing two;
+another point within 40 m sharing a main word. A name match anywhere wins over a near one. The
+import shows *12 look like what we have — 10 ticked to leave out*, and *See them* lists each:
+the point and its layer → what it matched, where (on the map and its layer, a property on the
+board, or in our properties but not on this board) and how (same name, similar name, so many
+metres away). Points matching the map or the board are ticked to leave out; ones matching a
+property not on this board come in as points — untick or tick any. Points placed by their address
+during the import are then compared with the board by their spot too. **On a point's panel**, *＋
+Add to properties board* first looks for the property it may be: *This looks like The Tangerine,
+already in our properties (same name)* with **Put The Tangerine on the board** — that property
+added to the event's board with a hotel contact task, the point removed — or, when it is on the
+board already, **Remove this point**; *It is a different one* goes on to make a new property.
+
 **Searching the map** (the owner, 2026-11-23). Beside *＋ Add to the map* at the top of the map
 is a search box: **an address or a property on the map**. What is typed is matched first against
 **our own** — the event's properties and the places on its layers, listed *On our map* — then

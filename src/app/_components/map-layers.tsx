@@ -112,7 +112,20 @@ export function LayersPanel({
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState<{ id?: string; name: string; color: string; measured: boolean } | null>(null);
   const [adding, setAdding] = useState<{ layerId: string; name: string; address: string } | null>(null);
-  const [incoming, setIncoming] = useState<ReturnType<typeof readKml> | null>(null);
+  const [incoming, setIncomingRaw] = useState<ReturnType<typeof readKml> | null>(null);
+  // What of it is ours already — and, of those, which to leave out (ticked).
+  const check = api.mapLayer.checkImport.useMutation({
+    onSuccess: ({ matches }) => setLeaveOut(new Set(matches.filter((one) => one.against !== "library").map((one) => one.key))),
+  });
+  const [leaveOut, setLeaveOut] = useState<Set<string>>(new Set());
+  const [showMatches, setShowMatches] = useState(false);
+  const setIncoming = (read: ReturnType<typeof readKml> | null) => {
+    setIncomingRaw(read);
+    check.reset();
+    setLeaveOut(new Set());
+    setShowMatches(false);
+    if (read) check.mutate({ eventId, layers: read.layers });
+  };
   const [link, setLink] = useState<string | null>(null);
   const fetchMyMaps = api.mapLayer.fetchMyMaps.useMutation({
     onSuccess: ({ kml }) => {
@@ -402,9 +415,64 @@ export function LayersPanel({
               {incoming.byAddress > 0 && <p className="text-ink-500 mt-1">{incoming.byAddress} have only an address — they are placed by it (about a second each).</p>}
               {incoming.unlocated > 0 && <p className="text-ink-500 mt-1">{incoming.unlocated} have no position or address — left out.</p>}
               {incoming.skipped > 0 && <p className="text-ink-500 mt-1">{incoming.skipped} lines or shapes left out — only points come in.</p>}
+              {check.isPending && <p className="text-ink-500 mt-1.5">Checking what is on our map and in our properties already…</p>}
+              {check.error && <p className="mt-1 text-[#c03654]">{friendlyError(check.error)}</p>}
+              {check.data && (
+                <div className="border-ink-200/60 mt-1.5 rounded border bg-white p-1.5">
+                  {check.data.matches.length === 0 ? (
+                    <p className="text-[#0a7a47]">Nothing in it is ours already.</p>
+                  ) : (
+                    <>
+                      <p className="text-ink-900">
+                        <span className="font-medium">{check.data.matches.length} look like what we have</span> — {leaveOut.size} ticked to leave out.{" "}
+                        <button type="button" onClick={() => setShowMatches(!showMatches)} className="text-brand-700 hover:underline">
+                          {showMatches ? "Hide" : "See them"}
+                        </button>
+                      </p>
+                      {showMatches && (
+                        <ul className="mt-1 max-h-64 space-y-1 overflow-y-auto">
+                          {check.data.matches.map((one) => (
+                            <li key={one.key}>
+                              <label className="flex items-start gap-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={leaveOut.has(one.key)}
+                                  onChange={() =>
+                                    setLeaveOut((now) => {
+                                      const next = new Set(now);
+                                      if (next.has(one.key)) next.delete(one.key);
+                                      else next.add(one.key);
+                                      return next;
+                                    })
+                                  }
+                                  className="accent-brand-500 mt-0.5 h-3 w-3 shrink-0"
+                                />
+                                <span>
+                                  <span className="text-ink-900">{one.name}</span> <span className="text-ink-500">({one.layer})</span> → {one.match.name}
+                                  <span className="text-ink-500">
+                                    {" "}
+                                    · {one.against === "point" ? `on the map${one.where ? `, ${one.where}` : ""}` : one.against === "board" ? "a property on the board" : "in our properties, not on this board"}
+                                    {one.match.by === "name" ? " · same name" : one.match.by === "similar" ? ` · similar name${one.match.metres !== null ? `, ${one.match.metres} m away` : ""}` : ` · ${one.match.metres} m away`}
+                                  </span>
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <p className="text-ink-500 mt-1">Ticked are left out. Ones in our properties but not on this board come in as points; adding such a point to the board uses the property we have.</p>
+                    </>
+                  )}
+                </div>
+              )}
               {importLayers.error && <p className="mt-1 text-[#c03654]">{friendlyError(importLayers.error)}</p>}
               <div className="mt-1.5 flex items-center gap-2">
-                <button type="button" disabled={importLayers.isPending} onClick={() => importLayers.mutate({ eventId, layers: incoming.layers })} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60">
+                <button
+                  type="button"
+                  disabled={importLayers.isPending || check.isPending}
+                  onClick={() => importLayers.mutate({ eventId, layers: incoming.layers, leaveOut: [...leaveOut] })}
+                  className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
+                >
                   {importLayers.isPending ? "Importing…" : "Import"}
                 </button>
                 <button type="button" onClick={() => setIncoming(null)} className="text-ink-500 hover:underline">

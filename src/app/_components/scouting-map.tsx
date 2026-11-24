@@ -427,13 +427,16 @@ function PlaceToBoard({ place, onDone }: { place: MapPlace; onDone: () => void }
   const [name, setName] = useState(starred ? starred[2]!.trim() : place.name);
   const [type, setType] = useState<"HOTEL" | "APARTMENT" | "APARTHOTEL">(starred ? "HOTEL" : looksLikeApartments ? "APARTMENT" : "HOTEL");
   const [stars, setStars] = useState<number | null>(starred ? Math.min(5, Math.max(1, Number(starred[1]))) : null);
-  const add = api.place.toProperty.useMutation({
-    onSuccess: () => {
-      void utils.invalidate();
-      router.refresh();
-      onDone();
-    },
-  });
+  const finished = () => {
+    void utils.invalidate();
+    router.refresh();
+    onDone();
+  };
+  const add = api.place.toProperty.useMutation({ onSuccess: finished });
+  const useExisting = api.place.toExistingProperty.useMutation({ onSuccess: finished });
+  // A property we already have, by name or on the same spot (doc §3.7).
+  const known = api.place.matchProperty.useQuery({ id: place.id }, { enabled: open });
+  const [different, setDifferent] = useState(false);
   if (!open) {
     return (
       <div className="mb-4">
@@ -445,6 +448,30 @@ function PlaceToBoard({ place, onDone }: { place: MapPlace; onDone: () => void }
     );
   }
   const field = "border-ink-200 w-full rounded-lg border px-2 py-1 text-[13px]";
+  if (known.isLoading) return <p className="text-ink-500 mb-4 text-xs font-light">Checking our properties…</p>;
+  if (known.data && !different) {
+    const match = known.data;
+    return (
+      <div className="mb-4 space-y-2 rounded-lg border border-[#f0d9a8] bg-[#fdf6e7] p-2.5 text-xs text-[#6b4a07]">
+        <p>
+          This looks like <span className="font-medium">{match.name}</span>, already in our properties ({match.by === "name" ? "same name" : match.by === "similar" ? "a similar name" : `${match.metres} m away`})
+          {match.onBoard ? " — and on this event's board." : "."}
+        </p>
+        {useExisting.error && <p className="text-[#c03654]">{useExisting.error.message}</p>}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={useExisting.isPending} onClick={() => useExisting.mutate({ id: place.id, propertyId: match.id })} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60">
+            {useExisting.isPending ? "…" : match.onBoard ? "Remove this point — the property has its pin" : `Put ${match.name} on the board`}
+          </button>
+          <button type="button" onClick={() => setDifferent(true)} className="text-ink-700 hover:underline">
+            It is a different one
+          </button>
+          <button type="button" onClick={() => setOpen(false)} className="text-ink-500 hover:underline">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <form
       className="border-brand-200 bg-brand-50/50 mb-4 space-y-2 rounded-lg border p-2.5 text-xs"

@@ -4,7 +4,9 @@ import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
+import { findMatch } from "~/lib/map-match";
 import { createFoundProperty } from "~/server/found-property";
+import { ensureHotelContactTask } from "~/server/hotel-contact";
 import { deliverImmediate } from "~/server/notify";
 
 /**
@@ -104,6 +106,44 @@ export const placeRouter = createTRPCRouter({
         },
       });
     }),
+
+  /**
+   * The property in our library a point looks to be — the same name, or the
+   * same spot (doc §3.7) — and whether it is on the point's event's board.
+   */
+  matchProperty: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const place = await ctx.db.placeOfInterest.findUnique({ where: { id: input.id }, select: { name: true, latitude: true, longitude: true, eventId: true } });
+    if (!place) return null;
+    const library = await ctx.db.property.findMany({ select: { id: true, name: true, latitude: true, longitude: true } });
+    const match = findMatch(place, library, "property");
+    if (!match) return null;
+    const entry = await ctx.db.scoutingEntry.findFirst({ where: { eventId: place.eventId, propertyId: match.id }, select: { id: true } });
+    return { ...match, onBoard: Boolean(entry) };
+  }),
+
+  /**
+   * A point that is a property we already have: that property put on the
+   * event's board (with a hotel contact task) if it is not there yet, and the
+   * point taken off the map — the property has its own pin.
+   */
+  toExistingProperty: protectedProcedure.input(z.object({ id: z.string(), propertyId: z.string() })).mutation(async ({ ctx, input }) => {
+    const result = await ctx.db.$transaction(async (tx) => {
+      const place = await tx.placeOfInterest.findUnique({ where: { id: input.id }, select: { id: true, name: true, eventId: true, layer: { select: { name: true } } } });
+      if (!place) throw new TRPCError({ code: "NOT_FOUND", message: "That point is not on the map any more." });
+      const property = await tx.property.findUniqueOrThrow({ where: { id: input.propertyId }, select: { id: true, name: true } });
+      const already = await tx.scoutingEntry.findFirst({ where: { eventId: place.eventId, propertyId: property.id }, select: { id: true } });
+      if (!already) {
+        const entry = await tx.scoutingEntry.create({ data: { eventId: place.eventId, propertyId: property.id, addedById: ctx.session.user.id } });
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: entry.id, summary: `Added to the scouting list — from the map's ${place.layer?.name ?? "places"} layer` });
+        await ensureHotelContactTask(tx, { propertyId: property.id, eventId: place.eventId, salesRequestId: null, actorId: ctx.session.user.id });
+      }
+      await tx.placeOfInterest.delete({ where: { id: place.id } });
+      await logAudit(tx, { actorId: ctx.session.user.id, entity: "Event", entityId: place.eventId, summary: `Map point "${place.name}" is ${property.name}${already ? ", already on the board — point removed" : " — put on the properties board"}` });
+      return { propertyId: property.id, added: !already };
+    });
+    await deliverImmediate(ctx.db);
+    return result;
+  }),
 
   /**
    * A point that was only on the map — a hotel from research — put on the
