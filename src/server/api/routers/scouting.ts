@@ -606,6 +606,46 @@ export const scoutingRouter = createTRPCRouter({
       }),
     ),
 
+  /**
+   * A property taken off the event's board from its pin on the map (the owner,
+   * 2026-11-24: "we should also be able to remove properties") — and, if a
+   * layer is given, kept on the map as a point there, as research. The
+   * property stays in our library for other events.
+   */
+  removeFromMap: protectedProcedure
+    .input(z.object({ id: z.string(), layerId: z.string().nullable() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.$transaction(async (tx) => {
+        const entry = await tx.scoutingEntry.findUniqueOrThrow({
+          where: { id: input.id },
+          include: { property: { select: { id: true, name: true, latitude: true, longitude: true, address: true, stars: true } }, event: { select: { id: true, name: true } } },
+        });
+        let kept: string | null = null;
+        if (input.layerId) {
+          const layer = await tx.mapLayer.findUnique({ where: { id: input.layerId }, select: { eventId: true, name: true } });
+          if (layer?.eventId !== entry.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That layer is not on this event's map." });
+          const { property } = entry;
+          if (property.latitude === null || property.longitude === null) throw new TRPCError({ code: "BAD_REQUEST", message: `${property.name} has no position, so it cannot stay on the map.` });
+          const name = property.stars ? `${property.stars}* ${property.name}` : property.name;
+          const taken = await tx.placeOfInterest.findFirst({ where: { eventId: entry.eventId, name: { equals: name, mode: "insensitive" } }, select: { id: true } });
+          if (!taken) {
+            await tx.placeOfInterest.create({
+              data: { eventId: entry.eventId, layerId: input.layerId, name, category: "OTHER", latitude: property.latitude, longitude: property.longitude, address: property.address, notes: "Was on the properties board; taken off it and kept on the map." },
+            });
+          }
+          kept = layer.name;
+        }
+        await logAudit(tx, {
+          actorId: ctx.session.user.id,
+          entity: "Property",
+          entityId: entry.propertyId,
+          summary: `Removed from "${entry.event.name}"'s scouting list, from the map${kept ? ` — kept on the map's ${kept} layer` : ""}`,
+        });
+        await tx.scoutingEntry.delete({ where: { id: input.id } });
+        return { kept };
+      }),
+    ),
+
   remove: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) =>

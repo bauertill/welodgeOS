@@ -363,6 +363,7 @@ function SidePanel({
           </Link>
 
           {eventId && <ContactTaskBox key={pin.propertyId} propertyId={pin.propertyId} eventId={eventId} />}
+          {eventId && <RemoveProperty key={`remove-${pin.id}`} pin={pin} layers={layers} onDone={onClose} />}
 
           <div className="mt-5">
             <PanelHeading>Rooms still available</PanelHeading>
@@ -397,6 +398,7 @@ function SidePanel({
           {place.address && <p className="text-ink-700 mb-2 text-[13px] font-light">{place.address}</p>}
           {place.notes && <p className="text-ink-700 mb-3 text-[13px] font-light whitespace-pre-line">{place.notes}</p>}
           {eventId && <PlaceToBoard key={place.id} place={place} onDone={onClose} />}
+          {eventId && <RemovePoint key={`remove-${place.id}`} place={place} onDone={onClose} />}
           {place.lines ? (
             <>
               <PanelHeading>Lines</PanelHeading>
@@ -412,6 +414,92 @@ function SidePanel({
         </div>
       )}
     </aside>
+  );
+}
+
+/** A point taken off the map, from its panel — after asking. */
+function RemovePoint({ place, onDone }: { place: MapPlace; onDone: () => void }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const remove = api.place.remove.useMutation({
+    onSuccess: () => {
+      void utils.invalidate();
+      router.refresh();
+      onDone();
+    },
+  });
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        disabled={remove.isPending}
+        onClick={() => window.confirm(`Remove "${place.name}" from the map?`) && remove.mutate({ id: place.id })}
+        className="text-xs font-light text-[#c03654] hover:underline"
+      >
+        {remove.isPending ? "Removing…" : "Remove from the map"}
+      </button>
+      {remove.error && <p className="text-xs text-[#c03654]">{remove.error.message}</p>}
+    </div>
+  );
+}
+
+/**
+ * A property taken off the event's board from its pin (the owner, 2026-11-24):
+ * kept on the map as a point on a layer chosen, or off the map too. The
+ * property stays in our library.
+ */
+function RemoveProperty({ pin, layers, onDone }: { pin: MapPin; layers: MapLayer[]; onDone: () => void }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const [open, setOpen] = useState(false);
+  const [layerId, setLayerId] = useState(layers.find((layer) => /accommodation|hotel/i.test(layer.name))?.id ?? layers[0]?.id ?? "");
+  const remove = api.scouting.removeFromMap.useMutation({
+    onSuccess: () => {
+      void utils.invalidate();
+      router.refresh();
+      onDone();
+    },
+  });
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-3 self-start text-xs font-light text-[#c03654] hover:underline">
+        Take off this event&rsquo;s board…
+      </button>
+    );
+  }
+  return (
+    <div className="mt-3 space-y-2 rounded-lg border border-[#f3c4cd] bg-[#fdf0f2] p-2.5 text-xs">
+      <p className="text-ink-900">
+        Take <span className="font-medium">{pin.name}</span> off this event&rsquo;s board? It stays in our properties for other events; its tasks and anything booked stay as they are.
+      </p>
+      {layers.length > 0 && (
+        <div className="space-y-1">
+          <button type="button" disabled={remove.isPending || !layerId} onClick={() => remove.mutate({ id: pin.id, layerId })} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60">
+            Take off, keep it on the map
+          </button>
+          <label className="text-ink-500 flex items-center gap-1.5">
+            as a point on
+            <select value={layerId} onChange={(e) => setLayerId(e.target.value)} className="border-ink-200 text-ink-900 min-w-0 flex-1 rounded-md border bg-white px-1 py-0.5">
+              {layers.map((layer) => (
+                <option key={layer.id} value={layer.id}>
+                  {layer.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      <div className="flex gap-3">
+        <button type="button" disabled={remove.isPending} onClick={() => remove.mutate({ id: pin.id, layerId: null })} className="font-medium text-[#c03654] hover:underline">
+          Take off the board and the map
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="text-ink-500 hover:underline">
+          Cancel
+        </button>
+      </div>
+      {remove.isPending && <p className="text-ink-500">Removing…</p>}
+      {remove.error && <p className="text-[#c03654]">{remove.error.message}</p>}
+    </div>
   );
 }
 
