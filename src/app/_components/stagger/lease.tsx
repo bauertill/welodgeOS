@@ -353,7 +353,7 @@ function LeaseBody({ s, c }: { s: LeaseSettings; c: LeaseComputed }) {
             <b>Damage and liability cover.*</b> Every apartment is insured for damage and liability, with a joint inspection at move-in and at hand-back.
           </li>
           <li>
-            <b>Professional cleaning.</b> Each apartment is professionally cleaned during the stay and on check-out.
+            <b>Professional cleaning.</b> Each apartment is professionally cleaned during the stay and on check-out, ready for the next tenant.
           </li>
         </ol>
       </section>
