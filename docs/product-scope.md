@@ -4195,7 +4195,7 @@ rows, then check-in, check-out, a column per guest (as many as the property's la
 sleeps, up to four; cells beyond a room's beds are greyed), arriving and notes. Every room with
 nights nobody is named for has an empty row, its dates set to the first such stretch — type a
 name and the stay is there. A room's rows are always **in date order**, the empty row among
-them where its dates fall (the owner, 2026-11-23). **A row saves when the cursor leaves it** (or with *Save*); × takes
+them where its dates fall (the owner, 2026-11-23); the rooms themselves go **by room number** — Room 1, 2, 3… — whatever their type (the owner, 2026-11-24). **A row saves when the cursor leaves it** (or with *Save*); × takes
 a stay out. A guest is typed as one full name, kept as first and last name (the last word is the
 last name), as hotels want them.
 
