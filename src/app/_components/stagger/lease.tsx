@@ -330,20 +330,20 @@ function LeaseBody({ s, c }: { s: LeaseSettings; c: LeaseComputed }) {
 
       {/* One run of headlines, each with its words — no section headings (the owner, 2026-11-24). */}
       <section className="why">
-        <h3>A steady flow, never a flood</h3>
-        <p>{copy.why1}</p>
-        <h3>Everything back while people are looking</h3>
-        <p>{copy.why2}</p>
-        <h3>Rent for the months that are used</h3>
-        <p>{copy.why3}</p>
-        <h3>One tenant, one contact</h3>
-        <p>We Lodge signs as the single corporate tenant, with one point of contact for your team from move-in to the last hand-back.</p>
         <h3>Rent in four payments</h3>
         <p>10% on signature, 40% on the move-in day, 40% during the stay and 10% at check-out.</p>
-        <h3>Damage and liability cover*</h3>
-        <p>Every apartment is insured for damage and liability, with a joint inspection at move-in and at hand-back.</p>
+        <h3>Rent for the months that are used</h3>
+        <p>{copy.why3}</p>
+        <h3>A steady flow, never a flood</h3>
+        <p>{copy.why1}</p>
+        <h3>One tenant, one contact</h3>
+        <p>We Lodge signs as the single corporate tenant, with one point of contact for your team from move-in to the last hand-back.</p>
+        <h3>Everything back while people are looking</h3>
+        <p>{copy.why2}</p>
         <h3>Professional cleaning</h3>
         <p>Each apartment is professionally cleaned during the stay and on check-out, ready for the next tenant.</p>
+        <h3>Damage and liability cover*</h3>
+        <p>Every apartment is insured for damage and liability, with a joint inspection at move-in and at hand-back.</p>
       </section>
 
       <section className="notes">
