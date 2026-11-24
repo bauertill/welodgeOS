@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Decron apartments for OBS: staggered lease option</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#614fc9;--violet:#ab6ce2;--lime:#cefa05;--navy:#1e2e5d;
+  --bg:#f7f6fc;--surface:#ffffff;--ink:#1e2e5d;--body:#33405f;--muted:#6b7591;
+  --line:#dcd9ee;--grid:#ecebf5;--bar:#614fc9;--bar2:#ab6ce2;--games:rgba(206,250,5,.38);--games-ink:#4a5a00;
+  --band:#1e2e5d;--band-ink:#ffffff;--meter:#e7e4f6;--capbg:#cefa05;--capink:#1e2e5d;
+  color-scheme:light;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#12182c;--surface:#1a2240;--ink:#eef0fb;--body:#c9cee3;--muted:#949cbb;
+    --line:#2f3a63;--grid:#242d51;--bar:#8b7cf0;--bar2:#c28ef0;--games:rgba(206,250,5,.16);--games-ink:#dff57a;
+    --band:#0d1222;--meter:#2a3359;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12182c;--surface:#1a2240;--ink:#eef0fb;--body:#c9cee3;--muted:#949cbb;
+  --line:#2f3a63;--grid:#242d51;--bar:#8b7cf0;--bar2:#c28ef0;--games:rgba(206,250,5,.16);--games-ink:#dff57a;
+  --band:#0d1222;--meter:#2a3359;color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--body);font:16px/1.55 Lato,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{color:var(--ink);font-weight:900;margin:0}
+.band{background:var(--band);color:var(--band-ink)}
+.band-in{max-width:1040px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{font-weight:900;font-size:17px;letter-spacing:.01em}
+.brand .sl{color:var(--lime);margin-right:2px}
+.brand .x{opacity:.6;margin:0 8px;font-weight:400}
+.ver{font-size:13px;opacity:.75;margin-left:auto}
+.btn{font:700 14px Lato,sans-serif;border-radius:999px;padding:8px 16px;cursor:pointer;border:1px solid rgba(255,255,255,.4);background:transparent;color:#fff}
+.btn:hover{background:rgba(255,255,255,.1)}
+.btn:focus-visible,a:focus-visible{outline:3px solid var(--violet);outline-offset:2px}
+main{max-width:1040px;margin:0 auto;padding:44px 24px 72px}
+.hero h1{font-size:clamp(30px,4.6vw,50px);line-height:1.08;letter-spacing:-.015em;max-width:23ch}
+.lede{font-size:19px;max-width:62ch;margin:18px 0 0;color:var(--body)}
+.facts{display:grid;grid-template-columns:1.15fr 1fr 1fr 1fr;margin-top:36px;border-top:2px solid var(--ink)}
+.fact{padding:18px 18px 4px 0}
+.fact+.fact{padding-left:18px;border-left:1px solid var(--line)}
+.fact b{display:block;font-size:38px;font-weight:900;color:var(--ink);line-height:1.05;font-variant-numeric:tabular-nums}
+.fact span{display:block;font-size:14px;color:var(--muted);margin-top:6px;max-width:24ch}
+.fact.cap{background:var(--capbg);padding:18px 18px 14px}
+.fact.cap b{font-size:58px;color:var(--capink)}
+.fact.cap span{color:var(--capink);opacity:.85}
+section{margin-top:60px}
+h2{font-size:26px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:6px 0 18px;max-width:70ch}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 12px 10px;overflow-x:auto}
+.chart svg{display:block;min-width:660px}
+.legend{display:flex;flex-wrap:wrap;gap:18px;font-size:13px;color:var(--muted);padding:8px 8px 2px}
+.legend i{display:inline-block;width:18px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:6px}
+svg text{font-family:Lato,sans-serif}
+.tw{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:15px}
+th,td{padding:10px 16px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{font-weight:700;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line)}
+tbody td{border-bottom:1px solid var(--grid);color:var(--ink)}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{font-weight:900;color:var(--ink);border-top:2px solid var(--line)}
+td.z{color:var(--muted);opacity:.65}
+.meter{display:inline-flex;gap:2px;vertical-align:-1px;margin-left:10px}
+.meter i{width:7px;height:12px;border-radius:2px;background:var(--meter)}
+.meter i.on{background:var(--purple)}
+.meter i.on.full{background:var(--violet)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.why p,.terms li,.notes p{max-width:68ch}
+.why h3{font-size:18px;margin:22px 0 4px}
+.terms ol{margin:14px 0 0;padding-left:22px}
+.terms li{margin-bottom:12px;padding-left:4px}
+.terms li b{color:var(--ink)}
+.pill{display:inline-block;font-size:13px;font-weight:700;color:var(--purple);border:1px solid var(--purple);border-radius:999px;padding:1px 10px;margin-left:10px;vertical-align:4px}
+.notes{color:var(--muted);font-size:14px;border-top:1px solid var(--line);padding-top:22px}
+.notes h2{font-size:17px;margin-bottom:8px}
+.notes p{margin:0 0 8px}
+@media screen and (max-width:820px){
+  .facts{grid-template-columns:1fr 1fr}
+  .fact:nth-child(3){padding-left:0;border-left:0}
+  .fact:nth-child(n+3){border-top:1px solid var(--line)}
+  .two{grid-template-columns:1fr;gap:0}
+  main{padding:30px 16px 56px}
+  .band-in{padding:12px 16px}
+  .ver{margin-left:0;width:100%;order:3}
+}
+@media screen and (max-width:420px){.fact b{font-size:30px}.fact.cap b{font-size:46px}}
+@page{size:Letter;margin:14mm 12mm}
+@media print{
+  :root{--bg:#fff;--surface:#fff;--ink:#1e2e5d;--body:#33405f;--muted:#5c6684;--line:#d6d3ea;--grid:#ecebf5;--bar:#614fc9;--bar2:#ab6ce2;--games:rgba(206,250,5,.45);--games-ink:#4a5a00;--meter:#e7e4f6;--band:#1e2e5d;color-scheme:light;padding:0}
+  body{font-size:12.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #pdf{display:none}
+  main{padding:20px 0 0;max-width:none}
+  .band-in{padding:10px 0;max-width:none}
+  .hero h1{font-size:30px}
+  .lede{font-size:14px}
+  .facts{margin-top:18px}.fact b{font-size:26px}.fact.cap b{font-size:38px}
+  section{margin-top:24px}
+  .chart,.tw,.why h3,.terms li{break-inside:avoid}
+  h2,h3,.sub{break-after:avoid}
+  section:not(.terms):not(.why){break-inside:avoid}
+  h2{font-size:19px}
+  .chart,.tw{border-radius:8px}
+  .chart svg{min-width:0}
+  th,td{padding:5px 10px}
+  table{font-size:12px}
+}
+
+.btn.alt{background:var(--lime);color:#1e2e5d;border-color:var(--lime)}
+.btn.alt:hover{background:#dcff4a}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(400px,100vw);background:var(--surface);border-left:1px solid var(--line);box-shadow:-12px 0 40px rgba(30,46,93,.18);z-index:20;transform:translateX(105%);transition:transform .22s ease;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.drawer.open{transform:none}
+.dh{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
+.dh h2{font-size:19px}
+.xbtn{border:0;background:none;font-size:26px;line-height:1;color:var(--muted);cursor:pointer;padding:2px 6px}
+.db{overflow:auto;padding:4px 20px 24px;flex:1}
+.grp{border-bottom:1px solid var(--line);padding:16px 0 8px}
+.grp h3{font-size:14px;margin:0 0 10px}
+.f{display:block;font-size:13px;color:var(--muted);margin-bottom:10px}
+.f input,.f select{display:block;width:100%;margin-top:4px;font:15px Lato,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.f input:focus,.f select:focus{outline:2px solid var(--purple);outline-offset:0;border-color:var(--purple)}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mixg{display:grid;grid-template-columns:1.1fr .8fr 1fr;gap:6px 8px;align-items:center;font-size:13px;color:var(--muted)}
+.mixg input{width:100%;font:15px Lato,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.hint{font-size:12px;color:var(--muted);margin:2px 0 10px}
+.warn{font-size:13px;color:#8a1f3d;background:#ffe3ea;border-radius:8px;padding:8px 10px;margin:10px 0 0}
+.warn:empty{display:none}
+.lbtn{font:700 13px Lato,sans-serif;border-radius:999px;padding:6px 12px;cursor:pointer;border:1px solid var(--purple);background:transparent;color:var(--purple);margin:4px 6px 4px 0}
+.scrim{position:fixed;inset:0;background:rgba(18,24,44,.35);z-index:19;display:none}
+.scrim.on{display:block}
+@media print{.drawer,.scrim,#edit{display:none!important}}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-in">
+    <div class="brand"><span class="sl">//</span>We Lodge<span class="x">×</span><span id="provName"></span></div>
+    <div class="ver" id="ver"></div>
+    <button class="btn alt" id="edit" type="button" aria-controls="drawer" aria-expanded="false">Edit numbers</button>
+    <button class="btn" id="pdf" type="button">Save as PDF</button>
+  </div>
+</header>
+<main>
+  <div class="hero">
+    <h1 id="h1"></h1>
+    <p class="lede" id="lede"></p>
+    <div class="facts" id="facts"></div>
+  </div>
+
+  <section>
+    <h2>Rental periods</h2>
+    <p class="sub">Each bar is a group of apartments with the same move-in and hand-back dates. Thicker bars hold more apartments; the number at the end is the count.</p>
+    <div class="chart"><div id="gantt"></div>
+      <div class="legend"><span><i style="background:var(--bar)"></i>Leased to We Lodge</span><span><i style="background:var(--games)"></i>Games periods</span></div>
+    </div>
+  </section>
+
+  <section id="weekly">
+    <h2>Hand-backs, week by week</h2>
+    <p class="sub" id="weeklySub"></p>
+    <div class="tw"><table id="weekTable"></table></div>
+  </section>
+
+  <section>
+    <h2>Month by month</h2>
+    <p class="sub">Apartments moving in and handed back each month, how many are leased at month end, and the rent you receive. Part-months are charged by the day.</p>
+    <div class="tw"><table id="monthTable"></table></div>
+  </section>
+
+  <section>
+    <h2>Rent per apartment</h2>
+    <p class="sub">Monthly rent by unit type, and the blended average used for the figures above.</p>
+    <div class="tw"><table id="rentTable"></table></div>
+  </section>
+
+  <section class="why">
+    <h2>Why this shape works for you</h2>
+    <h3>A steady flow, never a flood</h3>
+    <p id="why1"></p>
+    <h3>Everything back while people are looking</h3>
+    <p id="why2"></p>
+    <h3>Rent for the months that are used</h3>
+    <p id="why3"></p>
+  </section>
+
+  <section class="terms">
+    <h2>Proposed terms<span class="pill">For discussion</span></h2>
+    <ol>
+      <li><b>One tenant, one contact.</b> We Lodge signs as the single corporate tenant, with one point of contact for your team from move-in to the last hand-back.</li>
+      <li><b>Rent paid in advance.</b> Rent for each move-in wave is paid in advance, with a deposit held per apartment.</li>
+      <li><b>Damage and liability cover.</b> Every apartment is insured for damage and liability, with a joint inspection at move-in and at hand-back.</li>
+      <li><b>Professional cleaning.</b> Each apartment is professionally cleaned on departure, so it can be shown straight away.</li>
+      <li id="flexLi"></li>
+      <li><b>Proven on large international projects.</b> We Lodge has housed teams on major projects in Qatar, France, Japan and Italy.</li>
+    </ol>
+  </section>
+
+  <section class="notes">
+    <h2>Notes</h2>
+    <p id="note1"></p>
+    <p id="note2"></p>
+    <p id="note3"></p>
+  </section>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Edit numbers" aria-hidden="true">
+  <div class="dh"><h2>Edit numbers</h2><button class="xbtn" id="close" type="button" aria-label="Close">×</button></div>
+  <div class="db">
+    <div class="grp"><h3>Names</h3>
+      <div class="r2"><label class="f">Provider<input id="i_provider"></label><label class="f">Client<input id="i_client"></label></div>
+      <label class="f">Version label<input id="i_version"></label>
+    </div>
+    <div class="grp"><h3>Apartments and rent</h3>
+      <label class="f">Apartments to lease<input id="i_units" type="number" min="1" max="2000" step="1"></label>
+      <div class="mixg" id="mixg"></div>
+      <p class="hint">Changing the total rescales the unit mix. Changing a unit count changes the total.</p>
+    </div>
+    <div class="grp"><h3>Move-ins and hand-backs</h3>
+      <label class="f">Weekly hand-back cap<input id="i_cap" type="number" min="1" max="500" step="1"></label>
+      <div class="r2">
+        <label class="f">Move-in days of the month<input id="i_waves" placeholder="1, 15"></label>
+        <label class="f">Hand-back day<select id="i_dow"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></label>
+      </div>
+      <div class="r2">
+        <label class="f">Earliest move-in<input id="i_earliest" type="date"></label>
+        <label class="f">Latest hand-back<input id="i_latest" type="date"></label>
+      </div>
+      <label class="f">No hand-backs before<select id="i_minback"><option value="none">No limit</option><option value="g1">End of Games period 1</option><option value="g2">End of Games period 2</option></select></label>
+      <label class="f">Arrival flexibility per wave (days)<input id="i_flex" type="number" min="0" max="60" step="1"></label>
+      <p class="warn" id="warn"></p>
+    </div>
+    <div class="grp"><h3>Target event</h3>
+      <div class="r2"><label class="f">Games period 1 opens<input id="i_t_open" type="date"></label><label class="f">Games period 1 closes<input id="i_t_close1" type="date"></label></div>
+      <div class="r2"><label class="f">Games period 2 opens<input id="i_t_open2" type="date"></label><label class="f">Games period 2 closes<input id="i_t_close2" type="date"></label></div>
+    </div>
+    <div class="grp"><h3>Reference event</h3>
+      <div class="r2"><label class="f">Opening<input id="i_r_open" type="date"></label><label class="f">First closing<input id="i_r_close1" type="date"></label></div>
+      <label class="f">Second closing<input id="i_r_close2" type="date"></label>
+      <p class="hint" id="resInfo"></p>
+      <label class="lbtn" style="display:inline-block">Load reservation list (CSV)<input id="i_csv" type="file" accept=".csv,text/csv,text/plain" hidden></label>
+      <button class="lbtn" id="resReset" type="button">Use original list</button>
+      <p class="hint">The CSV needs a check-in and check-out date (YYYY-MM-DD) on each line.</p>
+    </div>
+    <div class="grp" style="border:0"><button class="lbtn" id="reset" type="button">Reset everything</button>
+      <p class="hint">Your changes are saved in this browser only. Other people opening the link see the original numbers.</p></div>
+  </div>
+</aside>
+
+<script>
+(function(){
+  var KEY='welodge-decron-stagger-lease-v3';
+  var ORIG_RES = [["2025-06-30","2026-05-30"],["2025-07-06","2026-04-01"],["2025-07-06","2026-04-01"],["2025-07-07","2026-03-18"],["2025-07-07","2026-03-18"],["2025-07-07","2026-03-21"],["2025-07-07","2026-03-22"],["2025-07-08","2026-03-18"],["2025-07-13","2026-04-20"],["2025-08-31","2026-03-21"],["2025-09-07","2026-03-28"],["2025-09-14","2026-04-04"],["2025-09-14","2026-04-04"],["2025-09-14","2026-04-25"],["2025-09-14","2026-05-01"],["2025-09-14","2026-05-01"],["2025-09-14","2026-05-01"],["2025-09-14","2026-05-01"],["2025-09-15","2026-04-02"],["2025-09-21","2026-03-24"],["2025-09-28","2026-03-20"],["2025-09-28","2026-04-25"],["2025-09-30","2026-02-27"],["2025-09-30","2026-03-18"],["2025-09-30","2026-03-18"],["2025-09-30","2026-03-18"],["2025-09-30","2026-03-21"],["2025-09-30","2026-03-21"],["2025-09-30","2026-03-25"],["2025-09-30","2026-03-25"],["2025-09-30","2026-03-25"],["2025-09-30","2026-03-25"],["2025-09-30","2026-03-25"],["2025-09-30","2026-03-25"],["2025-09-30","2026-03-25"],["2025-09-30","2026-03-25"],["2025-09-30","2026-04-01"],["2025-09-30","2026-04-16"],["2025-10-05","2026-04-01"],["2025-10-05","2026-04-18"],["2025-10-05","2026-05-01"],["2025-10-07","2026-02-27"],["2025-10-09","2026-02-27"],["2025-10-12","2026-02-27"],["2025-10-12","2026-02-27"],["2025-10-12","2026-02-27"],["2025-10-12","2026-02-27"],["2025-10-12","2026-02-27"],["2025-10-12","2026-02-27"],["2025-10-12","2026-03-25"],["2025-10-12","2026-04-01"],["2025-10-14","2026-03-18"],["2025-10-19","2026-02-06"],["2025-10-19","2026-02-06"],["2025-10-19","2026-02-06"],["2025-10-19","2026-02-06"],["2025-10-19","2026-02-27"],["2025-10-19","2026-02-27"],["2025-10-19","2026-03-28"],["2025-10-19","2026-03-28"],["2025-10-25","2026-03-18"],["2025-10-25","2026-03-19"],["2025-10-26","2026-03-23"],["2025-10-30","2026-03-23"],["2025-10-31","2026-03-17"],["2025-10-31","2026-03-19"],["2025-10-31","2026-03-21"],["2025-10-31","2026-03-21"],["2025-10-31","2026-03-21"],["2025-11-02","2026-02-09"],["2025-11-02","2026-02-22"],["2025-11-02","2026-02-26"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-02-27"],["2025-11-02","2026-03-01"],["2025-11-02","2026-03-01"],["2025-11-02","2026-03-17"],["2025-11-02","2026-03-17"],["2025-11-02","2026-03-17"],["2025-11-02","2026-03-17"],["2025-11-02","2026-03-17"],["2025-11-02","2026-03-17"],["2025-11-02","2026-03-17"],["2025-11-02","2026-03-17"],["2025-11-02","2026-03-18"],["2025-11-02","2026-03-18"],["2025-11-02","2026-03-18"],["2025-11-02","2026-03-18"],["2025-11-02","2026-03-18"],["2025-11-02","2026-03-18"],["2025-11-02","2026-03-18"],["2025-11-02","2026-03-18"],["2025-11-02","2026-03-20"],["2025-11-02","2026-03-21"],["2025-11-02","2026-03-23"],["2025-11-02","2026-03-26"],["2025-11-02","2026-03-26"],["2025-11-02","2026-03-26"],["2025-11-02","2026-05-01"],["2025-11-06","2026-03-20"],["2025-11-09","2026-02-27"],["2025-11-09","2026-02-27"],["2025-11-09","2026-03-19"],["2025-11-09","2026-03-19"],["2025-11-09","2026-03-19"],["2025-11-09","2026-03-21"],["2025-11-09","2026-03-21"],["2025-11-09","2026-03-21"],["2025-11-09","2026-03-21"],["2025-11-09","2026-03-28"],["2025-11-10","2026-03-21"],["2025-11-10","2026-03-28"],["2025-11-14","2026-03-17"],["2025-11-16","2026-02-27"],["2025-11-16","2026-03-21"],["2025-11-16","2026-03-21"],["2025-11-16","2026-03-21"],["2025-11-16","2026-05-01"],["2025-11-22","2026-03-20"],["2025-11-22","2026-03-20"],["2025-11-22","2026-03-20"],["2025-11-22","2026-05-01"],["2025-11-23","2026-02-27"],["2025-11-23","2026-02-27"],["2025-11-23","2026-03-18"],["2025-11-23","2026-03-21"],["2025-11-24","2026-02-27"],["2025-11-24","2026-03-17"],["2025-11-24","2026-03-19"],["2025-11-24","2026-03-19"],["2025-11-24","2026-03-19"],["2025-11-24","2026-03-19"],["2025-11-24","2026-03-20"],["2025-11-24","2026-03-20"],["2025-11-24","2026-03-20"],["2025-11-24","2026-03-20"],["2025-11-24","2026-03-20"],["2025-11-24","2026-03-20"],["2025-11-24","2026-03-20"],["2025-11-24","2026-03-28"],["2025-11-30","2026-02-23"],["2025-11-30","2026-02-23"],["2025-11-30","2026-02-27"],["2025-11-30","2026-02-27"],["2025-11-30","2026-02-27"],["2025-11-30","2026-02-27"],["2025-11-30","2026-02-27"],["2025-11-30","2026-02-27"],["2025-11-30","2026-02-28"],["2025-11-30","2026-03-17"],["2025-11-30","2026-03-17"],["2025-11-30","2026-03-20"],["2025-11-30","2026-03-20"],["2025-11-30","2026-03-20"],["2025-11-30","2026-03-21"],["2025-11-30","2026-03-21"],["2025-11-30","2026-05-16"],["2025-12-01","2026-02-27"],["2025-12-01","2026-03-02"],["2025-12-01","2026-03-17"],["2025-12-07","2026-03-18"],["2025-12-07","2026-03-23"],["2025-12-08","2026-03-17"],["2025-12-09","2026-03-20"],["2025-12-12","2026-03-17"],["2025-12-14","2026-03-16"],["2025-12-14","2026-03-16"],["2025-12-14","2026-03-16"],["2025-12-14","2026-03-21"],["2026-01-01","2026-03-21"],["2026-01-04","2026-04-01"],["2026-01-06","2026-04-17"],["2026-01-06","2026-04-24"],["2026-01-07","2026-02-16"],["2026-01-07","2026-02-23"],["2026-01-07","2026-02-27"],["2026-01-07","2026-03-20"],["2026-01-07","2026-03-21"],["2026-01-18","2026-02-26"],["2026-02-26","2026-04-16"]];
+  function defaults(){ return {
+    provider:'Decron Properties', client:'OBS', version:'Staggered lease option, draft 3, November 2026',
+    units:60,
+    mix:[{t:'Studio',n:10,r:2400},{t:'1-bed',n:40,r:2700},{t:'2-bed',n:10,r:3200}],
+    cap:8, waves:'1, 15', dow:1, earliest:'2028-03-01', latest:'2028-10-16', minback:'g1', flex:14,
+    r_open:'2026-02-06', r_close1:'2026-02-22', r_close2:'2026-03-15',
+    t_open:'2028-07-14', t_close1:'2028-07-30', t_open2:'2028-08-15', t_close2:'2028-08-27',
+    res:null
+  };}
+  var S=defaults();
+  try{ var saved=JSON.parse(localStorage.getItem(KEY)||'null'); if(saved&&saved.mix) S=Object.assign(defaults(),saved); }catch(e){}
+  function save(){ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){} }
+
+  var DAY=864e5, MONTH_DAYS=30.42;
+  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var MONL=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var DOW=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  function ud(s){var p=String(s).split('-').map(Number);return Date.UTC(p[0],p[1]-1,p[2]);}
+  function okDate(s){return /^\d{4}-\d{2}-\d{2}$/.test(s||'')&&!isNaN(ud(s));}
+  function dd(a,b){return Math.round((b-a)/DAY);}
+  function fd(t){var d=new Date(t);return MON[d.getUTCMonth()]+' '+d.getUTCDate();}
+  function fdy(t){return fd(t)+', '+new Date(t).getUTCFullYear();}
+  function money(n){return '$'+Math.round(n).toLocaleString('en-US');}
+  function one(n){return (Math.round(n*10)/10).toFixed(1);}
+  function ord(n){var s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);}
+  function listJoin(a){return a.length<2?a.join(''):a.slice(0,-1).join(', ')+' or '+a[a.length-1];}
+  function split(total,weights){ // largest remainder
+    var sum=weights.reduce(function(s,w){return s+w;},0)||1;
+    var raw=weights.map(function(w){return total*w/sum;}), out=raw.map(Math.floor), left=total-out.reduce(function(s,v){return s+v;},0);
+    raw.map(function(v,i){return [v-Math.floor(v),i];}).sort(function(a,b){return b[0]-a[0];}).slice(0,left).forEach(function(x){out[x[1]]++;});
+    return out;
+  }
+  var $=function(id){return document.getElementById(id);};
+  function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+
+  /* ---------- model ---------- */
+  function compute(){
+    var res=S.res||ORIG_RES, N=Math.max(1,Math.min(res.length*50,Math.round(+S.units)||1)), CAP=Math.max(1,Math.round(+S.cap)||1);
+    var R={open:ud(S.r_open),c1:ud(S.r_close1),c2:ud(S.r_close2)};
+    var T={open:ud(S.t_open),c1:ud(S.t_close1),o2:ud(S.t_open2),c2:ud(S.t_close2)};
+    var EARLY=ud(S.earliest), LATEST=ud(S.latest);
+    var MINBACK = S.minback==='g1'?T.c1 : S.minback==='g2'?T.c2 : null;
+    var waveDays=String(S.waves).split(/[^0-9]+/).map(Number).filter(function(d){return d>=1&&d<=28;});
+    waveDays=waveDays.filter(function(d,i){return waveDays.indexOf(d)===i;}).sort(function(a,b){return a-b;});
+    if(!waveDays.length) waveDays=[1];
+    var dow=+S.dow;
+
+    // 1–2 map
+    var mapped=res.map(function(r){
+      var ci=ud(r[0]), co=ud(r[1]), a=T.open+(ci-R.open);
+      var d= co<=R.c1+14*DAY ? T.c1+(co-R.c1) : T.c2+(co-R.c2);
+      return {a:a,d:d};
+    }).sort(function(x,y){return x.a-y.a||x.d-y.d;});
+    // 3 slice
+    var n=mapped.length, apts=[];
+    for(var i=0;i<N;i++){var m=mapped[Math.floor((i+.5)*n/N)];apts.push({a:m.a,d:m.d});}
+    // 4–5
+    apts.forEach(function(p){
+      var d=new Date(p.a), y=d.getUTCFullYear(), mo=d.getUTCMonth(), day=d.getUTCDate();
+      var cand=waveDays.filter(function(w){return w<=day;});
+      var w = cand.length ? Date.UTC(y,mo,cand[cand.length-1]) : Date.UTC(y,mo-1,waveDays[waveDays.length-1]);
+      p.start=Math.max(w,EARLY);
+      p.co=p.d;
+      p.held = MINBACK!==null && p.co<MINBACK;
+      if(p.held) p.co=MINBACK;
+      p.co=Math.min(p.co,LATEST);
+      if(p.co<=p.start) p.co=p.start+DAY;
+    });
+    // 6 hand-back day + cap
+    var used={};
+    apts.slice().sort(function(x,y){return x.co-y.co||x.a-y.a;}).forEach(function(p){
+      var wd=new Date(p.co).getUTCDay(), e=p.co+((dow-wd+7)%7)*DAY;
+      while((used[e]||0)>=CAP) e+=7*DAY;
+      used[e]=(used[e]||0)+1; p.end=e;
+    });
+    // mix + rent
+    var counts=S.mix.map(function(x){return Math.max(0,Math.round(+x.n)||0);});
+    var mixN=counts.reduce(function(s,v){return s+v;},0)||1;
+    var blended=S.mix.reduce(function(s,x,k){return s+counts[k]*(+x.r||0);},0)/mixN;
+    var perDay=blended/MONTH_DAYS;
+    // 8 lengths
+    apts.forEach(function(p){p.days=dd(p.start,p.end);p.months=p.days/MONTH_DAYS;});
+    var totalDays=apts.reduce(function(s,p){return s+p.days;},0), leaseMonths=totalDays/MONTH_DAYS;
+    var lens=apts.map(function(p){return p.months;});
+    function mn(k){return Math.min.apply(null,apts.map(function(p){return p[k];}));}
+    function mx(k){return Math.max.apply(null,apts.map(function(p){return p[k];}));}
+    var minStart=mn('start'),maxStart=mx('start'),minEnd=mn('end'),maxEnd=mx('end');
+    var waves={}; apts.forEach(function(p){waves[p.start]=1;});
+    // 7 months
+    var months=[], sd=new Date(minStart);
+    for(var y=sd.getUTCFullYear(),mo=sd.getUTCMonth(); Date.UTC(y,mo,1)<=maxEnd; mo++){
+      if(mo>11){mo=0;y++;}
+      var m0=Date.UTC(y,mo,1), m1=Date.UTC(y,mo+1,1), last=m1-DAY, row={t:m0,inn:0,out:0,endL:0,days:0};
+      apts.forEach(function(p){
+        if(p.start>=m0&&p.start<m1) row.inn++;
+        if(p.end>=m0&&p.end<m1) row.out++;
+        if(p.start<=last&&p.end>last) row.endL++;
+        var o=Math.min(p.end,m1)-Math.max(p.start,m0); if(o>0) row.days+=o/DAY;
+      });
+      row.rent=Math.round(row.days*perDay); months.push(row);
+    }
+    var gross=months.reduce(function(s,r){return s+r.rent;},0);
+    var weeks=[], back=0;
+    for(var w=minEnd; w<=maxEnd; w+=7*DAY){var c=used[w]||0; back+=c; weeks.push({t:w,c:c,back:back,left:N-back});}
+    var gm={}; apts.forEach(function(p){var k=p.start+'|'+p.end; gm[k]=gm[k]||{s:p.start,e:p.end,n:0}; gm[k].n++;});
+    var groups=Object.keys(gm).map(function(k){return gm[k];}).sort(function(a,b){return a.s-b.s||a.e-b.e;});
+    var ok = months.reduce(function(s,r){return s+r.inn;},0)===N && months.reduce(function(s,r){return s+r.out;},0)===N &&
+      weeks.reduce(function(s,r){return s+r.c;},0)===N && groups.reduce(function(s,g){return s+g.n;},0)===N &&
+      Math.max.apply(null,weeks.map(function(x){return x.c;}))<=CAP;
+    return {N:N,CAP:CAP,T:T,res:res,apts:apts,counts:counts,mixN:mixN,blended:blended,perDay:perDay,leaseMonths:leaseMonths,
+      avg:leaseMonths/N,minLen:Math.min.apply(null,lens),maxLen:Math.max.apply(null,lens),
+      minStart:minStart,maxStart:maxStart,minEnd:minEnd,maxEnd:maxEnd,nWaves:Object.keys(waves).length,
+      months:months,gross:gross,weeks:weeks,groups:groups,ok:ok,waveDays:waveDays,dow:dow,LATEST:LATEST,MINBACK:MINBACK,
+      held:apts.filter(function(p){return p.held;}).length, late:apts.filter(function(p){return p.end>LATEST+6*DAY;}).length};
+  }
+
+  /* ---------- render ---------- */
+  function table(id,head,rows,foot){
+    var t=$(id); t.innerHTML='';
+    var th=el('thead'),tr=el('tr');head.forEach(function(h){tr.appendChild(el('th',null,h));});th.appendChild(tr);t.appendChild(th);
+    var tb=el('tbody');rows.forEach(function(r){var tr=el('tr');r.forEach(function(c){
+      var td=el('td',c&&c.z?'z':null); if(c&&c.node){td.appendChild(document.createTextNode(c.txt));td.appendChild(c.node);}
+      else td.textContent=(c&&c.txt!=null)?c.txt:c; tr.appendChild(td);});tb.appendChild(tr);});t.appendChild(tb);
+    if(foot){var tf=el('tfoot'),fr=el('tr');foot.forEach(function(c){fr.appendChild(el('td',null,c));});tf.appendChild(fr);t.appendChild(tf);}
+  }
+  var C;
+  function render(){
+    C=compute(); window.__model=C;
+    var prov=S.provider||'the provider', short=prov.split(' ')[0], cl=S.client||'the client', day=DOW[C.dow], days=day+'s';
+    var waveTxt=listJoin(C.waveDays.map(ord));
+    document.title=short+' apartments for '+cl+': staggered lease option';
+    $('provName').textContent=prov; $('ver').textContent=S.version||'';
+    $('h1').textContent=C.N+' apartments in with '+cl+', back to you no more than '+C.CAP+' a week';
+    $('lede').textContent='We lease '+C.N+' apartments for the '+cl+' team, moving in on the '+waveTxt+' of the month from '+fd(C.minStart)+' to '+fdy(C.maxStart)+
+      '. They come back to you on '+days+' between '+fd(C.minEnd)+' and '+fdy(C.maxEnd)+', never more than '+C.CAP+' in one week.';
+    var f=$('facts'); f.innerHTML='';
+    [{c:'cap',b:C.CAP,s:'apartments handed back in any one week, at most'},
+     {b:C.N,s:'apartments, moving in over '+C.nWaves+(C.nWaves===1?' wave':' waves')},
+     {b:one(C.avg)+' mo',s:'average lease, ranging from '+one(C.minLen)+' to '+one(C.maxLen)+' months'},
+     {b:C.gross>=1e6?'$'+(C.gross/1e6).toFixed(2)+'M':'$'+(C.gross/1e3).toFixed(0)+'k',s:money(C.gross)+' gross rent over '+one(C.leaseMonths)+' lease months'}
+    ].forEach(function(x){var d=el('div','fact'+(x.c?' '+x.c:''));d.appendChild(el('b',null,String(x.b)));d.appendChild(el('span',null,x.s));f.appendChild(d);});
+
+    $('weeklySub').textContent='Every hand-back falls on a '+day+'. The meter shows how many of the '+C.CAP+' weekly slots are used.';
+    function meter(c){var s=el('span','meter');s.setAttribute('aria-label',c+' of '+C.CAP+' slots');var k=Math.min(C.CAP,24);
+      for(var i=0;i<k;i++){var on=i<Math.round(c*k/C.CAP);s.appendChild(el('i',on?'on'+(c===C.CAP?' full':''):null));}return s;}
+    function z(v){return v?String(v):{txt:'–',z:1};}
+    table('weekTable',['Week of','Handed back','Returned so far','Still leased'],
+      C.weeks.map(function(w){return [fd(w.t),{txt:String(w.c),node:meter(w.c),z:!w.c},String(w.back),String(w.left)];}));
+    table('monthTable',['Month','Moving in','Handed back','Leased at month end','Rent to '+short],
+      C.months.map(function(r){var d=new Date(r.t);return [MONL[d.getUTCMonth()]+' '+d.getUTCFullYear(),z(r.inn),z(r.out),z(r.endL),money(r.rent)];}),
+      ['Total',String(C.N),String(C.N),one(C.leaseMonths)+' lease months',money(C.gross)]);
+    table('rentTable',['Unit type','Apartments','Monthly rent'],
+      S.mix.map(function(x,k){return [x.t,String(C.counts[k]),money(+x.r||0)];}),['Blended average',String(C.mixN),money(C.blended)]);
+
+    $('why1').textContent='Apartments come back over '+C.weeks.length+' weeks, from '+fd(C.minEnd)+' to '+fdy(C.maxEnd)+'. No week has more than '+C.CAP+
+      ', so your leasing and cleaning teams can plan a steady weekly turnover instead of re-letting a whole block at once.';
+    var heldTxt = C.MINBACK!==null ? ' None come back before the end of '+(S.minback==='g1'?'the first':'the second')+' Games period.' : '';
+    $('why2').textContent='All '+C.N+' apartments are back by '+fdy(C.maxEnd)+', in the late-summer and early-autumn leasing season, not in winter when units are hardest to fill.'+heldTxt;
+    $('why3').textContent='Each lease starts with the move-in wave just before the person arrives and ends on the '+day+' after they leave, so there are no empty months before or after. Apartments move in from '+
+      fd(C.minStart)+' and are back with you as soon as each person leaves.';
+    var flexLi=$('flexLi'); flexLi.innerHTML=''; flexLi.appendChild(el('b',null,'Flexible arrivals, fixed hand-backs.'));
+    flexLi.appendChild(document.createTextNode(' Each move-in wave can move by up to '+(Math.round(+S.flex)||0)+' days once the final arrival list is in. The weekly hand-back cap does not change.'));
+    $('note1').textContent='This scenario is based on '+cl+'’s arrival and departure pattern at a recent event ('+C.res.length+' reservations), shifted to the '+new Date(C.T.open).getUTCFullYear()+' calendar and scaled to '+C.N+
+      ' apartments. '+cl+'’s final arrival list will set the exact dates.';
+    $('note2').textContent='Each lease ends on the first '+day+' after the person checks out'+(C.MINBACK!==null?', and not before '+fdy(C.MINBACK)+', the close of '+(S.minback==='g1'?'the first':'the second')+' Games period':'')+'. If that '+day+' already has '+C.CAP+' hand-backs, the lease runs to the next '+day+' with a free slot. Rent is charged by the day at the blended rate ('+money(C.blended)+' a month, about '+money(C.perDay)+' a day).';
+    $('note3').textContent='All leases are 30 nights or longer and are fully insured. Rates are proposals and are subject to agreement. All amounts in USD.';
+
+    var warn=[];
+    if(C.mixN!==C.N) warn.push('Unit counts add up to '+C.mixN+', not '+C.N+'. Rent uses the blended rate of the mix.');
+    if(C.late) warn.push(C.late+' apartment'+(C.late===1?' is':'s are')+' handed back after the latest hand-back date because the weekly cap is full. Raise the cap or move the date.');
+    if(C.minLen*MONTH_DAYS<30) warn.push('At least one lease is shorter than 30 nights.');
+    if(!C.ok) warn.push('Totals do not reconcile. Check the inputs.');
+    $('warn').textContent=warn.join(' ');
+    $('resInfo').textContent=(S.res?'Your uploaded list: ':'Original list: ')+C.res.length+' reservations.';
+    gantt();
+  }
+
+  function gantt(){
+    var host=$('gantt'); host.innerHTML=''; var groups=C.groups, T=C.T;
+    var W=Math.max(660,host.clientWidth||900), ml=74, mr=40, top=30;
+    var x0=Date.UTC(new Date(C.minStart).getUTCFullYear(),new Date(C.minStart).getUTCMonth(),1);
+    var lastD=new Date(C.maxEnd), x1=Date.UTC(lastD.getUTCFullYear(),lastD.getUTCMonth()+1,1);
+    function x(t){return ml+(t-x0)/(x1-x0)*(W-ml-mr);}
+    var maxN=Math.max.apply(null,groups.map(function(g){return g.n;}));
+    function th(n){return 16+(n/maxN)*12;}
+    var ys=[],yy=top; groups.forEach(function(g,i){if(i&&g.s!==groups[i-1].s)yy+=10; ys.push(yy+th(g.n)/2); yy+=th(g.n)+5;});
+    var H=yy+28, NS='http://www.w3.org/2000/svg';
+    var svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width','100%');
+    svg.setAttribute('role','img'); svg.setAttribute('aria-label','Rental periods for '+C.N+' apartments in '+groups.length+' groups');
+    function add(tag,a,txt,parent){var e=document.createElementNS(NS,tag);for(var k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;(parent||svg).appendChild(e);return e;}
+    [[T.open,T.c1+DAY,'Games period 1'],[T.o2,T.c2+DAY,'Games period 2']].forEach(function(gp){
+      if(gp[1]<x0||gp[0]>x1) return;
+      add('rect',{x:x(gp[0]),y:top-8,width:Math.max(1,x(gp[1])-x(gp[0])),height:H-top-20,fill:'var(--games)'});
+      add('text',{x:(x(gp[0])+x(gp[1]))/2,y:top-14,'text-anchor':'middle','font-size':11,'font-weight':700,fill:'var(--games-ink)'},gp[2]);
+    });
+    for(var t=x0;t<=x1;){var d=new Date(t);add('line',{x1:x(t),x2:x(t),y1:top-8,y2:H-20,stroke:'var(--grid)'});
+      if(t<x1) add('text',{x:x(t)+5,y:H-6,'font-size':12,fill:'var(--muted)'},MON[d.getUTCMonth()]);
+      t=Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1);}
+    groups.forEach(function(g,i){
+      var h=th(g.n), y=ys[i];
+      if(!i||g.s!==groups[i-1].s) add('text',{x:ml-10,y:y+4,'text-anchor':'end','font-size':12,'font-weight':700,fill:'var(--ink)'},fd(g.s));
+      var r=add('rect',{x:x(g.s),y:y-h/2,width:Math.max(2,x(g.e)-x(g.s)),height:h,rx:Math.min(3,h/2),fill:'var(--bar)'});
+      add('title',{},g.n+(g.n===1?' apartment':' apartments')+', '+fd(g.s)+' to '+fd(g.e),r);
+      var bw=x(g.e)-x(g.s), per=fd(g.s)+' – '+fd(g.e);
+      var inside=bw>per.length*6+16;
+      if(inside) add('text',{x:x(g.s)+8,y:y+4,'font-size':11,'font-weight':700,fill:'#ffffff'},per);
+      add('text',{x:x(g.e)+6,y:y+4,'font-size':12,'font-weight':700,fill:'var(--ink)'},String(g.n)+(inside?'':'  '+per));
+    });
+    add('text',{x:4,y:top-14,'font-size':11,fill:'var(--muted)'},'Move-in');
+    host.appendChild(svg);
+  }
+
+  /* ---------- editor ---------- */
+  var FIELDS=['provider','client','version','cap','waves','dow','earliest','latest','minback','flex','r_open','r_close1','r_close2','t_open','t_close1','t_open2','t_close2'];
+  var DATES={earliest:1,latest:1,r_open:1,r_close1:1,r_close2:1,t_open:1,t_close1:1,t_open2:1,t_close2:1};
+  function fill(){
+    FIELDS.forEach(function(k){$('i_'+k).value=S[k];});
+    $('i_units').value=S.units; buildMix();
+  }
+  function buildMix(){
+    var g=$('mixg'); g.innerHTML='';
+    ['Unit type','Count','Rent / month'].forEach(function(h){g.appendChild(el('span',null,h));});
+    S.mix.forEach(function(x,k){
+      var t=document.createElement('input'); t.value=x.t; t.setAttribute('aria-label','Unit type '+(k+1));
+      t.addEventListener('input',function(){x.t=t.value;commit();});
+      var nn=document.createElement('input'); nn.type='number'; nn.min=0; nn.step=1; nn.value=x.n; nn.setAttribute('aria-label',x.t+' count');
+      nn.addEventListener('input',function(){x.n=Math.max(0,Math.round(+nn.value)||0); S.units=S.mix.reduce(function(s,m){return s+m.n;},0)||1; $('i_units').value=S.units; commit();});
+      var rr=document.createElement('input'); rr.type='number'; rr.min=0; rr.step=50; rr.value=x.r; rr.setAttribute('aria-label',x.t+' monthly rent');
+      rr.addEventListener('input',function(){x.r=Math.max(0,+rr.value||0);commit();});
+      g.appendChild(t); g.appendChild(nn); g.appendChild(rr);
+    });
+  }
+  var timer;
+  function commit(){save(); clearTimeout(timer); timer=setTimeout(render,80);}
+  FIELDS.forEach(function(k){
+    var inp=$('i_'+k);
+    inp.addEventListener(inp.tagName==='SELECT'||DATES[k]?'change':'input',function(){
+      if(DATES[k]&&!okDate(inp.value)) return;
+      S[k]= (k==='cap'||k==='flex'||k==='dow') ? (+inp.value||0) : inp.value;
+      if(k==='cap'&&S.cap<1) return;
+      commit();
+    });
+  });
+  $('i_units').addEventListener('input',function(){
+    var v=Math.round(+$('i_units').value); if(!(v>=1)) return; S.units=v;
+    var c=split(v,S.mix.map(function(m){return m.n||0;})); S.mix.forEach(function(m,k){m.n=c[k];}); buildMix(); commit();
+  });
+  $('i_csv').addEventListener('change',function(){
+    var file=this.files[0]; if(!file) return; var rd=new FileReader();
+    rd.onload=function(){
+      var rows=[]; String(rd.result).split(/\r?\n/).forEach(function(line){var m=line.match(/\d{4}-\d{2}-\d{2}/g); if(m&&m.length>=2&&ud(m[1])>ud(m[0])) rows.push([m[0],m[1]]);});
+      if(rows.length<2){ $('warn').textContent='No reservations found in that file. Each line needs a check-in and a check-out date as YYYY-MM-DD.'; return; }
+      S.res=rows; commit();
+    };
+    rd.readAsText(file); this.value='';
+  });
+  $('resReset').addEventListener('click',function(){S.res=null;commit();});
+  $('reset').addEventListener('click',function(){S=defaults(); save(); fill(); render();});
+  function openD(on){$('drawer').classList.toggle('open',on);$('scrim').classList.toggle('on',on);$('drawer').setAttribute('aria-hidden',on?'false':'true');$('edit').setAttribute('aria-expanded',on?'true':'false');if(on)$('i_units').focus();}
+  $('edit').addEventListener('click',function(){openD(true);});
+  $('close').addEventListener('click',function(){openD(false);$('edit').focus();});
+  $('scrim').addEventListener('click',function(){openD(false);});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&$('drawer').classList.contains('open')){openD(false);$('edit').focus();}});
+  var rt; window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(gantt,120);});
+  window.addEventListener('beforeprint',gantt);
+  $('pdf').addEventListener('click',function(){window.print();});
+  fill(); render();
+})();
+
+</script>
+</body>
+</html>

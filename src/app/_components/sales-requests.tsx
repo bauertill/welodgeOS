@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { RequestGuestInfo } from "~/app/_components/guest-info";
+import { RequestRoomingList } from "~/app/_components/rooming-list";
 import { HistorySection } from "~/app/_components/activity-log";
 import { Manager } from "~/app/_components/client-list";
 import { contractHref, newContractHref } from "~/lib/finance";
@@ -1494,6 +1495,8 @@ export function SalesRequestView({ request }: { request: FullRequest }) {
 
       {/* Operations (doc §6.8): the client's property information page. */}
       {tab === "guest" && <RequestGuestInfo salesRequestId={request.id} />}
+      {/* Operations (doc §6.9): who sleeps where. */}
+      {tab === "rooming" && <RequestRoomingList salesRequestId={request.id} />}
 
       {tab === "history" && <HistorySection entity="SalesRequest" entityId={request.id} className="" startOpen />}
     </div>
@@ -1509,6 +1512,7 @@ const requestTabs = [
   { key: "contracting", label: "Contracting details" },
   { key: "tasks", label: "Tasks & quotes" },
   { key: "guest", label: "Guest information" },
+  { key: "rooming", label: "Rooming list" },
   { key: "history", label: "History" },
 ] as const;
 type RequestTab = (typeof requestTabs)[number]["key"];

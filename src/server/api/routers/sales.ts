@@ -17,7 +17,7 @@ import {
   waitingOnLabels,
 } from "~/lib/sales";
 import { clientCompanyFields, clientCompanyKeys, type ClientCompanyKey } from "~/lib/clients";
-import { peopleWords, wishesInWords } from "~/lib/needs";
+import { locationName, peopleWords, wishesInWords } from "~/lib/needs";
 import { measuredPlaces } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
@@ -103,6 +103,14 @@ const include = {
   closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
   lines: { orderBy: [{ position: "asc" }] },
   closeToPoints: { orderBy: [{ position: "asc" }] },
+  locations: {
+    orderBy: [{ position: "asc" }],
+    include: {
+      closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+      points: { orderBy: [{ position: "asc" }] },
+      lines: { orderBy: [{ position: "asc" }] },
+    },
+  },
   amendsContract: { select: { id: true, name: true, signedOn: true, eventId: true } },
 } satisfies Prisma.SalesRequestInclude;
 
@@ -127,11 +135,16 @@ const lineInput = z.object({
   checkOut: day,
 });
 
-const detailsInput = z.object({
+/**
+ * One place the client needs rooms (doc §4.11): what to be close to, the units
+ * and periods there, and notes for it alone. `id` keeps a saved location —
+ * and its sourcing task — the same across edits.
+ */
+const locationInput = z.object({
+  id: z.string().max(100).optional(),
+  name: z.string().max(200).default(""),
+  notes: z.string().max(5000).default(""),
   lines: z.array(lineInput).max(50),
-  budgetCents: z.number().int().min(0).nullable(),
-  budgetCurrency: z.string().length(3).nullable(),
-  budgetBasis: z.nativeEnum(BudgetBasis).nullable(),
   closeToIds: z.array(z.string()).max(50),
   /** Their own places, found by address or picked on a map. */
   points: z
@@ -144,6 +157,13 @@ const detailsInput = z.object({
       }),
     )
     .max(20),
+});
+
+const detailsInput = z.object({
+  locations: z.array(locationInput).min(1).max(20),
+  budgetCents: z.number().int().min(0).nullable(),
+  budgetCurrency: z.string().length(3).nullable(),
+  budgetBasis: z.nativeEnum(BudgetBasis).nullable(),
   closeToOther: z.string().max(2000),
   /** Room types and occupancy, in words. */
   clientComments: z.string().max(10_000),
@@ -164,37 +184,71 @@ async function saveDetails(
   actor: { id: string | null; summary: string },
 ) {
   const before = await tx.salesRequest.findUniqueOrThrow({ where: { id }, include });
-  for (const [index, line] of details.lines.entries()) {
-    if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: `Line ${index + 1}: the departure must be after the arrival.` });
+  const several = details.locations.length > 1;
+  for (const [l, location] of details.locations.entries()) {
+    for (const [index, line] of location.lines.entries()) {
+      if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) {
+        const where = several ? `${location.name.trim() || `Location ${l + 1}`}, line ${index + 1}` : `Line ${index + 1}`;
+        throw new TRPCError({ code: "BAD_REQUEST", message: `${where}: the departure must be after the arrival.` });
+      }
     }
   }
-  const places = details.closeToIds.length
-    ? await tx.placeOfInterest.findMany({ where: { id: { in: details.closeToIds }, eventId: before.eventId ?? "" }, select: { id: true } })
+  const allIds = [...new Set(details.locations.flatMap((location) => location.closeToIds))];
+  const places = allIds.length
+    ? await tx.placeOfInterest.findMany({ where: { id: { in: allIds }, eventId: before.eventId ?? "" }, select: { id: true } })
     : [];
+  const known = new Set(places.map((place) => place.id));
+
+  // The locations: kept by id (so each keeps its sourcing task), new ones made, the rest removed.
+  const existing = new Set(before.locations.map((location) => location.id));
+  const kept: string[] = [];
+  await tx.salesRequestLine.deleteMany({ where: { salesRequestId: id } });
+  await tx.salesRequestPoint.deleteMany({ where: { salesRequestId: id } });
+  for (const [position, location] of details.locations.entries()) {
+    const data = {
+      name: blank(location.name),
+      notes: blank(location.notes),
+      position,
+      closeTo: { set: location.closeToIds.filter((placeId) => known.has(placeId)).map((placeId) => ({ id: placeId })) },
+    };
+    const saved =
+      location.id && existing.has(location.id)
+        ? await tx.salesRequestLocation.update({ where: { id: location.id }, data, select: { id: true } })
+        : await tx.salesRequestLocation.create({ data: { ...data, closeTo: { connect: data.closeTo.set }, salesRequestId: id }, select: { id: true } });
+    kept.push(saved.id);
+    await tx.salesRequestLine.createMany({
+      data: location.lines.map((line, index) => ({
+        salesRequestId: id,
+        locationId: saved.id,
+        rooms: line.rooms,
+        roomType: blank(line.roomType),
+        people: line.people,
+        checkIn: line.checkIn ? parseDay(line.checkIn) : null,
+        checkOut: line.checkOut ? parseDay(line.checkOut) : null,
+        // Numbered across the request, location by location.
+        position: position * 100 + index,
+      })),
+    });
+    await tx.salesRequestPoint.createMany({
+      data: location.points.map((point, index) => ({
+        ...point,
+        address: blank(point.address),
+        salesRequestId: id,
+        locationId: saved.id,
+        position: position * 100 + index,
+      })),
+    });
+  }
+  await tx.salesRequestLocation.deleteMany({ where: { salesRequestId: id, id: { notIn: kept } } });
+
   const after = await tx.salesRequest.update({
     where: { id },
     data: {
-      // The lines are the request's own rows: replaced as a whole.
-      lines: {
-        deleteMany: {},
-        create: details.lines.map((line, position) => ({
-          rooms: line.rooms,
-          roomType: blank(line.roomType),
-          people: line.people,
-          checkIn: line.checkIn ? parseDay(line.checkIn) : null,
-          checkOut: line.checkOut ? parseDay(line.checkOut) : null,
-          position,
-        })),
-      },
       budgetCents: details.budgetCents,
       budgetCurrency: details.budgetCents === null ? null : (details.budgetCurrency ?? "EUR"),
       budgetBasis: details.budgetCents === null ? null : (details.budgetBasis ?? "PER_ROOM_NIGHT"),
+      // The request's places are all its locations' together.
       closeTo: { set: places },
-      closeToPoints: {
-        deleteMany: {},
-        create: details.points.map((point, position) => ({ ...point, address: blank(point.address), position })),
-      },
       closeToOther: blank(details.closeToOther),
       clientComments: blank(details.clientComments),
       breakfast: details.breakfast,
@@ -234,16 +288,21 @@ function readable(request: Loaded) {
     closedOn: date(request.closedOn),
     amendsContract: request.amendsContract?.name ?? null,
     asked:
-      request.lines
-        .map((line) =>
-          [
-            `${line.rooms} × ${line.roomType ?? "units"}`,
-            peopleWords(line.people),
-            line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : null,
-          ]
-            .filter(Boolean)
-            .join(", "),
-        )
+      request.locations
+        .flatMap((location, index) => {
+          const lines = location.lines.map((line) =>
+            [
+              `${line.rooms} × ${line.roomType ?? "units"}`,
+              peopleWords(line.people),
+              line.checkIn && line.checkOut ? formatRange(line.checkIn, line.checkOut) : null,
+            ]
+              .filter(Boolean)
+              .join(", "),
+          );
+          if (request.locations.length < 2 && !location.name) return lines;
+          const head = locationName(location, index);
+          return [`${head}:`, ...lines.map((line) => `  ${line}`), ...(location.notes ? [`  ${location.notes}`] : [])];
+        })
         .join("\n") || null,
     budgetAmount:
       request.budgetCents !== null && request.budgetCurrency
@@ -733,13 +792,20 @@ async function tieContract(tx: Prisma.TransactionClient, actorId: string, reques
 }
 
 /** What sourcing a request starts from (doc §4.11): the places to be close to, and what is wanted. */
-async function sourcingContext(db: PrismaClient, id: string) {
-  const request = await db.salesRequest.findUniqueOrThrow({
+async function sourcingContext(db: PrismaClient, id: string, locationId?: string | null) {
+  const found = await db.salesRequest.findUniqueOrThrow({
     where: { id },
     include: {
       lines: true,
       closeTo: { select: { name: true, latitude: true, longitude: true } },
       closeToPoints: { select: { label: true, latitude: true, longitude: true } },
+      locations: {
+        include: {
+          lines: true,
+          closeTo: { select: { name: true, latitude: true, longitude: true } },
+          points: { select: { label: true, latitude: true, longitude: true } },
+        },
+      },
       event: {
         select: {
           id: true,
@@ -749,6 +815,9 @@ async function sourcingContext(db: PrismaClient, id: string) {
       },
     },
   });
+  // A sourcing task is for one location: only its places and its units (doc §4.11).
+  const location = locationId ? found.locations.find((one) => one.id === locationId) : undefined;
+  const request = location ? { ...found, lines: location.lines, closeTo: location.closeTo, closeToPoints: location.points } : found;
   const chosen = [
     ...request.closeTo.map((place) => ({ label: place.name, latitude: place.latitude, longitude: place.longitude })),
     ...request.closeToPoints,
@@ -1408,18 +1477,23 @@ export const salesRouter = createTRPCRouter({
       stay: request.event ? { checkIn: dayKey(request.event.startDate), checkOut: dayKey(request.event.endDate) } : null,
       submittedAt: request.needsSubmittedAt,
       values: {
-        lines: request.lines.map((line) => ({
-          rooms: line.rooms,
-          roomType: line.roomType ?? "",
-          people: line.people,
-          checkIn: line.checkIn ? dayKey(line.checkIn) : "",
-          checkOut: line.checkOut ? dayKey(line.checkOut) : "",
+        locations: request.locations.map((location) => ({
+          id: location.id,
+          name: location.name,
+          notes: location.notes,
+          closeToIds: location.closeTo.map((place) => place.id),
+          points: location.points.map(({ label, address, latitude, longitude }) => ({ label, address: address ?? "", latitude, longitude })),
+          lines: location.lines.map((line) => ({
+            rooms: line.rooms,
+            roomType: line.roomType ?? "",
+            people: line.people,
+            checkIn: line.checkIn ? dayKey(line.checkIn) : "",
+            checkOut: line.checkOut ? dayKey(line.checkOut) : "",
+          })),
         })),
         budgetCents: request.budgetCents,
         budgetCurrency: request.budgetCurrency,
         budgetBasis: request.budgetBasis,
-        closeToIds: request.closeTo.map((place) => place.id),
-        points: request.closeToPoints.map(({ label, address, latitude, longitude }) => ({ label, address: address ?? "", latitude, longitude })),
         closeToOther: request.closeToOther ?? "",
         clientComments: request.clientComments ?? "",
         breakfast: request.breakfast,
@@ -1434,8 +1508,8 @@ export const salesRouter = createTRPCRouter({
    * properties we already have near them, each judged against the request.
    * With no places chosen, the event's own places stand in, and it says so.
    */
-  sourcing: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    const { request, chosen, targets, wanted } = await sourcingContext(ctx.db, input.id);
+  sourcing: protectedProcedure.input(z.object({ id: z.string(), locationId: z.string().nullish() })).query(async ({ ctx, input }) => {
+    const { request, chosen, targets, wanted } = await sourcingContext(ctx.db, input.id, input.locationId);
     const onList = new Set(
       request.eventId
         ? (await ctx.db.scoutingEntry.findMany({ where: { eventId: request.eventId }, select: { propertyId: true } })).map((entry) => entry.propertyId)
@@ -1562,9 +1636,9 @@ export const salesRouter = createTRPCRouter({
    */
   sourcingDiscover: protectedProcedure
     // 5 km to start with; wider when asked.
-    .input(z.object({ id: z.string(), radiusKm: z.number().min(1).max(30).default(5) }))
+    .input(z.object({ id: z.string(), locationId: z.string().nullish(), radiusKm: z.number().min(1).max(30).default(5) }))
     .query(async ({ ctx, input }) => {
-    const { targets, wanted } = await sourcingContext(ctx.db, input.id);
+    const { targets, wanted } = await sourcingContext(ctx.db, input.id, input.locationId);
     if (targets.length === 0) return { source: null as Source | null, found: [] };
     const kinds = { hotels: wanted.hotelRooms || !wanted.apartments, apartments: wanted.apartments };
     const answered = await Promise.all(targets.slice(0, 4).map((target) => findNearby(target, input.radiusKm, kinds)));
@@ -1592,7 +1666,7 @@ export const salesRouter = createTRPCRouter({
    * Ask a property near the client's places for a rate (doc §4.11, 2026-10-18):
    * a get rate task for the accommodation manager, with the dates and rooms.
    */
-  getRate: protectedProcedure.input(z.object({ salesRequestId: z.string(), propertyId: z.string() })).mutation(async ({ ctx, input }) => {
+  getRate: protectedProcedure.input(z.object({ salesRequestId: z.string(), propertyId: z.string(), locationId: z.string().nullish() })).mutation(async ({ ctx, input }) => {
     const task = await ctx.db.$transaction(async (tx) => {
       const request = await tx.salesRequest.findUniqueOrThrow({ where: { id: input.salesRequestId }, select: { eventId: true } });
       if (!request.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the event under Details first — a rate is for an event." });
@@ -1603,7 +1677,7 @@ export const salesRouter = createTRPCRouter({
   }),
 
   addFound: protectedProcedure
-    .input(z.object({ salesRequestId: z.string(), place: foundPlaceInput }))
+    .input(z.object({ salesRequestId: z.string(), locationId: z.string().nullish(), place: foundPlaceInput }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.db.$transaction(async (tx) => {
         const request = await tx.salesRequest.findUniqueOrThrow({
@@ -1614,6 +1688,7 @@ export const salesRouter = createTRPCRouter({
           place: input.place,
           eventId: request.eventId,
           salesRequestId: input.salesRequestId,
+          salesLocationId: input.locationId ?? null,
           foundWhile: `while sourcing for ${request.client.name}`,
           actorId: ctx.session.user.id,
         });
@@ -1653,7 +1728,7 @@ export const salesRouter = createTRPCRouter({
       await ctx.db.$transaction(async (tx) => {
         const request = await tx.salesRequest.findUnique({ where: { needsToken: token }, select: { id: true, ownerId: true, client: { select: { name: true } } } });
         if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This link is not in use any more." });
-        if (details.lines.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Please say how many rooms you need." });
+        if (details.locations.every((location) => location.lines.length === 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Please say how many rooms you need." });
         await saveDetails(tx, request.id, details, { id: null, summary: "Needs sent by the client, through the link" });
         await tx.salesRequest.update({ where: { id: request.id }, data: { needsSubmittedAt: new Date() } });
         await notify(tx, {
@@ -1661,8 +1736,13 @@ export const salesRouter = createTRPCRouter({
           actorId: null,
           kind: "SALES_NEEDS_SENT",
           title: `${request.client.name} told us their needs`,
-          body: details.lines
-            .map((line) => [`${line.rooms} ${line.roomType || "rooms"}`, line.checkIn && line.checkOut ? `${line.checkIn} – ${line.checkOut}` : null].filter(Boolean).join(" · "))
+          body: details.locations
+            .flatMap((location) => [
+              ...(details.locations.length > 1 || location.name.trim() ? [`${location.name.trim() || "Another location"}:`] : []),
+              ...location.lines.map((line) =>
+                [`${line.rooms} ${line.roomType || "rooms"}`, line.checkIn && line.checkOut ? `${line.checkIn} – ${line.checkOut}` : null].filter(Boolean).join(" · "),
+              ),
+            ])
             .join("\n"),
           link: `/sales/${request.id}`,
         });

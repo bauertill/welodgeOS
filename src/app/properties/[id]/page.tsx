@@ -17,6 +17,7 @@ import {
 } from "~/app/_components/property-cards";
 import { PropertyContracts } from "~/app/_components/finance";
 import { PropertyGuestInfo } from "~/app/_components/guest-info";
+import { MasterRoomingList } from "~/app/_components/rooming-list";
 import { PropertyContractors } from "~/app/_components/contractors";
 import { PropertyMedia } from "~/app/_components/property-media";
 import { PropertyTabs } from "~/app/_components/property-tabs";
@@ -31,7 +32,7 @@ export default async function PropertyPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ back?: string }>;
+  searchParams: Promise<{ back?: string; event?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
@@ -42,7 +43,7 @@ export default async function PropertyPage({
 
   // Opened from an event's Properties tab: "back" goes to that event. Only an
   // event this property is actually on is accepted.
-  const { back } = await searchParams;
+  const { back, event: rosterEvent } = await searchParams;
   const cameFrom = property.scoutingEntries.find((entry) => back === `/events/${entry.event.id}`);
   const editHref = `/properties/${property.id}/edit${cameFrom ? `?back=${encodeURIComponent(back!)}` : ""}`;
 
@@ -135,6 +136,8 @@ export default async function PropertyPage({
               },
               // What guests need to know, for the client's property information page (doc §6.8, 2026-11-23).
               { key: "guest", label: "Guest information", content: <PropertyGuestInfo propertyId={property.id} /> },
+              // Every client's guests here, for the hotel (doc §6.9, 2026-11-23).
+              { key: "rooming", label: "Rooming list", content: <MasterRoomingList propertyId={property.id} eventId={rosterEvent ?? null} /> },
               // Furniture, cleaning… companies serving it (doc §3.11, 2026-11-19).
               { key: "contractors", label: "Contractors", count: property._count.contractors, content: <PropertyContractors propertyId={property.id} /> },
               // Kept for the record, rarely read: a tab of its own, out of the way.

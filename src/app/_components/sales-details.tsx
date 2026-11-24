@@ -14,7 +14,7 @@ import { DatePicker } from "~/app/_components/date-picker";
 import { Card } from "~/app/_components/ui";
 import { dayKey, nightsBetween } from "~/lib/dates";
 import { formatDate, formatMoney, formatMomentInWords, formatRange } from "~/lib/format";
-import { peopleWords, wishes } from "~/lib/needs";
+import { locationName, peopleWords, wishes } from "~/lib/needs";
 import { currencyForCountry, roomTypeGroups } from "~/lib/sales";
 import { measuredPlaces } from "~/lib/scouting";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -50,13 +50,21 @@ const blankLine = (from?: LineDraft): LineDraft => ({
   checkOut: "",
 });
 
+/** One place the client needs rooms (doc §4.11): its places, its units, its notes. */
+export type LocationDraft = { id?: string; name: string; notes: string; closeToIds: string[]; points: Point[]; lines: LineDraft[] };
+const blankLocation = (from?: LocationDraft): LocationDraft => ({
+  name: "",
+  notes: "",
+  closeToIds: [],
+  points: [],
+  lines: [blankLine(from?.lines[0] ? { ...from.lines[0], checkOut: from.lines[0].checkIn } : undefined)],
+});
+
 export type DetailsValues = {
-  lines: LineDraft[];
+  locations: LocationDraft[];
   budget: string;
   budgetCurrency: string;
   budgetBasis: BudgetBasis;
-  closeToIds: string[];
-  points: Point[];
   closeToOther: string;
   clientComments: string;
   breakfast: boolean | null;
@@ -65,17 +73,22 @@ export type DetailsValues = {
 };
 
 type StoredLine = { rooms: number; roomType: string | null; people?: number | null; checkIn: Date | string | null; checkOut: Date | string | null };
+type StoredPoint = { label: string; address: string | null; latitude: number; longitude: number };
+type StoredLocation = { id: string; name: string | null; notes: string | null; closeToIds: string[]; points: StoredPoint[]; lines: StoredLine[] };
+
+/** A request's saved locations as the form takes them. */
+export const storedLocations = (request: {
+  locations: { id: string; name: string | null; notes: string | null; closeTo: { id: string }[]; points: StoredPoint[]; lines: StoredLine[] }[];
+}): StoredLocation[] => request.locations.map((location) => ({ ...location, closeToIds: location.closeTo.map((place) => place.id) }));
 
 export function detailsFrom(
   values: {
-  lines: StoredLine[];
+  locations: StoredLocation[];
   budgetCents: number | null;
   budgetCurrency: string | null;
   budgetBasis: BudgetBasis | null;
-  closeToIds: string[];
   closeToOther: string | null;
   clientComments: string | null;
-  points?: { label: string; address: string | null; latitude: number; longitude: number }[];
   breakfast?: boolean | null;
   parking?: boolean | null;
   parkingSpaces?: number | null;
@@ -84,22 +97,31 @@ export function detailsFrom(
   defaultCurrency = "EUR",
 ): DetailsValues {
   const day = (value: Date | string | null) => (!value ? "" : typeof value === "string" ? value : dayKey(value));
-  return {
-    lines: values.lines.length
-      ? values.lines.map((line) => ({
+  const lines = (stored: StoredLine[]) =>
+    stored.length
+      ? stored.map((line) => ({
           rooms: line.rooms ? String(line.rooms) : "",
           roomType: line.roomType ?? "",
           people: line.people ? String(line.people) : "",
           checkIn: day(line.checkIn),
           checkOut: day(line.checkOut),
         }))
-      : [blankLine()],
+      : [blankLine()];
+  return {
+    locations: values.locations.length
+      ? values.locations.map((location) => ({
+          id: location.id,
+          name: location.name ?? "",
+          notes: location.notes ?? "",
+          closeToIds: location.closeToIds,
+          points: location.points.map((point) => ({ ...point, address: point.address ?? "" })),
+          lines: lines(location.lines),
+        }))
+      : [blankLocation()],
     budget: values.budgetCents !== null ? (values.budgetCents / 100).toFixed(2).replace(/\.00$/, "") : "",
     budgetCurrency: values.budgetCurrency ?? defaultCurrency,
     budgetBasis: values.budgetBasis ?? "PER_ROOM_NIGHT",
-    closeToIds: values.closeToIds,
     closeToOther: values.closeToOther ?? "",
-    points: (values.points ?? []).map((point) => ({ ...point, address: point.address ?? "" })),
     clientComments: values.clientComments ?? "",
     breakfast: values.breakfast ?? null,
     parking: values.parking ?? null,
@@ -108,38 +130,46 @@ export function detailsFrom(
 }
 
 /** The details as the server takes them; a problem in words when something does not read. */
+type LineInput = { rooms: number; roomType: string; people: number | null; checkIn: string; checkOut: string };
+type LocationInput = { id?: string; name: string; notes: string; closeToIds: string[]; points: Point[]; lines: LineInput[] };
+
+/** A location with nothing in it at all — left out, not refused. */
+const emptyLocation = (location: LocationDraft) =>
+  !location.name.trim() && !location.notes.trim() && !location.closeToIds.length && !location.points.length && location.lines.every((line) => !line.rooms.trim() && !line.roomType.trim() && !line.checkIn && !line.checkOut);
+
 export function detailsInput(values: DetailsValues): { problem: string } | { input: ReturnType<typeof toInput> } {
-  const lines = [];
-  // A line with nothing in it is left out, not refused.
-  for (const [index, line] of values.lines.entries()) {
-    if (!line.rooms.trim() && !line.roomType.trim() && !line.checkIn && !line.checkOut) continue;
-    const label = values.lines.length > 1 ? `Line ${index + 1}: ` : "";
-    const rooms = Number(line.rooms);
-    if (!line.rooms.trim() || !Number.isInteger(rooms) || rooms < 1) return { problem: `${label}say how many units, like 20.` };
-    if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) return { problem: `${label}the departure must be after the arrival.` };
-    const people = line.people.trim() ? Number(line.people) : null;
-    if (people !== null && (!Number.isInteger(people) || people < 1)) return { problem: `${label}people per unit should be a number, like 2.` };
-    lines.push({ rooms, roomType: line.roomType, people, checkIn: line.checkIn, checkOut: line.checkOut });
+  const several = values.locations.length > 1;
+  const locations: LocationInput[] = [];
+  for (const [l, location] of values.locations.entries()) {
+    if (several && emptyLocation(location)) continue;
+    const where = several ? `${location.name.trim() || `Location ${l + 1}`}, ` : "";
+    const lines = [];
+    // A line with nothing in it is left out, not refused.
+    for (const [index, line] of location.lines.entries()) {
+      if (!line.rooms.trim() && !line.roomType.trim() && !line.checkIn && !line.checkOut) continue;
+      const label = location.lines.length > 1 ? `${where}line ${index + 1}: ` : where;
+      const rooms = Number(line.rooms);
+      if (!line.rooms.trim() || !Number.isInteger(rooms) || rooms < 1) return { problem: `${label}say how many units, like 20.` };
+      if (line.checkIn && line.checkOut && line.checkOut <= line.checkIn) return { problem: `${label}the departure must be after the arrival.` };
+      const people = line.people.trim() ? Number(line.people) : null;
+      if (people !== null && (!Number.isInteger(people) || people < 1)) return { problem: `${label}people per unit should be a number, like 2.` };
+      lines.push({ rooms, roomType: line.roomType, people, checkIn: line.checkIn, checkOut: line.checkOut });
+    }
+    locations.push({ id: location.id, name: location.name, notes: location.notes, closeToIds: location.closeToIds, points: location.points, lines });
   }
+  if (!locations.length) locations.push({ name: "", notes: "", closeToIds: [], points: [], lines: [] });
   const budget = values.budget.trim() ? Number(values.budget.replace(/[’'\s,]/g, "")) : null;
   if (budget !== null && (!Number.isFinite(budget) || budget < 0)) return { problem: "The budget should be an amount, like 180." };
   const spaces = values.parking && values.parkingSpaces.trim() ? Number(values.parkingSpaces) : null;
   if (spaces !== null && (!Number.isInteger(spaces) || spaces < 1)) return { problem: "Parking: say how many cars, like 3." };
-  return { input: toInput(values, lines, budget, spaces) };
+  return { input: toInput(values, locations, budget, spaces) };
 }
-function toInput(
-  values: DetailsValues,
-  lines: { rooms: number; roomType: string; people: number | null; checkIn: string; checkOut: string }[],
-  budget: number | null,
-  parkingSpaces: number | null,
-) {
+function toInput(values: DetailsValues, locations: LocationInput[], budget: number | null, parkingSpaces: number | null) {
   return {
-    lines,
+    locations,
     budgetCents: budget === null ? null : Math.round(budget * 100),
     budgetCurrency: budget === null ? null : values.budgetCurrency,
     budgetBasis: budget === null ? null : values.budgetBasis,
-    closeToIds: values.closeToIds,
-    points: values.points,
     closeToOther: values.closeToOther,
     clientComments: values.clientComments,
     breakfast: values.breakfast,
@@ -170,98 +200,86 @@ export function DetailsFields({
   periods?: EventPeriodDays[];
 }) {
   const set = <K extends keyof DetailsValues>(key: K, value: DetailsValues[K]) => onChange({ ...values, [key]: value });
-  const setLine = (index: number, patch: Partial<LineDraft>) =>
-    set(
-      "lines",
-      values.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
-    );
+  const several = values.locations.length > 1;
+  const setLocation = (index: number, location: LocationDraft) => set("locations", values.locations.map((one, i) => (i === index ? location : one)));
   return (
     <div className="space-y-4">
-      <div>
-        <Label>{forClient ? "The units you need, and when" : "Units and periods"}</Label>
-        <div className="space-y-2">
-          {values.lines.map((line, index) => (
-            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[4.75rem_minmax(10rem,1fr)_5.5rem_8.75rem_8.75rem_1.25rem] sm:items-end sm:border-0 sm:p-0">
-              <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap">
-                  Units
-                  <InfoTip text={UNIT_HINT} />
-                </span>
-                <Input value={line.rooms} onChange={(e) => setLine(index, { rooms: e.target.value })} inputMode="numeric" placeholder="20" aria-label={`Line ${index + 1} units`} className="px-2" />
-              </label>
-              <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">Type</span>
-                {line.roomType && !knownRoomTypes.has(line.roomType) && line.roomType !== "__other__" ? (
-                  <Input value={line.roomType} onChange={(e) => setLine(index, { roomType: e.target.value })} aria-label={`Line ${index + 1} room type`} autoFocus />
-                ) : (
-                  <Select
-                    value={line.roomType}
-                    onChange={(e) => {
-                      const name = e.target.value;
-                      setLine(index, { roomType: name === "__other__" ? " " : name });
-                    }}
-                    aria-label={`Line ${index + 1} room type`}
-                  >
-                    <option value="">Choose…</option>
-                    {roomTypeGroups.map((group) => (
-                      <optgroup key={group.kind} label={group.label}>
-                        {group.types.map((type) => (
-                          <option key={type.name} value={type.name}>
-                            {/* Short: the group's name says the rest. */}
-                            {type.short}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                    <option value="__other__">Something else…</option>
-                  </Select>
-                )}
-              </label>
-              <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap">People / unit</span>
-                <Input value={line.people} onChange={(e) => setLine(index, { people: e.target.value })} inputMode="numeric" placeholder="2" aria-label={`Line ${index + 1} people per unit`} className="px-2" />
-              </label>
-              <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">Arrival</span>
-                <DatePicker
-                  value={line.checkIn}
-                  onChange={(day) => setLine(index, { checkIn: day })}
-                  openAt={values.lines[index - 1]?.checkOut || eventStart}
-                  ariaLabel={`Line ${index + 1} arrival`}
+      {values.locations.map((location, index) =>
+        several ? (
+          // Each location framed, with its name and notes (doc §4.11).
+          <div key={location.id ?? `new-${index}`} className="border-brand-200 bg-brand-50/30 space-y-4 rounded-xl border p-4">
+            <div className="flex items-end gap-3">
+              <label className="min-w-0 flex-1">
+                <span className="text-brand-800 mb-1 block text-[11px] font-medium tracking-wider uppercase">Location {index + 1}</span>
+                <Input
+                  value={location.name}
+                  onChange={(e) => setLocation(index, { ...location, name: e.target.value })}
+                  placeholder={forClient ? "e.g. Rowing venue" : "e.g. UCLA, Sailing, Rowing"}
+                  aria-label={`Location ${index + 1} name`}
                 />
               </label>
-              <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">Departure</span>
-                <DatePicker
-                  value={line.checkOut}
-                  onChange={(day) => setLine(index, { checkOut: day })}
-                  openAt={line.checkIn || eventStart}
-                  ariaLabel={`Line ${index + 1} departure`}
-                />
-              </label>
-              {values.lines.length > 1 ? (
-                <button
-                  type="button"
-                  aria-label={`Remove line ${index + 1}`}
-                  onClick={() => set("lines", values.lines.filter((_, i) => i !== index))}
-                  className="text-ink-400 pb-2 text-lg leading-none hover:text-[#c03654]"
-                >
-                  ×
-                </button>
-              ) : (
-                <span />
-              )}
-              {periods.length > 0 && (
-                <div className="col-span-2 sm:col-span-6 sm:-mt-1 sm:mb-1 sm:pl-[calc(4.75rem+0.5rem)]">
-                  <PeriodChips periods={periods} checkIn={line.checkIn} checkOut={line.checkOut} onPick={(checkIn, checkOut) => setLine(index, { checkIn, checkOut })} />
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!emptyLocation(location) && !window.confirm(`Remove ${location.name.trim() || `location ${index + 1}`} and its units?`)) return;
+                  set("locations", values.locations.filter((_, i) => i !== index));
+                }}
+                className="pb-2.5 text-[13px] font-light text-[#c03654] hover:underline"
+              >
+                Remove
+              </button>
             </div>
-          ))}
-        </div>
-        <button type="button" onClick={() => set("lines", [...values.lines, blankLine(values.lines.at(-1))])} className="text-brand-700 mt-2 text-[13px] font-medium hover:underline">
-          + Add another period or room type
+            <LocationFields
+              location={location}
+              onChange={(next) => setLocation(index, next)}
+              values={values}
+              set={set}
+              first={index === 0}
+              prefix={`Location ${index + 1} `}
+              places={places}
+              forClient={forClient}
+              find={find}
+              eventStart={eventStart}
+              periods={periods}
+            />
+            <Field label={forClient ? "Anything about this location" : "Notes for this location"}>
+              <Textarea
+                rows={2}
+                value={location.notes}
+                onChange={(e) => setLocation(index, { ...location, notes: e.target.value })}
+                placeholder="e.g. All in one building · They have a van to the venue"
+                aria-label={`Location ${index + 1} notes`}
+              />
+            </Field>
+          </div>
+        ) : (
+          <LocationFields
+            key={location.id ?? `new-${index}`}
+            location={location}
+            onChange={(next) => setLocation(index, next)}
+            values={values}
+            set={set}
+            first
+            prefix=""
+            places={places}
+            forClient={forClient}
+            find={find}
+            eventStart={eventStart}
+            periods={periods}
+          />
+        ),
+      )}
+      <div>
+        <button
+          type="button"
+          onClick={() => set("locations", [...values.locations, blankLocation(values.locations.at(-1))])}
+          className="border-brand-300 text-brand-700 hover:bg-brand-50 rounded-lg border border-dashed px-3 py-2 text-[13px] font-medium"
+        >
+          + Add another location
         </button>
+        <span className="text-ink-500 ml-3 text-xs font-light">
+          {forClient ? "Rooms near more than one venue? Add each place with its own rooms." : "Rooms needed in more than one place — each gets its own sourcing task, all under one agreement."}
+        </span>
       </div>
       <div>
         <Label>{forClient ? "Your budget" : "Budget"}</Label>
@@ -280,46 +298,6 @@ export function DetailsFields({
             ))}
           </Select>
         </div>
-      </div>
-      <div>
-        <Label>{forClient ? "Where would you like to be close to?" : "Close to"}</Label>
-        {/* A dropdown to search and add from, the chosen as tags (the owner, 2026-10-15: forty venues as buttons was a wall). */}
-        {places.length > 0 && (
-          <div className="mb-2 space-y-2">
-            {values.closeToIds.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {values.closeToIds.map((id) => {
-                  const place = places.find((one) => one.id === id);
-                  if (!place) return null;
-                  return (
-                    <span key={id} className="border-brand-400 bg-brand-50 text-brand-800 inline-flex items-center gap-1.5 rounded-full border py-1 pr-1.5 pl-3 text-[13px] font-medium">
-                      {place.name}
-                      <button
-                        type="button"
-                        onClick={() => set("closeToIds", values.closeToIds.filter((one) => one !== id))}
-                        aria-label={`Remove ${place.name}`}
-                        className="text-brand-700 hover:bg-brand-100 rounded-full px-1.5 leading-none"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-            <Combobox
-              value=""
-              onChange={(id) => id && !values.closeToIds.includes(id) && set("closeToIds", [...values.closeToIds, id])}
-              placeholder={values.closeToIds.length ? "Add another venue — type to search" : "Choose a venue — type to search"}
-              options={places.filter((place) => !values.closeToIds.includes(place.id)).map((place) => ({ id: place.id, label: place.name }))}
-            />
-          </div>
-        )}
-        <CloseToPicker points={values.points} onChange={(points) => set("points", points)} places={places} find={find} />
-        {values.closeToOther && (
-          // Said in words before places could be found on a map.
-          <Input value={values.closeToOther} onChange={(e) => set("closeToOther", e.target.value)} aria-label="Close to, in words" className="mt-2" />
-        )}
       </div>
       <div>
         <Label>{forClient ? "Your preferences" : "Their preferences"}</Label>
@@ -342,6 +320,172 @@ export function DetailsFields({
         <Textarea rows={3} value={values.clientComments} onChange={(e) => set("clientComments", e.target.value)} placeholder="Arriving in two groups, a quiet floor, close to each other…" />
       </Field>
     </div>
+  );
+}
+
+/** One location's boxes: where to be close to, then the units and periods there. */
+function LocationFields({
+  location,
+  onChange,
+  values,
+  set,
+  first,
+  prefix,
+  places,
+  forClient,
+  find,
+  eventStart,
+  periods,
+}: {
+  location: LocationDraft;
+  onChange: (location: LocationDraft) => void;
+  values: DetailsValues;
+  set: <K extends keyof DetailsValues>(key: K, value: DetailsValues[K]) => void;
+  /** The first location also shows what was said in words before places were on a map. */
+  first: boolean;
+  /** "Location 2 " — so each box has its own name for screen readers. */
+  prefix: string;
+  places: Place[];
+  forClient: boolean;
+  find: (address: string) => Promise<{ latitude: number; longitude: number; address: string | null } | null>;
+  eventStart?: string | null;
+  periods: EventPeriodDays[];
+}) {
+  const setLoc = <K extends keyof LocationDraft>(key: K, value: LocationDraft[K]) => onChange({ ...location, [key]: value });
+  const setLine = (index: number, patch: Partial<LineDraft>) =>
+    setLoc(
+      "lines",
+      location.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    );
+  return (
+    <>
+      <div>
+        <Label>{forClient ? "Where would you like to be close to?" : "Close to"}</Label>
+        {/* A dropdown to search and add from, the chosen as tags (the owner, 2026-10-15: forty venues as buttons was a wall). */}
+        {places.length > 0 && (
+          <div className="mb-2 space-y-2">
+            {location.closeToIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {location.closeToIds.map((id) => {
+                  const place = places.find((one) => one.id === id);
+                  if (!place) return null;
+                  return (
+                    <span key={id} className="border-brand-400 bg-brand-50 text-brand-800 inline-flex items-center gap-1.5 rounded-full border py-1 pr-1.5 pl-3 text-[13px] font-medium">
+                      {place.name}
+                      <button
+                        type="button"
+                        onClick={() => setLoc("closeToIds", location.closeToIds.filter((one) => one !== id))}
+                        aria-label={`Remove ${place.name}`}
+                        className="text-brand-700 hover:bg-brand-100 rounded-full px-1.5 leading-none"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <Combobox
+              value=""
+              onChange={(id) => id && !location.closeToIds.includes(id) && setLoc("closeToIds", [...location.closeToIds, id])}
+              placeholder={location.closeToIds.length ? "Add another venue — type to search" : "Choose a venue — type to search"}
+              options={places.filter((place) => !location.closeToIds.includes(place.id)).map((place) => ({ id: place.id, label: place.name }))}
+            />
+          </div>
+        )}
+        <CloseToPicker points={location.points} onChange={(points) => setLoc("points", points)} places={places} find={find} />
+        {first && values.closeToOther && (
+          // Said in words before places could be found on a map.
+          <Input value={values.closeToOther} onChange={(e) => set("closeToOther", e.target.value)} aria-label="Close to, in words" className="mt-2" />
+        )}
+      </div>
+      <div>
+        <Label>{forClient ? "The units you need, and when" : "Units and periods"}</Label>
+        <div className="space-y-2">
+          {location.lines.map((line, index) => (
+            <div key={index} className="border-ink-200/60 grid grid-cols-2 gap-2 rounded-lg border p-2 sm:grid-cols-[4.75rem_minmax(10rem,1fr)_5.5rem_8.75rem_8.75rem_1.25rem] sm:items-end sm:border-0 sm:p-0">
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap">
+                  Units
+                  <InfoTip text={UNIT_HINT} />
+                </span>
+                <Input value={line.rooms} onChange={(e) => setLine(index, { rooms: e.target.value })} inputMode="numeric" placeholder="20" aria-label={`${prefix}Line ${index + 1} units`} className="px-2" />
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px]">Type</span>
+                {line.roomType && !knownRoomTypes.has(line.roomType) && line.roomType !== "__other__" ? (
+                  <Input value={line.roomType} onChange={(e) => setLine(index, { roomType: e.target.value })} aria-label={`${prefix}Line ${index + 1} room type`} autoFocus />
+                ) : (
+                  <Select
+                    value={line.roomType}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setLine(index, { roomType: name === "__other__" ? " " : name });
+                    }}
+                    aria-label={`${prefix}Line ${index + 1} room type`}
+                  >
+                    <option value="">Choose…</option>
+                    {roomTypeGroups.map((group) => (
+                      <optgroup key={group.kind} label={group.label}>
+                        {group.types.map((type) => (
+                          <option key={type.name} value={type.name}>
+                            {/* Short: the group's name says the rest. */}
+                            {type.short}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                    <option value="__other__">Something else…</option>
+                  </Select>
+                )}
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap">People / unit</span>
+                <Input value={line.people} onChange={(e) => setLine(index, { people: e.target.value })} inputMode="numeric" placeholder="2" aria-label={`${prefix}Line ${index + 1} people per unit`} className="px-2" />
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px]">Arrival</span>
+                <DatePicker
+                  value={line.checkIn}
+                  onChange={(day) => setLine(index, { checkIn: day })}
+                  openAt={location.lines[index - 1]?.checkOut || eventStart}
+                  ariaLabel={`${prefix}Line ${index + 1} arrival`}
+                />
+              </label>
+              <label className="min-w-0">
+                <span className="text-ink-500 mb-1 block text-[11px]">Departure</span>
+                <DatePicker
+                  value={line.checkOut}
+                  onChange={(day) => setLine(index, { checkOut: day })}
+                  openAt={line.checkIn || eventStart}
+                  ariaLabel={`${prefix}Line ${index + 1} departure`}
+                />
+              </label>
+              {location.lines.length > 1 ? (
+                <button
+                  type="button"
+                  aria-label={`${prefix}Remove line ${index + 1}`}
+                  onClick={() => setLoc("lines", location.lines.filter((_, i) => i !== index))}
+                  className="text-ink-400 pb-2 text-lg leading-none hover:text-[#c03654]"
+                >
+                  ×
+                </button>
+              ) : (
+                <span />
+              )}
+              {periods.length > 0 && (
+                <div className="col-span-2 sm:col-span-6 sm:-mt-1 sm:mb-1 sm:pl-[calc(4.75rem+0.5rem)]">
+                  <PeriodChips periods={periods} checkIn={line.checkIn} checkOut={line.checkOut} onPick={(checkIn, checkOut) => setLine(index, { checkIn, checkOut })} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={() => setLoc("lines", [...location.lines, blankLine(location.lines.at(-1))])} className="text-brand-700 mt-2 text-[13px] font-medium hover:underline">
+          + Add another period or room type
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -399,6 +543,110 @@ function useSaved() {
 const eventStay = (event: { startDate: Date; endDate: Date } | null) =>
   event ? { checkIn: dayKey(event.startDate), checkOut: dayKey(event.endDate) } : null;
 
+type ShownLine = { id: string; rooms: number; roomType: string | null; people: number | null; checkIn: Date | null; checkOut: Date | null };
+type ShownLocation = {
+  id: string;
+  name: string | null;
+  notes: string | null;
+  closeTo: { id: string; name: string }[];
+  points: { label: string }[];
+  lines: ShownLine[];
+};
+
+/** What the client asked, each line large, its dates beneath (doc §4.11). */
+export function AskedLines({ lines, size = "large" }: { lines: ShownLine[]; size?: "large" | "small" }) {
+  if (lines.length === 0) return <p className="text-ink-500 text-sm font-light">No units given yet.</p>;
+  return (
+    <ul className={size === "large" ? "space-y-3" : "space-y-2.5"}>
+      {lines.map((line) => (
+        <li key={line.id}>
+          <span className={`text-ink-900 block font-semibold ${size === "large" ? "text-lg" : "text-[15px]"}`} title={UNIT_HINT}>
+            {line.rooms} × {line.roomType ?? "units"}
+          </span>
+          <span className={`block font-light ${size === "large" ? "text-ink-700 text-[13px]" : "text-ink-500 text-xs"}`}>
+            {[
+              line.checkIn && line.checkOut
+                ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
+                : line.checkIn
+                  ? `From ${formatDate(line.checkIn)}`
+                  : "Dates not given",
+              peopleWords(line.people),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A location's places as dark tags. */
+export function CloseToTags({ names, label = true }: { names: string[]; label?: boolean }) {
+  if (!names.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {label && <span className="text-ink-500 text-[13px] font-light">Close to</span>}
+      {names.map((place) => (
+        <span key={place} className="bg-ink-900 rounded-full px-2.5 py-0.5 text-xs text-white">
+          {place}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const placeNames = (location: ShownLocation) => [...location.closeTo.map((place) => place.name), ...location.points.map((point) => point.label)];
+
+/**
+ * The request's locations (doc §4.11): with one, its units and places as
+ * before; with several, each under its name with its own units, places and
+ * notes. `only` shows one location — on its sourcing task.
+ */
+export function RequestLocations({
+  request,
+  only,
+  size = "large",
+}: {
+  request: { locations: ShownLocation[]; lines: ShownLine[]; closeTo: { name: string }[]; closeToPoints: { label: string }[]; closeToOther: string | null };
+  only?: string | null;
+  size?: "large" | "small";
+}) {
+  const several = request.locations.length > 1;
+  const shown = only ? request.locations.filter((location) => location.id === only) : request.locations;
+  if (shown.length === 0) {
+    // From before locations, or none given yet.
+    const names = [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther].filter(Boolean) as string[];
+    return (
+      <div className="space-y-3">
+        <AskedLines lines={request.lines} size={size} />
+        <CloseToTags names={names} />
+      </div>
+    );
+  }
+  return (
+    <div className={several && !only ? "divide-brand-200/70 space-y-4 divide-y" : "space-y-3"}>
+      {shown.map((location) => {
+        const index = request.locations.indexOf(location);
+        const names = [...placeNames(location), ...(index === 0 && request.closeToOther ? [request.closeToOther] : [])];
+        return (
+          <div key={location.id} className={several && !only ? "space-y-2 pt-4 first:pt-0" : "space-y-3"}>
+            {(several || location.name) && (
+              <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">
+                📍 {locationName(location, index)}
+                {several && <span className="text-ink-400 font-normal normal-case tracking-normal"> · location {index + 1} of {request.locations.length}</span>}
+              </p>
+            )}
+            <AskedLines lines={location.lines} size={size} />
+            <CloseToTags names={names} />
+            {location.notes && <p className="text-ink-700 text-[13px] whitespace-pre-line">{location.notes}</p>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Whether a request is still an enquiry, or a sales request with its details in. */
 export function RequestKind({ request }: { request: { detailedAt: Date | null } }) {
   return request.detailedAt ? (
@@ -414,7 +662,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
   const places = api.place.listForEvent.useQuery({ eventId: request.event?.id ?? "" }, { enabled: Boolean(request.event) });
   const eventPeriods = api.event.periods.useQuery({ eventId: request.event?.id ?? "" }, { enabled: Boolean(request.event) });
   const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
+  const [values, setValues] = useState<DetailsValues>(() => detailsFrom({ ...request, locations: storedLocations(request) }, currencyForCountry(request.event?.country)));
   const [problem, setProblem] = useState<string | null>(null);
   const save = api.sales.saveDetails.useMutation({
     onSuccess: () => {
@@ -425,9 +673,6 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
   // What the client can be close to: the places distances are measured to (doc §3.7).
   const placeList = measuredPlaces(places.data ?? []).map((place) => ({ id: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude }));
   const geocode = api.property.geocode.useMutation();
-  const closeTo = [...request.closeTo.map((place) => place.name), ...request.closeToPoints.map((point) => point.label), request.closeToOther]
-    .filter(Boolean)
-    .join(", ");
 
   return (
     <Card>
@@ -439,7 +684,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
           <button
             type="button"
             onClick={() => {
-              setValues(detailsFrom({ ...request, lines: request.lines, closeToIds: request.closeTo.map((place) => place.id), points: request.closeToPoints }, currencyForCountry(request.event?.country)));
+              setValues(detailsFrom({ ...request, locations: storedLocations(request) }, currencyForCountry(request.event?.country)));
               setEditing(true);
             }}
             className="text-brand-700 text-[13px] font-light hover:underline"
@@ -483,31 +728,7 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
         // What the client asked, made to stand out (doc §4.11): each line large, its dates beneath.
         <div>
           <div className="border-brand-200 bg-brand-50/60 rounded-xl border px-5 py-4">
-            {request.lines.length === 0 ? (
-              <p className="text-ink-500 text-sm font-light">No units given yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {request.lines.map((line) => (
-                  <li key={line.id}>
-                    <span className="text-ink-900 block text-lg font-semibold" title={UNIT_HINT}>
-                      {line.rooms} × {line.roomType ?? "units"}
-                    </span>
-                    <span className="text-ink-700 block text-[13px] font-light">
-                      {[
-                        line.checkIn && line.checkOut
-                          ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
-                          : line.checkIn
-                            ? `From ${formatDate(line.checkIn)}`
-                            : "Dates not given",
-                        peopleWords(line.people),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <RequestLocations request={request} />
             <div className="border-brand-200/70 mt-4 grid gap-x-6 gap-y-3 border-t pt-3 text-sm sm:grid-cols-2">
               <div>
                 <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">Budget</p>
@@ -515,20 +736,6 @@ export function RequestDetailsCard({ request }: { request: FullRequest }) {
                   {request.budgetCents !== null && request.budgetCurrency ? formatMoney(request.budgetCents, request.budgetCurrency) : "—"}
                   {request.budgetCents !== null && request.budgetBasis && <span className="text-ink-500 font-light"> {budgetBasisLabels[request.budgetBasis]}</span>}
                 </p>
-              </div>
-              <div>
-                <p className="text-brand-800 text-[11px] font-medium tracking-wider uppercase">Close to</p>
-                {closeTo ? (
-                  <div className="mt-0.5 flex flex-wrap gap-1.5">
-                    {closeTo.split(", ").map((place) => (
-                      <span key={place} className="bg-ink-900 rounded-full px-2.5 py-0.5 text-xs text-white">
-                        {place}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-ink-900">—</p>
-                )}
               </div>
               {wishes(request).map((wish) => (
                 <div key={wish.label}>
@@ -705,7 +912,7 @@ export function NeedsForm({ token }: { token: string }) {
           onSubmit={(e) => {
             e.preventDefault();
             setProblem(null);
-            if (!values.lines.some((line) => line.rooms.trim())) return setProblem("Please say how many rooms you need.");
+            if (!values.locations.some((location) => location.lines.some((line) => line.rooms.trim()))) return setProblem("Please say how many rooms you need.");
             const result = detailsInput(values);
             if ("problem" in result) return setProblem(result.problem);
             submit.mutate({ token, ...result.input });

@@ -16,7 +16,7 @@ import { notify } from "~/server/notify";
  */
 export const GET_RATE = "Get rate";
 
-export async function ensureGetRateTask(tx: Prisma.TransactionClient, input: { propertyId: string; salesRequestId: string; actorId: string }) {
+export async function ensureGetRateTask(tx: Prisma.TransactionClient, input: { propertyId: string; salesRequestId: string; locationId?: string | null; actorId: string }) {
   const request = await tx.salesRequest.findUniqueOrThrow({
     where: { id: input.salesRequestId },
     select: {
@@ -28,8 +28,11 @@ export async function ensureGetRateTask(tx: Prisma.TransactionClient, input: { p
       client: { select: { name: true } },
       event: { select: { name: true, accommodationManagers: { select: { id: true } } } },
       lines: { orderBy: { position: "asc" } },
+      locations: { select: { id: true, lines: { orderBy: { position: "asc" } } } },
     },
   });
+  // From a location's sourcing task: only that location's units (doc §4.11).
+  const location = input.locationId ? request.locations.find((one) => one.id === input.locationId) : undefined;
   if (!request.eventId || !request.event) throw new Error("The request has no event.");
   const eventId = request.eventId;
   // One open get rate task per property and request.
@@ -59,7 +62,7 @@ export async function ensureGetRateTask(tx: Prisma.TransactionClient, input: { p
       : [input.actorId];
   const type =
     (await tx.taskType.findFirst({ where: { name: { equals: GET_RATE, mode: "insensitive" } } })) ?? (await tx.taskType.create({ data: { name: GET_RATE } }));
-  const wanted = request.lines.map((line) => {
+  const wanted = (location?.lines ?? request.lines).map((line) => {
     const stay = line.checkIn && line.checkOut ? `, ${formatRange(line.checkIn, line.checkOut)} (${nightsBetween(line.checkIn, line.checkOut)} nights)` : "";
     const people = peopleWords(line.people);
     return `• ${line.rooms} × ${line.roomType ?? "units"}${stay}${people ? `, ${people}` : ""}`;
@@ -90,6 +93,7 @@ export async function ensureGetRateTask(tx: Prisma.TransactionClient, input: { p
       propertyId: input.propertyId,
       clientId: request.clientId,
       salesRequestId: input.salesRequestId,
+      salesLocationId: location?.id ?? null,
       assignees: { connect: assignees.map((id) => ({ id })) },
     },
   });

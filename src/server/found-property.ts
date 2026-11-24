@@ -33,6 +33,7 @@ export async function createFoundProperty(
     place: z.infer<typeof foundPlaceInput>;
     eventId: string | null;
     salesRequestId: string | null;
+    salesLocationId?: string | null;
     /** Said in its notes: "while sourcing for Beyond Limits", or "near the IBC for LA28". */
     foundWhile: string;
     actorId: string;
@@ -67,7 +68,7 @@ export async function createFoundProperty(
     const entry = await tx.scoutingEntry.create({ data: { eventId: input.eventId, propertyId: property.id, addedById: input.actorId } });
     await logAudit(tx, { actorId: input.actorId, entity: "ScoutingEntry", entityId: entry.id, summary: "Added to the scouting list" });
     // Someone now reaches out to it, to gather what we need (doc §4.11).
-    const task = await ensureHotelContactTask(tx, { propertyId: property.id, eventId: input.eventId, salesRequestId: input.salesRequestId, actorId: input.actorId });
+    const task = await ensureHotelContactTask(tx, { propertyId: property.id, eventId: input.eventId, salesRequestId: input.salesRequestId, salesLocationId: input.salesLocationId, actorId: input.actorId });
     taskId = task?.id ?? null;
   }
   return { id: property.id, taskId };

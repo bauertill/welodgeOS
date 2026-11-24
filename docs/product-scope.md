@@ -2598,6 +2598,20 @@ the contract.
   one arrival and departure kept them as their first line. They are
   filled in by us after a call (*Fill in after a call*), or by the client on their needs
   form — which lands on the request, says so, and tells the account manager.
+- **Several locations on one request** (the owner, 2026-11-24: a client often needs rooms
+  in more than one place — "15 rooms at UCLA, 20 beds near Sailing, 10 near Rowing"). The
+  details are grouped by **location**: each has its own **close to** places, its own
+  **units and periods**, and with more than one, a **name** ("UCLA", "Rowing") and **notes
+  for this location** ("all in one building", "they have a van to the venue").
+  *+ Add another location* adds one; *Remove* takes one off (asked first when it has
+  anything in it). A request with one location looks as before, with *Close to* above the
+  units. The **budget, preferences and client's comments stay one per request**, and **all
+  locations are contracted under one agreement** (the owner, 2026-11-24) — the offer,
+  contract and rooming list see the request's units all together, as before. The request's
+  page shows each location under its name (📍 UCLA · location 1 of 3) with its units,
+  places and notes; the client's needs form has the same boxes. A location with no name is
+  called by its places ("Near Long Beach Arena"), or "Location 2". Requests from before
+  locations became one location holding all their details.
 - **The sourcing task.** When a request for one of our events becomes a sales request, a
   task goes on the task board on its own (§2.8): *Source accommodation for [client] —
   [event]*, of type *Sourcing*, given to the **event's accommodation managers** and asked by
@@ -2606,9 +2620,18 @@ the contract.
   the client's comments written into it as they were then — the request itself always has
   the latest. The accommodation managers are told they have a task, and the project lead
   that a new sales request has come in (§2.9); with no accommodation manager set, the task
-  waits unassigned and the project lead is told to give it to someone. One task per request:
-  sending the details again makes no second one, and a request whose event is only chosen
-  later gets its task then. A request not for one of our events gets none. **The request's
+  waits unassigned and the project lead is told to give it to someone. **One task per
+  location** (2026-11-24): a request with three locations makes three sourcing tasks,
+  *Source accommodation for [client] — [event] · [location]*, each with only that
+  location's units, places and notes (plus the shared budget, preferences and comments), and
+  a line naming the other locations — "each has its own sourcing task; all go under one
+  agreement". Its *Where to source* map and nearby properties are measured from that
+  location's places only, and a *Get rate* or *Hotel contact* task made from it carries the
+  location, so the email to the hotel lists only that location's units. The project lead is
+  told once, when the request first comes in. Sending the details again makes no second task;
+  a location added later gets its own task then; a location removed leaves its task on the
+  board, no longer tied to a location, for the team to close. A request whose event is only
+  chosen later gets its tasks then. A request not for one of our events gets none. **The request's
   page links to it** (2026-10-07): a *Tasks* card at the top of its right-hand column shows
   the sourcing task — its status, who has it, *Open the sourcing task* — and under it the
   hotel contact tasks that came out of it, each a link with its status.
@@ -3533,6 +3556,85 @@ the tests; unit-tested against the 50-unit scenario):
 The notes under *How these figures are built* keep the reference's *Scenario* and *Hand-back*
 labels.
 
+#### 4.12.1 Staggered lease — a second kind of scenario (2026-11-24)
+
+The owner asked for a second kind of scenario beside the move-in waves: a **staggered lease**,
+built from a client's real arrivals and departures at a recent event and shaped so the provider
+gets apartments back at a steady weekly pace. Its reference page is
+`docs/reference/staggered-lease-reference.html`; its starting reservation list is
+`docs/reference/obs_reference_reservations_feb2026.csv` (check-in and check-out dates only — no
+names or other personal data).
+
+**Two kinds.** Every scenario now has a type: *Move-in waves* (the planner above — every
+scenario made before this is one, unchanged) or *Staggered lease*. *+ New scenario* asks which;
+the list says which each is. Copying keeps the type and, for a lease, its reservation list.
+
+**What a lease scenario keeps**, in the database, for everyone (never in one browser): every
+box of the reference's *Edit numbers* panel — provider, client and version label; apartments to
+lease and the unit mix (type, count, monthly rent); the weekly hand-back cap; the move-in days
+of the month (default the 1st and 15th); the hand-back weekday (default Monday); the earliest
+move-in and the latest hand-back; *No hand-backs before* (no limit, end of Games period 1 or 2);
+the arrival flexibility per wave; the target event's two Games periods; the reference event's
+opening, first and second closing — and its **reservation list**. The provider's name is also
+the scenario's *Owner* on the list.
+
+**Loading a reservation list.** *Load reservation list (CSV)* reads a file whose lines each
+have a check-in and a check-out as YYYY-MM-DD; lines with no date (a heading, a blank) are
+skipped. A line with one date, a date that does not exist or a check-out not after its check-in
+is refused with its line number, and nothing is loaded; fewer than two stays is refused too. A
+good file **replaces the scenario's list** for everyone. The panel says *Original list: 195
+reservations* or *Your uploaded list: n reservations*; *Use original list* brings the reference
+list back. *Reset everything* (asked first, as it changes the scenario for everyone, the
+provider's link included) puts every number and the list back to the reference.
+
+**How the figures are built** — exactly as the reference, every date a UTC day:
+- **Arrivals**: each stay's target arrival = target opening + (its check-in − reference opening).
+- **Departures**: a check-out on or before the reference's first closing + 14 days is placed the
+  same distance from the target's first closing; a later one from the target's second closing.
+- **Scaling**: the stays sorted by mapped arrival (then departure), and N of them taken, the
+  i-th at position ⌊(i + ½) × n ÷ N⌋ of the n stays.
+- **Lease start**: the latest move-in day of the month on or before the arrival; with none that
+  month, the previous month's last move-in day; never before the earliest move-in.
+- **Check-out**: raised to the *No hand-backs before* date when earlier, then capped at the
+  latest hand-back, and always after the lease start.
+- **Lease end**: the first hand-back weekday on or after the check-out. Apartments are taken in
+  order of check-out, then arrival; when that day already has the weekly cap, the lease runs to
+  the same weekday a week later, and again, until there is a free slot.
+- **Rent**: blended = Σ (count × monthly rent) ÷ Σ count; a day's rent = blended ÷ 30.42; lease
+  days = end − start (the end day is not charged). Each month's rent = days leased in it × a
+  day's rent, **rounded per month**; gross rent is the sum of the rounded months, so the tables
+  always add up.
+- **Month by month**: moving in, handed back, and leased at month end (started on or before its
+  last day, ending after it). **Week by week**: every hand-back weekday from the first to the last,
+  weeks with none included, with a meter of the cap's slots used. **Rental periods**: one bar per
+  group of apartments with the same start and end, thicker for more, over the two Games periods.
+- **Changing the total** rescales the unit mix by largest remainder; **changing a count**
+  changes the total.
+- **Warnings** in the panel and above the page in the editor: unit counts that do not add up to
+  the total (rent still uses the mix's blended rate); hand-backs pushed past the latest date by
+  the cap — counted, as the reference, when a lease ends more than six days after it, since a
+  check-out capped at that date still runs to the next hand-back weekday; any lease under 30
+  nights; totals that do not reconcile; no reservation list.
+- The reference scenario gives 60 apartments (10 Studio $2,400, 40 1-bed $2,700, 10 2-bed
+  $3,200; $2,733.33 blended), 8 move-in waves from Mar 1 to Jun 15, 2028 in 32 bars, hand-backs
+  of 2, 8, 8, 2, 1, 8, 8, 8, 8, 3, 1, 3 on the Mondays Jul 31 – Oct 16, monthly rent Mar–Oct of
+  $43,848 / $105,847 / $154,997 / $160,478 / $166,947 / $128,310 / $57,686 / $5,032, 301.2 lease
+  months, $823,145 gross, and an average lease of 5.02 months (1.74 to 7.53). Tests hold these.
+
+**The pages.** The editor is the reference page under the usual bar (name, *Staggered lease*,
+event, saved status, *Share link*), with *Edit numbers* opening the panel from the side
+(Escape or × closes it); it saves 600 ms after the last change and, like the waves planner,
+refuses to overwrite a colleague's newer save and asks to reload. The **provider's link**
+(`/stagger/view/…`, the same share link as the waves planner) shows the same page read-only — no
+panel, no OS around it, not indexed — following the device into dark mode. *Save as PDF* opens
+the browser's print dialog with the reference's print layout on US Letter. A migration made
+*Decron – OBS staggered lease, 60 units* from the reference defaults and the CSV.
+
+**Rules kept**: only the provider's rent is shown or sent — never our margins, sell rates,
+client prices or costs; "We Lodge" in two words; "Games periods" and "a recent event", never an
+event's protected name; all amounts in USD. The reference's default client label *OBS* is kept,
+as in the waves planner.
+
 ## 5. Reporting and derived views
 
 ### 5.1 Position per property/category/night
@@ -3899,7 +4001,8 @@ into a room that is ready for them, and out again without disputes.
    to change the room nights with the supplier, and once they are bought the client is told
    (and invoiced if need be). The finished list is shared with the supplier. Cancellation
    allowances are not calculated: the client's changes are captured, and what they owe is
-   worked out by the team. This replaces the spreadsheet upload of §6.2 below.
+   worked out by the team. This replaces the spreadsheet upload of §6.2 below. *Built (§6.9),
+   extension requests included.*
 3. **Inspections and defects — apartments only.** Hotels inspect their own rooms. Before
    check-in (a week before at best, two days usually, the day itself at worst) one of the team
    goes through each apartment: a dump of general photos from every angle, and a checklist
@@ -4059,6 +4162,153 @@ contracting link is; no sign-in, so it goes only to the client.
 with a Google Maps link, the website, their rooms, and the guest information that is filled
 in (empty fields are left out; a property with none says "More details to follow"). It never
 shows prices, the supplier's own contacts or our notes. It works on a phone.
+
+### 6.9 The rooming list
+
+(The owner, 2026-11-23.) Who sleeps where, on **the sales request's *Rooming list* tab** and on
+**the client's own link**. It is a **fixed** list: made from the rooms the client has **sold**
+at the event — per property, each room with its type, how many it sleeps, and the dates it is
+theirs (*Booked 10 Jul – 30 Jul 2028*). Nobody adds or removes rooms or dates here; that is
+the contract's.
+
+**A sheet** (the owner, 2026-11-23: "the current layout is so hard to add to… maybe a table or
+sheet works better"). Each property is a table to type straight into: one row per stay, the room
+(type, number, how many it sleeps, its booked dates and how many nights are named) beside its
+rows, then check-in, check-out, a column per guest (as many as the property's largest room
+sleeps, up to four; cells beyond a room's beds are greyed), arriving and notes. Every room with
+nights nobody is named for has an empty row, its dates set to the first such stretch — type a
+name and the stay is there. A room's rows are always **in date order**, the empty row among
+them where its dates fall (the owner, 2026-11-23). **A row saves when the cursor leaves it** (or with *Save*); × takes
+a stay out. A guest is typed as one full name, kept as first and last name (the last word is the
+last name), as hotels want them.
+
+**Stays.** Into each room go its **stays**: the dates, the **guests sharing the room** for those
+dates (as many as the room sleeps), when they **arrive** (a time or a flight, as the client gives
+it) and notes.
+
+**More about each guest, when the list needs it** (the owner, 2026-11-23). On the request's
+*Rooming list* tab, *Also ask for, per guest*: **gender, nationality, passport no., email** —
+each ticked on for this client's list (some properties and countries need them; Japan asks for
+foreign guests' passport details). Ticked, each named guest in the sheet gets those boxes under
+their name, on the team's list and the client's link alike; the Excel has a column for each,
+and reading the client's own sheet offers those columns to match too. A room used in turns —
+one team then another — gets one stay after the other. Each room says how many of its nights
+are named, and the list how many of all of them (*20 of 505 nights named across 25 rooms*). The
+system refuses, saying why:
+- dates that neither overlap nor touch the room's booking — *"Those dates do not touch your
+  booking for this room (10 Jul – 30 Jul 2028)…"* (dates next to or overlapping it are an
+  extension request, below);
+- extra nights in a room another client holds on those nights;
+- a stay overlapping another in the same room — guests sharing go in the same stay;
+- more guests than the room sleeps.
+
+**Reading the client's own spreadsheet** (the owner, 2026-11-23: "a client might send us a
+rooming list in Excel, can the system automatically view, update and flag any discrepancies…
+if they could upload an Excel they have and map it accordingly"). On the team's list *⬆ Read the
+client's Excel*, and on the client's link *⬆ Upload your own Excel or CSV*: an Excel file
+(.xlsx — the old .xls is refused, asking for .xlsx or CSV) or a CSV, read in the browser. Its
+heading row is found — of the first twenty, the one with the most filled cells, so a title and
+the client's name above it are passed over — and **each column is matched** to ours by its
+heading — guest full name, or first and last name; a second guest sharing; check-in; check-out
+(*Actual check-in* is taken over a contract date); hotel (when the client has rooms at
+several); room type; the building's room number; the sheet's own **room line** (*Apt #*);
+arriving (an ETA before a flight number); notes — each changeable. Dates are read as Excel
+stores them or as written (10/07/2028, 10 Jul 2028, 3 March2025, July 10…); where 05/07 could be
+either, the reader is asked which way round. Without dates, a room's booked dates are used.
+
+Written the way our own template is (the owner's Hotel Olympia Cortina list, 2026-11-23): a room
+line's first row carries its number, type and dates, and the rows under it with those cells
+blank **belong to it** — they carry on with its number, type and hotel, and its dates while they
+give none. Rows on the same line and the same dates **share the room** (a twin); on other dates
+they **follow each other in it**, and are kept in the same room of ours where it is free. A row
+with nobody on it (a second contract line) is skipped. **The same person can stay twice** — a
+room change, a second trip: a guest already on the list is matched by name *and* overlapping
+dates, so their second stay is added rather than replacing the first.
+
+*Check it against the rooms* then shows, without changing anything: **to add** — each new stay
+and the room it goes in; **to change** — a guest already on the list (matched by name), with what
+differs (dates, room, sharing, arrival); **already right**; **not placed**, in red with the
+sheet's row and why — *no "Suite" booked (booked: ROH)*, *outside the booking (these rooms are
+booked 10 Jul – 30 Jul 2028)*, *no room left: all 5 matching rooms are taken*, *3 guests but these
+rooms sleep 2*, no name, check-out before check-in; and **on the list but not in the file**, with
+a tick to take them out when the file is the whole list. A room number we do not know yet is a
+warning, and the stay is placed by its type. *Apply to the rooming list* makes the changes —
+each on its own, the same rules as typing them in — and says what was added, changed and taken
+out; the request's history records the file. What was not placed stays to be fixed in the file
+or typed into the sheet.
+
+**The client's link** (*Make a link for the client*; copy, open, switch off as the other
+links): no sign-in; every change saves at once and is in the request's history as made by the
+client. It never shows prices, our notes, other clients or what the hotel has been sent. **Made
+for the client** (the owner, 2026-11-23: "why is it boxed… still quite hard to understand"): the
+page uses the whole width with no boxes — the event, three short lines on how it works (*each
+line is a room you booked, with its dates · type who stays in it — it saves by itself · someone
+only part of the time? change the dates — a new line appears for the rest*), *Have it in Excel
+already? Upload it*, and a bar of how many rooms have their guests. Then per property, under its
+name and check-in times, **every room they booked**: on the left *Room 1 · No. 101*, its type,
+how many it sleeps and its booked dates, with a dot (green when all named, amber when partly,
+empty when not yet); on the right **a line per stay** — *Guest*, *Sharing with* (more people via
+*+ another person* in larger rooms; *Sleeps one* for singles) — or, in a room with **one bed for
+a couple** (a King), just the one name and **+ partner** for a second (the owner, 2026-11-23:
+"when it's a double room it should have sharing with; when it's a King, leave only one name, but a
+plus for a partner"); the team's sheet does the same. One bed is read from the room type's bed
+configuration ("1 King"), else its name: *King* or a single *Queen* is one bed; *Double*, *Twin*,
+*Double Queen*, suites and apartments are sharing; a room type with neither (*ROH*) is sharing — *From*, *To*, *Arriving* (time or
+flight), *Notes* — and an empty line ready for the room's next free dates. On a phone each line
+stacks with its labels.
+
+**Room numbers.** Beside each room the team types **the building's own number** (*No. 4B*) once
+known — a month before at best, sometimes a week; for hotels often the day before. It belongs to
+the room, so it shows wherever that room does: on the client's link and on the property's list.
+
+**Extension requests** (the plan's step 2; the owner, 2026-11-23). A stay may start before or
+end after its room's booking — next to or overlapping it, in a room no other client holds on
+those nights. It is kept, and those **extra nights** are flagged on its row: to the client *"You
+asked for 3 extra nights (07 Jul – 10 Jul 2028) — we are getting them for you and will
+confirm"*, to the team *"Extension requested…"*; the list's top counts the extra nights asked
+for. One **Extra nights** task per request and property goes to whoever has those rooms with the
+property (else whoever handled its contact task, else the event's accommodation managers, else
+the account manager), listing every stay's extra nights; it follows as stays change, and closes
+itself if nothing is asked for any more. Once acquisitions has the nights and **sells them to the
+client** (§4.8), the stay is simply within the booking: its flag goes, the task closes as
+*"All the extra nights are booked"*, and the account manager is told in the bell to let the
+client know. Reading the client's sheet places such stays too, with a warning that they ask for
+extra nights. What the extra nights cost the client is the team's to settle, as agreed.
+
+**Booked but not used.** Each room says how many of its booked nights nobody is named for
+(*2 nights not used*) once anyone is in it, and the list's top counts them all.
+
+**One list per client at an event.** A client's rooming list is the same whichever of their sales
+requests it is opened from — an addendum's tab and link show the same guests — so nobody is entered
+twice. Clients only ever see their own rooms and guests.
+
+**The master list per property** (the owner, 2026-11-23: "1 master list per property, we should be
+able to get the master from the properties page… the hotel's list should show all the rooms booked
+at the property"). On **the property's page, *Rooming list* tab** — per event, chosen when the
+property has rooms sold at several — **every client** with rooms sold there, each with their rooms
+and guests as on their own list (and editable there, as there), linked to their request; a client
+with rooms but no sales request at the event shows their rooms only, as nobody can name guests in
+them yet. Its header counts clients, rooms and booked nights named. **What the hotel gets is sent
+from here**, and **its versions sit here** (the owner: "keep the clients' rooming list on the sales
+request but any versions sent to the hotel should sit on the properties page"): **Mark V2 as sent to
+the property** keeps what was sent — every client's stays — as that version, with who and when;
+*Earlier versions…* downloads any version as it was sent. On each client's own list (the team's
+view, never the client's) the property's header says which version the hotel has, how many of this
+client's stays changed since, and links to the master; every stay **new**, **changed** (saying
+what: dates, room, guests, arrival, details) or **taken out** since that version is highlighted with
+who did it.
+
+**To the property.** **⬇ Download Excel for the hotel** gives the master list made to be read at a
+glance: a few lines first — *Rooming list — Hotel Carmel*, the event and how many clients, the
+version (*V2 — the latest, not yet marked as sent*), the property's check-in and check-out times,
+the number of rooms and guests (and whether anything changed since the last version) — then **one
+row per guest**: client, room number, room type, arrival, departure, nights, last name, first name,
+**sharing with**, any extra details a client's list asks for, arriving (time or flight), notes, and
+our own room reference; every room booked with nights nobody is named for yet as *To be named*, so
+the hotel sees all the rooms we have there. Every row changed since the last version is **yellow**
+with a *Change since V1* column, and a second sheet, **Changes since V1**, lists each change — new,
+changed (was → now) and **cancelled** (in red), with the client — so the hotel sees at once what to
+update.
 
 ---
 
@@ -4528,11 +4778,13 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Emails from Gmail | **Built** (2026-11-10) | Connect Gmail on My profile, and a card on every page until connected (Not now = a day) (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. Google set up and the owner's mailbox connected on staging, 2026-11-10; each colleague connects theirs on the live site |
 | §4.10 Contracting details | **Built** (2026-11-12) | Card on the client's page (trade name, address, VAT, registration, two signatories), edited with Add/Edit, in the client's history. A request with no details of its own shows the client's on its contracting link and rate card; what the client sends is written back to the client |
 | §4.10 Import from monday.com | **Built** (2026-11-12) | Review and import built; names approved and mismatched categories corrected by the owner. **Ran on the live site 2026-11-12:** 1,387 clients added, 33 existing ones had blanks filled in, 1,779 people added (rehearsed on staging first; a second run adds nothing). 120 people with no company to go on are left for the team to add by hand, from the review's *3 to place by hand* |
+| §4.11 Several locations on one request | **Built** (2026-11-24, staging) | Locations on the request in detail and the client's needs form, each with its close-to places, units and periods, name and notes; budget, preferences and comments once per request; one agreement; a sourcing task per location, its map, nearby properties, get-rate and hotel emails for that location only; existing requests moved into one location |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates; room types renamed or added on the card (added to the property too) properties added to a card later and put in order; rooms offered at "Rate to be confirmed"; the client's link full width with the map beside it, "I like it!" on each room, rates include and payment & cancellation terms, and "Request a proposal" at the end (switchable to look-only); the client's map shows only the properties plus the layers and places chosen on the card, and the distance beside each property is to the nearest of them; new cards remember each property's description and client rates; Sales › Rate cards lists and makes every card, each sent to a client (kept on their page) or any client (2026-11-17), which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09); a click anywhere on a row opens the request (2026-11-18) |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Not interested on the sales list | **Built** (2026-11-20) | Each open row on the Sales requests list ends in *Not interested* instead of *Delete*: it closes the request as Lost/Declined with the new reason *Not interested* (also under Mark as…), reopenable from its page. Delete stays only on the request's own page |
 | §4.12 Stagger Planner | **Built** (2026-11-19) | Sales › Stagger planner: scenarios listed, made, copied, renamed, archived; the editor saves as you go and refuses to overwrite a colleague's newer save; a read-only, unindexed owner's link (on/off, replaced); the reference page's sums in one tested module; Decron – OBS 50 units made by the migration |
+| §4.12.1 Staggered lease scenarios | **Built** (2026-11-24, staging) | A second scenario type beside move-in waves; settings and reservation list kept with the scenario; CSV upload checked line by line, *Use original list*, *Reset everything*; the reference's calculation in one tested module (the seed's figures held by tests); editor with the *Edit numbers* panel and safe autosave; read-only provider's link, dark mode, Letter print; *Decron – OBS staggered lease, 60 units* made by the migration |
 | §4.12 Stagger Planner, revised reference | **Built** (2026-11-20; 2-beds back on staging 2026-11-23) | Studio, 1-bed and 2-bed (scenarios without 2-beds take a 0 share and the default rate); defaults 20/60/20 at $4,000/$4,500/$5,500; the day-by-day chart, its tooltip and the single-block option removed; *Rental periods* first with *Wave N* rows and a legend; new story, three figures, two notes; title *Decron Apartments OBS*; *Save as PDF* (print) with the two-page Letter layout |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |
 | §4.11 Selling from the request | **Built** | Add rooms (request, block, sell) by category, count and dates, with the rooms picked for the rep; each row blocked, sold, extended, released, withdrawn or cancelled from the request — all through the inventory's rules, ledger and undo. Nights carry their request; the stock sheet asks which request, and loose holds can be tied to one. Moving the stage is offered, never automatic |
@@ -4570,8 +4822,9 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.2 Exposure report | **Built** | Short, long and deadline exposure, valued per currency |
 | §5.3 Availability | **Built** | The conservative figure is the headline on both the Position and Properties tabs; the optimistic one only shows as a note when it differs |
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
-| §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Only step 1 is built |
-| §6.8 Property information for the client | **Built on staging** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
+| §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
+| §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
+| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Not yet: notifying the team when the client changes the list, sending the Excel from OS |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 

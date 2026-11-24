@@ -11,7 +11,7 @@ import { formatDate } from "~/lib/format";
 import { compute, type StaggerData } from "~/lib/stagger-model";
 import { api, type RouterOutputs } from "~/trpc/react";
 
-type Scenario = NonNullable<RouterOutputs["stagger"]["byId"]>;
+type Scenario = Extract<NonNullable<RouterOutputs["stagger"]["byId"]>, { kind: "waves" }>;
 type ListRow = RouterOutputs["stagger"]["list"][number];
 
 const shareUrl = (token: string) => `${window.location.origin}/stagger/view/${token}`;
@@ -294,6 +294,7 @@ export function StaggerList() {
                     <Link href={`/stagger/${row.id}`} className="hover:text-brand-700">
                       {row.name}
                     </Link>
+                    <span className="text-ink-500 block text-xs font-light">{row.kind === "lease" ? "Staggered lease" : "Move-in waves"}</span>
                   </td>
                   <td className={td}>{row.clientLabel ?? "—"}</td>
                   <td className={td}>{row.event ?? "—"}</td>
@@ -380,16 +381,34 @@ function NewScenario({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [clientLabel, setClientLabel] = useState("");
   const [event, setEvent] = useState("LA28");
+  const [kind, setKind] = useState<"waves" | "lease">("waves");
   const create = api.stagger.create.useMutation({ onSuccess: (row) => router.push(`/stagger/${row.id}`) });
   return (
-    <Popup size="medium" title="New scenario" subtitle="It starts at the 50-unit scenario and opens straight after, to set the waves, mix and rent." onClose={onClose}>
+    <Popup size="medium" title="New scenario" subtitle="It starts from the defaults and opens straight after, to set the numbers." onClose={onClose}>
       <form
         className="space-y-4 rounded-xl bg-white p-5"
         onSubmit={(e) => {
           e.preventDefault();
-          create.mutate({ name, clientLabel, event });
+          create.mutate({ name, clientLabel, event, kind });
         }}
       >
+        <fieldset className="space-y-2">
+          <legend className="text-ink-700 mb-1.5 text-[13px] font-medium">Type</legend>
+          {(
+            [
+              ["waves", "Move-in waves", "Apartments arriving in waves you set, each staying a number of months — starts at 50 units."],
+              ["lease", "Staggered lease", "Built from a client's arrivals and departures at a recent event, with a weekly hand-back cap — starts at 60 units and the reference reservation list."],
+            ] as const
+          ).map(([value, label, hint]) => (
+            <label key={value} className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${kind === value ? "border-brand-400 bg-brand-50/50" : "border-ink-200"}`}>
+              <input type="radio" name="kind" value={value} checked={kind === value} onChange={() => setKind(value)} className="accent-brand-500 mt-1" />
+              <span>
+                <span className="text-ink-900 block text-[13px] font-medium">{label}</span>
+                <span className="text-ink-500 block text-xs font-light">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
         <Field label="Name">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Decron – OBS 100 units" autoFocus />
         </Field>
