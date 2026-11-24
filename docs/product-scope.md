@@ -3651,6 +3651,8 @@ the browser's print dialog with the reference's print layout on US Letter. A mig
 
 **Why this shape works** no longer says *None come back before the end of the first Games period* (the owner, 2026-11-24).
 
+**No section headings for these** (the owner, 2026-11-24): the *Why this shape works for you* and *Proposed terms* headings (and the *For discussion* pill) are gone; the three reasons and the four terms run on as one list of seven headlines, each a bold heading with its words beneath — *A steady flow, never a flood* through *Professional cleaning* — the terms no longer numbered.
+
 **The insurance term** (the owner, 2026-11-24): *Damage and liability cover* carries an asterisk, and the notes end with the full term — We Lodge's commercial general liability insurance of US$1,000,000 per occurrence and US$2,000,000 general aggregate through the Lease Period, the Provider as additional insured, the certificate 30 days before the Lease Period, and occupants told the Provider's insurance does not cover their belongings or personal liability.
 
 **The figures at the top** (the owner, 2026-11-24, dropped the reference's average-lease figure): the weekly cap (in lime), the apartments and their move-in waves, and the gross rent over the lease months.
