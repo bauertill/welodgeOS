@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-import { Button, FormError, friendlyError } from "~/app/_components/form";
+import { Button, Field, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { Card } from "~/app/_components/ui";
 import { parseDay } from "~/lib/dates";
 import { formatDate, formatRange } from "~/lib/format";
-import { isExtraKey, roomingExtraFields, type Guest, type RoomingExtraKey } from "~/lib/rooming";
+import { changeCount, isExtraKey, roomingExtraFields, type Guest, type ListChange, type RoomingExtraKey } from "~/lib/rooming";
 import { cellDate, cellText, readSheetFile, type Cell, type ReadSheet } from "~/lib/sheet-read";
 import { api, type RouterInputs, type RouterOutputs } from "~/trpc/react";
 
@@ -72,6 +72,7 @@ export function RoomingList(mode: Mode) {
   if (mode.token) {
     return (
       <>
+        <Submissions mode={mode} />
         <ClientRoomingView properties={properties} rooming={rooming} fields={fields} onUpload={() => setImporting(true)} />
         {importing && (
           <ImportSheet
@@ -164,15 +165,18 @@ function ClientRoomingView({ properties, rooming, fields, onUpload }: { properti
   return (
     <div className="space-y-8">
       <div className="grid gap-x-8 gap-y-3 md:grid-cols-[1fr_auto] md:items-end">
-        <ol className="text-ink-700 grid gap-2 text-[14px] font-light sm:grid-cols-3">
+        <ol className="text-ink-700 grid gap-2 text-[14px] font-light sm:grid-cols-2 xl:grid-cols-4">
           <li>
             <span className="text-brand-700 mr-1.5 font-medium">1</span>Each line is a room you booked, with its dates.
           </li>
           <li>
-            <span className="text-brand-700 mr-1.5 font-medium">2</span>Type who stays in it — it saves by itself.
+            <span className="text-brand-700 mr-1.5 font-medium">2</span>Type who stays in it — it saves as you go.
           </li>
           <li>
             <span className="text-brand-700 mr-1.5 font-medium">3</span>Someone only part of the time? Change the dates — a new line appears for the rest.
+          </li>
+          <li>
+            <span className="text-brand-700 mr-1.5 font-medium">4</span>Ready? Press <span className="font-medium">Submit</span> — we are told, and it is kept as a version.
           </li>
         </ol>
         <button type="button" onClick={onUpload} className="text-brand-700 hover:text-brand-800 justify-self-start text-[13px] font-medium underline-offset-2 hover:underline md:justify-self-end">
@@ -460,6 +464,7 @@ export function MasterRoomingList({ propertyId, eventId: chosen }: { propertyId:
   const utils = api.useUtils();
   const data = api.rooming.forProperty.useQuery({ propertyId, eventId });
   const markSent = api.rooming.markSent.useMutation({ onSuccess: () => (void utils.rooming.invalidate(), void utils.audit.invalidate()) });
+  const [sending, setSending] = useState(false);
   if (!data.data) return <p className="text-ink-500 text-sm font-light">Loading…</p>;
   const { events, master } = data.data;
   if (!master || !data.data.eventId) return <p className="text-ink-500 text-sm font-light">No rooms sold to any client here yet — the master rooming list is made from them.</p>;
@@ -503,16 +508,19 @@ export function MasterRoomingList({ propertyId, eventId: chosen }: { propertyId:
           )}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px]">
+          <button type="button" onClick={() => setSending(true)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-1.5 text-[13px] font-medium text-white">
+            ✉ Send V{next} to the property
+          </button>
           <a href={download} className="text-brand-700 font-medium hover:underline">
-            ⬇ Download Excel for the hotel (V{next}{master.version && changes ? ", changes in yellow" : ""})
+            ⬇ Download Excel (V{next}{master.version && changes ? ", changes in yellow" : ""})
           </a>
           <button
             type="button"
             disabled={markSent.isPending}
             onClick={() => markSent.mutate({ eventId: current, propertyId })}
-            className="border-ink-200 text-ink-700 hover:bg-ink-50 rounded-full border px-3 py-1 text-xs font-light"
+            className="text-ink-500 hover:text-ink-700 text-xs font-light hover:underline"
           >
-            {markSent.isPending ? "Saving…" : `Mark V${next} as sent to the property`}
+            {markSent.isPending ? "Saving…" : `Sent it another way? Mark V${next} as sent`}
           </button>
           {master.versions.length > 0 && (
             <select
@@ -525,12 +533,25 @@ export function MasterRoomingList({ propertyId, eventId: chosen }: { propertyId:
               {master.versions.map((version) => (
                 <option key={version.number} value={version.number}>
                   V{version.number} — {formatDate(version.sentAt)}
+                  {version.sentTo ? ` — to ${version.sentTo}` : ""}
                 </option>
               ))}
             </select>
           )}
         </div>
       </div>
+      {sending && (
+        <SendToProperty
+          eventId={current}
+          propertyId={propertyId}
+          property={master.property.name}
+          event={events.find((one) => one.id === current)?.name ?? ""}
+          next={next}
+          changes={Boolean(master.version && changes)}
+          addresses={data.data.addresses}
+          onClose={() => setSending(false)}
+        />
+      )}
       {master.clients.map((client) => (
         <section key={client.clientId} className="border-ink-200/60 overflow-hidden rounded-2xl border bg-white">
           <header className="border-ink-200/60 flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3">
@@ -1300,6 +1321,7 @@ export function RequestRoomingList({ salesRequestId }: { salesRequestId: string 
         </div>
         <AskFor salesRequestId={salesRequestId} fields={data.data?.fields ?? []} />
       </Card>
+      <Submissions mode={{ salesRequestId }} />
       <RoomingList salesRequestId={salesRequestId} />
     </div>
   );
@@ -1333,5 +1355,254 @@ function AskFor({ salesRequestId, fields }: { salesRequestId: string; fields: st
         ))}
       </div>
     </div>
+  );
+}
+
+// --- Submitted versions (doc §6.9, the owner 2026-11-24) ------------------------------
+
+/** "24 Nov 2026, 14:53" — in the reader's own time. */
+const stamp = (at: Date | string) => new Date(at).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+type Submitted = RouterOutputs["rooming"]["submissions"];
+type Version = Submitted["versions"][number];
+
+/**
+ * The client's versions, neatly along the top, each named by when it was
+ * submitted — opened to see what it changed and the list as it was — and
+ * Submit: on the client's link a bar along the bottom of the screen; for the
+ * team, "Save as a version" (the owner: "They should actually have to click
+ * submit. And it should save as a version").
+ */
+function Submissions({ mode }: { mode: Mode }) {
+  const utils = api.useUtils();
+  const team = api.rooming.submissions.useQuery({ salesRequestId: mode.salesRequestId ?? "" }, { enabled: Boolean(mode.salesRequestId) });
+  const link = api.rooming.submissionsByLink.useQuery({ token: mode.token ?? "" }, { enabled: Boolean(mode.token), retry: false });
+  const done = () => void utils.rooming.invalidate();
+  const submitTeam = api.rooming.submit.useMutation({ onSuccess: () => (done(), void utils.audit.invalidate()) });
+  const submitLink = api.rooming.submitByLink.useMutation({ onSuccess: done });
+  const [open, setOpen] = useState<Version | null>(null);
+  const [thanks, setThanks] = useState<number | null>(null);
+  const data = mode.token ? link.data : team.data;
+  const submit = mode.token ? submitLink : submitTeam;
+  if (!data) return null;
+  const { versions, pending, last } = data;
+  const client = Boolean(mode.token);
+  const go = () =>
+    void (mode.token ? submitLink.mutateAsync({ token: mode.token }) : submitTeam.mutateAsync({ salesRequestId: mode.salesRequestId! })).then((made) => setThanks(made.number)).catch(() => undefined);
+
+  const status = pending.length
+    ? client
+      ? `${changeCount(pending)} — not submitted yet`
+      : `Since ${last ? `version ${last.number}` : "the start"}: ${changeCount(pending)}, not in a version yet`
+    : last
+      ? `Version ${last.number} submitted ${stamp(last.submittedAt)} — nothing changed since`
+      : client
+        ? "Put in your guests, then submit."
+        : "The client has not submitted the list yet.";
+
+  return (
+    <>
+      <div className={client ? "border-ink-200 flex flex-wrap items-center gap-x-3 gap-y-2 border-b pb-4" : "border-ink-200/60 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-white px-4 py-3"}>
+        <span className="text-ink-500 text-[11px] font-medium tracking-wide uppercase">{client ? "Your submitted versions" : "Submitted versions"}</span>
+        {versions.length ? (
+          versions.map((version) => (
+            <button
+              key={version.number}
+              type="button"
+              onClick={() => setOpen(version)}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${version.number === last?.number ? "border-brand-300 bg-brand-50 text-brand-800 font-medium" : "border-ink-200 text-ink-700 hover:bg-ink-50 bg-white font-light"}`}
+              title={`Version ${version.number}, by ${version.by} — ${changeCount(version.changes)}`}
+            >
+              {stamp(version.submittedAt)}
+            </button>
+          ))
+        ) : (
+          <span className="text-ink-500 text-xs font-light">None yet</span>
+        )}
+        {!client && (
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            <span className={`text-xs ${pending.length ? "font-medium text-[#b45309]" : "text-ink-500 font-light"}`}>{status}</span>
+            {pending.length > 0 && (
+              <button type="button" disabled={submit.isPending} onClick={go} className="border-ink-200 text-ink-700 hover:bg-ink-50 rounded-full border bg-white px-3 py-1 text-xs font-light">
+                {submit.isPending ? "Saving…" : "Save as a version"}
+              </button>
+            )}
+          </div>
+        )}
+        {!client && submit.error && <FormError message={friendlyError(submit.error)} />}
+      </div>
+
+      {client && (
+        <div className="border-ink-200 fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur sm:px-8">
+          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3">
+            <div className="text-[13px]">
+              {thanks && !pending.length ? (
+                <span className="font-medium text-[#0a7a47]">Thank you — version {thanks} is with We Lodge. Come back to change it any time, then submit again.</span>
+              ) : (
+                <span className={pending.length ? "text-ink-900 font-medium" : "text-ink-500 font-light"}>{status}</span>
+              )}
+              {submit.error && <span className="ml-2 text-[#c03654]">{friendlyError(submit.error)}</span>}
+            </div>
+            <Button type="button" disabled={submit.isPending || pending.length === 0} onClick={() => (setThanks(null), go())}>
+              {submit.isPending ? "Submitting…" : "Submit rooming list"}
+            </Button>
+          </div>
+        </div>
+      )}
+      {open && <VersionPopup version={open} client={client} onClose={() => setOpen(null)} />}
+    </>
+  );
+}
+
+const changeTone: Record<ListChange["kind"], string> = { new: "text-[#0a7a47]", changed: "text-[#b45309]", removed: "text-[#c03654]" };
+const changeWord: Record<ListChange["kind"], string> = { new: "New", changed: "Changed", removed: "Taken out" };
+
+/** One submitted version: what it changed from the one before, and the list as it was. */
+function VersionPopup({ version, client, onClose }: { version: Version; client: boolean; onClose: () => void }) {
+  const properties = [...new Set(version.stays.map((stay) => stay.property))].sort();
+  return (
+    <Popup title={`Version ${version.number} — ${stamp(version.submittedAt)}`} subtitle={`Submitted by ${version.by} · ${changeCount(version.changes)}${version.number === 1 ? " (the first)" : ` since version ${version.number - 1}`}`} onClose={onClose}>
+      <div className="space-y-6 text-[13px]">
+        {version.changes.length > 0 && (
+          <section>
+            <h3 className="text-ink-900 mb-2 text-[14px] font-medium">{version.number === 1 ? "In it" : `What changed since version ${version.number - 1}`}</h3>
+            <ul className="divide-ink-100 divide-y">
+              {version.changes.map((change, i) => (
+                <li key={i} className="grid gap-1 py-1.5 sm:grid-cols-[6rem_1fr]">
+                  <span className={`font-medium ${changeTone[change.kind]}`}>{changeWord[change.kind]}</span>
+                  <span className="text-ink-700 font-light">
+                    <span className="text-ink-900">{change.guests}</span> · {change.room}
+                    {properties.length > 1 || change.kind === "removed" ? ` · ${change.property}` : ""} · {change.dates}
+                    {change.detail.length > 0 && <span className="text-ink-500 block text-xs">{change.detail.join("; ")}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {properties.map((property) => (
+          <section key={property}>
+            <h3 className="text-ink-900 border-ink-900 mb-1 border-b-2 pb-1 text-[14px] font-medium">{property}</h3>
+            <table className="w-full text-left">
+              <thead className="text-ink-500 text-[11px] tracking-wide uppercase">
+                <tr>
+                  <th className="py-1.5 pr-3 font-medium">Room</th>
+                  <th className="py-1.5 pr-3 font-medium">Guests</th>
+                  <th className="py-1.5 pr-3 font-medium">Dates</th>
+                  <th className="py-1.5 pr-3 font-medium">Arriving</th>
+                  <th className="py-1.5 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-ink-100 divide-y font-light">
+                {version.stays
+                  .filter((stay) => stay.property === property)
+                  .sort((a, b) => a.slotNumber - b.slotNumber || a.checkIn.localeCompare(b.checkIn))
+                  .map((stay) => (
+                    <tr key={stay.stayId}>
+                      <td className="py-1.5 pr-3">{stay.room}</td>
+                      <td className="text-ink-900 py-1.5 pr-3">{stay.guests.map(name).filter(Boolean).join(", ") || "—"}</td>
+                      <td className="py-1.5 pr-3 whitespace-nowrap">{range(stay.checkIn, stay.checkOut)}</td>
+                      <td className="py-1.5 pr-3">{stay.arrival ?? ""}</td>
+                      <td className="py-1.5">{stay.notes ?? ""}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+        {!version.stays.length && <p className="text-ink-500 font-light">Nobody was named in this version.</p>}
+        {client && <p className="text-ink-500 text-xs font-light">This is the list as you submitted it then. Your list now is on the page.</p>}
+      </div>
+    </Popup>
+  );
+}
+
+// --- Sending the master list to the property (doc §6.9, the owner 2026-11-24) ----------
+
+/** "A send to hotel button where we can insert an email address and a message." */
+function SendToProperty({
+  eventId,
+  propertyId,
+  property,
+  event,
+  next,
+  changes,
+  addresses,
+  onClose,
+}: {
+  eventId: string;
+  propertyId: string;
+  property: string;
+  event: string;
+  next: number;
+  changes: boolean;
+  addresses: { email: string; label: string }[];
+  onClose: () => void;
+}) {
+  const utils = api.useUtils();
+  const me = api.user.me.useQuery(undefined, { staleTime: 60_000 });
+  const [to, setTo] = useState(addresses[0]?.email ?? "");
+  const [message, setMessage] = useState<string | null>(null);
+  const send = api.rooming.sendToProperty.useMutation({ onSuccess: () => (void utils.rooming.invalidate(), void utils.audit.invalidate()) });
+  const signOff = me.data?.name ?? "";
+  const text =
+    message ??
+    `Dear ${property} team,\n\nPlease find attached our rooming list for ${event}, version ${next}.${changes && next > 1 ? ` Changes since version ${next - 1} are highlighted in yellow and listed on the second sheet.` : ""}\n\nPlease let us know if anything is unclear.\n\nKind regards,\n${signOff}${signOff ? "\n" : ""}We Lodge`;
+  const list = to
+    .split(/[,;\s]+/)
+    .map((one) => one.trim())
+    .filter(Boolean);
+  const add = (email: string) => setTo((now) => (list.some((one) => one.toLowerCase() === email.toLowerCase()) ? now : [now.trim(), email].filter(Boolean).join(", ")));
+  if (send.data) {
+    return (
+      <Popup title="Sent" size="medium" onClose={onClose}>
+        <p className="text-ink-700 text-[13px] font-light">
+          Version {send.data.number} went to {list.join(", ")}, with the Excel attached and a copy to you. Replies come to your inbox. It is kept on this tab as version {send.data.number}.
+        </p>
+        <div className="mt-4">
+          <Button type="button" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      </Popup>
+    );
+  }
+  return (
+    <Popup title={`Send version ${next} to ${property}`} subtitle="The Excel goes attached; a copy comes to you, and replies come to your inbox" size="medium" onClose={onClose}>
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          send.mutate({ eventId, propertyId, to: list, message: text });
+        }}
+      >
+        <Field label="To" hint="More than one? Separate them with commas.">
+          <Input type="text" value={to} onChange={(e) => setTo(e.target.value)} placeholder="reservations@hotel.com" autoFocus />
+        </Field>
+        {addresses.length > 0 && (
+          <div className="-mt-2 flex flex-wrap gap-1.5">
+            {addresses.map((one) => (
+              <button key={one.email} type="button" onClick={() => add(one.email)} className="border-ink-200 text-ink-700 hover:bg-ink-50 rounded-full border bg-white px-2.5 py-0.5 text-xs font-light" title={one.label}>
+                + {one.email}
+                {one.label && <span className="text-ink-400"> · {one.label}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+        <Field label="Message">
+          <Textarea rows={9} value={text} onChange={(e) => setMessage(e.target.value)} />
+        </Field>
+        <p className="text-ink-500 text-xs font-light">Attached: Rooming list V{next} — {property}.xlsx</p>
+        <FormError message={send.error ? friendlyError(send.error) : null} />
+        <div className="flex gap-2">
+          <Button type="submit" disabled={send.isPending || list.length === 0}>
+            {send.isPending ? "Sending…" : "Send"}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Popup>
   );
 }

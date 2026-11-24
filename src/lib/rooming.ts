@@ -62,3 +62,44 @@ export function sharesOneBed(room: { category: string; bedConfiguration?: string
   if (/\b(double|twin|two|2 |queen queen|bunk|triple|quad|family|suite|apartment|studio|bedroom)\b/.test(name)) return false;
   return /\b(king|queen|matrimonial)\b/.test(name);
 }
+
+/** A stay in a submitted rooming list (doc §6.9): with its property and room in words, as they were then. */
+export type SubmittedStay = StaySnapshot & { propertyId: string; property: string; room: string; slotNumber: number };
+
+export type ListChange = { kind: "new" | "changed" | "removed"; property: string; room: string; guests: string; dates: string; detail: string[] };
+
+/**
+ * What changed between two submissions of a client's list — or between the
+ * last one and the list now: stays added, changed (and how), taken out.
+ * Nothing before means everything is new.
+ */
+export function listChanges(before: SubmittedStay[] | null, now: SubmittedStay[]): ListChange[] {
+  const was = new Map((before ?? []).map((stay) => [stay.stayId, stay]));
+  const rooms = new Map([...(before ?? []), ...now].map((stay) => [stay.slotId, stay.room]));
+  const label = (slotId: string) => rooms.get(slotId) ?? "another room";
+  const names = (stay: SubmittedStay) => stay.guests.map(guestName).filter(Boolean).join(", ") || "Nobody named";
+  const dates = (stay: SubmittedStay) => formatRange(parseDay(stay.checkIn), parseDay(stay.checkOut));
+  const order = (a: SubmittedStay, b: SubmittedStay) => a.property.localeCompare(b.property) || a.slotNumber - b.slotNumber || a.checkIn.localeCompare(b.checkIn);
+  const out: ListChange[] = [];
+  for (const stay of [...now].sort(order)) {
+    const earlier = was.get(stay.stayId);
+    const base = { property: stay.property, room: stay.room, guests: names(stay), dates: dates(stay) };
+    if (!earlier) out.push({ kind: "new", ...base, detail: [] });
+    else {
+      const detail = stayChanges(earlier, stay, label);
+      if (detail.length) out.push({ kind: "changed", ...base, detail });
+    }
+  }
+  const still = new Set(now.map((stay) => stay.stayId));
+  for (const stay of [...(before ?? [])].sort(order)) {
+    if (!still.has(stay.stayId)) out.push({ kind: "removed", property: stay.property, room: stay.room, guests: names(stay), dates: dates(stay), detail: [] });
+  }
+  return out;
+}
+
+/** "3 new, 1 changed, 1 taken out" — or "no changes". */
+export function changeCount(changes: ListChange[]) {
+  const count = (kind: ListChange["kind"]) => changes.filter((change) => change.kind === kind).length;
+  const parts = [count("new") && `${count("new")} new`, count("changed") && `${count("changed")} changed`, count("removed") && `${count("removed")} taken out`].filter(Boolean);
+  return parts.length ? parts.join(", ") : "no changes";
+}
