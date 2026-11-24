@@ -344,6 +344,16 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
         }
       }
 
+      // Everything starts from the sales request (the owner, 2026-11-24: "if a
+      // client has rooms sold there HAS to be a sales request"): a block or a
+      // sale names the client's request, unless every night is already on one of theirs.
+      if ((action === "BLOCK" || action === "SELL") && !input.salesRequestId && !nights.every((night) => night.salesRequestId && night.clientId === input.clientId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nothing was changed. Rooms are only blocked or sold on a sales request — choose the client's request for this event, or make one first.",
+        });
+      }
+
       const need = (value: unknown, message: string) => {
         if (value === undefined || value === null || value === "") {
           throw new TRPCError({ code: "BAD_REQUEST", message });

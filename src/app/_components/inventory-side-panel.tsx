@@ -27,7 +27,7 @@ import {
   type InventoryAction,
 } from "~/lib/inventory";
 import { periodProblem, RatePeriods, wholeStay, type RatePeriod } from "~/app/_components/rate-periods";
-import { isClosed, salesStageLabels } from "~/lib/sales";
+import { salesStageLabels } from "~/lib/sales";
 import { api } from "~/trpc/react";
 import { CURRENCIES } from "~/lib/currency";
 import { FileField } from "~/app/_components/file-field";
@@ -278,9 +278,11 @@ export function InventorySidePanel({
   const [salesRequestId, setSalesRequestId] = useState<string | null>(null);
   const forRequest = action === "REQUEST" || action === "BLOCK" || action === "SELL";
   const clientRequests = api.sales.forClient.useQuery({ clientId }, { enabled: Boolean(clientId) && forRequest });
+  // A sale happens on a contracted request too — only a lost one is out.
   const openRequests = (clientRequests.data ?? []).filter(
-    (request) => request.event?.id === eventId && !isClosed(request.stage),
+    (request) => request.event?.id === eventId && request.stage !== "LOST",
   );
+  const needsRequest = (action === "BLOCK" || action === "SELL") && Boolean(clientId);
   const chosenRequest = salesRequestId ?? (openRequests.length === 1 ? openRequests[0]!.id : "");
 
   const [error, setError] = useState<string | null>(null);
@@ -710,10 +712,15 @@ export function InventorySidePanel({
             </div>
           )}
 
+          {needsRequest && clientRequests.isSuccess && openRequests.length === 0 && (
+            <p className="rounded-lg bg-[#fdecef] px-3 py-2 text-[13px] font-light text-[#a3283f]">
+              This client has no sales request for this event. Rooms are only blocked or sold on a sales request — make one first, from Sales.
+            </p>
+          )}
           {forRequest && clientId && openRequests.length > 0 && (
-            <Field label="Sales request" hint="Which of the client's requests these nights belong to — they then show on it.">
+            <Field label="Sales request" hint={needsRequest ? "Which of the client's requests these nights are blocked or sold on — every sale starts from a sales request." : "Which of the client's requests these nights belong to — they then show on it."}>
               <Select value={chosenRequest} onChange={(e) => setSalesRequestId(e.target.value)}>
-                <option value="">None</option>
+                <option value="">{needsRequest ? "Choose a request" : "None"}</option>
                 {openRequests.map((request) => (
                   <option key={request.id} value={request.id}>
                     {[salesStageLabels[request.stage], request.contact?.name, request.description?.slice(0, 50)].filter(Boolean).join(" · ")}

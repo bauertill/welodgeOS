@@ -56,10 +56,11 @@ export const plainMentions = (body: string) => body.replace(MENTION_PATTERN, "@$
  * Only being mentioned (or tagged) is emailed (the owner, 2026-11-17: "I don't
  * want to overwhelm the team with an email every time — when they're tagged or
  * mentioned, yes") — and, since 2026-11-20, payment and cancellation deadline
- * reminders to the contract's account manager (doc §7.1). Everything else
+ * reminders to the contract's account manager (doc §7.1) — and, since
+ * 2026-11-24, a client's rooming list submitted (doc §6.9). Everything else
  * stays in the bell.
  */
-export const EMAILED_KINDS: NotificationKind[] = ["TASK_MENTION", "UPDATE_MENTION", "PAYMENT_DUE", "CANCELLATION_DUE"];
+export const EMAILED_KINDS: NotificationKind[] = ["TASK_MENTION", "UPDATE_MENTION", "PAYMENT_DUE", "CANCELLATION_DUE", "ROOMING_SUBMITTED"];
 
 /**
  * Email the mentions waiting, at once, to everyone who has not turned email

@@ -610,7 +610,7 @@ for new ones every half minute.
 
 **By email: only mentions** (the owner, 2026-11-17: "I don't want to overwhelm the team with
 an email every time — when they're tagged or mentioned, yes") — **and, since 2026-11-20,
-contract deadline reminders and the Friday overdue payments** to the account manager (§7.1). Being `@mentioned` — in a task
+contract deadline reminders and the Friday overdue payments** to the account manager (§7.1) — **and, since 2026-11-24, a client's rooming list submitted** to whoever looks after the property (§6.9). Being `@mentioned` — in a task
 or its comments, an update or a reply — sends an email **at once**, linking to the page.
 Everything else (a task given to you, comments, replies, status changes, deadlines, rate card
 answers) is in the bell — **and in the morning summary**. On *My profile* each person chooses
@@ -1892,6 +1892,13 @@ per night to the client is given — or, left empty, only where every night alre
 that same client's price, as when a block becomes a sale. This holds on the stock sheet and
 on a sales request alike (§4.11). A request (soft) does not need one. (From Ami's review,
 2026-09-30.)
+
+**A block or a sale is always on a sales request** (the owner, 2026-11-24: "if a client has rooms
+sold there HAS to be a sales request. Remember everything starts from the sales request"). On the
+stock sheet *Block* and *Sell* need the client's request for the event — any not lost, contracted
+included; the only one is chosen by itself — and are refused without one, unless every night is
+already on one of that client's requests (a block becoming a sale). A client with no request at the
+event is told to make one first.
 
 **A block has one deadline: the client's deadline.** It is the date the client must decide
 by, the block's own date (`blockExpiry`) — required when blocking, the one the deadline
@@ -4347,10 +4354,11 @@ at the property"). On **the property's page, *Rooming list* tab** — per event,
 property has rooms sold at several — **every client** with rooms sold there, each with their rooms
 and guests as on their own list (and editable there, as there), linked to their request; a client
 with rooms but no sales request at the event shows their rooms only, as nobody can name guests in
-them yet. Its header counts clients, rooms and booked nights named. **What the hotel gets is sent
+them yet (which can no longer happen: a sale is always on a request, §4.3). Its header counts clients, rooms and booked nights named. **What the hotel gets is sent
 from here**, and **its versions sit here** (the owner: "keep the clients' rooming list on the sales
 request but any versions sent to the hotel should sit on the properties page"): **Mark V2 as sent to
-the property** keeps what was sent — every client's stays — as that version, with who and when;
+the property** keeps what was sent — every client's stays — as that version, with who and when
+(now *Sent it another way? Mark V2 as sent*, beside *Send to the property* below);
 *Earlier versions…* downloads any version as it was sent. On each client's own list (the team's
 view, never the client's) the property's header says which version the hotel has, how many of this
 client's stays changed since, and links to the master; every stay **new**, **changed** (saying
@@ -4368,6 +4376,34 @@ the hotel sees all the rooms we have there. Every row changed since the last ver
 with a *Change since V1* column, and a second sheet, **Changes since V1**, lists each change — new,
 changed (was → now) and **cancelled** (in red), with the client — so the hotel sees at once what to
 update.
+
+**✉ Send V2 to the property** (the owner, 2026-11-24: "a send to hotel button where we can insert an
+email address and a message") opens a popup: *To* (one address or several, with the property's
+contacts' addresses, its general and contracts emails offered to add), and a *Message* written
+ready — *Dear Hotel Carmel team, please find attached our rooming list for … version 2; changes
+since version 1 are highlighted in yellow…*, signed with the sender's name — to change as wanted.
+*Send* emails it from *<sender> · We Lodge*, the Excel attached (labelled *V2 — sent <date> by
+<sender>*), a copy to the sender, replies to the sender's own inbox; only once it has gone is it
+kept as V2, with whom it went to and the message (shown in *Earlier versions…*). Off the live site
+only the test addresses are emailed (§2.9).
+
+**Submitting** (the owner, 2026-11-24: "They should actually have to click submit. And it should
+save as a version. We need to be able to track changes… The versions could sit at the top neatly,
+named by a time and date stamp. The person dealing with that property should get notified… an email
+as well as bell"). Typing on the list still saves as it goes, as a draft, so nothing is lost; the
+client's link has a bar along the bottom — *1 new, 2 changed — not submitted yet* — and **Submit
+rooming list**, which keeps the list as it stands as their next **version** (refused when nothing
+changed since the last), then thanks them. The how-it-works lines gain a fourth: *Ready? Press
+Submit — we are told, and it is kept as a version.* **The versions sit along the top**, each named
+by its date and time (*24 Nov 2026, 14:53*, in the reader's time; the latest highlighted); opening
+one shows who submitted it, **what changed since the one before** — new, changed (and how) or
+taken out — and the whole list as it was. The team sees the same row on the request's tab, with
+*Since version 2: 1 changed, not in a version yet* and **Save as a version** for changes they made
+themselves. Each submission tells **whoever looks after each property with changes in it** — its
+account manager on the event (§3.9), else the request's owner — in the bell **and by email** (*Beyond
+Limits submitted their rooming list — version 3*, with the event and per property *Hotel Carmel:
+1 new, 2 changed*), linking to the request's *Rooming list* tab. A version is the client's whole
+list at the event, every property in it.
 
 ---
 
@@ -4884,7 +4920,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
-| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Not yet: notifying the team when the client changes the list, sending the Excel from OS |
+| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. On staging (2026-11-24): the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 
