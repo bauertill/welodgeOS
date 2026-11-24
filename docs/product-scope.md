@@ -3630,6 +3630,8 @@ panel, no OS around it, not indexed — following the device into dark mode. *Sa
 the browser's print dialog with the reference's print layout on US Letter. A migration made
 *Decron – OBS staggered lease, 60 units* from the reference defaults and the CSV.
 
+**The figures at the top** (the owner, 2026-11-24, dropped the reference's average-lease figure): the weekly cap (in lime), the apartments and their move-in waves, and the gross rent over the lease months.
+
 **Rules kept**: only the provider's rent is shown or sent — never our margins, sell rates,
 client prices or costs; "We Lodge" in two words; "Games periods" and "a recent event", never an
 event's protected name; all amounts in USD. The reference's default client label *OBS* is kept,

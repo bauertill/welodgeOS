@@ -412,7 +412,6 @@ export function leaseCopy(S: LeaseSettings, c: LeaseComputed) {
     facts: [
       { cap: true, b: String(c.CAP), s: "apartments handed back in any one week, at most" },
       { cap: false, b: String(c.N), s: `apartments, moving in over ${c.nWaves}${c.nWaves === 1 ? " wave" : " waves"}` },
-      { cap: false, b: `${one(c.avg)} mo`, s: `average lease, ranging from ${one(c.minLen)} to ${one(c.maxLen)} months` },
       {
         cap: false,
         b: c.gross >= 1e6 ? `$${(c.gross / 1e6).toFixed(2)}M` : `$${(c.gross / 1e3).toFixed(0)}k`,
