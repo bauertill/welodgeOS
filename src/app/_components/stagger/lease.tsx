@@ -350,10 +350,10 @@ function LeaseBody({ s, c }: { s: LeaseSettings; c: LeaseComputed }) {
             <b>Rent in four payments.</b> 10% on signature, 40% on the move-in day, 40% during the stay and 10% at check-out.
           </li>
           <li>
-            <b>Damage and liability cover.</b> Every apartment is insured for damage and liability, with a joint inspection at move-in and at hand-back.
+            <b>Damage and liability cover.*</b> Every apartment is insured for damage and liability, with a joint inspection at move-in and at hand-back.
           </li>
           <li>
-            <b>Professional cleaning.</b> Each apartment is professionally cleaned on departure, so it can be shown straight away.
+            <b>Professional cleaning.</b> Each apartment is professionally cleaned during the stay and on check-out, ready for the next tenant.
           </li>
         </ol>
       </section>
@@ -363,6 +363,7 @@ function LeaseBody({ s, c }: { s: LeaseSettings; c: LeaseComputed }) {
         <p>{copy.note1}</p>
         <p>{copy.note2}</p>
         <p>{copy.note3}</p>
+        <p>{copy.insurance}</p>
       </section>
     </main>
   );

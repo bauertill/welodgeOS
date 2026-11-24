@@ -421,10 +421,13 @@ export function leaseCopy(S: LeaseSettings, c: LeaseComputed) {
     ],
     weeklySub: `Every hand-back falls on a ${day}. The meter shows how many of the ${c.CAP} weekly slots are used.`,
     why1: `Apartments come back over ${c.weeks.length} weeks, from ${fd(c.minEnd)} to ${fdy(c.maxEnd)}. No week has more than ${c.CAP}, so your leasing and cleaning teams can plan a steady weekly turnover instead of re-letting a whole block at once.`,
-    why2: `All ${c.N} apartments are back by ${fdy(c.maxEnd)}, in the late-summer and early-autumn leasing season, not in winter when units are hardest to fill.${c.MINBACK !== null ? ` None come back before the end of ${which} Games period.` : ""}`,
+    why2: `All ${c.N} apartments are back by ${fdy(c.maxEnd)}, in the late-summer and early-autumn leasing season, not in winter when units are hardest to fill.`,
     why3: `Each lease starts with the move-in wave just before the person arrives and ends on the ${day} after they leave, so there are no empty months before or after. Apartments move in from ${fd(c.minStart)} and are back with you as soon as each person leaves.`,
     note1: `This scenario is based on ${cl}’s arrival and departure pattern at a recent event (${c.resCount} reservations), shifted to the ${new Date(c.T.open).getUTCFullYear()} calendar and scaled to ${c.N} apartments. ${cl}’s final arrival list will set the exact dates.`,
     note2: `Each lease ends on the first ${day} after the person checks out${c.MINBACK !== null ? `, and not before ${fdy(c.MINBACK)}, the close of ${which} Games period` : ""}. If that ${day} already has ${c.CAP} hand-backs, the lease runs to the next ${day} with a free slot. Rent is charged pro rata at the blended rate of ${money(c.blended)} a month.`,
     note3: "All leases are 30 nights or longer and are fully insured. Rates are proposals and are subject to agreement. All amounts in USD.",
+    // The full insurance term behind "Damage and liability cover.*" (the owner, 2026-11-24).
+    insurance:
+      "* We Lodge shall, at its own cost, maintain throughout the Lease Period commercial general liability insurance with limits of US$1,000,000 per occurrence and US$2,000,000 general aggregate, naming the Provider as an additional insured, and shall deliver a certificate of such insurance to the Provider no later than 30 (thirty) days before the start of the Lease Period. We Lodge shall inform all occupants that the Provider's insurance does not cover occupants' personal property or personal liability.",
   };
 }

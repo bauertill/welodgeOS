@@ -3639,7 +3639,11 @@ the browser's print dialog with the reference's print layout on US Letter. A mig
 
 **No daily rate on the page** (the owner, 2026-11-24): the notes say rent is charged *pro rata* at the blended monthly rate, and the month table that part-months are charged *pro rata* — the day rate is still how the figures are worked out, but it is not shown.
 
-**Proposed terms** (the owner, 2026-11-24): one tenant, one contact; **rent in four payments — 10% on signature, 40% on the move-in day, 40% during the stay and 10% at check-out** (not the reference's rent in advance with a deposit per apartment); damage and liability cover; professional cleaning. The reference's *Flexible arrivals, fixed hand-backs* and *Proven on large international projects* points are removed, and with them the panel's *Arrival flexibility per wave* box (a saved value is kept but not shown).
+**Proposed terms** (the owner, 2026-11-24): one tenant, one contact; **rent in four payments — 10% on signature, 40% on the move-in day, 40% during the stay and 10% at check-out** (not the reference's rent in advance with a deposit per apartment); damage and liability cover; professional cleaning — *each apartment is professionally cleaned during the stay and on check-out, ready for the next tenant*. The reference's *Flexible arrivals, fixed hand-backs* and *Proven on large international projects* points are removed, and with them the panel's *Arrival flexibility per wave* box (a saved value is kept but not shown).
+
+**Why this shape works** no longer says *None come back before the end of the first Games period* (the owner, 2026-11-24).
+
+**The insurance term** (the owner, 2026-11-24): *Damage and liability cover* carries an asterisk, and the notes end with the full term — We Lodge's commercial general liability insurance of US$1,000,000 per occurrence and US$2,000,000 general aggregate through the Lease Period, the Provider as additional insured, the certificate 30 days before the Lease Period, and occupants told the Provider's insurance does not cover their belongings or personal liability.
 
 **The figures at the top** (the owner, 2026-11-24, dropped the reference's average-lease figure): the weekly cap (in lime), the apartments and their move-in waves, and the gross rent over the lease months.
 
