@@ -40,7 +40,7 @@
 .sl main { max-width: 1040px; margin: 0 auto; padding: 44px 24px 72px; }
 .sl .hero h1 { font-size: clamp(30px, 4.6vw, 50px); line-height: 1.08; letter-spacing: -0.015em; max-width: 23ch; }
 .sl .lede { font-size: 19px; max-width: 62ch; margin: 18px 0 0; color: var(--body); }
-.sl .facts { display: grid; grid-template-columns: 1.15fr 1fr 1fr 1fr; margin-top: 36px; border-top: 2px solid var(--ink); }
+.sl .facts { display: grid; grid-template-columns: 1.15fr 1fr 1fr; margin-top: 36px; border-top: 2px solid var(--ink); }
 .sl .fact { padding: 18px 18px 4px 0; }
 .sl .fact + .fact { padding-left: 18px; border-left: 1px solid var(--line); }
 .sl .fact b { display: block; font-size: 38px; font-weight: 900; color: var(--ink); line-height: 1.05; font-variant-numeric: tabular-nums; }
