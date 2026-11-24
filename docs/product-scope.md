@@ -1014,6 +1014,61 @@ Layers panel — the venues and points come first, before any property — where
 places with an address but no position (a layer built from a spreadsheet) has those places
 skipped: they need a position first.
 
+**Points only on the map, or on the properties board** (the owner, 2026-11-24: "Sometimes we just
+want things to be seen on the map without creating a property in the system… There should be an
+option to add it to the sheet however"). *Import from Google My Maps* now takes **the map's link
+pasted in** (the map shared so anyone with the link can view — Google gives its KML), or a KML file
+as before. Every point comes in **on the map only**, in its My Maps layer — research hotels and
+apartments too — and **nothing is added to the properties board**. A point with no position of
+its own takes the one in its *WKT* column, or, with only an *Address*, is placed by it (through
+OpenStreetMap, about a second each, at most 120 at a time); one with neither is left out and
+counted. A point named as a property already on the event's board (*5\* Hotel Carmel* is Hotel
+Carmel — stars in front are ignored) is left out, as the property has its pin. Its address is kept,
+and its description — without the empty *Name:* lines a spreadsheet layer leaves — becomes its
+notes. **A point's panel** shows its layer, address and notes, and **＋ Add to properties board**:
+its name (the stars in front read off into its stars), Hotel / Apartments / Aparthotel (apartments
+guessed from the layer or notes) and stars, then *Add* — the property is made on the event's board
+with a hotel contact task, as *＋ Add to the map* makes one, its notes saying which layer it came
+from and what the point said; the point leaves its layer, the property now having its own pin.
+**＋ Add to the map** asks the same question in words: **Add to properties board** or **Only show
+on the map**.
+
+**Nothing twice** (the owner, 2026-11-24: "does it compare what is already there to avoid
+duplicating?"). Before an import, every point is checked against **the points already on the
+event's map**, **the properties on its board** and **every property in our library** — the same
+when the names are the same (stars in front, capitals and punctuation aside: *Hotel Amarano
+Burbank Hollywood* is *Hotel Amarano Burbank-Hollywood*), when one name's main words — three at
+least, so a town alone ("Long Beach") is not enough — are all in the other's within 5 km (*similar
+name*: *Courtyard Culver City* in *Courtyard by Marriott Culver City Los Angeles*), or when it
+stands on the same spot: a property within 40 m, 75 m sharing a main word, 300 m sharing two;
+another point within 40 m sharing a main word. A name match anywhere wins over a near one. The
+import shows *12 look like what we have — 10 ticked to leave out*, and *See them* lists each:
+the point and its layer → what it matched, where (on the map and its layer, a property on the
+board, or in our properties but not on this board) and how (same name, similar name, so many
+metres away). Points matching the map or the board are ticked to leave out; ones matching a
+property not on this board come in as points — untick or tick any. Points placed by their address
+during the import are then compared with the board by their spot too. **On a point's panel**, *＋
+Add to properties board* first looks for the property it may be: *This looks like The Tangerine,
+already in our properties (same name)* with **Put The Tangerine on the board** — that property
+added to the event's board with a hotel contact task, the point removed — or, when it is on the
+board already, **Remove this point**; *It is a different one* goes on to make a new property.
+
+**Moving points between layers** (the owner, 2026-11-24: "I need to move things between
+layers"). On a point's panel, **Layer** is a dropdown of the map's layers — choosing another moves
+it there at once — with *+ A new layer…* to name one and move it into it. Several at once: a
+layer's **⋯ › Move points…** lists its points with ticks, a box to find them by part of a name
+(*ESA Suites*), *All found* to tick every one shown, and **To** another layer or *+ A new layer…*;
+*Move 8 points*. A new layer gets the next colour; the move is in the event's history.
+
+**Removing from the map** (the owner, 2026-11-24: "we should also be able to remove properties").
+A point's panel has **Remove from the map** (after asking); a layer's **⋯ › Move or remove points…**
+has **Remove ticked from the map** for several at once. A **property's** panel on the event's map
+has **Take off this event's board…**: **Take off, keep it on the map** as a point on a layer chosen
+(a layer named for accommodation or hotels offered first; the point named with its stars in front,
+its notes saying it was on the board), or **Take off the board and the map**. Either way the
+property stays in our properties for other events, and its tasks and anything booked stay as they
+are — as *Remove* on the list. Every removal is in the history.
+
 **Searching the map** (the owner, 2026-11-23). Beside *＋ Add to the map* at the top of the map
 is a search box: **an address or a property on the map**. What is typed is matched first against
 **our own** — the event's properties and the places on its layers, listed *On our map* — then

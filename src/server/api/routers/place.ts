@@ -3,6 +3,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { logAudit } from "~/server/audit";
+import { findMatch } from "~/lib/map-match";
+import { createFoundProperty } from "~/server/found-property";
+import { ensureHotelContactTask } from "~/server/hotel-contact";
+import { deliverImmediate } from "~/server/notify";
 
 /**
  * A place of interest: somewhere guests need to get to for one event — a
@@ -103,14 +108,154 @@ export const placeRouter = createTRPCRouter({
     }),
 
   /**
+   * Points moved to another layer (the owner, 2026-11-24: "I need to move
+   * things between layers") — one from its panel, or several from a layer's ⋯ —
+   * into one of the event's layers, or a new one made with the name given.
+   */
+  move: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1, "Tick the points to move.").max(3000),
+        layerId: z.string().optional(),
+        newLayer: z.string().trim().min(1, "Give the new layer a name.").max(100).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!input.layerId === !input.newLayer) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the layer to move them to." });
+      return ctx.db.$transaction(async (tx) => {
+        const places = await tx.placeOfInterest.findMany({ where: { id: { in: input.ids } }, select: { id: true, eventId: true, layer: { select: { name: true } } } });
+        const eventId = places[0]?.eventId;
+        if (!eventId || places.some((place) => place.eventId !== eventId)) throw new TRPCError({ code: "BAD_REQUEST", message: "Those points are not on one event's map." });
+        let layer: { id: string; name: string };
+        if (input.layerId) {
+          const found = await tx.mapLayer.findUnique({ where: { id: input.layerId }, select: { id: true, name: true, eventId: true } });
+          if (found?.eventId !== eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That layer is not on this event's map." });
+          layer = found;
+        } else {
+          const taken = await tx.mapLayer.findFirst({ where: { eventId, name: { equals: input.newLayer!, mode: "insensitive" } }, select: { id: true, name: true } });
+          const count = await tx.mapLayer.count({ where: { eventId } });
+          const palette = ["#614fc9", "#e5533d", "#1d5fa8", "#0a7a47", "#e5a400", "#c03654", "#00838f", "#8a5a00"];
+          layer = taken ?? (await tx.mapLayer.create({ data: { eventId, name: input.newLayer!, color: palette[count % palette.length]!, position: count }, select: { id: true, name: true } }));
+        }
+        await tx.placeOfInterest.updateMany({ where: { id: { in: places.map((place) => place.id) } }, data: { layerId: layer.id } });
+        const from = [...new Set(places.map((place) => place.layer?.name ?? "no layer"))].join(", ");
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Event", entityId: eventId, summary: `${places.length} map ${places.length === 1 ? "point" : "points"} moved to ${layer.name}`, changes: `From ${from}` });
+        return { moved: places.length, layer: layer.name };
+      });
+    }),
+
+  /**
+   * The property in our library a point looks to be — the same name, or the
+   * same spot (doc §3.7) — and whether it is on the point's event's board.
+   */
+  matchProperty: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const place = await ctx.db.placeOfInterest.findUnique({ where: { id: input.id }, select: { name: true, latitude: true, longitude: true, eventId: true } });
+    if (!place) return null;
+    const library = await ctx.db.property.findMany({ select: { id: true, name: true, latitude: true, longitude: true } });
+    const match = findMatch(place, library, "property");
+    if (!match) return null;
+    const entry = await ctx.db.scoutingEntry.findFirst({ where: { eventId: place.eventId, propertyId: match.id }, select: { id: true } });
+    return { ...match, onBoard: Boolean(entry) };
+  }),
+
+  /**
+   * A point that is a property we already have: that property put on the
+   * event's board (with a hotel contact task) if it is not there yet, and the
+   * point taken off the map — the property has its own pin.
+   */
+  toExistingProperty: protectedProcedure.input(z.object({ id: z.string(), propertyId: z.string() })).mutation(async ({ ctx, input }) => {
+    const result = await ctx.db.$transaction(async (tx) => {
+      const place = await tx.placeOfInterest.findUnique({ where: { id: input.id }, select: { id: true, name: true, eventId: true, layer: { select: { name: true } } } });
+      if (!place) throw new TRPCError({ code: "NOT_FOUND", message: "That point is not on the map any more." });
+      const property = await tx.property.findUniqueOrThrow({ where: { id: input.propertyId }, select: { id: true, name: true } });
+      const already = await tx.scoutingEntry.findFirst({ where: { eventId: place.eventId, propertyId: property.id }, select: { id: true } });
+      if (!already) {
+        const entry = await tx.scoutingEntry.create({ data: { eventId: place.eventId, propertyId: property.id, addedById: ctx.session.user.id } });
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "ScoutingEntry", entityId: entry.id, summary: `Added to the scouting list — from the map's ${place.layer?.name ?? "places"} layer` });
+        await ensureHotelContactTask(tx, { propertyId: property.id, eventId: place.eventId, salesRequestId: null, actorId: ctx.session.user.id });
+      }
+      await tx.placeOfInterest.delete({ where: { id: place.id } });
+      await logAudit(tx, { actorId: ctx.session.user.id, entity: "Event", entityId: place.eventId, summary: `Map point "${place.name}" is ${property.name}${already ? ", already on the board — point removed" : " — put on the properties board"}` });
+      return { propertyId: property.id, added: !already };
+    });
+    await deliverImmediate(ctx.db);
+    return result;
+  }),
+
+  /**
+   * A point that was only on the map — a hotel from research — put on the
+   * properties board after all (the owner, 2026-11-24: "we can either add it
+   * to the property board or not"): the property made from it, on the event's
+   * board with a hotel contact task, and the point taken off its layer, as the
+   * property now has its own pin.
+   */
+  toProperty: protectedProcedure
+    .input(z.object({ id: z.string(), name: z.string().trim().min(1, "Give it a name").max(300), type: z.enum(["HOTEL", "APARTMENT", "APARTHOTEL"]), stars: z.number().int().min(1).max(5).nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const made = await ctx.db.$transaction(async (tx) => {
+        const place = await tx.placeOfInterest.findUnique({ where: { id: input.id }, include: { event: { select: { id: true, name: true } }, layer: { select: { name: true } } } });
+        if (!place) throw new TRPCError({ code: "NOT_FOUND", message: "That point is not on the map any more." });
+        const made = await createFoundProperty(tx, {
+          place: {
+            name: input.name,
+            type: input.type,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            address: place.address,
+            city: null,
+            country: null,
+            website: null,
+            phone: null,
+            stars: input.stars,
+            rooms: null,
+            source: "map",
+          },
+          eventId: place.eventId,
+          salesRequestId: null,
+          foundWhile: `for ${place.event.name}`,
+          actorId: ctx.session.user.id,
+        });
+        // Its notes say where it came from, with what the map said of it.
+        const from = `Was on the map's ${place.layer?.name ?? "places"} layer as "${place.name}".${place.notes ? `\n${place.notes}` : ""}`;
+        const property = await tx.property.findUniqueOrThrow({ where: { id: made.id }, select: { notes: true } });
+        await tx.property.update({ where: { id: made.id }, data: { notes: [property.notes?.replace("Spotted on the ground and added from the map", "Added from the map"), from].filter(Boolean).join("\n") } });
+        await tx.placeOfInterest.delete({ where: { id: place.id } });
+        await logAudit(tx, { actorId: ctx.session.user.id, entity: "Event", entityId: place.eventId, summary: `Map point put on the properties board: ${input.name}`, changes: place.layer ? `From the ${place.layer.name} layer` : null });
+        return made;
+      });
+      await deliverImmediate(ctx.db);
+      return made;
+    }),
+
+  /**
    * Nothing hangs off a place of interest — it is measured from, never booked
    * against — so removing one takes nothing with it.
    */
   remove: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.placeOfInterest.delete({ where: { id: input.id } }),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const place = await ctx.db.placeOfInterest.delete({ where: { id: input.id }, include: { layer: { select: { name: true } } } });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Event", entityId: place.eventId, summary: `Map point removed: ${place.name}`, changes: place.layer ? `From ${place.layer.name}` : null });
+      return place;
+    }),
+
+  /** Several points taken off the map at once, from a layer's ⋯ (the owner, 2026-11-24). */
+  removeMany: protectedProcedure.input(z.object({ ids: z.array(z.string()).min(1, "Tick the points to remove.").max(3000) })).mutation(({ ctx, input }) =>
+    ctx.db.$transaction(async (tx) => {
+      const places = await tx.placeOfInterest.findMany({ where: { id: { in: input.ids } }, select: { id: true, name: true, eventId: true } });
+      const eventId = places[0]?.eventId;
+      if (!eventId || places.some((place) => place.eventId !== eventId)) throw new TRPCError({ code: "BAD_REQUEST", message: "Those points are not on one event's map." });
+      await tx.placeOfInterest.deleteMany({ where: { id: { in: places.map((place) => place.id) } } });
+      await logAudit(tx, {
+        actorId: ctx.session.user.id,
+        entity: "Event",
+        entityId: eventId,
+        summary: `${places.length} map ${places.length === 1 ? "point" : "points"} removed`,
+        changes: places.slice(0, 30).map((place) => place.name).join(", ") + (places.length > 30 ? "…" : ""),
+      });
+      return { removed: places.length };
+    }),
+  ),
 });
 
 /**

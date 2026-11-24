@@ -8,6 +8,7 @@ import {
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlaceCategory, PropertyType, ScoutingStatus } from "generated/prisma";
 
@@ -64,6 +65,7 @@ export type MapPlace = {
   /** For its icon: its layer's name and its notes, where the sport is often said. */
   layerName?: string | null;
   notes?: string | null;
+  address?: string | null;
 };
 
 /** A layer of the event's map (doc §3.7): its places shown or hidden together. */
@@ -306,11 +308,13 @@ function SidePanel({
   places,
   availability,
   eventId,
+  layers = [],
   onClose,
 }: {
   pin?: MapPin;
   place?: MapPlace;
   places: MapPlace[];
+  layers?: MapLayer[];
   availability: MapAvailability[];
   eventId?: string;
   onClose: () => void;
@@ -359,6 +363,7 @@ function SidePanel({
           </Link>
 
           {eventId && <ContactTaskBox key={pin.propertyId} propertyId={pin.propertyId} eventId={eventId} />}
+          {eventId && <RemoveProperty key={`remove-${pin.id}`} pin={pin} layers={layers} onDone={onClose} />}
 
           <div className="mt-5">
             <PanelHeading>Rooms still available</PanelHeading>
@@ -389,6 +394,11 @@ function SidePanel({
 
       {place && (
         <div className="mt-4">
+          {eventId && layers.length > 0 ? <MoveToLayer key={place.id} place={place} layers={layers} /> : place.layerName && <p className="text-ink-500 -mt-3 mb-2 text-xs font-light">On the {place.layerName} layer</p>}
+          {place.address && <p className="text-ink-700 mb-2 text-[13px] font-light">{place.address}</p>}
+          {place.notes && <p className="text-ink-700 mb-3 text-[13px] font-light whitespace-pre-line">{place.notes}</p>}
+          {eventId && <PlaceToBoard key={place.id} place={place} onDone={onClose} />}
+          {eventId && <RemovePoint key={`remove-${place.id}`} place={place} onDone={onClose} />}
           {place.lines ? (
             <>
               <PanelHeading>Lines</PanelHeading>
@@ -404,6 +414,251 @@ function SidePanel({
         </div>
       )}
     </aside>
+  );
+}
+
+/** A point taken off the map, from its panel — after asking. */
+function RemovePoint({ place, onDone }: { place: MapPlace; onDone: () => void }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const remove = api.place.remove.useMutation({
+    onSuccess: () => {
+      void utils.invalidate();
+      router.refresh();
+      onDone();
+    },
+  });
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        disabled={remove.isPending}
+        onClick={() => window.confirm(`Remove "${place.name}" from the map?`) && remove.mutate({ id: place.id })}
+        className="text-xs font-light text-[#c03654] hover:underline"
+      >
+        {remove.isPending ? "Removing…" : "Remove from the map"}
+      </button>
+      {remove.error && <p className="text-xs text-[#c03654]">{remove.error.message}</p>}
+    </div>
+  );
+}
+
+/**
+ * A property taken off the event's board from its pin (the owner, 2026-11-24):
+ * kept on the map as a point on a layer chosen, or off the map too. The
+ * property stays in our library.
+ */
+function RemoveProperty({ pin, layers, onDone }: { pin: MapPin; layers: MapLayer[]; onDone: () => void }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const [open, setOpen] = useState(false);
+  const [layerId, setLayerId] = useState(layers.find((layer) => /accommodation|hotel/i.test(layer.name))?.id ?? layers[0]?.id ?? "");
+  const remove = api.scouting.removeFromMap.useMutation({
+    onSuccess: () => {
+      void utils.invalidate();
+      router.refresh();
+      onDone();
+    },
+  });
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-3 self-start text-xs font-light text-[#c03654] hover:underline">
+        Take off this event&rsquo;s board…
+      </button>
+    );
+  }
+  return (
+    <div className="mt-3 space-y-2 rounded-lg border border-[#f3c4cd] bg-[#fdf0f2] p-2.5 text-xs">
+      <p className="text-ink-900">
+        Take <span className="font-medium">{pin.name}</span> off this event&rsquo;s board? It stays in our properties for other events; its tasks and anything booked stay as they are.
+      </p>
+      {layers.length > 0 && (
+        <div className="space-y-1">
+          <button type="button" disabled={remove.isPending || !layerId} onClick={() => remove.mutate({ id: pin.id, layerId })} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60">
+            Take off, keep it on the map
+          </button>
+          <label className="text-ink-500 flex items-center gap-1.5">
+            as a point on
+            <select value={layerId} onChange={(e) => setLayerId(e.target.value)} className="border-ink-200 text-ink-900 min-w-0 flex-1 rounded-md border bg-white px-1 py-0.5">
+              {layers.map((layer) => (
+                <option key={layer.id} value={layer.id}>
+                  {layer.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      <div className="flex gap-3">
+        <button type="button" disabled={remove.isPending} onClick={() => remove.mutate({ id: pin.id, layerId: null })} className="font-medium text-[#c03654] hover:underline">
+          Take off the board and the map
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="text-ink-500 hover:underline">
+          Cancel
+        </button>
+      </div>
+      {remove.isPending && <p className="text-ink-500">Removing…</p>}
+      {remove.error && <p className="text-[#c03654]">{remove.error.message}</p>}
+    </div>
+  );
+}
+
+/** A point's layer, changed from its panel — one of the map's layers, or a new one (doc §3.7). */
+function MoveToLayer({ place, layers }: { place: MapPlace; layers: MapLayer[] }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const [naming, setNaming] = useState<string | null>(null);
+  const move = api.place.move.useMutation({
+    onSuccess: () => {
+      setNaming(null);
+      void utils.invalidate();
+      router.refresh();
+    },
+  });
+  return (
+    <div className="-mt-2 mb-3 text-xs">
+      <label className="text-ink-500 flex items-center gap-1.5 font-light">
+        Layer
+        <select
+          value={naming !== null ? "__new__" : (place.layerId ?? "")}
+          disabled={move.isPending}
+          onChange={(e) => (e.target.value === "__new__" ? setNaming("") : move.mutate({ ids: [place.id], layerId: e.target.value }))}
+          className="border-ink-200 text-ink-900 min-w-0 flex-1 rounded-md border bg-white px-1.5 py-0.5"
+        >
+          {!place.layerId && <option value="">No layer</option>}
+          {layers.map((layer) => (
+            <option key={layer.id} value={layer.id}>
+              {layer.name}
+            </option>
+          ))}
+          <option value="__new__">+ A new layer…</option>
+        </select>
+      </label>
+      {naming !== null && (
+        <form
+          className="mt-1 flex gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            move.mutate({ ids: [place.id], newLayer: naming });
+          }}
+        >
+          <input value={naming} onChange={(e) => setNaming(e.target.value)} placeholder="New layer's name" autoFocus className="border-ink-200 min-w-0 flex-1 rounded-md border px-1.5 py-0.5" />
+          <button type="submit" disabled={move.isPending || !naming.trim()} className="bg-brand-400 rounded-md px-2 font-medium text-white disabled:opacity-60">
+            Move
+          </button>
+          <button type="button" onClick={() => setNaming(null)} className="text-ink-500 hover:underline">
+            Cancel
+          </button>
+        </form>
+      )}
+      {move.isPending && <p className="text-ink-500 mt-0.5">Moving…</p>}
+      {move.error && <p className="mt-0.5 text-[#c03654]">{move.error.message}</p>}
+    </div>
+  );
+}
+
+/**
+ * A point that is only on the map — a hotel or apartments from research — put
+ * on the properties board after all (the owner, 2026-11-24): its name (the
+ * stars in front of it read off), hotel or apartments, and stars.
+ */
+function PlaceToBoard({ place, onDone }: { place: MapPlace; onDone: () => void }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const starred = /^\s*(\d)\s*\*\s*(.+)$/.exec(place.name);
+  const looksLikeApartments = /apartment|unit|residen|village|moxie|universit/i.test(`${place.layerName ?? ""} ${place.notes ?? ""}`);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(starred ? starred[2]!.trim() : place.name);
+  const [type, setType] = useState<"HOTEL" | "APARTMENT" | "APARTHOTEL">(starred ? "HOTEL" : looksLikeApartments ? "APARTMENT" : "HOTEL");
+  const [stars, setStars] = useState<number | null>(starred ? Math.min(5, Math.max(1, Number(starred[1]))) : null);
+  const finished = () => {
+    void utils.invalidate();
+    router.refresh();
+    onDone();
+  };
+  const add = api.place.toProperty.useMutation({ onSuccess: finished });
+  const useExisting = api.place.toExistingProperty.useMutation({ onSuccess: finished });
+  // A property we already have, by name or on the same spot (doc §3.7).
+  const known = api.place.matchProperty.useQuery({ id: place.id }, { enabled: open });
+  const [different, setDifferent] = useState(false);
+  if (!open) {
+    return (
+      <div className="mb-4">
+        <button type="button" onClick={() => setOpen(true)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1.5 text-xs font-medium text-white">
+          ＋ Add to properties board
+        </button>
+        <p className="text-ink-500 mt-1 text-[11px] font-light">Only on the map for now. Adding it makes it a property on the event&rsquo;s board, with a contact task.</p>
+      </div>
+    );
+  }
+  const field = "border-ink-200 w-full rounded-lg border px-2 py-1 text-[13px]";
+  if (known.isLoading) return <p className="text-ink-500 mb-4 text-xs font-light">Checking our properties…</p>;
+  if (known.data && !different) {
+    const match = known.data;
+    return (
+      <div className="mb-4 space-y-2 rounded-lg border border-[#f0d9a8] bg-[#fdf6e7] p-2.5 text-xs text-[#6b4a07]">
+        <p>
+          This looks like <span className="font-medium">{match.name}</span>, already in our properties ({match.by === "name" ? "same name" : match.by === "similar" ? "a similar name" : `${match.metres} m away`})
+          {match.onBoard ? " — and on this event's board." : "."}
+        </p>
+        {useExisting.error && <p className="text-[#c03654]">{useExisting.error.message}</p>}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={useExisting.isPending} onClick={() => useExisting.mutate({ id: place.id, propertyId: match.id })} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60">
+            {useExisting.isPending ? "…" : match.onBoard ? "Remove this point — the property has its pin" : `Put ${match.name} on the board`}
+          </button>
+          <button type="button" onClick={() => setDifferent(true)} className="text-ink-700 hover:underline">
+            It is a different one
+          </button>
+          <button type="button" onClick={() => setOpen(false)} className="text-ink-500 hover:underline">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="border-brand-200 bg-brand-50/50 mb-4 space-y-2 rounded-lg border p-2.5 text-xs"
+      onSubmit={(e) => {
+        e.preventDefault();
+        add.mutate({ id: place.id, name, type, stars: type === "HOTEL" ? stars : null });
+      }}
+    >
+      <p className="text-ink-900 font-medium">Add to properties board</p>
+      <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" className={field} />
+      <div className="flex gap-1">
+        {(
+          [
+            ["HOTEL", "Hotel"],
+            ["APARTMENT", "Apartments"],
+            ["APARTHOTEL", "Aparthotel"],
+          ] as const
+        ).map(([value, label]) => (
+          <button key={value} type="button" aria-pressed={type === value} onClick={() => setType(value)} className={`flex-1 rounded-full border px-2 py-0.5 ${type === value ? "border-brand-400 bg-brand-500 font-medium text-white" : "border-ink-200 text-ink-700 bg-white"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {type === "HOTEL" && (
+        <div className="flex items-center gap-1">
+          <span className="text-ink-500 mr-1">Stars</span>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} type="button" aria-pressed={stars === n} onClick={() => setStars(stars === n ? null : n)} className={`h-6 w-6 rounded-full border ${stars === n ? "border-brand-400 bg-brand-500 font-medium text-white" : "border-ink-200 text-ink-700 bg-white"}`}>
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+      {add.error && <p className="text-[#c03654]">{add.error.message}</p>}
+      <div className="flex gap-2">
+        <button type="submit" disabled={add.isPending} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60">
+          {add.isPending ? "Adding…" : "Add"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="text-ink-500 hover:underline">
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -809,6 +1064,7 @@ export function ScoutingMap({
           places={places}
           availability={availability}
           eventId={eventId}
+          layers={layers}
           onClose={() => setOpenId(null)}
         />
       )}

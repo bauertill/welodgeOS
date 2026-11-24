@@ -10,37 +10,58 @@ import { api } from "~/trpc/react";
 
 const palette = ["#614fc9", "#e5533d", "#1d5fa8", "#0a7a47", "#e5a400", "#c03654", "#00838f", "#8a5a00"];
 
-type Imported = { name: string; color: string; places: { name: string; latitude: number; longitude: number; notes: string }[] };
+type Imported = { name: string; color: string; places: { name: string; latitude: number | null; longitude: number | null; address: string; notes: string }[] };
 
 /**
  * A Google My Maps export (KML), read in the browser: each folder is a layer,
  * each point a place. My Maps writes a point's colour into its style's name
- * ("#icon-1899-0288D1"); lines and shapes are counted, not imported.
+ * ("#icon-1899-0288D1"); lines and shapes are counted, not imported. A point
+ * with no position of its own (a layer built from a spreadsheet) takes the
+ * one in its WKT column, or else comes with its address, to be found by it.
  */
-export function readKml(text: string): { layers: Imported[]; skipped: number } {
+export function readKml(text: string): { layers: Imported[]; skipped: number; byAddress: number; unlocated: number } {
   const doc = new DOMParser().parseFromString(text, "application/xml");
   if (doc.getElementsByTagName("parsererror").length) throw new Error("That file could not be read as KML.");
   const direct = (element: Element, tag: string) => Array.from(element.children).find((child) => child.localName === tag) ?? null;
   const textOf = (element: Element | null) => element?.textContent?.trim() ?? "";
   let skipped = 0;
+  let byAddress = 0;
+  let unlocated = 0;
   const layerFrom = (container: Element, fallbackName: string, index: number): Imported => {
     const placemarks = Array.from(container.getElementsByTagName("Placemark"));
     let color: string | null = null;
     const places = placemarks.flatMap((placemark) => {
-      const point = placemark.getElementsByTagName("Point")[0];
-      if (!point) {
+      if (placemark.getElementsByTagName("LineString").length || placemark.getElementsByTagName("Polygon").length) {
         skipped++;
         return [];
       }
-      const [lng, lat] = textOf(point.getElementsByTagName("coordinates")[0] ?? null).split(",").map(Number);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        skipped++;
-        return [];
+      const data = new Map(
+        Array.from(placemark.getElementsByTagName("Data")).map((one) => [(one.getAttribute("name") ?? "").toLowerCase(), textOf(one.getElementsByTagName("value")[0] ?? null)] as const),
+      );
+      const point = placemark.getElementsByTagName("Point")[0];
+      let [lng, lat] = point ? textOf(point.getElementsByTagName("coordinates")[0] ?? null).split(",").map(Number) : [NaN, NaN];
+      const wkt = /POINT\s*\(\s*(-?[\d.]+)\s+(-?[\d.]+)\s*\)/i.exec(data.get("wkt") ?? "");
+      if (!(Number.isFinite(lat) && Number.isFinite(lng)) && wkt) [lng, lat] = [Number(wkt[1]), Number(wkt[2])];
+      const located = Number.isFinite(lat) && Number.isFinite(lng);
+      const address = (data.get("address") || "").slice(0, 500);
+      if (!located) {
+        if (address) byAddress++;
+        else {
+          unlocated++;
+          return [];
+        }
       }
       const style = /([0-9A-Fa-f]{6})(?:-[a-z]+)?$/.exec(textOf(direct(placemark, "styleUrl")));
       if (!color && style) color = `#${style[1]!.toLowerCase()}`;
-      const description = textOf(direct(placemark, "description")).replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
-      return [{ name: textOf(direct(placemark, "name")) || "Unnamed place", latitude: lat!, longitude: lng!, notes: description.slice(0, 5000) }];
+      // Its description, without the empty "Name: " lines a spreadsheet layer leaves.
+      const description = textOf(direct(placemark, "description"))
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && !/^[^:]{1,40}:$/.test(line) && !/^wkt:/i.test(line))
+        .join("\n");
+      return [{ name: (textOf(direct(placemark, "name")) || "Unnamed place").slice(0, 200), latitude: located ? lat! : null, longitude: located ? lng! : null, address, notes: description.slice(0, 5000) }];
     });
     return { name: (textOf(direct(container, "name")) || fallbackName).slice(0, 100), color: color ?? palette[index % palette.length]!, places };
   };
@@ -49,7 +70,85 @@ export function readKml(text: string): { layers: Imported[]; skipped: number } {
   const layers = folders.length
     ? folders.map((folder, index) => layerFrom(folder, `Layer ${index + 1}`, index))
     : [layerFrom(documentEl, "Imported places", 0)];
-  return { layers: layers.filter((layer) => layer.places.length > 0), skipped };
+  return { layers: layers.filter((layer) => layer.places.length > 0), skipped, byAddress, unlocated };
+}
+
+/**
+ * Points moved out of a layer (the owner, 2026-11-24): its points listed with
+ * ticks — found by typing part of a name, ticked one by one or all shown —
+ * and moved to another layer, or a new one.
+ */
+function MovePoints({ layerId, layers, places, onDone }: { layerId: string; layers: MapLayer[]; places: MapPlace[]; onDone: (text: string) => void }) {
+  const mine = places.filter((place) => place.layerId === layerId).sort((a, b) => a.name.localeCompare(b.name));
+  const [find, setFind] = useState("");
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [to, setTo] = useState(layers.find((layer) => layer.id !== layerId)?.id ?? "__new__");
+  const [newName, setNewName] = useState("");
+  const move = api.place.move.useMutation({ onSuccess: (done) => onDone(`${done.moved} moved to ${done.layer}.`) });
+  const removeMany = api.place.removeMany.useMutation({ onSuccess: (done) => onDone(`${done.removed} removed from the map.`) });
+  const shownPlaces = mine.filter((place) => place.name.toLowerCase().includes(find.trim().toLowerCase()));
+  const allShown = shownPlaces.length > 0 && shownPlaces.every((place) => ticked.has(place.id));
+  const flip = (ids: string[], on: boolean) =>
+    setTicked((now) => {
+      const next = new Set(now);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  return (
+    <div className="border-ink-200/60 mt-2 space-y-1.5 border-t pt-2 text-[11px]">
+      <input value={find} onChange={(e) => setFind(e.target.value)} placeholder={`Find in its ${mine.length} points — like ESA Suites`} className="border-ink-200 w-full rounded-md border bg-white px-2 py-1 outline-none" />
+      <label className="text-ink-700 flex items-center gap-1.5">
+        <input type="checkbox" checked={allShown} onChange={(e) => flip(shownPlaces.map((place) => place.id), e.target.checked)} className="accent-brand-500 h-3 w-3" />
+        All {find.trim() ? "found" : "of them"} ({shownPlaces.length})
+      </label>
+      <ul className="max-h-48 space-y-0.5 overflow-y-auto rounded border border-ink-200/60 bg-white p-1">
+        {shownPlaces.map((place) => (
+          <li key={place.id}>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={ticked.has(place.id)} onChange={(e) => flip([place.id], e.target.checked)} className="accent-brand-500 h-3 w-3 shrink-0" />
+              <span className="truncate">{place.name}</span>
+            </label>
+          </li>
+        ))}
+        {!shownPlaces.length && <li className="text-ink-500">None</li>}
+      </ul>
+      <div className="flex items-center gap-1">
+        <span className="text-ink-500">To</span>
+        <select value={to} onChange={(e) => setTo(e.target.value)} className="border-ink-200 min-w-0 flex-1 rounded-md border bg-white px-1 py-0.5">
+          {layers
+            .filter((layer) => layer.id !== layerId)
+            .map((layer) => (
+              <option key={layer.id} value={layer.id}>
+                {layer.name}
+              </option>
+            ))}
+          <option value="__new__">+ A new layer…</option>
+        </select>
+      </div>
+      {to === "__new__" && <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New layer's name" className="border-ink-200 w-full rounded-md border bg-white px-2 py-1 outline-none" />}
+      {move.error && <p className="text-[#c03654]">{friendlyError(move.error)}</p>}
+      <button
+        type="button"
+        disabled={move.isPending || ticked.size === 0 || (to === "__new__" && !newName.trim())}
+        onClick={() => move.mutate({ ids: [...ticked], ...(to === "__new__" ? { newLayer: newName } : { layerId: to }) })}
+        className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
+      >
+        {move.isPending ? "Moving…" : `Move ${ticked.size || ""} ${ticked.size === 1 ? "point" : "points"}`}
+      </button>
+      <button
+        type="button"
+        disabled={removeMany.isPending || ticked.size === 0}
+        onClick={() => window.confirm(`Remove ${ticked.size} ${ticked.size === 1 ? "point" : "points"} from the map?`) && removeMany.mutate({ ids: [...ticked] })}
+        className="ml-2 text-[#c03654] hover:underline disabled:opacity-50"
+      >
+        {removeMany.isPending ? "Removing…" : "Remove ticked from the map"}
+      </button>
+      {removeMany.error && <p className="text-[#c03654]">{friendlyError(removeMany.error)}</p>}
+    </div>
+  );
 }
 
 type Shown = { isShown: (id: string) => boolean; toggle: (id: string) => void; showAll: () => void; hideAll: () => void };
@@ -91,8 +190,35 @@ export function LayersPanel({
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState<{ id?: string; name: string; color: string; measured: boolean } | null>(null);
   const [adding, setAdding] = useState<{ layerId: string; name: string; address: string } | null>(null);
-  const [incoming, setIncoming] = useState<{ layers: Imported[]; skipped: number } | null>(null);
+  const [incoming, setIncomingRaw] = useState<ReturnType<typeof readKml> | null>(null);
+  // What of it is ours already — and, of those, which to leave out (ticked).
+  const check = api.mapLayer.checkImport.useMutation({
+    onSuccess: ({ matches }) => setLeaveOut(new Set(matches.filter((one) => one.against !== "library").map((one) => one.key))),
+  });
+  const [leaveOut, setLeaveOut] = useState<Set<string>>(new Set());
+  const [showMatches, setShowMatches] = useState(false);
+  const setIncoming = (read: ReturnType<typeof readKml> | null) => {
+    setIncomingRaw(read);
+    check.reset();
+    setLeaveOut(new Set());
+    setShowMatches(false);
+    if (read) check.mutate({ eventId, layers: read.layers });
+  };
+  const [link, setLink] = useState<string | null>(null);
+  const fetchMyMaps = api.mapLayer.fetchMyMaps.useMutation({
+    onSuccess: ({ kml }) => {
+      try {
+        const read = readKml(kml);
+        if (!read.layers.length) return setNote({ text: "No places found on that map.", bad: true });
+        setLink(null);
+        setIncoming(read);
+      } catch (error) {
+        setNote({ text: error instanceof Error ? error.message : "That map could not be read.", bad: true });
+      }
+    },
+  });
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const refresh = () => {
     void utils.mapLayer.invalidate();
@@ -122,7 +248,9 @@ export function LayersPanel({
   const importLayers = api.mapLayer.importLayers.useMutation({
     onSuccess: (done) => {
       setIncoming(null);
-      setNote({ text: `Imported ${done.added} ${done.added === 1 ? "place" : "places"} into ${done.layers} ${done.layers === 1 ? "layer" : "layers"}${done.skipped ? ` · ${done.skipped} already on the map, left out` : ""}.` });
+      setNote({
+        text: `Imported ${done.added} ${done.added === 1 ? "point" : "points"} into ${done.layers} ${done.layers === 1 ? "layer" : "layers"} — on the map only, nothing added to the properties board${done.skipped ? ` · ${done.skipped} already on the map, left out` : ""}${done.properties ? ` · ${done.properties} already on the properties board, left out` : ""}${done.found ? ` · ${done.found} placed by their address` : ""}${done.unlocated ? ` · ${done.unlocated} could not be placed` : ""}.`,
+      });
       refresh();
     },
   });
@@ -185,6 +313,9 @@ export function LayersPanel({
         </button>
         {editing.id && (
           <>
+            <button type="button" onClick={() => setMoving(moving === editing.id ? null : editing.id!)} className="text-brand-700 text-[11px] font-medium hover:underline">
+              Move or remove points…
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -208,6 +339,7 @@ export function LayersPanel({
           </>
         )}
       </div>
+      {editing.id && moving === editing.id && <MovePoints layerId={editing.id} layers={layers} places={places} onDone={(text) => (setNote({ text }), setMoving(null), refresh())} />}
     </div>
   );
 
@@ -305,9 +437,31 @@ export function LayersPanel({
             >
               + New layer
             </button>
-            <button type="button" onClick={() => file.current?.click()} className="text-brand-700 text-left font-medium hover:underline">
+            <button type="button" onClick={() => setLink((now) => (now === null ? "" : null))} className="text-brand-700 text-left font-medium hover:underline">
               Import from Google My Maps
             </button>
+            {link !== null && (
+              <div className="border-ink-200/60 rounded-lg border bg-white p-2">
+                <p className="text-ink-500 mb-1">Paste the map&rsquo;s link — shared so anyone with it can view:</p>
+                <form
+                  className="flex gap-1"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setNote(null);
+                    fetchMyMaps.mutate({ url: link });
+                  }}
+                >
+                  <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://www.google.com/maps/d/…?mid=…" className="border-ink-200 min-w-0 flex-1 rounded border px-1.5 py-1" autoFocus />
+                  <button type="submit" disabled={fetchMyMaps.isPending || !link.trim()} className="bg-brand-400 hover:bg-brand-500 rounded px-2 font-medium text-white disabled:opacity-60">
+                    {fetchMyMaps.isPending ? "Reading…" : "Read"}
+                  </button>
+                </form>
+                {fetchMyMaps.error && <p className="mt-1 text-[#c03654]">{friendlyError(fetchMyMaps.error)}</p>}
+                <button type="button" onClick={() => file.current?.click()} className="text-ink-500 mt-1 hover:underline">
+                  …or upload a KML file exported from My Maps
+                </button>
+              </div>
+            )}
             <input
               ref={file}
               type="file"
@@ -340,10 +494,68 @@ export function LayersPanel({
                   </li>
                 ))}
               </ul>
-              {incoming.skipped > 0 && <p className="text-ink-500 mt-1">{incoming.skipped} lines or shapes left out — only places come in.</p>}
+              <p className="text-ink-500 mt-1">Every point goes on the map only — nothing is added to the properties board. A hotel can be added to it later from its pin.</p>
+              {incoming.byAddress > 0 && <p className="text-ink-500 mt-1">{incoming.byAddress} have only an address — they are placed by it (about a second each).</p>}
+              {incoming.unlocated > 0 && <p className="text-ink-500 mt-1">{incoming.unlocated} have no position or address — left out.</p>}
+              {incoming.skipped > 0 && <p className="text-ink-500 mt-1">{incoming.skipped} lines or shapes left out — only points come in.</p>}
+              {check.isPending && <p className="text-ink-500 mt-1.5">Checking what is on our map and in our properties already…</p>}
+              {check.error && <p className="mt-1 text-[#c03654]">{friendlyError(check.error)}</p>}
+              {check.data && (
+                <div className="border-ink-200/60 mt-1.5 rounded border bg-white p-1.5">
+                  {check.data.matches.length === 0 ? (
+                    <p className="text-[#0a7a47]">Nothing in it is ours already.</p>
+                  ) : (
+                    <>
+                      <p className="text-ink-900">
+                        <span className="font-medium">{check.data.matches.length} look like what we have</span> — {leaveOut.size} ticked to leave out.{" "}
+                        <button type="button" onClick={() => setShowMatches(!showMatches)} className="text-brand-700 hover:underline">
+                          {showMatches ? "Hide" : "See them"}
+                        </button>
+                      </p>
+                      {showMatches && (
+                        <ul className="mt-1 max-h-64 space-y-1 overflow-y-auto">
+                          {check.data.matches.map((one) => (
+                            <li key={one.key}>
+                              <label className="flex items-start gap-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={leaveOut.has(one.key)}
+                                  onChange={() =>
+                                    setLeaveOut((now) => {
+                                      const next = new Set(now);
+                                      if (next.has(one.key)) next.delete(one.key);
+                                      else next.add(one.key);
+                                      return next;
+                                    })
+                                  }
+                                  className="accent-brand-500 mt-0.5 h-3 w-3 shrink-0"
+                                />
+                                <span>
+                                  <span className="text-ink-900">{one.name}</span> <span className="text-ink-500">({one.layer})</span> → {one.match.name}
+                                  <span className="text-ink-500">
+                                    {" "}
+                                    · {one.against === "point" ? `on the map${one.where ? `, ${one.where}` : ""}` : one.against === "board" ? "a property on the board" : "in our properties, not on this board"}
+                                    {one.match.by === "name" ? " · same name" : one.match.by === "similar" ? ` · similar name${one.match.metres !== null ? `, ${one.match.metres} m away` : ""}` : ` · ${one.match.metres} m away`}
+                                  </span>
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <p className="text-ink-500 mt-1">Ticked are left out. Ones in our properties but not on this board come in as points; adding such a point to the board uses the property we have.</p>
+                    </>
+                  )}
+                </div>
+              )}
               {importLayers.error && <p className="mt-1 text-[#c03654]">{friendlyError(importLayers.error)}</p>}
               <div className="mt-1.5 flex items-center gap-2">
-                <button type="button" disabled={importLayers.isPending} onClick={() => importLayers.mutate({ eventId, layers: incoming.layers })} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60">
+                <button
+                  type="button"
+                  disabled={importLayers.isPending || check.isPending}
+                  onClick={() => importLayers.mutate({ eventId, layers: incoming.layers, leaveOut: [...leaveOut] })}
+                  className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
+                >
                   {importLayers.isPending ? "Importing…" : "Import"}
                 </button>
                 <button type="button" onClick={() => setIncoming(null)} className="text-ink-500 hover:underline">
