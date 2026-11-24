@@ -3457,7 +3457,7 @@ offer opens it as a document, as it will print.
   draft had "his/her" and "her" for a company — "its".) **Clause 6.5, We Lodge's own
   insurance** (the owner, 2026-11-24): commercial general liability of US$1,000,000 per
   occurrence and US$2,000,000 aggregate through the Lease Period, the Provider as an additional
-  insured (not the owner — the owner said the Provider is the owner), the certificate to the Provider 30 days before the Lease
+  insured (no separate property owner is named: the Provider owns the property), the certificate to the Provider 30 days before the Lease
   Period, and occupants told the Provider's insurance does not cover their belongings or
   personal liability. Agreements already drawn up keep their wording.
 - **Whose agreement** is asked in the quoting phase too: the quotation has *The contract will
