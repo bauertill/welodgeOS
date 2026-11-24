@@ -671,6 +671,7 @@ export function welodgeServer(person: Person, headers: Headers) {
       currency: z.string().length(3).default("USD"),
       documentUrl: z.string().max(2000).optional().describe("A Google Drive link to the signed PDF, if the person gives one"),
       notes: z.string().max(5000).optional(),
+      paymentInstructions: z.string().max(5000).optional().describe("Where invoices must go or how payment is made, when the contract or person says: an email address, a portal to upload to, a PO to quote"),
       accountManagerId: z.string().optional().describe("Defaults to the person you are working for; they get the payment and deadline reminders"),
       noCancellationTerms: z.boolean().optional().describe("Only when the contract truly has no cancellation deadlines"),
       payments: z.array(paymentShape).max(30).default([]),
@@ -692,6 +693,7 @@ export function welodgeServer(person: Person, headers: Headers) {
         currency: input.currency.toUpperCase(),
         documentUrl: input.documentUrl ?? "",
         notes: input.notes ?? "",
+        paymentInstructions: input.paymentInstructions,
         ownerId: input.accountManagerId ?? person.id,
         noCancellationTerms: input.noCancellationTerms,
       });
@@ -708,7 +710,7 @@ export function welodgeServer(person: Person, headers: Headers) {
 
   tool(
     "update_contract",
-    "Fill in or correct a contract's own details from its PDF — name, signed date, total, taxes, currency, signed PDF link, notes, account manager. Only what is given changes.",
+    "Fill in or correct a contract's own details from its PDF — name, signed date, total, taxes, currency, signed PDF link, notes, where invoices go (payment instructions), account manager. Only what is given changes.",
     {
       id: z.string(),
       name: z.string().min(1).max(300).optional(),
@@ -718,6 +720,7 @@ export function welodgeServer(person: Person, headers: Headers) {
       currency: z.string().length(3).optional(),
       documentUrl: z.string().max(2000).optional(),
       notes: z.string().max(5000).optional(),
+      paymentInstructions: z.string().max(5000).optional().describe("Where invoices must go or how payment is made, when the contract or person says: an email address, a portal to upload to, a PO to quote"),
       accountManagerId: z.string().nullable().optional(),
       noCancellationTerms: z.boolean().optional(),
     },
