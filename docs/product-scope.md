@@ -2598,6 +2598,20 @@ the contract.
   one arrival and departure kept them as their first line. They are
   filled in by us after a call (*Fill in after a call*), or by the client on their needs
   form — which lands on the request, says so, and tells the account manager.
+- **Several locations on one request** (the owner, 2026-11-24: a client often needs rooms
+  in more than one place — "15 rooms at UCLA, 20 beds near Sailing, 10 near Rowing"). The
+  details are grouped by **location**: each has its own **close to** places, its own
+  **units and periods**, and with more than one, a **name** ("UCLA", "Rowing") and **notes
+  for this location** ("all in one building", "they have a van to the venue").
+  *+ Add another location* adds one; *Remove* takes one off (asked first when it has
+  anything in it). A request with one location looks as before, with *Close to* above the
+  units. The **budget, preferences and client's comments stay one per request**, and **all
+  locations are contracted under one agreement** (the owner, 2026-11-24) — the offer,
+  contract and rooming list see the request's units all together, as before. The request's
+  page shows each location under its name (📍 UCLA · location 1 of 3) with its units,
+  places and notes; the client's needs form has the same boxes. A location with no name is
+  called by its places ("Near Long Beach Arena"), or "Location 2". Requests from before
+  locations became one location holding all their details.
 - **The sourcing task.** When a request for one of our events becomes a sales request, a
   task goes on the task board on its own (§2.8): *Source accommodation for [client] —
   [event]*, of type *Sourcing*, given to the **event's accommodation managers** and asked by
@@ -2606,9 +2620,18 @@ the contract.
   the client's comments written into it as they were then — the request itself always has
   the latest. The accommodation managers are told they have a task, and the project lead
   that a new sales request has come in (§2.9); with no accommodation manager set, the task
-  waits unassigned and the project lead is told to give it to someone. One task per request:
-  sending the details again makes no second one, and a request whose event is only chosen
-  later gets its task then. A request not for one of our events gets none. **The request's
+  waits unassigned and the project lead is told to give it to someone. **One task per
+  location** (2026-11-24): a request with three locations makes three sourcing tasks,
+  *Source accommodation for [client] — [event] · [location]*, each with only that
+  location's units, places and notes (plus the shared budget, preferences and comments), and
+  a line naming the other locations — "each has its own sourcing task; all go under one
+  agreement". Its *Where to source* map and nearby properties are measured from that
+  location's places only, and a *Get rate* or *Hotel contact* task made from it carries the
+  location, so the email to the hotel lists only that location's units. The project lead is
+  told once, when the request first comes in. Sending the details again makes no second task;
+  a location added later gets its own task then; a location removed leaves its task on the
+  board, no longer tied to a location, for the team to close. A request whose event is only
+  chosen later gets its tasks then. A request not for one of our events gets none. **The request's
   page links to it** (2026-10-07): a *Tasks* card at the top of its right-hand column shows
   the sourcing task — its status, who has it, *Open the sourcing task* — and under it the
   hotel contact tasks that came out of it, each a link with its status.
@@ -4676,6 +4699,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.10 Emails from Gmail | **Built** (2026-11-10) | Connect Gmail on My profile, and a card on every page until connected (Not now = a day) (read-only, key encrypted); only emails with a client contact brought in — the last month at first, then what is new, a new contact's last month at the next sync; kept once across mailboxes, as text with attachment names; on each request's Emails tab and the client's page (one contact to choose); synced on opening (10 min), Sync now and every morning; Claude can read them. Google set up and the owner's mailbox connected on staging, 2026-11-10; each colleague connects theirs on the live site |
 | §4.10 Contracting details | **Built** (2026-11-12) | Card on the client's page (trade name, address, VAT, registration, two signatories), edited with Add/Edit, in the client's history. A request with no details of its own shows the client's on its contracting link and rate card; what the client sends is written back to the client |
 | §4.10 Import from monday.com | **Built** (2026-11-12) | Review and import built; names approved and mismatched categories corrected by the owner. **Ran on the live site 2026-11-12:** 1,387 clients added, 33 existing ones had blanks filled in, 1,779 people added (rehearsed on staging first; a second run adds nothing). 120 people with no company to go on are left for the team to add by hand, from the review's *3 to place by hand* |
+| §4.11 Several locations on one request | **Built** (2026-11-24, staging) | Locations on the request in detail and the client's needs form, each with its close-to places, units and periods, name and notes; budget, preferences and comments once per request; one agreement; a sourcing task per location, its map, nearby properties, get-rate and hotel emails for that location only; existing requests moved into one location |
 | §4.11 Enquiry → sales request | **Built** | Enquiry with what they asked for, owner and follow-up reminder; Email the client (own mailbox) with the owner's booking link and/or a needs form the client fills in without signing in; details as fields (lines of units × type × period — a unit is a hotel room or a whole apartment — budget, close to, comments); becomes a sales request once given; Summary for the lawyers to print; a Sourcing task to the event's accommodation managers when it becomes a sales request, the project lead told, with a map of the client's places and the properties we have nearby judged against the request, and places to stay not in the system found on the map (Google Maps once Places API is on for our key, OpenStreetMap until then), each added to our properties and the event in one click, which also makes a Hotel contact task — what to find out from the property, ticked as it is filled in; rate cards made from the ticked properties — selling rates over our event rates with a markup, short descriptions (written by hand; the Claude writing helper is off for now), preview, print/PDF and a client link, never our buying rates; room types renamed or added on the card (added to the property too) properties added to a card later and put in order; rooms offered at "Rate to be confirmed"; the client's link full width with the map beside it, "I like it!" on each room, rates include and payment & cancellation terms, and "Request a proposal" at the end (switchable to look-only); the client's map shows only the properties plus the layers and places chosen on the card, and the distance beside each property is to the nearest of them; new cards remember each property's description and client rates; Sales › Rate cards lists and makes every card, each sent to a client (kept on their page) or any client (2026-11-17), which the client answers (rooms they are interested in, nights, notes, a change of dates), the team told; delete one that went nowhere (refused with rooms or a contract) |
 | §4.11 Sales requests | **Built** | Registered with the client's initial interest; seven stages, moved by hand; Signed only with the client's contract registered against the request (chosen, or registered on the way); follow-up date and next step; proposal, block and close dates; value; contracting details; every change in the request's history. The list groups open requests by stage and flags due follow-ups; its account manager is changed right in the list (2026-11-09); a click anywhere on a row opens the request (2026-11-18) |
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |

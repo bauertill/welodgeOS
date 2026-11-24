@@ -34,6 +34,8 @@ export async function ensureHotelContactTask(
     propertyId: string;
     eventId: string;
     salesRequestId: string | null;
+    /** The request's location it was found for (doc §4.11). */
+    salesLocationId?: string | null;
     actorId: string;
     /** Chosen by hand (from the event's map); otherwise the event's accommodation managers. */
     assigneeIds?: string[];
@@ -85,6 +87,7 @@ export async function ensureHotelContactTask(
       propertyId: input.propertyId,
       clientId: request?.clientId ?? null,
       salesRequestId: input.salesRequestId,
+      salesLocationId: input.salesLocationId ?? null,
       assignees: { connect: managers.map((id) => ({ id })) },
     },
   });

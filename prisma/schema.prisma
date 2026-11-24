@@ -191,12 +191,14 @@ model PlaceOfInterest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  eventId       String
+  event            Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId          String
   /// The map layer it is on (doc §3.7, 2026-10-13) — Venues, Nation houses, Universities…
-  layer         MapLayer?      @relation(fields: [layerId], references: [id], onDelete: Cascade)
-  layerId       String?
-  salesRequests SalesRequest[] @relation("SalesRequestCloseTo")
+  layer            MapLayer?              @relation(fields: [layerId], references: [id], onDelete: Cascade)
+  layerId          String?
+  salesRequests    SalesRequest[]         @relation("SalesRequestCloseTo")
+  /// The locations of clients' requests that want to be close to it (doc §4.11).
+  requestLocations SalesRequestLocation[] @relation("LocationCloseTo")
 
   /// One name per event — two "Gare de Lyon" pins on one map is a mistake,
   /// not a distinction.
@@ -1565,11 +1567,14 @@ model SalesRequest {
   // through their needs link. With these in, an enquiry is a sales request.
   /// What rooms, for when: a line per room type and period (doc §4.11).
   lines          SalesRequestLine[]
+  /// Where the client needs rooms — one or more locations, each with its own
+  /// places, units and notes, and its own sourcing task (doc §4.11).
+  locations      SalesRequestLocation[]
   budgetCents    Int?
   budgetCurrency String?
   budgetBasis    BudgetBasis?
   /// Where they want to be close to: the event's places of interest…
-  closeTo        PlaceOfInterest[]   @relation("SalesRequestCloseTo")
+  closeTo        PlaceOfInterest[]      @relation("SalesRequestCloseTo")
   /// …places of their own, found by address or picked on a map…
   closeToPoints  SalesRequestPoint[]
   /// …and anywhere else, in words.
@@ -2045,17 +2050,20 @@ model Task {
   createdById   String?
 
   // What it is about — each optional.
-  event          Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  eventId        String?
-  property       Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  propertyId     String?
-  client         Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  clientId       String?
-  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
-  salesRequestId String?
+  event           Event?                @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventId         String?
+  property        Property?             @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  propertyId      String?
+  client          Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId        String?
+  salesRequest    SalesRequest?         @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId  String?
+  /// A sourcing task is for one location of the request (doc §4.11).
+  salesLocation   SalesRequestLocation? @relation(fields: [salesLocationId], references: [id], onDelete: SetNull)
+  salesLocationId String?
   /// A contractor it is about (doc §3.11).
-  contractor     Contractor?   @relation(fields: [contractorId], references: [id], onDelete: SetNull)
-  contractorId   String?
+  contractor      Contractor?           @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  contractorId    String?
 
   comments TaskComment[]
   /// Files put on the task (doc §2.8, 2026-11-18).
@@ -2210,17 +2218,41 @@ enum BudgetBasis {
 /// rooms, or whole apartments — of a type, from arrival to departure. A pre
 /// or post period, or another type, is another line. `rooms` counts units.
 model SalesRequestLine {
-  id             String       @id @default(cuid())
-  salesRequest   SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  id             String                @id @default(cuid())
+  salesRequest   SalesRequest          @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
   salesRequestId String
   rooms          Int
   /// "Twin room", "2-bedroom apartment" — chosen, or in words.
   roomType       String?
   /// How many people share each unit — the client's say (doc §4.11).
   people         Int?
-  checkIn        DateTime?    @db.Date
-  checkOut       DateTime?    @db.Date
-  position       Int          @default(0)
+  checkIn        DateTime?             @db.Date
+  checkOut       DateTime?             @db.Date
+  position       Int                   @default(0)
+  /// The location these units are for.
+  location       SalesRequestLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  locationId     String?
+
+  @@index([salesRequestId])
+}
+
+/// One place a client needs rooms (doc §4.11) — "At UCLA", "At the Rowing
+/// venue": the places to be close to, the units and periods, and notes of its
+/// own. A request has one or more; all are contracted under one agreement, and
+/// each gets its own sourcing task.
+model SalesRequestLocation {
+  id             String              @id @default(cuid())
+  salesRequest   SalesRequest        @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  salesRequestId String
+  /// What the team calls it: "UCLA", "Rowing".
+  name           String?
+  /// What matters for this location only: "One building", "They have a van".
+  notes          String?
+  position       Int                 @default(0)
+  closeTo        PlaceOfInterest[]   @relation("LocationCloseTo")
+  points         SalesRequestPoint[]
+  lines          SalesRequestLine[]
+  sourcingTasks  Task[]
 
   @@index([salesRequestId])
 }
@@ -2229,15 +2261,17 @@ model SalesRequestLine {
 /// (doc §4.11) — their office, a team hotel — found by its address or picked
 /// on a map, so it has a position to measure from.
 model SalesRequestPoint {
-  id             String       @id @default(cuid())
-  salesRequest   SalesRequest @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
+  id             String                @id @default(cuid())
+  salesRequest   SalesRequest          @relation(fields: [salesRequestId], references: [id], onDelete: Cascade)
   salesRequestId String
   /// What the client calls it: "Our office".
   label          String
   address        String?
   latitude       Float
   longitude      Float
-  position       Int          @default(0)
+  position       Int                   @default(0)
+  location       SalesRequestLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  locationId     String?
 
   @@index([salesRequestId])
 }
