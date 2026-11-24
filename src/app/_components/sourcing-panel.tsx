@@ -67,9 +67,9 @@ function FitAll({ points }: { points: { latitude: number; longitude: number }[] 
  * to be, on a map, and the properties we already have around it — each judged
  * against the request, to open or add to the event.
  */
-export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
+export function SourcingPanel({ salesRequestId, locationId = null }: { salesRequestId: string; /** The task's location — only its places and units (doc §4.11). */ locationId?: string | null }) {
   const utils = api.useUtils();
-  const data = api.sales.sourcing.useQuery({ id: salesRequestId });
+  const data = api.sales.sourcing.useQuery({ id: salesRequestId, locationId });
   const add = api.scouting.add.useMutation({ onSuccess: () => void utils.sales.sourcing.invalidate() });
   // No rate from it for this request: ask for one (doc §4.11, 2026-10-18).
   const getRate = api.sales.getRate.useMutation({
@@ -94,9 +94,9 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
   });
   // Not in the system: searched on the map once per visit, kept for an hour.
   const [radiusKm, setRadiusKm] = useState(5);
-  const discover = api.sales.sourcingDiscover.useQuery({ id: salesRequestId, radiusKm }, { staleTime: 3600_000, refetchOnWindowFocus: false });
+  const discover = api.sales.sourcingDiscover.useQuery({ id: salesRequestId, locationId, radiusKm }, { staleTime: 3600_000, refetchOnWindowFocus: false });
   const found = discover.data?.found ?? [];
-  const addFound = useAddFound(salesRequestId, discover.data?.source ?? null, () => setTab("contact"));
+  const addFound = useAddFound(salesRequestId, locationId, discover.data?.source ?? null, () => setTab("contact"));
   // The map's hover card: open while the pointer is on a dot or on its card.
   const [hovered, setHovered] = useState<string | null>(null);
   const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -335,7 +335,7 @@ export function SourcingPanel({ salesRequestId }: { salesRequestId: string }) {
                       <button
                         type="button"
                         disabled={getRate.isPending}
-                        onClick={() => getRate.mutate({ salesRequestId, propertyId: property.id })}
+                        onClick={() => getRate.mutate({ salesRequestId, propertyId: property.id, locationId })}
                         title="A task for the accommodation manager to ask the hotel for a price for the client's dates and rooms"
                         className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60"
                       >
@@ -523,7 +523,7 @@ function NotInSystem({
 }
 
 /** Adding a place found on the map to our properties (and the event), shared by its row and its map card. */
-function useAddFound(salesRequestId: string, source: "google" | "osm" | null, onAdded: () => void) {
+function useAddFound(salesRequestId: string, locationId: string | null, source: "google" | "osm" | null, onAdded: () => void) {
   const utils = api.useUtils();
   const [added, setAdded] = useState<Record<string, string>>({});
   // Its phone, email and website looked up as soon as it is added — for the hotel contact task.
@@ -544,6 +544,7 @@ function useAddFound(salesRequestId: string, source: "google" | "osm" | null, on
     add: (place: FoundPlace) =>
       add.mutate({
         salesRequestId,
+        locationId,
         place: {
           name: place.name,
           type: place.type,

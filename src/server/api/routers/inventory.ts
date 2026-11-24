@@ -21,6 +21,7 @@ import { positionOf } from "~/lib/position";
 import type { BlockNight } from "~/lib/stock-blocks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { ensureBlockTasks } from "~/server/block-task";
+import { settleExtensions } from "~/server/rooming";
 import {
   axisOf,
   describeRoom,
@@ -653,6 +654,9 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
           },
         });
       }
+
+      // Nights sold to a client may be the extra nights their rooming list asked for (doc §6.9).
+      if (action === "SELL" && input.clientId) await settleExtensions(tx, eventId, input.clientId, actorId);
 
       return { nights: ids.length, rooms: slotIds.length, added };
 }

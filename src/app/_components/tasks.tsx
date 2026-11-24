@@ -20,7 +20,8 @@ import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
 import { RateCardsBox, SourcingPanel } from "~/app/_components/sourcing-panel";
 import { AssigneePicker, PeopleSelect } from "~/app/_components/assignee-picker";
-import { peopleWords, wishes, wishesInWords } from "~/lib/needs";
+import { locationName, peopleWords, wishes, wishesInWords } from "~/lib/needs";
+import { RequestLocations } from "~/app/_components/sales-details";
 import { QuotationPopup, QuotesReceived } from "~/app/_components/quotations";
 import { Initials } from "~/app/_components/property-groups";
 import { EmptyState } from "~/app/_components/ui";
@@ -975,7 +976,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
                 The sales request →
               </Link>
             </div>
-            <SourcingPanel salesRequestId={t.salesRequest!.id} />
+            <SourcingPanel salesRequestId={t.salesRequest!.id} locationId={t.salesLocationId} />
           </div>
         )}
         {/* The hotel contact task, step by step (doc §4.11): call, email the request, gather. */}
@@ -991,6 +992,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
             taskId={t.id}
             propertyId={t.property!.id}
             salesRequestId={t.salesRequest?.id ?? null}
+            locationId={t.salesLocationId}
             eventName={t.event!.name}
             emailTo={t.emailToAddress ? { name: t.emailToName, email: t.emailToAddress } : null}
           />
@@ -1039,7 +1041,7 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           {acquire ? (
             <AcquireWhatToDo taskId={t.id} propertyName={t.property!.name} notes={t.details} />
           ) : sourcing || (hotelContact && t.salesRequest) ? (
-            <ClientRequest salesRequestId={t.salesRequest!.id} />
+            <ClientRequest salesRequestId={t.salesRequest!.id} locationId={t.salesLocationId} />
           ) : (
             t.details &&
             !hotelContact && (
@@ -1459,12 +1461,15 @@ function EmailTheHotel({
   taskId,
   propertyId,
   salesRequestId,
+  locationId,
   eventName,
   emailTo,
 }: {
   taskId: string;
   propertyId: string;
   salesRequestId: string | null;
+  /** The request's location this task is for — only its units go in the email (doc §4.11). */
+  locationId: string | null;
   eventName: string;
   /** Who the hotel said to send it to, on the call — they come first. */
   emailTo: { name: string | null; email: string } | null;
@@ -1504,7 +1509,7 @@ function EmailTheHotel({
   const toName = emailTo ? emailTo.name : p.contacts[0]?.name;
   const greeting = toName ? `Dear ${toName.split(" ")[0]},` : "Hello,";
   const r = request.data;
-  const lines = (r?.lines ?? []).map(
+  const lines = ((locationId && r?.locations.find((location) => location.id === locationId)?.lines) || r?.lines || []).map(
     (line) =>
       `• ${line.rooms} × ${line.roomType ?? "units"}${line.people ? ` (${peopleWords(line.people)})` : ""}${
         line.checkIn && line.checkOut
@@ -1855,40 +1860,23 @@ function HotelContactChecklist({ propertyId, propertyName, eventId, eventName }:
  * sales request itself, so it is always the latest: each line large, its
  * dates beneath; then the budget, the places and the client's words.
  */
-function ClientRequest({ salesRequestId }: { salesRequestId: string }) {
+function ClientRequest({ salesRequestId, locationId }: { salesRequestId: string; locationId: string | null }) {
   const request = api.sales.byId.useQuery({ id: salesRequestId });
   const r = request.data;
   if (!r) return <p className="text-ink-500 mb-4 text-sm font-light">{request.isLoading ? "…" : "The sales request is no longer there."}</p>;
-  const places = [...r.closeTo.map((place) => place.name), ...r.closeToPoints.map((point) => point.label), r.closeToOther].filter(Boolean) as string[];
+  // A task for one location shows only it, and names the others (doc §4.11).
+  const mine = locationId ? r.locations.find((location) => location.id === locationId) : undefined;
+  const others = mine ? r.locations.filter((location) => location !== mine).map((location) => locationName(location, r.locations.indexOf(location))) : [];
   return (
     <div className="border-brand-200 bg-brand-50/50 mb-4 rounded-lg border px-4 py-3">
       <p className="text-brand-800 mb-2 text-[11px] font-medium tracking-wider uppercase">What the client asked</p>
-      {r.lines.length === 0 ? (
-        <p className="text-ink-500 text-sm font-light">No units given yet.</p>
-      ) : (
-        <ul className="space-y-2.5">
-          {r.lines.map((line) => (
-            <li key={line.id}>
-              <span className="text-ink-900 block text-[15px] font-semibold">
-                {line.rooms} × {line.roomType ?? "units"}
-              </span>
-              <span className="text-ink-500 block text-xs font-light">
-                {[
-                  line.checkIn && line.checkOut
-                    ? `${formatRange(line.checkIn, line.checkOut)} · ${nightsBetween(line.checkIn, line.checkOut)} nights`
-                    : line.checkIn
-                      ? `From ${formatDate(line.checkIn)}`
-                      : "Dates not given",
-                  peopleWords(line.people),
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            </li>
-          ))}
-        </ul>
+      <RequestLocations request={r} only={mine ? mine.id : null} size="small" />
+      {others.length > 0 && (
+        <p className="text-ink-500 mt-2 text-xs font-light">
+          The same request also needs rooms at {others.join(", ")} — each has its own sourcing task; all go under one agreement.
+        </p>
       )}
-      {(r.budgetCents !== null || places.length > 0 || r.clientComments || wishes(r).length > 0) && (
+      {(r.budgetCents !== null || r.clientComments || wishes(r).length > 0) && (
         <div className="border-brand-200/70 mt-3 space-y-2 border-t pt-3 text-sm font-light">
           {r.budgetCents !== null && r.budgetCurrency && (
             <p>
@@ -1896,16 +1884,6 @@ function ClientRequest({ salesRequestId }: { salesRequestId: string }) {
               <span className="text-ink-900 font-medium">{formatMoney(r.budgetCents, r.budgetCurrency)}</span>
               {r.budgetBasis && <span className="text-ink-500"> {budgetBasisWords[r.budgetBasis]}</span>}
             </p>
-          )}
-          {places.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-ink-500">Close to</span>
-              {places.map((place) => (
-                <span key={place} className="bg-ink-900 rounded-full px-2.5 py-0.5 text-xs text-white">
-                  {place}
-                </span>
-              ))}
-            </div>
           )}
           {wishes(r).map((wish) => (
             <p key={wish.label}>

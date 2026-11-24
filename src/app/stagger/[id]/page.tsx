@@ -2,6 +2,8 @@ import { type Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { StaggerEditor } from "~/app/_components/stagger/editor";
+import { LeaseEditor } from "~/app/_components/stagger/lease";
+import { leaseTitle } from "~/lib/stagger-lease-model";
 import { pageTitle } from "~/lib/stagger-model";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
@@ -10,7 +12,8 @@ import { api } from "~/trpc/server";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const scenario = await api.stagger.byId({ id }).catch(() => null);
-  return { title: scenario ? { absolute: pageTitle(scenario.clientLabel) } : "Stagger planner" };
+  if (!scenario) return { title: "Stagger planner" };
+  return { title: { absolute: scenario.kind === "lease" ? leaseTitle(scenario.lease) : pageTitle(scenario.clientLabel) } };
 }
 
 /** One scenario in the editor (doc §4.12). */
@@ -21,5 +24,5 @@ export default async function StaggerScenarioPage({ params }: { params: Promise<
   const scenario = await api.stagger.byId({ id });
   if (!scenario) notFound();
   if (scenario.archived) redirect("/stagger");
-  return <StaggerEditor key={scenario.id} scenario={scenario} />;
+  return scenario.kind === "lease" ? <LeaseEditor key={scenario.id} scenario={scenario} /> : <StaggerEditor key={scenario.id} scenario={scenario} />;
 }
