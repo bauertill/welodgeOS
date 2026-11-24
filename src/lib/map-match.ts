@@ -25,8 +25,20 @@ export const plainName = (name: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-/** The words of a name that tell it apart — not "hotel", "the", "suites". */
-export const mainWords = (name: string) => new Set(plainName(name).split(" ").filter((word) => word.length > 2 && !STOP.has(word)));
+/**
+ * The words of a name that tell it apart — not "hotel", "the", "suites", nor
+ * any in `common`: words found in many names around (a town — "Santa
+ * Monica", "Pasadena" — or a chain), which say where or whose, not which.
+ */
+export const mainWords = (name: string, common?: Set<string>) =>
+  new Set(plainName(name).split(" ").filter((word) => word.length > 2 && !STOP.has(word) && !common?.has(word)));
+
+/** Words in at least `times` of the names given — to leave out of `mainWords` (see there). */
+export function commonWords(names: string[], times = 3) {
+  const count = new Map<string, number>();
+  for (const name of new Set(names.map(plainName))) for (const word of new Set(name.split(" "))) count.set(word, (count.get(word) ?? 0) + 1);
+  return new Set([...count].filter(([, n]) => n >= times).map(([word]) => word));
+}
 
 /** Metres between two points on the Earth. */
 export function metresBetween(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
@@ -43,9 +55,9 @@ const shared = (a: Set<string>, b: Set<string>) => [...a].filter((word) => b.has
  * The first of `known` the point is the same as, if any. `kind` sets how near
  * counts: a property is a building, a point may be a station beside a venue.
  */
-export function findMatch(point: { name: string; latitude: number | null; longitude: number | null }, known: Known[], kind: "property" | "point", only?: "name"): Match | null {
+export function findMatch(point: { name: string; latitude: number | null; longitude: number | null }, known: Known[], kind: "property" | "point", only?: "name", common?: Set<string>): Match | null {
   const name = plainName(point.name);
-  const words = mainWords(point.name);
+  const words = mainWords(point.name, common);
   let best: (Match & { score: number }) | null = null;
   for (const one of known) {
     const metres =
@@ -54,17 +66,17 @@ export function findMatch(point: { name: string; latitude: number | null; longit
         : null;
     if (name && plainName(one.name) === name) return { id: one.id, name: one.name, by: "name", metres: metres === null ? null : Math.round(metres) };
     // A name inside the other — "Courtyard Culver City" in "Courtyard by Marriott Culver City Los Angeles" — three main words at least, as two are often a town ("Long Beach").
-    const theirs = mainWords(one.name);
+    const theirs = mainWords(one.name, common);
     const [small, large] = theirs.size <= words.size ? [theirs, words] : [words, theirs];
-    if (small.size >= 3 && [...small].every((word) => large.has(word)) && (metres === null || metres <= 5000)) {
+    if (small.size >= (common ? 2 : 3) && [...small].every((word) => large.has(word)) && (metres === null || metres <= 5000)) {
       return { id: one.id, name: one.name, by: "similar", metres: metres === null ? null : Math.round(metres) };
     }
     if (metres === null || only === "name") continue;
-    const common = shared(words, mainWords(one.name));
+    const both = shared(words, mainWords(one.name, common));
     const near =
       kind === "property"
-        ? metres <= 40 || (metres <= 75 && common >= 1) || (metres <= 300 && common >= 2)
-        : metres <= 40 && common > 0;
+        ? metres <= 40 || (metres <= 75 && both >= 1) || (metres <= 300 && both >= 2)
+        : metres <= 40 && both > 0;
     if (near && (!best || metres < best.score)) best = { id: one.id, name: one.name, by: "near", metres: Math.round(metres), score: metres };
   }
   return best ? { id: best.id, name: best.name, by: best.by, metres: best.metres } : null;

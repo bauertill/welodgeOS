@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
-import { findMatch } from "~/lib/map-match";
+import { commonWords, findMatch } from "~/lib/map-match";
 import { createFoundProperty } from "~/server/found-property";
 import { ensureHotelContactTask } from "~/server/hotel-contact";
 import { deliverImmediate } from "~/server/notify";
@@ -152,7 +152,7 @@ export const placeRouter = createTRPCRouter({
     const place = await ctx.db.placeOfInterest.findUnique({ where: { id: input.id }, select: { name: true, latitude: true, longitude: true, eventId: true } });
     if (!place) return null;
     const library = await ctx.db.property.findMany({ select: { id: true, name: true, latitude: true, longitude: true } });
-    const match = findMatch(place, library, "property");
+    const match = findMatch(place, library, "property", undefined, commonWords(library.map((one) => one.name)));
     if (!match) return null;
     const entry = await ctx.db.scoutingEntry.findFirst({ where: { eventId: place.eventId, propertyId: match.id }, select: { id: true } });
     return { ...match, onBoard: Boolean(entry) };
