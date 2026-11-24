@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { findMatch, plainName } from "~/lib/map-match";
+import { commonWords, findMatch, plainName } from "~/lib/map-match";
 
 const carmel = { id: "p1", name: "Hotel Carmel", latitude: 34.0119, longitude: -118.4945 };
 const courtyard = { id: "p2", name: "Courtyard Culver City", latitude: 34.0215, longitude: -118.3965 };
@@ -42,5 +42,15 @@ describe("near is not enough on its own", () => {
     const ri = { id: "r", name: "Residence Inn Burbank Downtown", latitude: 34.1808, longitude: -118.3090 };
     expect(findMatch({ name: "3* Hotel Burbank", latitude: 34.1825, longitude: -118.3090 }, [ri], "property")).toBeNull();
     expect(findMatch({ name: "2* The Tangerine", latitude: 34.1814, longitude: -118.3090 }, [ri], "property")).toBeNull();
+  });
+});
+
+describe("words found in many names do not count", () => {
+  it("leaves two places alike only by their town", () => {
+    const names = ["Bayside Hotel Santa Monica", "Hotel Carmel Santa Monica", "Hampton Inn & Suites Santa Monica", "Avalon Santa Monica on Main", "Sovereign Santa Monica"];
+    const common = commonWords(names);
+    const bayside = { id: "b", name: "Bayside Hotel Santa Monica", latitude: 34.0122, longitude: -118.4951 };
+    expect(findMatch({ name: "Avalon Santa Monica on Main", latitude: 34.0122, longitude: -118.4962 }, [bayside], "property", undefined, common)).toBeNull();
+    expect(findMatch({ name: "Avalon Santa Monica on Main", latitude: 34.0122, longitude: -118.4962 }, [bayside], "property")).not.toBeNull();
   });
 });

@@ -70,6 +70,18 @@ export function readKml(text: string): { layers: Imported[]; skipped: number; by
   const layers = folders.length
     ? folders.map((folder, index) => layerFrom(folder, `Layer ${index + 1}`, index))
     : [layerFrom(documentEl, "Imported places", 0)];
+  // A name used again for another spot — "4 Bed, 4 Bath" listings — is numbered, so each is kept: "4 Bed, 4 Bath · 2".
+  for (const layer of layers) {
+    const seen = new Map<string, { latitude: number | null; longitude: number | null }[]>();
+    for (const place of layer.places) {
+      const key = place.name.toLowerCase();
+      const earlier = seen.get(key) ?? [];
+      const elsewhere = earlier.length > 0 && earlier.every((one) => one.latitude === null || place.latitude === null || Math.abs(one.latitude - place.latitude) + Math.abs(one.longitude! - place.longitude!) > 0.0004);
+      earlier.push({ latitude: place.latitude, longitude: place.longitude });
+      seen.set(key, earlier);
+      if (elsewhere) place.name = `${place.name} · ${earlier.length}`.slice(0, 200);
+    }
+  }
   return { layers: layers.filter((layer) => layer.places.length > 0), skipped, byAddress, unlocated };
 }
 
