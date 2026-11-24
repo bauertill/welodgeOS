@@ -670,6 +670,7 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | Tasks on the board; a request's or client's emails | Post an update on a sales request, client or property; create a task, move it, comment on it |
 | Properties (search by name, city, address); a hotel's quotations for an event | Add a property (with room types and contacts), put it on an event's board, add a room type |
 | Contracts (by event, property, client, contractor or request), and one in full | Record a hotel's quotation; register a contract with its payments and cancellation deadlines; fill in or correct a contract, add a payment or a deadline |
+| Artifacts (§4.13), and one's page to change it | Save a page as an artifact, or a new page for one; turn its client link on or off |
 
 **From a PDF** (the owner, 2026-11-20: "I will upload a PDF and it should read it and add the
 data onto OS" — for the whole team). In Claude, with the WeLodge OS connector on, the person
@@ -3635,6 +3636,47 @@ client prices or costs; "We Lodge" in two words; "Games periods" and "a recent e
 event's protected name; all amounts in USD. The reference's default client label *OBS* is kept,
 as in the waves planner.
 
+### 4.13 Artifacts — pages made with Claude, shared by a link (2026-11-24)
+
+**The team has Claude make a page and shows it to a client from os.welodge.net** (the owner,
+2026-11-24: "sometimes it's a random presentation … or a staggered comparison like we have done
+now with Decron. Most of the times we would want a client-facing version with a link from
+os.welodge.net"). **Sales › Artifacts** keeps them.
+
+**Made by Claude.** In Claude, with the WeLodge OS connector on (§2.10), someone asks for the
+page — *"Make a one-page comparison of the three hotels for Belgium NOC and save it to OS"*.
+Claude builds it as one self-contained HTML page in We Lodge's look (Lato, the brand purple,
+violet, navy and a little lime; "We Lodge" in two words; readable on a phone; prints cleanly)
+and saves it: **save_artifact** makes a new artifact, or with its id replaces the page of one
+(**get_artifact** reads it first). It answers with the link in OS. **share_artifact** turns the
+client link on and gives it — only when the person says so; Claude is told never to put our
+buying rates, margins, costs or other clients on a page for a client or a provider.
+**list_artifacts** finds them. Every change is in the history "— via Claude".
+
+**Made elsewhere.** *+ New artifact* takes an HTML file (in Claude, an artifact downloaded as
+HTML) or pasted HTML, with a title (taken from the page's own when left blank), who it is for,
+the event and a line on what it is. *Replace the page* on an artifact uploads a new one.
+
+**An artifact's page in OS** shows the page itself, with *Edit details*, *Replace the page*,
+*Open full page*, whether it is shared, and *Client link*. **Every replaced page is kept** under
+*Earlier versions (n)*: *View* shows it (marked "not what the client sees") and *Put this
+version back* makes it current again, keeping the one it replaces. The list shows title, what it
+is, who it is for, the event, when and by whom it last changed, and the client link (*Copy
+link*, *Manage*), with search and *Show archived*; *Archive* stops its link, *Restore* brings it
+back.
+
+**The client's link** is `os.welodge.net/p/<token>` — unguessable, made when first turned on,
+read-only, not indexed by search engines, and it always shows the current page. *Stop sharing*
+turns it off, *New link* replaces it (the old one stops at once); off or archived, the link
+says it is no longer shared.
+
+**Walled off.** A page is written by Claude or a colleague, so it is always served in the
+browser's sandbox, with an origin of its own: its own scripts, fonts and libraries work, links
+open and *Print* works, but it cannot read anyone's sign-in, call OS as the viewer, or see any
+other page of OS — on the client's link and inside OS alike. It also means a page cannot keep
+anything in the viewer's browser (its storage is refused), so an interactive page starts fresh
+each time. A page is at most 4 MB (the most one request can carry); pictures go in as links.
+
 ## 5. Reporting and derived views
 
 ### 5.1 Position per property/category/night
@@ -4784,6 +4826,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §3.9 Hotel fills in its own details by link | **Built** | From the property's page or its contact task: Email it to the hotel (from your own mailbox), Copy link, Open, Switch off, Make a new link. The property, room categories (change and add, not remove), amenities, services and contacts — not rates, event terms or contracting details; lands on the property and in its Log; whoever made the link is told; can be sent again |
 | §4.11 Not interested on the sales list | **Built** (2026-11-20) | Each open row on the Sales requests list ends in *Not interested* instead of *Delete*: it closes the request as Lost/Declined with the new reason *Not interested* (also under Mark as…), reopenable from its page. Delete stays only on the request's own page |
 | §4.12 Stagger Planner | **Built** (2026-11-19) | Sales › Stagger planner: scenarios listed, made, copied, renamed, archived; the editor saves as you go and refuses to overwrite a colleague's newer save; a read-only, unindexed owner's link (on/off, replaced); the reference page's sums in one tested module; Decron – OBS 50 units made by the migration |
+| §4.13 Artifacts | **Built** (2026-11-24, staging) | Sales › Artifacts: pages saved by Claude through the connector (save, read, list, share) or uploaded as HTML; each served walled off; client link at /p/… (on/off, replaced, noindex); every replaced page kept as a version, viewable and put back; archive |
 | §4.12.1 Staggered lease scenarios | **Built** (2026-11-24, staging) | A second scenario type beside move-in waves; settings and reservation list kept with the scenario; CSV upload checked line by line, *Use original list*, *Reset everything*; the reference's calculation in one tested module (the seed's figures held by tests); editor with the *Edit numbers* panel and safe autosave; read-only provider's link, dark mode, Letter print; *Decron – OBS staggered lease, 60 units* made by the migration |
 | §4.12 Stagger Planner, revised reference | **Built** (2026-11-20; 2-beds back on staging 2026-11-23) | Studio, 1-bed and 2-bed (scenarios without 2-beds take a 0 share and the default rate); defaults 20/60/20 at $4,000/$4,500/$5,500; the day-by-day chart, its tooltip and the single-block option removed; *Rental periods* first with *Wave N* rows and a legend; new story, three figures, two notes; title *Decron Apartments OBS*; *Save as PDF* (print) with the two-page Letter layout |
 | §4.11 Client fills in contracting details by link | **Built** | Company details, signatories and contact persons; lands on the request and in its history; can be sent again; switched off or replaced by a rep. No email is sent — the rep sends the link; also asked on the rate card straight after the client sends their request, and reminded there until given (2026-10-14) |

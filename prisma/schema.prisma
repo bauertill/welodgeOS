@@ -132,6 +132,7 @@ model Event {
   /// client's property information page (doc §6.8).
   guestContact          String?
   roomingVersions       RoomingVersion[]
+  artifacts             Artifact[]
 
   @@index([startDate])
 }
@@ -1145,6 +1146,9 @@ model User {
   teamTags               TeamTag[]            @relation("TeamTagMembers")
   staggerScenariosMade   StaggerScenario[]    @relation("StaggerCreatedBy")
   staggerScenariosEdited StaggerScenario[]    @relation("StaggerUpdatedBy")
+  artifactsMade          Artifact[]           @relation("ArtifactCreatedBy")
+  artifactsEdited        Artifact[]           @relation("ArtifactUpdatedBy")
+  artifactVersionsMade   ArtifactVersion[]
   /// When their last morning summary went — so it goes once a day.
   summarySentAt          DateTime?
   /// When the Friday email of overdue payments last went (doc §7.1, 2026-11-20).
@@ -2784,4 +2788,52 @@ model RoomingVersion {
   sentById   String?
 
   @@unique([eventId, propertyId, number])
+}
+
+// --- Artifacts (doc §4.13) ------------------------------------------------------
+
+/// A page the team had Claude make — a presentation, a comparison, a proposal —
+/// kept in OS and, when shared, opened by a client at os.welodge.net/p/<token>
+/// (doc §4.13). The page is one self-contained HTML document; it always runs
+/// walled off from OS, so it can read nothing of ours.
+model Artifact {
+  id           String            @id @default(cuid())
+  title        String
+  /// Who it is for, in words: "Decron Properties", "Belgium NOC".
+  forLabel     String?
+  /// What it is, for the list: "Staggered lease comparison for the provider".
+  description  String?
+  event        Event?            @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventId      String?
+  /// The current page, as one HTML document.
+  html         String
+  /// The client's read-only link; unguessable, made when first shared.
+  shareToken   String?           @unique
+  shareEnabled Boolean           @default(false)
+  archived     Boolean           @default(false)
+  createdBy    User?             @relation("ArtifactCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById  String?
+  updatedBy    User?             @relation("ArtifactUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedById  String?
+  versions     ArtifactVersion[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([archived, updatedAt])
+}
+
+/// An earlier page of an artifact, kept when a new one replaces it.
+model ArtifactVersion {
+  id          String   @id @default(cuid())
+  artifact    Artifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  artifactId  String
+  number      Int
+  html        String
+  /// How it was made: "via Claude", "uploaded".
+  note        String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([artifactId, number])
 }

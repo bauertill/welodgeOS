@@ -79,6 +79,7 @@ export function SalesPanel({ onClose }: { onClose: () => void }) {
             {row("/sales/rate-cards", "Rate cards", "Every rate card made and sent — and a new one for any client or event")}
             {row("/clients", "Clients", "The companies we sell to and the people there — search by company or by person")}
             {row("/stagger", "Stagger planner", "How a client's apartments arrive and leave in waves, and the owner's rent — with a read-only link for the owner")}
+            {row("/artifacts", "Artifacts", "Presentations and comparisons made with Claude — with a link for the client")}
           </ul>
         </div>
 

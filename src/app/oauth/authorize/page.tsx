@@ -59,7 +59,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
           <span className="font-medium">Claude will be able to</span> look up what you can see — sales requests, clients, events, properties, the stock
           sheet&rsquo;s position, tasks — and make everyday changes in your name: register a request, fill in its details, move its stage, hand it over, add
           a contact, an update or a task — and, from a PDF you share, add a property, a hotel&rsquo;s quotation, or a contract with its payments and
-          cancellation deadlines.
+          cancellation deadlines — and save pages it makes for you as artifacts, with a client link when you ask.
         </p>
         <p>
           <span className="font-medium">It will not</span> delete anything, buy, block or sell rooms, or make offers.

@@ -26,7 +26,7 @@ export const navItems = [
  * The sales side (doc §4.10, §4.11) is one menu item that opens a panel, as
  * Events does: its Requests and Clients pages live under these paths.
  */
-const salesPaths = ["/sales", "/clients", "/stagger"];
+const salesPaths = ["/sales", "/clients", "/stagger", "/artifacts"];
 
 /**
  * Pages opened by people outside We Lodge — a client filling in their

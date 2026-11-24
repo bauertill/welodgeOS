@@ -23,6 +23,7 @@ import { scoutingRouter } from "~/server/api/routers/scouting";
 import { notificationRouter } from "~/server/api/routers/notification";
 import { offerRouter } from "~/server/api/routers/offer";
 import { staggerRouter } from "~/server/api/routers/stagger";
+import { artifactRouter } from "~/server/api/routers/artifact";
 import { taskRouter } from "~/server/api/routers/task";
 import { filesRouter } from "~/server/api/routers/files";
 import { guestInfoRouter } from "~/server/api/routers/guest-info";
@@ -45,6 +46,7 @@ export const appRouter = createTRPCRouter({
   contractor: contractorRouter,
   teamTag: teamTagRouter,
   stagger: staggerRouter,
+  artifact: artifactRouter,
   scouting: scoutingRouter,
   quotation: quotationRouter,
   amenity: amenityRouter,

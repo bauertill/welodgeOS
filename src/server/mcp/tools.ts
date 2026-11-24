@@ -39,6 +39,7 @@ export function welodgeServer(person: Person, headers: Headers) {
         "Words matter: a room-night is Bought / Option / In progress with the hotel, and Sold / Blocked / Requested with the client. A sales request moves Initial interest → Specify → Proposal sent → Negotiation → Contracted, or is Lost/Declined.",
         "Look things up before changing them, use ids from what you found, and say what you changed. Every change is recorded as made by this person via Claude.",
         "You cannot delete anything, or buy, block or sell rooms, or make offers — point the person to the site for those.",
+        "When the person asks for a page to show someone — a presentation, a comparison, a proposal, a scenario — build it as ONE self-contained HTML document (styles inline; fonts and libraries only from public CDNs; pictures as links or small inline images; under 4 MB) and save it with save_artifact. In We Lodge's look: Lato, purple #614fc9, violet #ab6ce2, navy #1e2e5d, lime #cefa05 used sparingly; 'We Lodge' is two words; it must read well on a phone and print cleanly. A page for a client or a provider never shows our buying rates, margins, costs or other clients. Do not share it (share_artifact) until the person says so. To change a saved page, read it with get_artifact, then save_artifact with its id.",
         "When the person shares a PDF — a hotel's quotation (their proposal to us), a signed contract, a property's fact sheet — read it, find the event, property, client or contract it belongs to (search before adding, so nothing is added twice), then show the person in a short list what you will add and ask them to confirm before writing. Never guess a figure or a date the PDF does not give: leave it out and say so. Terms that do not fit a field go, in words, into the notes or terms. Afterwards say what you added, with the link.",
       ].join("\n"),
     },
@@ -748,6 +749,74 @@ export function welodgeServer(person: Person, headers: Headers) {
     async ({ contractId, deadline }) => {
       const saved = await addDeadline(contractId, deadline);
       return { deadlineId: (saved as { id: string }).id };
+    },
+  );
+
+  // --- Artifacts (doc §4.13) ----------------------------------------------------------
+
+  const origin = (() => {
+    const host = headers.get("x-forwarded-host") ?? headers.get("host") ?? "os.welodge.net";
+    const proto = headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+    return `${proto}://${host}`;
+  })();
+  const links = (row: { id: string; shareEnabled?: boolean; shareToken?: string | null }) => ({
+    inOS: `${origin}/artifacts/${row.id}`,
+    ...(row.shareEnabled && row.shareToken ? { clientLink: `${origin}/p/${row.shareToken}` } : {}),
+  });
+
+  tool(
+    "list_artifacts",
+    "The pages saved in OS (Sales › Artifacts) — presentations, comparisons, proposals — with who they are for and whether a client link is on. Search by title or who it is for.",
+    { query: z.string().max(200).default("") },
+    read,
+    async ({ query }) =>
+      (await caller.artifact.list({ q: query })).map((row) => ({
+        id: row.id,
+        title: row.title,
+        for: row.forLabel,
+        description: row.description,
+        event: row.event?.name,
+        changed: row.updatedAt,
+        ...links(row),
+      })),
+  );
+
+  tool("get_artifact", "Read a saved page's HTML, to change it. Then save it back with save_artifact and its id.", { id: z.string() }, read, async ({ id }) => {
+    const row = await caller.artifact.html({ id });
+    return { title: row.title, html: row.html };
+  });
+
+  tool(
+    "save_artifact",
+    "Save a page to OS (Sales › Artifacts): a new one, or — with its id — a new page for an existing one (the old page is kept as a version, and a client link shows the new one at once). The HTML must be one complete, self-contained document under 4 MB. Returns its link in OS, and the client link if sharing is on.",
+    {
+      id: z.string().optional().describe("Leave out for a new artifact"),
+      title: z.string().min(1).max(160).optional().describe("Required for a new artifact"),
+      html: z.string().min(20).max(4_000_000).describe("The whole page: <!doctype html>…"),
+      for: z.string().max(160).optional().describe("Who it is for, e.g. Decron Properties"),
+      description: z.string().max(500).optional().describe("One line on what it is, for the list"),
+      eventId: z.string().optional().describe("The event it is for, from list_events"),
+    },
+    write,
+    async ({ id, title, html, for: forLabel, description, eventId }) => {
+      if (id) {
+        const row = await caller.artifact.update({ id, html, note: "via Claude", ...(title && { title }), ...(forLabel !== undefined && { forLabel }), ...(description !== undefined && { description }), ...(eventId && { eventId }) });
+        return { id: row.id, saved: "New page saved; the last one is kept as a version.", ...links(row) };
+      }
+      if (!title) throw new Error("A new artifact needs a title.");
+      const row = await caller.artifact.create({ title, html, forLabel, description, eventId: eventId ?? null, note: "via Claude" });
+      return { id: row.id, saved: "Saved. Not shared yet — share_artifact turns on the client link when the person asks.", ...links(row) };
+    },
+  );
+
+  tool(
+    "share_artifact",
+    "Turn a saved page's client link on (or off). Anyone with the link can open it at os.welodge.net/p/…; it is not indexed by search engines. Only when the person asks — and after checking the page shows nothing a client should not see.",
+    { id: z.string(), on: z.boolean().default(true) },
+    write,
+    async ({ id, on }) => {
+      const row = await caller.artifact.share({ id, enabled: on });
+      return on ? { clientLink: `${origin}/p/${row.shareToken}`, inOS: `${origin}/artifacts/${id}` } : "The client link is off; it no longer opens.";
     },
   );
 
