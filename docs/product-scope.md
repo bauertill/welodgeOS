@@ -3641,6 +3641,8 @@ the browser's print dialog with the reference's print layout on US Letter. A mig
 
 **Proposed terms** (the owner, 2026-11-24): one tenant, one contact; **rent in four payments — 10% on signature, 40% on the move-in day, 40% during the stay and 10% at check-out** (not the reference's rent in advance with a deposit per apartment); damage and liability cover; professional cleaning. The reference's *Flexible arrivals, fixed hand-backs* and *Proven on large international projects* points are removed, and with them the panel's *Arrival flexibility per wave* box (a saved value is kept but not shown).
 
+**Why this shape works** no longer says *None come back before the end of the first Games period* (the owner, 2026-11-24).
+
 **The figures at the top** (the owner, 2026-11-24, dropped the reference's average-lease figure): the weekly cap (in lime), the apartments and their move-in waves, and the gross rent over the lease months.
 
 **Rules kept**: only the provider's rent is shown or sent — never our margins, sell rates,
