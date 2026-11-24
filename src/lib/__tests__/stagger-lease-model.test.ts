@@ -17,7 +17,9 @@ import {
 import { SEED_RESERVATIONS } from "~/lib/stagger-lease-seed";
 
 const seed = SEED_RESERVATIONS.map(([checkIn, checkOut]) => ({ checkIn, checkOut }));
-const c = computeLease(leaseDefaults(), seed);
+// The reference's figures are for Monday hand-backs; the default is now Thursday (the owner, 2026-11-24).
+const reference = () => ({ ...leaseDefaults(), dow: 1 });
+const c = computeLease(reference(), seed);
 
 describe("the seed scenario (docs/reference/staggered-lease-reference.html)", () => {
   it("uses all 195 reservations", () => {
@@ -82,7 +84,7 @@ describe("the seed scenario (docs/reference/staggered-lease-reference.html)", ()
 
 describe("the rules", () => {
   it("starts a lease on the latest move-in day on or before arrival, else the previous month's last", () => {
-    const s = { ...leaseDefaults(), units: 1, earliest: "2000-01-01" };
+    const s = { ...reference(), units: 1, earliest: "2000-01-01" };
     // Reference opening Feb 6 → target Jul 14; check in on the reference's Feb 10 → Jul 18 → the 15th.
     const one = (checkIn: string) => computeLease(s, [{ checkIn, checkOut: "2026-03-20" }, { checkIn, checkOut: "2026-03-20" }]).apts[0]!;
     expect(iso(one("2026-02-10").start)).toBe("2028-07-15");
@@ -95,13 +97,13 @@ describe("the rules", () => {
   });
 
   it("never starts before the earliest move-in", () => {
-    const s = { ...leaseDefaults(), units: 1, earliest: "2028-07-10" };
+    const s = { ...reference(), units: 1, earliest: "2028-07-10" };
     const p = computeLease(s, [{ checkIn: "2026-02-02", checkOut: "2026-03-20" }, { checkIn: "2026-02-02", checkOut: "2026-03-20" }]).apts[0]!;
     expect(iso(p.start)).toBe("2028-07-10");
   });
 
   it("maps an early check-out from the first closing, a later one from the second", () => {
-    const s = { ...leaseDefaults(), units: 2, minback: "none" as const, earliest: "2000-01-01" };
+    const s = { ...reference(), units: 2, minback: "none" as const, earliest: "2000-01-01" };
     const r = computeLease(s, [
       { checkIn: "2026-02-01", checkOut: "2026-03-08" }, // ≤ Feb 22 + 14 days → Jul 30 + 14 = Aug 13
       { checkIn: "2026-02-01", checkOut: "2026-03-09" }, // after → Aug 27 − 6 = Aug 21
@@ -110,7 +112,7 @@ describe("the rules", () => {
   });
 
   it("holds check-outs to the end of a Games period and caps them at the latest hand-back", () => {
-    const s = { ...leaseDefaults(), units: 2, earliest: "2000-01-01", minback: "g2" as const, latest: "2028-09-01" };
+    const s = { ...reference(), units: 2, earliest: "2000-01-01", minback: "g2" as const, latest: "2028-09-01" };
     const r = computeLease(s, [
       { checkIn: "2026-02-01", checkOut: "2026-02-10" }, // Jul 18 → held to Aug 27
       { checkIn: "2026-02-01", checkOut: "2026-05-30" }, // far later → capped at Sep 1
@@ -122,7 +124,7 @@ describe("the rules", () => {
   });
 
   it("pushes a hand-back a week while that Monday is full", () => {
-    const s = { ...leaseDefaults(), units: 3, cap: 2, minback: "none" as const, earliest: "2000-01-01" };
+    const s = { ...reference(), units: 3, cap: 2, minback: "none" as const, earliest: "2000-01-01" };
     const same = { checkIn: "2026-02-01", checkOut: "2026-03-08" };
     const r = computeLease(s, [same, same, same]);
     expect(r.weeks.map((w) => [iso(w.t), w.c])).toEqual([
@@ -138,13 +140,24 @@ describe("the rules", () => {
   });
 
   it("warns of a lease under 30 nights, a late hand-back and counts that do not match", () => {
-    const s = { ...leaseDefaults(), units: 4, cap: 1, earliest: "2000-01-01", minback: "none" as const, latest: "2028-08-14" };
+    const s = { ...reference(), units: 4, cap: 1, earliest: "2000-01-01", minback: "none" as const, latest: "2028-08-14" };
     const same = { checkIn: "2026-02-20", checkOut: "2026-02-25" };
     const r = computeLease(s, [same, same, same, same]);
     const warn = leaseWarnings(r).join(" ");
     expect(warn).toContain("Unit counts add up to 60, not 4");
     expect(warn).toContain("handed back after the latest hand-back date");
     expect(warn).toContain("shorter than 30 nights");
+  });
+});
+
+describe("the default hand-back day", () => {
+  it("is Thursday, and the seed still reconciles under the cap", () => {
+    expect(leaseDefaults().dow).toBe(4);
+    const t = computeLease(leaseDefaults(), seed);
+    expect(t.weeks.every((w) => new Date(w.t).getUTCDay() === 4)).toBe(true);
+    expect(t.ok).toBe(true);
+    expect(t.N).toBe(60);
+    expect(leaseWarnings(t)).toEqual([]);
   });
 });
 

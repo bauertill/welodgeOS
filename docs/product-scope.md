@@ -3572,7 +3572,7 @@ the list says which each is. Copying keeps the type and, for a lease, its reserv
 **What a lease scenario keeps**, in the database, for everyone (never in one browser): every
 box of the reference's *Edit numbers* panel — provider, client and version label; apartments to
 lease and the unit mix (type, count, monthly rent); the weekly hand-back cap; the move-in days
-of the month (default the 1st and 15th); the hand-back weekday (default Monday); the earliest
+of the month (default the 1st and 15th); the hand-back weekday (default **Thursday** — the owner, 2026-11-24; the reference had Monday); the earliest
 move-in and the latest hand-back; *No hand-backs before* (no limit, end of Games period 1 or 2);
 the arrival flexibility per wave; the target event's two Games periods; the reference event's
 opening, first and second closing — and its **reservation list**. The provider's name is also
@@ -3615,7 +3615,7 @@ provider's link included) puts every number and the list back to the reference.
   the cap — counted, as the reference, when a lease ends more than six days after it, since a
   check-out capped at that date still runs to the next hand-back weekday; any lease under 30
   nights; totals that do not reconcile; no reservation list.
-- The reference scenario gives 60 apartments (10 Studio $2,400, 40 1-bed $2,700, 10 2-bed
+- With the reference's Monday hand-backs, the reference scenario gives 60 apartments (10 Studio $2,400, 40 1-bed $2,700, 10 2-bed
   $3,200; $2,733.33 blended), 8 move-in waves from Mar 1 to Jun 15, 2028 in 32 bars, hand-backs
   of 2, 8, 8, 2, 1, 8, 8, 8, 8, 3, 1, 3 on the Mondays Jul 31 – Oct 16, monthly rent Mar–Oct of
   $43,848 / $105,847 / $154,997 / $160,478 / $166,947 / $128,310 / $57,686 / $5,032, 301.2 lease

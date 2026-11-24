@@ -62,7 +62,8 @@ export function leaseDefaults(): LeaseSettings {
     ],
     cap: 8,
     waves: "1, 15",
-    dow: 1,
+    // Thursday (the owner, 2026-11-24); the reference had Monday.
+    dow: 4,
     earliest: "2028-03-01",
     latest: "2028-10-16",
     minback: "g1",
