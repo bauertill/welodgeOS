@@ -258,7 +258,7 @@ function LeaseBody({ s, c }: { s: LeaseSettings; c: LeaseComputed }) {
 
       <section>
         <h2>Month by month</h2>
-        <p className="sub">Apartments moving in and handed back each month, how many are leased at month end, and the rent you receive. Part-months are charged by the day.</p>
+        <p className="sub">Apartments moving in and handed back each month, how many are leased at month end, and the rent you receive. Part-months are charged pro rata.</p>
         <div className="tw">
           <table>
             <thead>
