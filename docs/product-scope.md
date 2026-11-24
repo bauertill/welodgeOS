@@ -3644,6 +3644,8 @@ the browser's print dialog with the reference's print layout on US Letter. A mig
 
 **Why this shape works** no longer says *None come back before the end of the first Games period* (the owner, 2026-11-24).
 
+**The insurance term** (the owner, 2026-11-24): *Damage and liability cover* carries an asterisk, and the notes end with the full term — We Lodge's commercial general liability insurance of US$1,000,000 per occurrence and US$2,000,000 general aggregate through the Lease Period, the Provider as additional insured, the certificate 30 days before the Lease Period, and occupants told the Provider's insurance does not cover their belongings or personal liability.
+
 **The figures at the top** (the owner, 2026-11-24, dropped the reference's average-lease figure): the weekly cap (in lime), the apartments and their move-in waves, and the gross rent over the lease months.
 
 **Rules kept**: only the provider's rent is shown or sent — never our margins, sell rates,
