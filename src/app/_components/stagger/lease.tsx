@@ -105,8 +105,9 @@ function Gantt({ c }: { c: LeaseComputed }) {
   }
   const periods = (
     [
-      [T.open, T.c1 + DAY, "Games period 1"],
-      [T.o2, T.c2 + DAY, "Games period 2"],
+      // Named as the owner asked (2026-11-24); elsewhere the page says "Games periods".
+      [T.open, T.c1 + DAY, "Olympics"],
+      [T.o2, T.c2 + DAY, "Paralympics"],
     ] as const
   ).filter(([a, b]) => !(b < x0 || a > x1));
   return (
