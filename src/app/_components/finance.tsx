@@ -206,6 +206,7 @@ export function PaymentsBoard({ eventId: fixedEvent }: { eventId?: string } = {}
                   <td className={`${td} max-w-72`}>
                     <span className="line-clamp-2">{row.description}</span>
                     {row.beneficiary && <span className="text-ink-500 block text-xs">To {row.beneficiary}</span>}
+                    {row.contract.paymentInstructions && <PaymentInstructions text={row.contract.paymentInstructions} party={party} compact className="mt-1" />}
                   </td>
                   <td className={td}>{percent(row.percentBasisPoints) ?? "Set amount"}</td>
                   <td className={`${td} whitespace-nowrap`}>{money(row.amount, row.contract.currency)}</td>
@@ -249,6 +250,92 @@ export function PaymentsBoard({ eventId: fixedEvent }: { eventId?: string } = {}
         the contract and every share follows. Totals are per currency, never converted.
       </p>
     </div>
+  );
+}
+
+/**
+ * Where an invoice must go, or how to be paid (the owner, 2026-11-24:
+ * "sometimes they have specific instructions like send to this email address
+ * or upload to this system, we need to remember this") — a reminder, kept in view.
+ */
+function PaymentInstructions({ text, party, compact, className = "", onAdd }: { text: string | null; party: ContractParty; compact?: boolean; className?: string; onAdd?: () => void }) {
+  const label = party === "CLIENT" ? "Where the invoice goes" : "How to pay them";
+  if (!text) {
+    return onAdd ? (
+      <button type="button" onClick={onAdd} className={`text-brand-700 text-xs font-light hover:underline ${className}`}>
+        + {label}
+      </button>
+    ) : null;
+  }
+  return (
+    <div className={`rounded-lg border border-[#f0d9a8] bg-[#fdf6e7] text-[#6b4a07] ${compact ? "px-2 py-1 text-xs" : "px-3 py-2 text-[13px]"} ${className}`}>
+      <span className="font-medium">📌 {label}:</span> <span className="font-light break-words whitespace-pre-line">{linkify(text)}</span>
+    </div>
+  );
+}
+
+/** The instructions above a contract's payments — added and changed right there. */
+function EditInstructions({ contract }: { contract: FullContract }) {
+  const saved = useSaved();
+  const [draft, setDraft] = useState<string | null>(null);
+  const update = api.finance.updateContract.useMutation({ onSuccess: () => (saved(), setDraft(null)) });
+  const label = contract.party === "CLIENT" ? "Where the invoice goes" : "How to pay them";
+  if (draft === null) {
+    return (
+      <div className="mb-3 flex items-start gap-2">
+        {contract.paymentInstructions ? (
+          <>
+            <PaymentInstructions text={contract.paymentInstructions} party={contract.party} className="flex-1" />
+            <button type="button" onClick={() => setDraft(contract.paymentInstructions ?? "")} className="text-brand-700 mt-2 text-xs font-light hover:underline">
+              Change
+            </button>
+          </>
+        ) : (
+          <PaymentInstructions text={null} party={contract.party} onAdd={() => setDraft("")} />
+        )}
+      </div>
+    );
+  }
+  return (
+    <form
+      className="border-ink-200/60 mb-3 space-y-2 rounded-lg border p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        update.mutate({ id: contract.id, paymentInstructions: draft });
+      }}
+    >
+      <Field label={label} hint="Shown on every payment reminder and on the Payments sheet — and remembered for their next contract.">
+        <Textarea
+          rows={2}
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={contract.party === "CLIENT" ? "Email invoices to ap@client.com, quoting PO 4500123 — or: upload to their Coupa portal, link…" : "Pay through their portal, link… — or: send remittance to accounts@hotel.com"}
+        />
+      </Field>
+      <FormError message={update.error ? friendlyError(update.error) : null} />
+      <div className="flex gap-2">
+        <Button type="submit" disabled={update.isPending}>
+          {update.isPending ? "Saving…" : "Save"}
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => setDraft(null)}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Web links in the instructions open in a new tab. */
+function linkify(text: string) {
+  return text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a key={i} href={part} target="_blank" rel="noreferrer" className="underline">
+        {part}
+      </a>
+    ) : (
+      part
+    ),
   );
 }
 
@@ -741,6 +828,7 @@ function ContractDetails({ contract }: { contract: FullContract }) {
     currency: contract.currency ?? "USD",
     ownerId: contract.owner?.id ?? "",
     notes: contract.notes ?? "",
+    paymentInstructions: contract.paymentInstructions ?? "",
     noCancellationTerms: contract.noCancellationTerms,
     reminderDays: contract.reminderDays.filter((n) => REMINDER_PRESETS.some((preset) => preset.days === n)),
     otherDays: contract.reminderDays.filter((n) => !REMINDER_PRESETS.some((preset) => preset.days === n)).join(", "),
@@ -782,6 +870,7 @@ function ContractDetails({ contract }: { contract: FullContract }) {
               currency: draft.currency,
               ownerId: draft.ownerId || null,
               notes: draft.notes,
+              paymentInstructions: draft.paymentInstructions,
               noCancellationTerms: draft.noCancellationTerms,
               reminderDays: [...draft.reminderDays, ...other],
             });
@@ -840,6 +929,17 @@ function ContractDetails({ contract }: { contract: FullContract }) {
             <div className="mt-2">
               <Input value={draft.otherDays} onChange={(e) => set("otherDays")(e.target.value)} placeholder="Other days before — like 14 or 60, 3" aria-label="Other reminder days" />
             </div>
+          </Field>
+          <Field
+            label={contract.party === "CLIENT" ? "Where the invoice goes" : "How to pay them"}
+            hint="Shown on every payment reminder and on the Payments sheet — and remembered for this client's next contract."
+          >
+            <Textarea
+              rows={2}
+              value={draft.paymentInstructions}
+              onChange={(e) => set("paymentInstructions")(e.target.value)}
+              placeholder={contract.party === "CLIENT" ? "Email invoices to ap@client.com, quoting PO 4500123 — or: upload to their Coupa portal, link…" : "Pay through their portal, link… — or: send remittance to accounts@hotel.com"}
+            />
           </Field>
           <Field label="Notes">
             <Textarea rows={3} value={draft.notes} onChange={(e) => set("notes")(e.target.value)} />
@@ -938,6 +1038,7 @@ function ContractDetails({ contract }: { contract: FullContract }) {
           {contract.notes && <Row label="Notes" value={contract.notes} />}
         </dl>
       )}
+
       {!editing && <DeleteContract contract={contract} />}
     </Card>
   );
@@ -989,6 +1090,7 @@ function PaymentsCard({ contract }: { contract: FullContract }) {
           </button>
         )}
       </div>
+      <EditInstructions contract={contract} />
       {editing === "new" && <PaymentEditor contract={contract} onDone={() => setEditing(null)} />}
       {contract.payments.length === 0 ? (
         editing !== "new" && (

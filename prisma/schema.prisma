@@ -963,6 +963,10 @@ model Contract {
   lockedRateFor       DateTime? @db.Date
   lockedRateOn        DateTime? @db.Date
   notes               String?
+  /// Where an invoice must go, or how to be paid (the owner, 2026-11-24):
+  /// "send to this email address", "upload to this system" — shown on every
+  /// payment reminder and on the Payments sheet.
+  paymentInstructions String?
   /// Said on purpose when the contract has no cancellation deadlines at all,
   /// so it stops being flagged as missing them.
   noCancellationTerms Boolean   @default(false)

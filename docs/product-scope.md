@@ -4472,6 +4472,18 @@ event, its name ("Group Sales Agreement"), the signed PDF (uploaded, or a link),
 was signed, its account manager, notes, and **its total** — what the whole contract is worth,
 with its currency (§4.5).
 
+**Where the invoice goes** (the owner, 2026-11-24: "sometimes they have specific instructions like
+send to this email address or upload to this system, we need to remember this. It needs to be on
+the reminder and on the payment sheet"). Each contract has **invoice and payment instructions** —
+on a client contract *Where the invoice goes* ("Email invoices to ap@client.com, quoting PO
+4500123", "Upload to their Coupa portal, link…"), on a supplier contract *How to pay them*. They
+are added and changed at the top of the contract's *Payment terms* (*+ Where the invoice goes*,
+*Change*), or under *Edit*; links in them open. They show, as a yellow 📌 note, **under every
+payment of that contract on the Payments sheet**, and as a 📌 line **in every payment reminder**
+and in the Friday overdue email (§7.1 reminders). A new contract with the same client (or hotel,
+or contractor) starts with the instructions of their latest contract that has any, so they are
+remembered. Claude's connector reads and sets them with the contract (§2.10).
+
 **Taxes on top** (the owner, 2026-11-11): where the hotel's agreement adds taxes to the rooms,
 the contract keeps the **total as the rooms** and the **taxes** beside it, and shows *Rooms*,
 *Taxes* and *Total payable*; the contracts lists show the total payable. **Payment shares are
@@ -4909,7 +4921,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.8 Rate periods | **Built** | A pre rate, the event rate and a post rate in one change — on the stock sheet and in a sales request's Add rooms; all or nothing, one ledger entry per period |
 | §4.11 Editing an offer | **Built** (2026-11-18) | *Edit the offer* on an open offer: rooms, dates, rates, hold date and terms; changed rooms released and re-blocked in one all-or-nothing step; a hand-edited agreement flagged to check |
 | §3.10 / §4.11 Cancellation by rooms, terms in words | **Built** (2026-11-18) | A cut-off can be a number of rooms (with an optional room type) that may be cancelled until a date, free or for a fee; or a term in words with or without a date; on quotations and offers, written into the agreement, carried to the contract (words without a date as notes) |
-| §7.1 Deadline reminders | **Built** (2026-11-20) | The contract's account manager is emailed 1 month, 1 week and on the day of each payment due date and cancellation deadline until paid or handled — the days changeable per contract under Edit (ticks + other days), the manager changeable; every Friday at 7:00 their time, one email of their overdue payments |
+| §7.1 Deadline reminders | **Built** (2026-11-20) | The contract's account manager is emailed 1 month, 1 week and on the day of each payment due date and cancellation deadline until paid or handled — the days changeable per contract under Edit (ticks + other days), the manager changeable; every Friday at 7:00 their time, one email of their overdue payments. Since 2026-11-24 (staging) each carries the contract's invoice and payment instructions — where the invoice goes — which also show under each payment on the Payments sheet |
 | §7 Margin across currencies | **Built** (2026-11-19) | A night bought in one currency and sold in another (BRL bought, USD sold) has its margin in the selling currency at the European Central Bank rate locked when its contract was signed (shown on the contract), today's until then; the event report's money totals show ≈ USD in all beneath. Payments do not lock their own rate |
 | §7.1 Contracts, payments and cancellations | **Built** | Contracts with total, PDF link, payment shares of the total with statuses, and cancellation cut-offs; the event's Contracts tab hidden since 2026-10-02 — a hotel's contracts on the property's Contracts tab, a client's on the sales request; the Finances section with Payments and Cancellations across every event; incomplete contracts flagged. *Delete this contract* for one made by mistake or twice, refused once rooms, a signed offer, a contracted request (unless another contract of the request remains, 2026-11-18) or an addendum rest on it (2026-11-05). PDF upload into Drive waits on Till; reading the PDF automatically deferred |
 | §7.1 Buying and selling under a contract | **Built** | Buy offers the hotel's supplier contract and Sell the client's contract, both optional since 2026-10-02, on the stock sheet and from a sales request; new ones added on the spot; nights carry their contracts in the panel, ledger and undo |
