@@ -35,6 +35,7 @@ export default async function EventPropertiesPage({
     color: place.layer?.color ?? null,
     layerName: place.layer?.name ?? null,
     notes: place.notes,
+    address: place.address,
     measured: place.layer ? place.layer.measured : place.category === "VENUE",
     latitude: place.latitude,
     longitude: place.longitude,

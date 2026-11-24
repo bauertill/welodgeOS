@@ -8,6 +8,7 @@ import {
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlaceCategory, PropertyType, ScoutingStatus } from "generated/prisma";
 
@@ -64,6 +65,7 @@ export type MapPlace = {
   /** For its icon: its layer's name and its notes, where the sport is often said. */
   layerName?: string | null;
   notes?: string | null;
+  address?: string | null;
 };
 
 /** A layer of the event's map (doc §3.7): its places shown or hidden together. */
@@ -389,6 +391,10 @@ function SidePanel({
 
       {place && (
         <div className="mt-4">
+          {place.layerName && <p className="text-ink-500 -mt-3 mb-2 text-xs font-light">On the {place.layerName} layer</p>}
+          {place.address && <p className="text-ink-700 mb-2 text-[13px] font-light">{place.address}</p>}
+          {place.notes && <p className="text-ink-700 mb-3 text-[13px] font-light whitespace-pre-line">{place.notes}</p>}
+          {eventId && <PlaceToBoard key={place.id} place={place} onDone={onClose} />}
           {place.lines ? (
             <>
               <PanelHeading>Lines</PanelHeading>
@@ -404,6 +410,84 @@ function SidePanel({
         </div>
       )}
     </aside>
+  );
+}
+
+/**
+ * A point that is only on the map — a hotel or apartments from research — put
+ * on the properties board after all (the owner, 2026-11-24): its name (the
+ * stars in front of it read off), hotel or apartments, and stars.
+ */
+function PlaceToBoard({ place, onDone }: { place: MapPlace; onDone: () => void }) {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const starred = /^\s*(\d)\s*\*\s*(.+)$/.exec(place.name);
+  const looksLikeApartments = /apartment|unit|residen|village|moxie|universit/i.test(`${place.layerName ?? ""} ${place.notes ?? ""}`);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(starred ? starred[2]!.trim() : place.name);
+  const [type, setType] = useState<"HOTEL" | "APARTMENT" | "APARTHOTEL">(starred ? "HOTEL" : looksLikeApartments ? "APARTMENT" : "HOTEL");
+  const [stars, setStars] = useState<number | null>(starred ? Math.min(5, Math.max(1, Number(starred[1]))) : null);
+  const add = api.place.toProperty.useMutation({
+    onSuccess: () => {
+      void utils.invalidate();
+      router.refresh();
+      onDone();
+    },
+  });
+  if (!open) {
+    return (
+      <div className="mb-4">
+        <button type="button" onClick={() => setOpen(true)} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1.5 text-xs font-medium text-white">
+          ＋ Add to properties board
+        </button>
+        <p className="text-ink-500 mt-1 text-[11px] font-light">Only on the map for now. Adding it makes it a property on the event&rsquo;s board, with a contact task.</p>
+      </div>
+    );
+  }
+  const field = "border-ink-200 w-full rounded-lg border px-2 py-1 text-[13px]";
+  return (
+    <form
+      className="border-brand-200 bg-brand-50/50 mb-4 space-y-2 rounded-lg border p-2.5 text-xs"
+      onSubmit={(e) => {
+        e.preventDefault();
+        add.mutate({ id: place.id, name, type, stars: type === "HOTEL" ? stars : null });
+      }}
+    >
+      <p className="text-ink-900 font-medium">Add to properties board</p>
+      <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" className={field} />
+      <div className="flex gap-1">
+        {(
+          [
+            ["HOTEL", "Hotel"],
+            ["APARTMENT", "Apartments"],
+            ["APARTHOTEL", "Aparthotel"],
+          ] as const
+        ).map(([value, label]) => (
+          <button key={value} type="button" aria-pressed={type === value} onClick={() => setType(value)} className={`flex-1 rounded-full border px-2 py-0.5 ${type === value ? "border-brand-400 bg-brand-500 font-medium text-white" : "border-ink-200 text-ink-700 bg-white"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {type === "HOTEL" && (
+        <div className="flex items-center gap-1">
+          <span className="text-ink-500 mr-1">Stars</span>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} type="button" aria-pressed={stars === n} onClick={() => setStars(stars === n ? null : n)} className={`h-6 w-6 rounded-full border ${stars === n ? "border-brand-400 bg-brand-500 font-medium text-white" : "border-ink-200 text-ink-700 bg-white"}`}>
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+      {add.error && <p className="text-[#c03654]">{add.error.message}</p>}
+      <div className="flex gap-2">
+        <button type="submit" disabled={add.isPending} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 font-medium text-white disabled:opacity-60">
+          {add.isPending ? "Adding…" : "Add"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="text-ink-500 hover:underline">
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
