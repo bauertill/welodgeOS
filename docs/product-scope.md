@@ -3816,7 +3816,8 @@ out sooner and so needs attention sooner.
   negotiating) and it didn't reflect the table") — a dashed amber outline on pale amber for
   **Being negotiated**: in progress with the supplier, nobody holding it. A legend above the
   sheet says so. Being negotiated is still not secured: a room type with only that says
-  "nothing secured". Everything else is left **blank**, the same as a day with no inventory at
+  "nothing secured". The line written across a blank room type's first row (below) is left out
+  where anything is drawn — it would run over the block (the owner, 2026-11-25). Everything else is left **blank**, the same as a day with no inventory at
   all: a night nobody holds and we neither hold nor are negotiating — nothing started, or
   handed back. A
   soft request holds nothing (§4.3), so a requested night is drawn as whatever it is on our
