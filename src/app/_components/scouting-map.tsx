@@ -397,10 +397,10 @@ function SidePanel({
 
       {place && (
         <div className="mt-4">
-          {eventId && layers.length > 0 ? <MoveToLayer key={place.id} place={place} layers={layers} /> : place.layerName && <p className="text-ink-500 -mt-3 mb-2 text-xs font-light">On the {place.layerName} layer</p>}
+          {eventId && layers.length > 0 ? <MoveToLayer key={`layer-${place.id}`} place={place} layers={layers} /> : place.layerName && <p className="text-ink-500 -mt-3 mb-2 text-xs font-light">On the {place.layerName} layer</p>}
           {place.address && <p className="text-ink-700 mb-2 text-[13px] font-light">{place.address}</p>}
           {place.notes && <p className="text-ink-700 mb-3 text-[13px] font-light whitespace-pre-line">{place.notes}</p>}
-          {eventId && <PlaceToBoard key={place.id} place={place} onDone={onClose} />}
+          {eventId && <PlaceToBoard key={`board-${place.id}`} place={place} onDone={onClose} />}
           {eventId && <RemovePoint key={`remove-${place.id}`} place={place} onDone={onClose} />}
           {place.lines ? (
             <>
