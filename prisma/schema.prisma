@@ -195,6 +195,11 @@ model PlaceOfInterest {
 
   notes String?
 
+  /// A hotel's stars, for a point that is a hotel from research (the owner,
+  /// 2026-11-25: "categorise them, 2* 3* etc. and then remove the star rating
+  /// in the beginning of the name") — drawn in its stars' colour, like ours.
+  stars Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

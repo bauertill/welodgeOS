@@ -28,7 +28,9 @@ export default async function EventPropertiesPage({
   // (doc §3.7) — the map shows all of them, the list measures to the venues.
   const places = event.placesOfInterest.map((place) => ({
     id: place.id,
-    name: place.name,
+    // Stars in front of a name are said by its stars instead (2026-11-25).
+    name: place.stars ? place.name.replace(/^\s*[1-5]\s*\*\s*/, "") : place.name,
+    stars: place.stars,
     category: place.category,
     lines: place.lines,
     layerId: place.layerId,
