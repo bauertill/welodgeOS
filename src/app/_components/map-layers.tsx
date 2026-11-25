@@ -503,10 +503,11 @@ export function LayersPanel({
       </button>
       {open && (
         <div className="border-ink-200/60 max-h-[calc(max(32rem,78vh)-7rem)] overflow-y-auto border-t px-1.5 py-1.5">
-          {layers.filter((layer) => !layer.groupedWith).map((layer) => layerRow(layer))}
+          {/* Our properties first — Contracted, Hotels, Apartments — then the map's layers (the owner, 2026-11-25). */}
           {row("contracted", "Contracted", <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#0a7a47] bg-white" />, propertyCounts?.contracted)}
           {groupRow("hotels", "Hotels", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 bg-white" />, propertyCounts?.hotels)}
           {groupRow("apartments", "Apartments", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2 bg-white" />, propertyCounts?.apartments)}
+          {layers.filter((layer) => !layer.groupedWith).map((layer) => layerRow(layer))}
           {row("transit", "Google public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
           <div className="text-brand-700 flex justify-between px-1.5 pt-1 text-[11px]">
             <button type="button" onClick={shown.showAll} className="hover:underline">
