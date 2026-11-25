@@ -2061,6 +2061,10 @@ model Task {
   /// private board — never on the team board, anyone else's lists, or in
   /// anyone else's notifications. It has no type, and its maker completes it.
   private        Boolean         @default(false)
+  /// Where it sits in its Kanban column (doc §2.8, the owner 2026-11-25: "we
+  /// should be able to reorder tasks"): lowest first. Empty for a new task, or
+  /// one just moved to another column without a place — those sit at the top.
+  boardOrder     Int?
 
   type   TaskType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
   typeId String?
