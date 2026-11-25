@@ -24,21 +24,24 @@ export type BlockNight = {
 };
 
 /**
- * What a rep reads a block as, in the business's own words (doc §10). Only
- * three things are drawn: a sale, a block, and our own stock nobody holds.
+ * What a rep reads a block as, in the business's own words (doc §10): a sale,
+ * a block, our own stock nobody holds — and, since 2026-11-25, rooms still
+ * being negotiated with the hotel (the owner: "I registered three rooms
+ * (start negotiating) and it didn't reflect the table").
  */
-export type BlockKind = "SOLD" | "BLOCKED" | "OUR_STOCK";
+export type BlockKind = "SOLD" | "BLOCKED" | "OUR_STOCK" | "IN_PROGRESS";
 
 /**
  * The kind a night is drawn as, or null where the sheet leaves it blank: no
- * client holds it and we do not hold it either — nothing started, still in
- * progress, or handed back. A soft request holds nothing (§4.3), so a
+ * client holds it and we neither hold it nor are negotiating it — nothing
+ * started, or handed back. A soft request holds nothing (§4.3), so a
  * requested night reads as whatever it is on the supply side.
  */
 export function blockKind(night: Pick<BlockNight, "sales" | "acquisition">): BlockKind | null {
   if (night.sales === "SOLD") return "SOLD";
   if (night.sales === "BLOCKED") return "BLOCKED";
   if (night.acquisition === "BOUGHT" || night.acquisition === "OPTION") return "OUR_STOCK";
+  if (night.acquisition === "IN_PROGRESS") return "IN_PROGRESS";
   return null;
 }
 

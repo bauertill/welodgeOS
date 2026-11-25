@@ -693,7 +693,9 @@ export function InventoryGrid({
           category.slots.every((slot) =>
             dates.every((date) => {
               const cell = cells[`${slot.id}|${dayKey(date)}`];
-              return !cell || !blockKind(cell.position);
+              // Being negotiated is not secured yet.
+              const kind = cell ? blockKind(cell.position) : null;
+              return !kind || kind === "IN_PROGRESS";
             }),
           ),
         )
@@ -1410,6 +1412,7 @@ const kindLabels: Record<BlockKind, string> = {
   SOLD: "Sold",
   BLOCKED: "Blocked",
   OUR_STOCK: "Our stock, unsold",
+  IN_PROGRESS: "Being negotiated",
 };
 
 const kindStyles: Record<BlockKind, string> = {
@@ -1418,16 +1421,19 @@ const kindStyles: Record<BlockKind, string> = {
   // A solid tint rather than a see-through one, so the row lines behind a
   // block never show through it.
   OUR_STOCK: "bg-[#dcf4eb]",
+  // Not ours yet: a dashed outline on a pale amber, so it reads as "coming", not "held".
+  IN_PROGRESS: "bg-[#fff4dc] border-dashed border-[#d9a441]",
 };
 
 const kindText: Record<BlockKind, string> = {
   SOLD: "text-white",
   BLOCKED: "text-brand-800",
   OUR_STOCK: "text-[#0d8f5d]",
+  IN_PROGRESS: "text-[#8a5a00]",
 };
 
 
-const outlined = (kind: BlockKind) => kind === "BLOCKED";
+const outlined = (kind: BlockKind) => kind === "BLOCKED" || kind === "IN_PROGRESS";
 
 const hasClient = (kind: BlockKind | null) => kind === "SOLD" || kind === "BLOCKED";
 
@@ -1613,7 +1619,7 @@ function BlockSummary({
       <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1 font-light">
         <dt className="text-ink-500">Sales</dt>
         <dd className="text-ink-900">
-          {block.kind === "OUR_STOCK" ? "No client" : salesLabels[block.sales]}
+          {block.kind === "OUR_STOCK" || block.kind === "IN_PROGRESS" ? "No client" : salesLabels[block.sales]}
           {block.client && hasClient(block.kind) ? ` — ${block.client}` : ""}
         </dd>
         {block.requestedBy.length > 0 && (
@@ -1729,7 +1735,7 @@ function Culprit({ level, children }: { level?: Severity; children: React.ReactN
 }
 
 function Legend() {
-  const shown: BlockKind[] = ["SOLD", "BLOCKED", "OUR_STOCK"];
+  const shown: BlockKind[] = ["SOLD", "BLOCKED", "OUR_STOCK", "IN_PROGRESS"];
   return (
     <div className="text-ink-500 mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] font-light">
       {shown.map((kind) => (
