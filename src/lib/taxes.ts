@@ -39,3 +39,25 @@ export function percentTaxes(taxes: Pick<TaxLine, "basisPoints">[]) {
   const percents = taxes.filter((tax) => tax.basisPoints !== null);
   return percents.length ? percents.reduce((sum, tax) => sum + tax.basisPoints!, 0) : null;
 }
+
+/** Kinds that are taxes; the rest — service charge, resort fee, a bank charge — are fees. */
+const TAX_KINDS: TaxKind[] = ["OCCUPANCY", "CITY", "VAT", "SALES", "ISS", "TOURISM"];
+const isTax = (tax: Pick<TaxLine, "kind" | "label">) => TAX_KINDS.includes(tax.kind) || (tax.kind === "OTHER" && /\btax|taxa|imposto|impuesto|steuer/i.test(tax.label ?? ""));
+
+/**
+ * What the amounts on top of a quotation's rates are called (the owner,
+ * 2026-11-25: "we included the 12% International Bank Transfer charge, but
+ * here it's labeled as tax"): one alone by its own name ("International Bank
+ * Transfer"), else "taxes", "fees" or "taxes and fees" as they are.
+ */
+export function extrasLabel(taxes: Pick<TaxLine, "kind" | "label">[]) {
+  if (taxes.length === 1) return taxName(taxes[0]!);
+  const taxed = taxes.filter(isTax).length;
+  return taxed === taxes.length ? "taxes" : taxed === 0 ? "fees" : "taxes and fees";
+}
+
+/** The same, to start a sentence or a column: "Taxes and fees", "International Bank Transfer". */
+export const ExtrasLabel = (taxes: Pick<TaxLine, "kind" | "label">[]) => {
+  const label = extrasLabel(taxes);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
