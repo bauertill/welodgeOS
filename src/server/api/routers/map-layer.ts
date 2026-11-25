@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
-import { findMatch, type Match } from "~/lib/map-match";
+import { commonWords, findMatch, type Match } from "~/lib/map-match";
 import { geocode } from "~/server/places";
 
 
@@ -101,17 +101,19 @@ export const mapLayerRouter = createTRPCRouter({
     const board = library.filter((one) => onBoard.has(one.id));
     const elsewhere = library.filter((one) => !onBoard.has(one.id));
     const layerOf = new Map(points.map((one) => [one.id, one.layer?.name ?? null]));
+    // Words in many of the names around — towns, chains — do not make two names alike.
+    const common = commonWords([...points, ...library, ...input.layers.flatMap((layer) => layer.places)].map((one) => one.name));
     const out: { key: string; layer: string; name: string; against: "point" | "board" | "library"; match: Match; where: string | null }[] = [];
     input.layers.forEach((layer, i) =>
       layer.places.forEach((place, j) => {
         const key = `${i}:${j}`;
         // The same name anywhere first, then the same spot.
         for (const only of ["name", undefined] as const) {
-          const onMap = findMatch(place, points, "point", only);
+          const onMap = findMatch(place, points, "point", only, common);
           if (onMap) return out.push({ key, layer: layer.name, name: place.name, against: "point", match: onMap, where: layerOf.get(onMap.id) ?? null });
-          const property = findMatch(place, board, "property", only);
+          const property = findMatch(place, board, "property", only, common);
           if (property) return out.push({ key, layer: layer.name, name: place.name, against: "board", match: property, where: null });
-          const known = findMatch(place, elsewhere, "property", only);
+          const known = findMatch(place, elsewhere, "property", only, common);
           if (known) return out.push({ key, layer: layer.name, name: place.name, against: "library", match: known, where: null });
         }
       }),

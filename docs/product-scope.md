@@ -1041,7 +1041,14 @@ Burbank Hollywood* is *Hotel Amarano Burbank-Hollywood*), when one name's main w
 least, so a town alone ("Long Beach") is not enough — are all in the other's within 5 km (*similar
 name*: *Courtyard Culver City* in *Courtyard by Marriott Culver City Los Angeles*), or when it
 stands on the same spot: a property within 40 m, 75 m sharing a main word, 300 m sharing two;
-another point within 40 m sharing a main word. A name match anywhere wins over a near one. The
+another point within 40 m sharing a main word. A name match anywhere wins over a near one. **Words
+found in many of the names around** — in three or more of the map's points, our properties and the
+import's own — are left out of the main words (a town, *Santa Monica*, *Pasadena*; a chain), so two
+places alike only by their town are not taken as one (from the first live import, 2026-11-24:
+*Avalon Santa Monica on Main* had matched *Bayside Hotel Santa Monica*); with them left out, two
+main words in common are enough for a similar name. **A name used again in one layer for another
+spot** — Moxie's *4 Bed, 4 Bath, Unfurnished* listings — is numbered on reading (*… · 2*), so each
+is kept, as two points of one name cannot be. The
 import shows *12 look like what we have — 10 ticked to leave out*, and *See them* lists each:
 the point and its layer → what it matched, where (on the map and its layer, a property on the
 board, or in our properties but not on this board) and how (same name, similar name, so many
