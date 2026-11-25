@@ -484,7 +484,13 @@ team asks of each other. **Tasks** in the menu opens **one board that everyone s
 **Two views of the same board**, switched at the top and remembered in the browser:
 
 - **Kanban** — four columns, Backlog, To do, In progress and Done. Dragging a card to
-  another column moves the task there. **Cards are kept small** (2026-10-11), as the board
+  another column moves the task there, at the spot it is dropped. **Cards can be put in
+  order** (the owner, 2026-11-25): dragged up or down their column, a line shows where the
+  card will land. The order is the team's, kept for everyone; a card hidden by someone's
+  filters stays just after the card it followed, so reordering "My tasks" never jumbles
+  anyone else's. A new task, or one moved to another column some other way (its status
+  changed in the task), sits at the top of its column until placed. *Done* is not put in
+  order — it keeps the most recently finished first. **Cards are kept small** (2026-10-11), as the board
   will hold many: the title on at most two lines, the event left off its end ("Contact The
   Georgian for Beyond Limits"); who completes it and its priority beside it; one line under
   it with any outcome, the type, the deadline and the number of comments. What it is about
