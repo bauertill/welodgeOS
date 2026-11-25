@@ -14,7 +14,7 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea } from "~/app/_components/form";
 import { MentionTextarea } from "~/app/_components/mention-textarea";
 import { Popup } from "~/app/_components/popup";
-import { NewTaskFiles, TaskFiles, uploadTaskFiles } from "~/app/_components/task-files";
+import { NewTaskFiles, TaskFiles, TaskLinks, uploadTaskFiles } from "~/app/_components/task-files";
 import { WebsiteLink } from "~/app/_components/website-link";
 import { HotelDetailsForm } from "~/app/_components/hotel-details-form";
 import { PropertyEntryPanel } from "~/app/_components/property-entry-panel";
@@ -1021,8 +1021,9 @@ export function TaskView({ id, onRemoved }: { id: string; onRemoved?: () => void
           </div>
         )}
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
-          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Files</h2>
+          <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Files and links</h2>
           <TaskFiles taskId={t.id} />
+          <TaskLinks taskId={t.id} />
         </div>
         <div className="border-ink-200/60 rounded-xl border bg-white p-5">
           <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Comments</h2>

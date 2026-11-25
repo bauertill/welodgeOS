@@ -196,3 +196,102 @@ export function TaskFiles({ taskId }: { taskId: string }) {
     </div>
   );
 }
+
+/** What a link is, from its address: a Google Sheet, Doc, Slides deck, Drive folder or file — else its site. */
+export function linkKind(url: string): { icon: string; label: string } {
+  let host = "";
+  try {
+    host = new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return { icon: "🔗", label: "Link" };
+  }
+  if (host === "docs.google.com") {
+    if (url.includes("/spreadsheets/")) return { icon: "📊", label: "Google Sheet" };
+    if (url.includes("/document/")) return { icon: "📄", label: "Google Doc" };
+    if (url.includes("/presentation/")) return { icon: "📽️", label: "Google Slides" };
+    if (url.includes("/forms/")) return { icon: "📝", label: "Google Form" };
+  }
+  if (host === "drive.google.com") return url.includes("/folders/") ? { icon: "📁", label: "Google Drive folder" } : { icon: "📎", label: "Google Drive file" };
+  return { icon: "🔗", label: host };
+}
+
+/**
+ * Links on a task (the owner, 2026-11-25: "would also be super helpful to have
+ * space for a google sheet or doc link"): paste one, name it if you like —
+ * else it says what it is, "Google Sheet" — opened in a new tab, removable.
+ */
+export function TaskLinks({ taskId }: { taskId: string }) {
+  const utils = api.useUtils();
+  const links = api.task.links.useQuery({ taskId });
+  const refresh = () => (void utils.task.links.invalidate({ taskId }), void utils.audit.invalidate());
+  const add = api.task.addLink.useMutation({
+    onSuccess: () => {
+      setUrl("");
+      setTitle("");
+      refresh();
+    },
+  });
+  const remove = api.task.removeLink.useMutation({ onSuccess: refresh });
+  const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const rows = links.data ?? [];
+  return (
+    <div className="mt-4">
+      {rows.length > 0 && (
+        <ul className="divide-ink-200/60 mb-3 divide-y">
+          {rows.map((link) => {
+            const kind = linkKind(link.url);
+            return (
+              <li key={link.id} className="flex items-center gap-3 py-2 text-[13px]">
+                <span className="shrink-0" aria-hidden>
+                  {kind.icon}
+                </span>
+                <a href={link.url} target="_blank" rel="noreferrer" className="text-ink-900 hover:text-brand-700 min-w-0 flex-1 truncate font-medium hover:underline">
+                  {link.title ?? kind.label}
+                </a>
+                <span className="text-ink-500 shrink-0 text-xs font-light">
+                  {link.title ? `${kind.label} · ` : ""}
+                  {link.addedBy?.name ?? "someone"} · {formatMomentInWords(link.createdAt)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => window.confirm(`Take the link "${link.title ?? kind.label}" off this task?`) && remove.mutate({ id: link.id })}
+                  className="text-ink-400 shrink-0 text-lg leading-none hover:text-[#c03654]"
+                  aria-label={`Remove ${link.title ?? kind.label}`}
+                >
+                  ×
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <form
+        className="flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (url.trim()) add.mutate({ taskId, url: url.trim(), title: title.trim() || undefined });
+        }}
+      >
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="Paste a Google Sheet, Doc or any link"
+          aria-label="Link"
+          className="border-ink-200 focus:border-brand-400 min-w-0 flex-[2] rounded-lg border bg-white px-3 py-2 text-[13px] outline-none"
+        />
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Name — optional"
+          aria-label="Name of the link"
+          className="border-ink-200 focus:border-brand-400 min-w-0 flex-1 rounded-lg border bg-white px-3 py-2 text-[13px] outline-none"
+        />
+        <button type="submit" disabled={add.isPending || !url.trim()} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-2 text-[13px] font-medium text-white disabled:opacity-50">
+          {add.isPending ? "Adding…" : "Add link"}
+        </button>
+      </form>
+      {add.error && <p className="mt-1 text-xs text-[#c03654]">{add.error.message.includes("Paste the whole link") ? "Paste the whole link — like https://docs.google.com/…" : add.error.message}</p>}
+    </div>
+  );
+}

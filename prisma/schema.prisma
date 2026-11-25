@@ -1180,6 +1180,7 @@ model User {
   agreementTemplates     AgreementTemplate[]  @relation("AgreementTemplateUpdatedBy")
   updatesSeen            UpdateBoardSeen[]
   taskFiles              TaskFile[]           @relation("TaskFileUploadedBy")
+  taskLinks              TaskLink[]           @relation("TaskLinkAddedBy")
   storedFiles            StoredFile[]         @relation("StoredFileUploadedBy")
 }
 
@@ -2082,6 +2083,7 @@ model Task {
   comments TaskComment[]
   /// Files put on the task (doc §2.8, 2026-11-18).
   files    TaskFile[]
+  links    TaskLink[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -2115,6 +2117,23 @@ model TaskFile {
   uploadedBy   User?    @relation("TaskFileUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
   uploadedById String?
   createdAt    DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+/// A link on a task — a Google Sheet, Doc, Slides, a Drive folder, any web
+/// page (the owner, 2026-11-25: "would also be super helpful to have space for
+/// a google sheet or doc link") — kept beside its files.
+model TaskLink {
+  id        String   @id @default(cuid())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  url       String
+  /// What it is called on the task; empty shows what the link is ("Google Sheet").
+  title     String?
+  addedBy   User?    @relation("TaskLinkAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+  addedById String?
+  createdAt DateTime @default(now())
 
   @@index([taskId, createdAt])
 }

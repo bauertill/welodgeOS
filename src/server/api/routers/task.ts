@@ -633,6 +633,41 @@ export const taskRouter = createTRPCRouter({
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Task", entityId: file.taskId, summary: `File removed: ${file.name}` });
   }),
 
+  // --- Links (doc §2.5, the owner 2026-11-25) ---------------------------------
+
+  /** A task's links — Google Sheets, Docs, any page — the newest first. */
+  links: protectedProcedure.input(z.object({ taskId: z.string() })).query(async ({ ctx, input }) => {
+    await guard(ctx.db, input.taskId, ctx.session.user.id);
+    return ctx.db.taskLink.findMany({ where: { taskId: input.taskId }, orderBy: { createdAt: "desc" }, include: { addedBy: person } });
+  }),
+
+  addLink: protectedProcedure
+    .input(
+      z.object({
+        taskId: z.string(),
+        url: z
+          .string()
+          .trim()
+          .max(2000)
+          .transform((url) => (/^https?:\/\//i.test(url) ? url : `https://${url}`))
+          .pipe(z.string().url("Paste the whole link — like https://docs.google.com/…")),
+        title: z.string().trim().max(200).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await guard(ctx.db, input.taskId, ctx.session.user.id);
+      const link = await ctx.db.taskLink.create({ data: { taskId: input.taskId, url: input.url, title: input.title || null, addedById: ctx.session.user.id }, include: { addedBy: person } });
+      await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Task", entityId: input.taskId, summary: `Link added: ${input.title || input.url}` });
+      return link;
+    }),
+
+  removeLink: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const owned = await ctx.db.taskLink.findUniqueOrThrow({ where: { id: input.id }, select: { taskId: true } });
+    await guard(ctx.db, owned.taskId, ctx.session.user.id);
+    const link = await ctx.db.taskLink.delete({ where: { id: input.id } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Task", entityId: link.taskId, summary: `Link removed: ${link.title ?? link.url}` });
+  }),
+
   // --- Comments --------------------------------------------------------------
 
   comments: protectedProcedure.input(z.object({ taskId: z.string() })).query(async ({ ctx, input }) => {
