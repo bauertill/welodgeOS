@@ -1069,9 +1069,10 @@ layer's **⋯ › Move points…** lists its points with ticks, a box to find th
 
 **A layer under Hotels or Apartments** (the owner, 2026-11-25: "please merge hotels (research)
 with Hotels and same for apartments"). A layer's ⋯ has **Show under**: *a layer of its own*,
-*Hotels* or *Apartments*. One shown under Hotels is listed indented beneath our **Hotels** (↳,
-with its count and ⋯, no tick box of its own) and is ticked on and off with it — the same for
-Apartments. Its points stay points, map-only, not properties; each can still be put on the board
+*Hotels* or *Apartments*. One shown under Hotels is **part of our Hotels line** — one item (the owner, 2026-11-25: "just
+make it one item"), its count the board's and the layer's together (pointing at it says how
+many of each), its ⋯ opening that layer to change or take out from under — and is ticked on and
+off with it; the same for Apartments. The panel lists **Contracted, Hotels and Apartments first**, then the map's layers and Google public transport (the owner, 2026-11-25). Its points stay points, map-only, not properties; each can still be put on the board
 from its pin. LA28's *Hotels (research)* and *Apartments (research)* were set so on going live.
 
 **The map is taller** (the owner, 2026-11-25): most of the screen's height (78%), never less than
@@ -2932,7 +2933,12 @@ room category at the rate we sell it for.
   taken off the screen 2026-10-13 by the owner until the AI key is set up; the server part
   is kept, so bringing it back is putting the button back.)*
   Each room category shows **our cost per night** — its event rate (§3.9) when the card was
-  made, in the card's currency (the request's budget currency, else the rates') — and **what
+  made, in the card's currency (the request's budget currency, else the rates'; **changeable**
+  beside the card's name — *Currency — the client's rates* (the owner, 2026-11-25: "we need to be
+  able to change the currency on the sales rate… set the sales price as USD"): every rate on the
+  card, the client's and our cost, converted at today's ECB rate, rounded to the cent, to be
+  checked and typed over; asked first, after saving any changes, and refused once a client has
+  answered the card — their answer was to the rates as they were) — and **what
   the client pays per night**, typed in; the margin beside it, red when below cost — **for
   the whole booking** first (the owner, 2026-10-18): on the rooms and nights the client asked
   for, the event's dates where a line has none, as far as the units available go ("US$

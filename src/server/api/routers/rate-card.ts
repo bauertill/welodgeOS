@@ -15,6 +15,9 @@ import { ensureGetMediaTask, GET_MEDIA, hasMedia, withMedia } from "~/server/get
 import { ensureContractTask } from "~/server/contract-task";
 import { deliverImmediate, notify } from "~/server/notify";
 import { eventRates } from "~/server/event-rates";
+import { usdRates } from "~/server/exchange-rates";
+import { CURRENCIES } from "~/lib/currency";
+import { formatMoney } from "~/lib/format";
 
 /**
  * Rate cards (doc §4.11): what we offer a client for a sales request — the
@@ -578,6 +581,43 @@ export const rateCardRouter = createTRPCRouter({
   }),
 
   /** The card as edited: its name and word to the client, the markup last applied, each property's description and each selling rate. */
+  /**
+   * The card in another currency (the owner, 2026-11-25: "we need to be able to
+   * change the currency on the sales rate … set the sales price as USD"):
+   * every rate on it — the client's and our buying rate beside it — converted
+   * at today's European Central Bank rate and rounded to the cent, to be
+   * checked and typed over. Not once a client has answered it: their answer
+   * was to the rates as they were.
+   */
+  setCurrency: protectedProcedure.input(z.object({ id: z.string(), currency: z.enum(CURRENCIES as [string, ...string[]]) })).mutation(async ({ ctx, input }) => {
+    const card = await ctx.db.rateCard.findUniqueOrThrow({
+      where: { id: input.id },
+      select: { id: true, name: true, currency: true, salesRequestId: true, _count: { select: { responses: true } }, properties: { select: { lines: { select: { id: true, buyingCents: true, sellingCents: true } } } } },
+    });
+    if (card.currency === input.currency) return { currency: card.currency, rate: 1 };
+    if (card._count.responses > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "A client has already answered this card in " + card.currency + " — make a new card for " + input.currency + " instead." });
+    const rates = await usdRates();
+    const from = rates?.perUsd[card.currency];
+    const to = rates?.perUsd[input.currency];
+    if (!from || !to) throw new TRPCError({ code: "BAD_REQUEST", message: "Today's exchange rate could not be fetched — try again in a moment." });
+    const factor = to / from;
+    const convert = (cents: number | null) => (cents === null ? null : Math.round(cents * factor));
+    await ctx.db.$transaction(async (tx) => {
+      await tx.rateCard.update({ where: { id: card.id }, data: { currency: input.currency } });
+      for (const line of card.properties.flatMap((property) => property.lines)) {
+        await tx.rateCardLine.update({ where: { id: line.id }, data: { buyingCents: convert(line.buyingCents), sellingCents: convert(line.sellingCents) } });
+      }
+      await logAudit(tx, {
+        actorId: ctx.session.user.id,
+        entity: card.salesRequestId ? "SalesRequest" : "RateCard",
+        entityId: card.salesRequestId ?? card.id,
+        summary: `Rate card "${card.name}" now in ${input.currency}`,
+        changes: `${card.currency} → ${input.currency}, every rate converted at ${formatMoney(100, card.currency)} = ${formatMoney(Math.round(100 * factor), input.currency)} (ECB, ${rates!.date})`,
+      });
+    });
+    return { currency: input.currency, rate: factor, date: rates!.date };
+  }),
+
   save: protectedProcedure
     .input(
       z.object({
