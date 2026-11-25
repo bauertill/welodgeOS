@@ -1072,7 +1072,16 @@ with Hotels and same for apartments"). A layer's ⋯ has **Show under**: *a laye
 *Hotels* or *Apartments*. One shown under Hotels is **part of our Hotels line** — one item (the owner, 2026-11-25: "just
 make it one item"), its count the board's and the layer's together (pointing at it says how
 many of each), its ⋯ opening that layer to change or take out from under — and is ticked on and
-off with it; the same for Apartments. The panel lists **Contracted, Hotels and Apartments first**, then the map's layers and Google public transport (the owner, 2026-11-25). Its points stay points, map-only, not properties; each can still be put on the board
+off with it; the same for Apartments. The panel lists **Contracted, Hotels and Apartments first**, then the map's layers and Google public transport (the owner, 2026-11-25).
+
+**Research hotels by their stars** (the owner, 2026-11-25: "categorise them, 2* 3* etc. and then
+remove the star rating in the beginning of the name"). A point keeps a hotel's **stars**: read off
+"3\* …" in front of its name on import, the name kept without them; the points already on the map
+were done so on going live (two whose plain name another point already had keep the stars in
+their name, which the map does not show). A point with stars is drawn in **its stars' colour, as
+our hotels are** — five black, four blue, three green, two or fewer yellow — named "3★ Hotel
+Carmel" on pointing at it, its panel *3★ hotel · on the map only*; *Add to properties board*
+starts with its stars, and a property taken off the board and kept as a point keeps its stars. Its points stay points, map-only, not properties; each can still be put on the board
 from its pin. LA28's *Hotels (research)* and *Apartments (research)* were set so on going live.
 
 **The map is taller** (the owner, 2026-11-25): most of the screen's height (78%), never less than

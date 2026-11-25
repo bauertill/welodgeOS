@@ -15,6 +15,8 @@ const incomingPlace = z.object({
   longitude: z.number().min(-180).max(180).nullable(),
   address: z.string().max(500).default(""),
   notes: z.string().max(5000),
+  /** A hotel's stars, read off "3* …" in front of its name. */
+  stars: z.number().int().min(1).max(5).nullable().optional(),
 });
 const incomingLayers = z
   .array(z.object({ name: z.string().trim().min(1).max(100), color, places: z.array(incomingPlace).max(2000) }))
@@ -201,6 +203,7 @@ export const mapLayerRouter = createTRPCRouter({
                 longitude: place.longitude!,
                 address: place.address.trim() || null,
                 notes: place.notes.trim() || null,
+                stars: place.stars ?? null,
               })),
             });
             added += fresh.length;

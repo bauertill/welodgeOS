@@ -10,7 +10,7 @@ import { api } from "~/trpc/react";
 
 const palette = ["#614fc9", "#e5533d", "#1d5fa8", "#0a7a47", "#e5a400", "#c03654", "#00838f", "#8a5a00"];
 
-type Imported = { name: string; color: string; places: { name: string; latitude: number | null; longitude: number | null; address: string; notes: string }[] };
+type Imported = { name: string; color: string; places: { name: string; latitude: number | null; longitude: number | null; address: string; notes: string; stars: number | null }[] };
 
 /**
  * A Google My Maps export (KML), read in the browser: each folder is a layer,
@@ -61,7 +61,19 @@ export function readKml(text: string): { layers: Imported[]; skipped: number; by
         .map((line) => line.trim())
         .filter((line) => line && !/^[^:]{1,40}:$/.test(line) && !/^wkt:/i.test(line))
         .join("\n");
-      return [{ name: (textOf(direct(placemark, "name")) || "Unnamed place").slice(0, 200), latitude: located ? lat! : null, longitude: located ? lng! : null, address, notes: description.slice(0, 5000) }];
+      // "3* Hotel Carmel": the stars kept as its stars, the name without them (2026-11-25).
+      const full = textOf(direct(placemark, "name")) || "Unnamed place";
+      const starred = /^\s*([1-5])\s*\*\s*(.+)$/.exec(full);
+      return [
+        {
+          name: (starred ? starred[2]!.trim() : full).slice(0, 200),
+          stars: starred ? Number(starred[1]) : null,
+          latitude: located ? lat! : null,
+          longitude: located ? lng! : null,
+          address,
+          notes: description.slice(0, 5000),
+        },
+      ];
     });
     return { name: (textOf(direct(container, "name")) || fallbackName).slice(0, 100), color: color ?? palette[index % palette.length]!, places };
   };
