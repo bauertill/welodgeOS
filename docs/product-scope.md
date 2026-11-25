@@ -3860,10 +3860,14 @@ different days, and the label then gives the spread ("CI 10–12 Jul"). A block 
 the story changes — a different client, a sale beside a block, or one room whose option runs
 out sooner and so needs attention sooner.
 
-- **Only three things are drawn:** solid for *Sold*, outlined light for *Blocked*, and green
-  for our own stock nobody holds. A legend above the sheet says so. Everything else is left
-  **blank**, the same as a day with no inventory at all: a night nobody holds and we do not
-  hold either — nothing started, still in progress with the supplier, or handed back. A
+- **Four things are drawn:** solid for *Sold*, outlined light for *Blocked*, green for our own
+  stock nobody holds, and — since 2026-11-25 (the owner: "I registered three rooms (start
+  negotiating) and it didn't reflect the table") — a dashed amber outline on pale amber for
+  **Being negotiated**: in progress with the supplier, nobody holding it. A legend above the
+  sheet says so. Being negotiated is still not secured: a room type with only that says
+  "nothing secured". Everything else is left **blank**, the same as a day with no inventory at
+  all: a night nobody holds and we neither hold nor are negotiating — nothing started, or
+  handed back. A
   soft request holds nothing (§4.3), so a requested night is drawn as whatever it is on our
   side — our stock if we hold it, otherwise blank — and who asked is named in the hover
   summary. A sale or block on a night we have not secured is still drawn, with its warning.
