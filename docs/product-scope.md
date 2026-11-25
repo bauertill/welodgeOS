@@ -569,6 +569,14 @@ live site, staging and the team's computers share the one store, so a file put o
 staging is a real file too; the nightly copy of live onto staging copies the records, not the
 files, which stay where they are.
 
+**Links on a task** (the owner, 2026-11-25: "would also be super helpful to have space for a google
+sheet or doc link"). The box is **Files and links**: under the files, *Paste a Google Sheet, Doc or
+any link*, an optional name, **Add link** (a link typed without https:// gets it). Each is listed
+with what it is, read from its address — 📊 *Google Sheet*, 📄 *Google Doc*, 📽️ *Google Slides*,
+📝 *Google Form*, 📁 *Google Drive folder*, 📎 *Google Drive file*, else 🔗 its site — named so
+when no name was given, who added it and when; clicking opens it in a new tab; × takes it off,
+after asking. Adding and removing are in the task's history; deleting the task deletes its links.
+
 **Documents on records** (the owner, 2026-11-23: "I want to set up Vercel Blob for file
 storage"). The same store now holds the documents that used to be pasted as Google Drive links:
 **a hotel's quotation** (§3.10), **a signed contract** — client or hotel, wherever it is asked
