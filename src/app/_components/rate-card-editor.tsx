@@ -7,6 +7,7 @@ import { Button, FormError, friendlyError, Input, Textarea } from "~/app/_compon
 import { Popup } from "~/app/_components/popup";
 import { RateCardView, type ClientRateCard } from "~/app/_components/rate-card-view";
 import { Photo } from "~/app/_components/photo";
+import { currencyOptions } from "~/lib/currency";
 import { nightsBetween } from "~/lib/dates";
 import { clientMedia } from "~/lib/media";
 import { formatMoment, formatMoney, formatNights, formatRange } from "~/lib/format";
@@ -137,6 +138,16 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       setDraft(next);
       setSaved(JSON.stringify(next));
       void utils.property.invalidate();
+    },
+  });
+  // The card in another currency (2026-11-25): every rate converted at today's rate, the draft fresh from it.
+  const setCurrency = api.rateCard.setCurrency.useMutation({
+    onSuccess: async () => {
+      await utils.rateCard.invalidate();
+      const fresh = await utils.rateCard.byId.fetch({ id });
+      const next = draftOf(fresh);
+      setDraft(next);
+      setSaved(JSON.stringify(next));
     },
   });
   // Properties added after the card was made (2026-11-17): they join the draft at the end, unsaved changes kept.
@@ -372,9 +383,33 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                 </>
               )}
             </div>
-            <label className="block sm:col-span-2">
+            <label className="block">
               <span className="text-ink-700 mb-1 block text-[13px] font-medium">Name — for us</span>
               <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-ink-700 mb-1 block text-[13px] font-medium">Currency — the client&rsquo;s rates</span>
+              <select
+                value={c.currency}
+                disabled={setCurrency.isPending}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  if (dirty) return window.alert("Save your changes first, then change the currency.");
+                  if (window.confirm(`Change this card to ${next}? Every rate on it — the client's and our buying rate — is converted from ${c.currency} at today's exchange rate. Check the client's rates afterwards and round them as you want.`)) {
+                    setCurrency.mutate({ id, currency: next });
+                  }
+                }}
+                className="border-ink-200 focus:border-brand-400 w-full rounded-lg border bg-white px-3 py-2 text-[13px]"
+              >
+                {currencyOptions(c.currency).map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+              {setCurrency.isPending && <span className="text-ink-500 mt-1 block text-[11px] font-light">Converting…</span>}
+              {setCurrency.data && setCurrency.data.rate !== 1 && <span className="mt-1 block text-[11px] font-light text-[#0a7a47]">Now in {setCurrency.data.currency} — check the client&rsquo;s rates.</span>}
+              {setCurrency.error && <span className="mt-1 block text-[11px] text-[#c03654]">{friendlyError(setCurrency.error)}</span>}
             </label>
             {/* The markup box and "Apply to all" were taken off (the owner, 2026-11-17): client rates are typed per room. */}
             <label className="block sm:col-span-2">
