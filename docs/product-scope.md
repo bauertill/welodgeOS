@@ -1072,7 +1072,7 @@ with Hotels and same for apartments"). A layer's ⋯ has **Show under**: *a laye
 *Hotels* or *Apartments*. One shown under Hotels is **part of our Hotels line** — one item (the owner, 2026-11-25: "just
 make it one item"), its count the board's and the layer's together (pointing at it says how
 many of each), its ⋯ opening that layer to change or take out from under — and is ticked on and
-off with it; the same for Apartments. Its points stay points, map-only, not properties; each can still be put on the board
+off with it; the same for Apartments. The panel lists **Contracted, Hotels and Apartments first**, then the map's layers and Google public transport (the owner, 2026-11-25). Its points stay points, map-only, not properties; each can still be put on the board
 from its pin. LA28's *Hotels (research)* and *Apartments (research)* were set so on going live.
 
 **The map is taller** (the owner, 2026-11-25): most of the screen's height (78%), never less than
