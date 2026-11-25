@@ -332,7 +332,7 @@ export function TaskBoard() {
       </div>
 
       {view === "board" ? (
-        <Kanban tasks={rows} onOpen={setOpenId} onAdd={setAdding} />
+        <Kanban tasks={rows} board={board} onOpen={setOpenId} onAdd={setAdding} />
       ) : rows.length === 0 && !tasks.isLoading && filtered ? (
         <EmptyState title="No task matches" description="Nothing matches these filters." />
       ) : (
@@ -351,47 +351,91 @@ export function TaskBoard() {
   );
 }
 
-/** Four columns by status; a card is dragged from one to another to move it. */
-function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) => void; onAdd: (status: TaskStatus) => void }) {
+/**
+ * Four columns by status; a card is dragged from one to another to move it,
+ * or up and down its column to put it in order (doc §2.8). Done keeps the
+ * most recently finished first.
+ */
+function Kanban({ tasks, board, onOpen, onAdd }: { tasks: Task[]; board: "team" | "private"; onOpen: (id: string) => void; onAdd: (status: TaskStatus) => void }) {
   const utils = api.useUtils();
-  const move = api.task.update.useMutation({
-    onSettled: () => {
-      void utils.task.invalidate();
-      void utils.audit.invalidate();
-    },
-  });
+  const move = api.task.update.useMutation();
+  const reorder = api.task.reorder.useMutation();
   const [over, setOver] = useState<TaskStatus | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
-  // Shown in its new column at once, while the move is saved.
+  // Where the card would land: before the card at `index` in that column.
+  const [place, setPlace] = useState<{ column: TaskStatus; index: number } | null>(null);
+  // Shown in its new column and place at once, while the move is saved.
   const [moved, setMoved] = useState<Record<string, TaskStatus>>({});
-  useEffect(() => setMoved({}), [tasks]);
+  const [ordered, setOrdered] = useState<Partial<Record<TaskStatus, string[]>>>({});
+  useEffect(() => {
+    setMoved({});
+    setOrdered({});
+  }, [tasks]);
   const statusOf = (task: Task) => moved[task.id] ?? task.status;
   // A long column shows its first cards only; Done, its latest few (doc §2.8).
   const [expanded, setExpanded] = useState<TaskStatus[]>([]);
 
+  const cardsIn = (column: TaskStatus) => {
+    const inColumn = tasks.filter((task) => statusOf(task) === column);
+    // Done: the most recently finished first.
+    if (column === "DONE") return inColumn.sort((a, b) => (b.doneAt?.getTime() ?? 0) - (a.doneAt?.getTime() ?? 0));
+    const order = ordered[column];
+    if (order) inColumn.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    return inColumn;
+  };
+
+  const save = async (id: string, column: TaskStatus, from: TaskStatus, ids: string[] | null) => {
+    try {
+      if (column !== from) await move.mutateAsync({ id, status: column });
+      if (ids && column !== "DONE") await reorder.mutateAsync({ status: column, ids, board });
+    } catch {
+      // Shown under the board.
+    } finally {
+      void utils.task.invalidate();
+      void utils.audit.invalidate();
+    }
+  };
+
+  const drop = (column: TaskStatus, id: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    const from = statusOf(task);
+    const current = cardsIn(column).map((t) => t.id);
+    let index = place?.column === column ? place.index : current.length;
+    const was = current.indexOf(id);
+    if (was !== -1 && was < index) index -= 1;
+    const ids = current.filter((one) => one !== id);
+    ids.splice(index, 0, id);
+    const sameOrder = from === column && ids.every((one, i) => one === current[i]);
+    if (sameOrder) return;
+    setMoved((m) => ({ ...m, [id]: column }));
+    if (column !== "DONE") setOrdered((o) => ({ ...o, [column]: ids }));
+    void save(id, column, from, column === "DONE" ? null : ids);
+  };
+
+  const marker = <div className="bg-brand-500 h-0.5 rounded-full" aria-hidden />;
+
   return (
     <div className="grid gap-3 lg:grid-cols-4">
       {taskStatusOrder.map((column) => {
-        const inColumn = tasks.filter((task) => statusOf(task) === column);
-        // Done: the most recently finished first.
-        if (column === "DONE") inColumn.sort((a, b) => (b.doneAt?.getTime() ?? 0) - (a.doneAt?.getTime() ?? 0));
+        const inColumn = cardsIn(column);
+        const shown = inColumn.slice(0, expanded.includes(column) ? undefined : columnCap(column));
+        const markAt = dragging && column !== "DONE" && place?.column === column ? place.index : null;
         return (
           <div
             key={column}
             onDragOver={(e) => {
               e.preventDefault();
               setOver(column);
+              // Below the last card: it goes to the end.
+              if (e.target === e.currentTarget || !(e.target as HTMLElement).closest("[data-card]")) setPlace({ column, index: shown.length });
             }}
             onDragLeave={() => setOver((current) => (current === column ? null : current))}
             onDrop={(e) => {
               e.preventDefault();
               setOver(null);
-              const id = e.dataTransfer.getData("text/task");
-              const task = tasks.find((t) => t.id === id);
-              if (task && statusOf(task) !== column) {
-                setMoved((current) => ({ ...current, [id]: column }));
-                move.mutate({ id, status: column });
-              }
+              drop(column, e.dataTransfer.getData("text/task"));
+              setPlace(null);
             }}
             className={`min-h-48 rounded-xl border p-2 transition-colors ${over === column ? "border-brand-400 bg-brand-50/60" : "border-ink-200/60 bg-ink-50/40"}`}
           >
@@ -400,20 +444,34 @@ function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) 
               <span className="text-ink-500 text-xs font-light">{inColumn.length}</span>
             </div>
             <div className="space-y-1.5">
-              {inColumn.slice(0, expanded.includes(column) ? undefined : columnCap(column)).map((task) => (
-                <TaskCard
+              {shown.map((task, i) => (
+                <div
                   key={task.id}
-                  task={task}
-                  faded={dragging === task.id}
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("text/task", task.id);
-                    e.dataTransfer.effectAllowed = "move";
-                    setDragging(task.id);
+                  data-card
+                  onDragOver={(e) => {
+                    const box = e.currentTarget.getBoundingClientRect();
+                    setPlace({ column, index: e.clientY > box.top + box.height / 2 ? i + 1 : i });
                   }}
-                  onDragEnd={() => setDragging(null)}
-                  onOpen={() => onOpen(task.id)}
-                />
+                  className="space-y-1.5"
+                >
+                  {markAt === i && marker}
+                  <TaskCard
+                    task={task}
+                    faded={dragging === task.id}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/task", task.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      setDragging(task.id);
+                    }}
+                    onDragEnd={() => {
+                      setDragging(null);
+                      setPlace(null);
+                    }}
+                    onOpen={() => onOpen(task.id)}
+                  />
+                </div>
               ))}
+              {markAt === shown.length && marker}
               {inColumn.length > columnCap(column) && (
                 <button
                   type="button"
@@ -428,9 +486,9 @@ function Kanban({ tasks, onOpen, onAdd }: { tasks: Task[]; onOpen: (id: string) 
           </div>
         );
       })}
-      {move.error && (
+      {(move.error ?? reorder.error) && (
         <div className="lg:col-span-4">
-          <FormError message={friendlyError(move.error)} />
+          <FormError message={friendlyError((move.error ?? reorder.error)!)} />
         </div>
       )}
     </div>

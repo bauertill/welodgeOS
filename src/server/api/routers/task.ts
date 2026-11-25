@@ -12,6 +12,7 @@ import { diffFields, logAudit } from "~/server/audit";
 import { deleteStored, storedFile, taskFilePrefix } from "~/server/files";
 import { GET_RATE } from "~/server/get-rate";
 import { visibleTo } from "~/server/private-tasks";
+import { placeInColumn } from "~/lib/task-order";
 import { ensureHotelContactTask, HOTEL_CONTACT, hotelContactItems } from "~/server/hotel-contact";
 import { deliverImmediate, mentionedIn, notify, plainMentions } from "~/server/notify";
 import { isApartmentLike } from "~/lib/scouting";
@@ -34,6 +35,8 @@ async function guard(db: Prisma.TransactionClient, taskId: string, userId: strin
 }
 
 const person = { select: { id: true, name: true, email: true, image: true } } as const;
+/** A Kanban column's order: new (unplaced) cards on top, then as the team placed them, then by deadline. */
+const boardOrderBy = [{ boardOrder: { sort: "asc", nulls: "first" } }, { deadline: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }] satisfies Prisma.TaskOrderByWithRelationInput[];
 
 const include = {
   type: { select: { id: true, name: true } },
@@ -182,7 +185,7 @@ export const taskRouter = createTRPCRouter({
           ],
         },
         include,
-        orderBy: [{ deadline: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+        orderBy: boardOrderBy,
         take: 500,
       });
     }),
@@ -518,6 +521,33 @@ export const taskRouter = createTRPCRouter({
     return created;
   }),
 
+  /**
+   * Put a Kanban column in a new order (doc §2.8): `ids` are the column's cards
+   * as the person now sees them. Cards hidden by their filters keep their
+   * place just after the card they followed, so nobody else's order jumps.
+   */
+  reorder: protectedProcedure
+    .input(z.object({ status: z.enum(["BACKLOG", "TODO", "IN_PROGRESS"]), ids: z.array(z.string()).min(1).max(500), board: z.enum(["team", "private"]).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const me = ctx.session.user.id;
+      await ctx.db.$transaction(async (tx) => {
+        const column = await tx.task.findMany({
+          where: {
+            status: input.status,
+            AND: [input.board === "team" ? { private: false } : input.board === "private" ? { private: true, createdById: me } : visibleTo(me)],
+          },
+          orderBy: boardOrderBy,
+          select: { id: true },
+        });
+        const order = placeInColumn(
+          column.map((task) => task.id),
+          input.ids,
+        );
+        await Promise.all(order.map((id, index) => tx.task.update({ where: { id }, data: { boardOrder: index } })));
+      });
+      return { ok: true };
+    }),
+
   /** Change a task: only the fields given. */
   update: protectedProcedure.input(taskInput.partial().extend({ id: z.string() })).mutation(async ({ ctx, input }) => {
     const updated = await ctx.db.$transaction(async (tx) => {
@@ -535,6 +565,8 @@ export const taskRouter = createTRPCRouter({
           ...(fields.status !== undefined && {
             status: fields.status,
             doneAt: fields.status === "DONE" ? (before.status === "DONE" ? before.doneAt : new Date()) : null,
+            // In a new column, it has no place there yet: it sits at the top.
+            ...(fields.status !== before.status && { boardOrder: null }),
             // Reopened: the hotel's "cannot help" no longer stands (doc §4.11).
             ...(fields.status !== "DONE" && { outcome: null, outcomeNote: null }),
           }),
