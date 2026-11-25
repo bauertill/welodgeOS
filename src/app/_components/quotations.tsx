@@ -18,7 +18,7 @@ import { formatDate, formatMoney, formatRange } from "~/lib/format";
 import { currencyOptions } from "~/lib/currency";
 import { contractHref, percent } from "~/lib/finance";
 import { describeRateIncludes } from "~/lib/scouting";
-import { taxesPerNight, taxKindLabels, taxKinds, taxName } from "~/lib/taxes";
+import { extrasLabel, ExtrasLabel, taxesPerNight, taxKindLabels, taxKinds, taxName } from "~/lib/taxes";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { FileField } from "~/app/_components/file-field";
 
@@ -273,7 +273,7 @@ function QuotationCard({
           {formatMoney(quotation.payableCents, quotation.currency)}
           {quotation.taxCents > 0 && (
             <span className="text-ink-500 block text-xs font-light">
-              {formatMoney(quotation.totalCents, quotation.currency)} + {formatMoney(quotation.taxCents, quotation.currency)} taxes
+              {formatMoney(quotation.totalCents, quotation.currency)} + {formatMoney(quotation.taxCents, quotation.currency)} {extrasLabel(quotation.taxes)}
             </span>
           )}
           <InUsd cents={quotation.payableCents} currency={quotation.currency} />
@@ -290,7 +290,7 @@ function QuotationCard({
               <th className={th}>Period</th>
               <th className={th}>Rooms</th>
               <th className={th}>Per night</th>
-              {quotation.taxCents > 0 && <th className={th}>Tax per night</th>}
+              {quotation.taxCents > 0 && <th className={th}>{ExtrasLabel(quotation.taxes)} per night</th>}
               <th className={th}>Room-nights</th>
               <th className={th}>Total</th>
             </tr>
@@ -315,7 +315,7 @@ function QuotationCard({
                 <td className={td}>{line.roomNights}</td>
                 <td className={`${td} whitespace-nowrap`}>
                   {formatMoney(line.totalCents + line.taxCents, quotation.currency)}
-                  {line.taxCents > 0 && <span className="text-ink-500 block text-xs">incl. {formatMoney(line.taxCents, quotation.currency)} tax</span>}
+                  {line.taxCents > 0 && <span className="text-ink-500 block text-xs">incl. {formatMoney(line.taxCents, quotation.currency)} {extrasLabel(quotation.taxes)}</span>}
                   <InUsd cents={line.totalCents + line.taxCents} currency={quotation.currency} />
                 </td>
               </tr>
@@ -395,7 +395,7 @@ function QuotationCard({
                 disabled={makeContract.isPending}
                 onClick={() =>
                   window.confirm(
-                    `Accept "${quotation.name}" and make it the supplier contract, worth ${formatMoney(quotation.payableCents, quotation.currency)}${quotation.taxCents > 0 ? " with taxes" : ""}?${
+                    `Accept "${quotation.name}" and make it the supplier contract, worth ${formatMoney(quotation.payableCents, quotation.currency)}${quotation.taxCents > 0 ? ` with ${extrasLabel(quotation.taxes)}` : ""}?${
                       short.length ? `\n\nThe hotel's room types will be updated to match the quote first: ${shortWords}.` : ""
                     }`,
                   ) && makeContract.mutate({ id: quotation.id, raiseRoomTypes: short.length > 0 })
@@ -530,7 +530,7 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                   <span className="text-ink-500">
                     {" "}
                     · {quotation.roomNights} room-nights
-                    {quotation.taxCents > 0 && ` · incl. ${formatMoney(quotation.taxCents, quotation.currency)} taxes`}
+                    {quotation.taxCents > 0 && ` · incl. ${formatMoney(quotation.taxCents, quotation.currency)} ${extrasLabel(quotation.taxes)}`}
                   </span>
                   <InUsd cents={quotation.payableCents} currency={quotation.currency} className="text-ink-500 ml-1 text-xs font-light" />
                 </p>
