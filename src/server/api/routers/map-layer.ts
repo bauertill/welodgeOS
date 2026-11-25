@@ -37,14 +37,24 @@ export const mapLayerRouter = createTRPCRouter({
   ),
 
   save: protectedProcedure
-    .input(z.object({ eventId: z.string(), id: z.string().optional(), name: z.string().trim().min(1, "Give the layer a name").max(100), color, measured: z.boolean() }))
+    .input(
+      z.object({
+        eventId: z.string(),
+        id: z.string().optional(),
+        name: z.string().trim().min(1, "Give the layer a name").max(100),
+        color,
+        measured: z.boolean(),
+        /** Shown under our Hotels or Apartments, ticked with it; null for a layer of its own. */
+        groupedWith: z.enum(["hotels", "apartments"]).nullable().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const clash = await ctx.db.mapLayer.findFirst({
         where: { eventId: input.eventId, name: { equals: input.name, mode: "insensitive" }, ...(input.id ? { id: { not: input.id } } : {}) },
         select: { id: true },
       });
       if (clash) throw new TRPCError({ code: "BAD_REQUEST", message: `There is already a layer called "${input.name}".` });
-      const data = { name: input.name, color: input.color, measured: input.measured };
+      const data = { name: input.name, color: input.color, measured: input.measured, ...(input.groupedWith !== undefined && { groupedWith: input.groupedWith }) };
       const layer = input.id
         ? await ctx.db.mapLayer.update({ where: { id: input.id }, data })
         : await ctx.db.mapLayer.create({

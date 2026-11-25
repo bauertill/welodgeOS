@@ -200,7 +200,7 @@ export function LayersPanel({
   const router = useRouter();
   const utils = api.useUtils();
   const [open, setOpen] = useState(true);
-  const [editing, setEditing] = useState<{ id?: string; name: string; color: string; measured: boolean } | null>(null);
+  const [editing, setEditing] = useState<{ id?: string; name: string; color: string; measured: boolean; groupedWith?: string | null } | null>(null);
   const [adding, setAdding] = useState<{ layerId: string; name: string; address: string } | null>(null);
   const [incoming, setIncomingRaw] = useState<ReturnType<typeof readKml> | null>(null);
   // What of it is ours already — and, of those, which to leave out (ticked).
@@ -272,9 +272,15 @@ export function LayersPanel({
     setPicking(false);
   };
 
-  const row = (id: string, name: string, swatch: React.ReactNode, count?: number, layer?: MapLayer) => (
-    <div key={id} className="hover:bg-ink-50 group flex items-center gap-2 rounded px-1.5 py-1">
-      <input type="checkbox" checked={shown.isShown(id)} onChange={() => shown.toggle(id)} className="accent-brand-500 h-3.5 w-3.5 shrink-0" aria-label={`Show ${name}`} />
+  const row = (id: string, name: string, swatch: React.ReactNode, count?: number, layer?: MapLayer, under?: boolean) => (
+    <div key={id} className={`hover:bg-ink-50 group flex items-center gap-2 rounded py-1 ${under ? "pr-1.5 pl-7" : "px-1.5"}`}>
+      {under ? (
+        <span className="text-ink-400 w-3.5 shrink-0 text-center" aria-hidden>
+          ↳
+        </span>
+      ) : (
+        <input type="checkbox" checked={shown.isShown(id)} onChange={() => shown.toggle(id)} className="accent-brand-500 h-3.5 w-3.5 shrink-0" aria-label={`Show ${name}`} />
+      )}
       {swatch}
       <span className="text-ink-900 min-w-0 flex-1 truncate">
         {name}
@@ -286,7 +292,7 @@ export function LayersPanel({
           type="button"
           onClick={() => {
             closeAdding();
-            setEditing(editing?.id === layer.id ? null : { id: layer.id, name: layer.name, color: layer.color, measured: layer.measured });
+            setEditing(editing?.id === layer.id ? null : { id: layer.id, name: layer.name, color: layer.color, measured: layer.measured, groupedWith: layer.groupedWith ?? null });
           }}
           className="text-ink-500 hover:text-ink-900 px-1 leading-none"
           aria-label={`${layer.name}: change, or add a place`}
@@ -315,9 +321,23 @@ export function LayersPanel({
         <input type="checkbox" checked={editing.measured} onChange={(e) => setEditing({ ...editing, measured: e.target.checked })} className="accent-brand-500 mt-0.5 h-3.5 w-3.5" />
         Measure distances to these places, and let clients choose them as &ldquo;close to&rdquo;
       </label>
+      {editing.id && (
+        <label className="flex items-center gap-1.5 text-[11px]">
+          Show under
+          <select
+            value={editing.groupedWith ?? ""}
+            onChange={(e) => setEditing({ ...editing, groupedWith: e.target.value || null })}
+            className="border-ink-200 min-w-0 flex-1 rounded-md border bg-white px-1 py-0.5"
+          >
+            <option value="">— a layer of its own</option>
+            <option value="hotels">Hotels — ticked with our hotels</option>
+            <option value="apartments">Apartments — ticked with our apartments</option>
+          </select>
+        </label>
+      )}
       {save.error && <p className="text-[11px] text-[#c03654]">{friendlyError(save.error)}</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={save.isPending || !editing.name.trim()} onClick={() => save.mutate({ eventId, ...editing })} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 text-[11px] font-medium text-white disabled:opacity-60">
+        <button type="button" disabled={save.isPending || !editing.name.trim()} onClick={() => save.mutate({ eventId, ...editing, groupedWith: editing.groupedWith === "hotels" || editing.groupedWith === "apartments" ? editing.groupedWith : null })} className="bg-brand-400 hover:bg-brand-500 rounded-full px-3 py-1 text-[11px] font-medium text-white disabled:opacity-60">
           {save.isPending ? "Saving…" : editing.id ? "Save" : "Add layer"}
         </button>
         <button type="button" onClick={() => setEditing(null)} className="text-ink-500 text-[11px] hover:underline">
@@ -405,29 +425,35 @@ export function LayersPanel({
     </div>
   );
 
+  // A layer of its own, or — shown under Hotels or Apartments — ticked with that one.
+  const layerRow = (layer: MapLayer, under = false) => (
+    <div key={layer.id}>
+      {row(
+        layer.id,
+        layer.name,
+        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: layer.color }} />,
+        places.filter((place) => place.layerId === layer.id).length,
+        layer,
+        under,
+      )}
+      {editing?.id === layer.id && layerForm}
+      {adding?.layerId === layer.id && addForm}
+    </div>
+  );
+
   return (
     <div className="absolute top-16 left-2.5 z-10 w-64 rounded-lg bg-white text-[12px] shadow-lg">
       <button type="button" onClick={() => setOpen(!open)} className="text-ink-900 flex w-full items-center justify-between px-3 py-2 font-medium">
         Layers <span className="text-ink-500">{open ? "▴" : "▾"}</span>
       </button>
       {open && (
-        <div className="border-ink-200/60 max-h-[26rem] overflow-y-auto border-t px-1.5 py-1.5">
-          {layers.map((layer) => (
-            <div key={layer.id}>
-              {row(
-                layer.id,
-                layer.name,
-                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: layer.color }} />,
-                places.filter((place) => place.layerId === layer.id).length,
-                layer,
-              )}
-              {editing?.id === layer.id && layerForm}
-              {adding?.layerId === layer.id && addForm}
-            </div>
-          ))}
+        <div className="border-ink-200/60 max-h-[calc(max(32rem,78vh)-7rem)] overflow-y-auto border-t px-1.5 py-1.5">
+          {layers.filter((layer) => !layer.groupedWith).map((layer) => layerRow(layer))}
           {row("contracted", "Contracted", <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#0a7a47] bg-white" />, propertyCounts?.contracted)}
           {row("hotels", "Hotels", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 bg-white" />, propertyCounts?.hotels)}
+          {layers.filter((layer) => layer.groupedWith === "hotels").map((layer) => layerRow(layer, true))}
           {row("apartments", "Apartments", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2 bg-white" />, propertyCounts?.apartments)}
+          {layers.filter((layer) => layer.groupedWith === "apartments").map((layer) => layerRow(layer, true))}
           {row("transit", "Google public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
           <div className="text-brand-700 flex justify-between px-1.5 pt-1 text-[11px]">
             <button type="button" onClick={shown.showAll} className="hover:underline">

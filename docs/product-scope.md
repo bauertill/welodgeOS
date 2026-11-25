@@ -1067,6 +1067,16 @@ layer's **⋯ › Move points…** lists its points with ticks, a box to find th
 (*ESA Suites*), *All found* to tick every one shown, and **To** another layer or *+ A new layer…*;
 *Move 8 points*. A new layer gets the next colour; the move is in the event's history.
 
+**A layer under Hotels or Apartments** (the owner, 2026-11-25: "please merge hotels (research)
+with Hotels and same for apartments"). A layer's ⋯ has **Show under**: *a layer of its own*,
+*Hotels* or *Apartments*. One shown under Hotels is listed indented beneath our **Hotels** (↳,
+with its count and ⋯, no tick box of its own) and is ticked on and off with it — the same for
+Apartments. Its points stay points, map-only, not properties; each can still be put on the board
+from its pin. LA28's *Hotels (research)* and *Apartments (research)* were set so on going live.
+
+**The map is taller** (the owner, 2026-11-25): most of the screen's height (78%), never less than
+before; the Layers panel and a pin's panel grow with it.
+
 **Removing from the map** (the owner, 2026-11-24: "we should also be able to remove properties").
 A point's panel has **Remove from the map** (after asking); a layer's **⋯ › Move or remove points…**
 has **Remove ticked from the map** for several at once. A **property's** panel on the event's map

@@ -69,7 +69,7 @@ export type MapPlace = {
 };
 
 /** A layer of the event's map (doc §3.7): its places shown or hidden together. */
-export type MapLayer = { id: string; name: string; color: string; measured: boolean };
+export type MapLayer = { id: string; name: string; color: string; measured: boolean; groupedWith?: string | null };
 
 /** Google's own public transport — every metro, rail and bus line with its stations — on or off. */
 function TransitLayer({ on }: { on: boolean }) {
@@ -171,6 +171,9 @@ const pinColor = (status?: ScoutingStatus) =>
  * a map ID of our own only matters once the map is styled (doc §3.8).
  */
 const mapId = env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? "DEMO_MAP_ID";
+
+/** Most of the screen, never less than it was (the owner, 2026-11-25: "make the map height more"). */
+const MAP_HEIGHT = "max(32rem, 78vh)";
 
 /**
  * Properties are what this map is *for*, so they are drawn larger than the
@@ -320,7 +323,7 @@ function SidePanel({
   onClose: () => void;
 }) {
   return (
-    <aside className="border-ink-200/60 flex h-[20rem] w-full flex-col overflow-y-auto border-t bg-white p-4 md:h-[32rem] md:w-80 md:shrink-0 md:border-t-0 md:border-l">
+    <aside className="border-ink-200/60 flex h-[20rem] w-full flex-col overflow-y-auto border-t bg-white p-4 md:h-[max(32rem,78vh)] md:w-80 md:shrink-0 md:border-t-0 md:border-l">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-ink-900 text-[15px] font-normal">
@@ -692,7 +695,12 @@ export function ScoutingMap({
   // A place on a hidden layer is not drawn; one on no layer always is.
   const visiblePlaces = onlyPlaceId
     ? places.filter((place) => place.id === onlyPlaceId)
-    : places.filter((place) => !place.layerId || shown.isShown(place.layerId));
+    : places.filter((place) => {
+        if (!place.layerId) return true;
+        // A layer shown under our Hotels or Apartments is ticked with it.
+        const group = layers.find((layer) => layer.id === place.layerId)?.groupedWith;
+        return shown.isShown(group ?? place.layerId);
+      });
   // Three layers of properties (the owner, 2026-11-19, split 2026-11-23): Contracted — hotels and
   // apartments together — then Hotels and Apartments for everything else, each ticked on or off.
   const contractedPins = pins.filter((pin) => pin.status === "CONTRACTED");
@@ -914,7 +922,7 @@ export function ScoutingMap({
             }}
             draggableCursor={picking || pickingProperty || addingProperty ? "crosshair" : undefined}
             fullscreenControl={false}
-            style={{ height: fullScreen ? "100vh" : "32rem", width: "100%" }}
+            style={{ height: fullScreen ? "100vh" : MAP_HEIGHT, width: "100%" }}
           >
             <FitBounds points={points} />
             <PanTo point={lookedUpPoint} />
