@@ -66,6 +66,8 @@ export type MapPlace = {
   layerName?: string | null;
   notes?: string | null;
   address?: string | null;
+  /** A research hotel's stars — drawn in its stars' colour, as our hotels are. */
+  stars?: number | null;
 };
 
 /** A layer of the event's map (doc §3.7): its places shown or hidden together. */
@@ -334,7 +336,7 @@ function SidePanel({
               ? [pin.subtitle, pin.stars ? `${pin.stars}-star` : null]
                   .filter(Boolean)
                   .join(" · ")
-              : place && placeCategoryLabels[place.category]}
+              : place && (place.stars ? `${place.stars}★ hotel · on the map only` : placeCategoryLabels[place.category])}
           </p>
         </div>
         <button
@@ -397,10 +399,10 @@ function SidePanel({
 
       {place && (
         <div className="mt-4">
-          {eventId && layers.length > 0 ? <MoveToLayer key={place.id} place={place} layers={layers} /> : place.layerName && <p className="text-ink-500 -mt-3 mb-2 text-xs font-light">On the {place.layerName} layer</p>}
+          {eventId && layers.length > 0 ? <MoveToLayer key={`layer-${place.id}`} place={place} layers={layers} /> : place.layerName && <p className="text-ink-500 -mt-3 mb-2 text-xs font-light">On the {place.layerName} layer</p>}
           {place.address && <p className="text-ink-700 mb-2 text-[13px] font-light">{place.address}</p>}
           {place.notes && <p className="text-ink-700 mb-3 text-[13px] font-light whitespace-pre-line">{place.notes}</p>}
-          {eventId && <PlaceToBoard key={place.id} place={place} onDone={onClose} />}
+          {eventId && <PlaceToBoard key={`board-${place.id}`} place={place} onDone={onClose} />}
           {eventId && <RemovePoint key={`remove-${place.id}`} place={place} onDone={onClose} />}
           {place.lines ? (
             <>
@@ -568,7 +570,7 @@ function MoveToLayer({ place, layers }: { place: MapPlace; layers: MapLayer[] })
 function PlaceToBoard({ place, onDone }: { place: MapPlace; onDone: () => void }) {
   const router = useRouter();
   const utils = api.useUtils();
-  const starred = /^\s*(\d)\s*\*\s*(.+)$/.exec(place.name);
+  const starred = /^\s*(\d)\s*\*\s*(.+)$/.exec(place.name) ?? (place.stars ? [place.name, String(place.stars), place.name] : null);
   const looksLikeApartments = /apartment|unit|residen|village|moxie|universit/i.test(`${place.layerName ?? ""} ${place.notes ?? ""}`);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(starred ? starred[2]!.trim() : place.name);
@@ -964,11 +966,12 @@ export function ScoutingMap({
                 <span className="group relative block translate-y-1/2">
                   <span
                     className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[14px] leading-none shadow-md transition-transform group-hover:scale-110 ${openId === place.id ? "ring-brand-300 scale-110 ring-4" : ""}`}
-                    style={{ background: place.color ?? "#9b1c31" }}
+                    style={{ background: place.stars ? propertyColor({ stars: place.stars }) : (place.color ?? "#9b1c31") }}
                   >
                     {placeIcon(place)}
                   </span>
                   <span className="bg-ink-900 pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white shadow-lg group-hover:block">
+                    {place.stars ? `${place.stars}★ ` : ""}
                     {place.name}
                   </span>
                 </span>

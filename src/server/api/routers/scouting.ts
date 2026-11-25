@@ -626,11 +626,11 @@ export const scoutingRouter = createTRPCRouter({
           if (layer?.eventId !== entry.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "That layer is not on this event's map." });
           const { property } = entry;
           if (property.latitude === null || property.longitude === null) throw new TRPCError({ code: "BAD_REQUEST", message: `${property.name} has no position, so it cannot stay on the map.` });
-          const name = property.stars ? `${property.stars}* ${property.name}` : property.name;
+          const name = property.name;
           const taken = await tx.placeOfInterest.findFirst({ where: { eventId: entry.eventId, name: { equals: name, mode: "insensitive" } }, select: { id: true } });
           if (!taken) {
             await tx.placeOfInterest.create({
-              data: { eventId: entry.eventId, layerId: input.layerId, name, category: "OTHER", latitude: property.latitude, longitude: property.longitude, address: property.address, notes: "Was on the properties board; taken off it and kept on the map." },
+              data: { eventId: entry.eventId, layerId: input.layerId, name, stars: property.stars, category: "OTHER", latitude: property.latitude, longitude: property.longitude, address: property.address, notes: "Was on the properties board; taken off it and kept on the map." },
             });
           }
           kept = layer.name;
