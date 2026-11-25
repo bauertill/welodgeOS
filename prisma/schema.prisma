@@ -159,6 +159,11 @@ model MapLayer {
   /// Distances and travel times are measured to its places, and a client can pick them as "close to".
   measured Boolean @default(false)
   position Int     @default(0)
+  /// Shown under our properties' Hotels or Apartments layer, ticked on and
+  /// off with it (the owner, 2026-11-24: "merge hotels (research) with
+  /// Hotels") — "hotels", "apartments", or empty for a layer of its own.
+  /// Its points stay map-only, not properties.
+  groupedWith String?
 
   places    PlaceOfInterest[]
   createdAt DateTime          @default(now())
