@@ -147,32 +147,64 @@ export function QuotationsSection({
   );
 }
 
-/** The terms a quotation offers, in words, leaving out what it does not say. */
-function quotationTerms(quotation: Quotation): [string, string][] {
-return [
-  [
-    "Payments",
-    quotation.payments
-      .map((payment) => `${percent(payment.percentBasisPoints)}${payment.plusTaxes ? " + all taxes" : ""} ${payment.onSignature ? "on signature" : `on ${formatDate(payment.dueOn!)}`}`)
-      .join(" · ") || null,
-  ],
-  ["Payment terms", quotation.paymentTerms],
-  [
-    "Cancellation",
-    quotation.cancellations
-      .map(cutSummary)
-      .join(" · ") || null,
-  ],
-  ["Cancellation terms", quotation.cancellationTerms],
-  ["Rates include", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
-  [
-    "Taxes and fees",
-    quotation.taxesIncluded
-      ? "Included in the rates"
-      : quotation.taxes.map((tax) => `${taxName(tax)} ${tax.basisPoints !== null ? percent(tax.basisPoints) : `${formatMoney(tax.amountCents!, quotation.currency)} per room per night`}`).join(" · ") || null,
-  ],
-  ["Other taxes", quotation.otherTaxes],
-].filter(([, value]) => value) as [string, string][];
+/**
+ * The terms a quotation offers, leaving out what it does not say (Ami,
+ * 2026-11-25: "too many words and difficult to pick up the information"):
+ * `key` is one short line each — payments, cancellation, what the rate
+ * includes, what is added on top; `more` is the hotel's terms in full, shown
+ * on a click.
+ */
+function quotationTerms(quotation: Quotation): { key: [string, string][]; more: [string, string][] } {
+  const present = (rows: [string, string | null][]) => rows.filter(([, value]) => value?.trim()) as [string, string][];
+  return {
+    key: present([
+      [
+        "Payments",
+        quotation.payments
+          .map((payment) => `${percent(payment.percentBasisPoints)}${payment.plusTaxes ? " + all taxes" : ""} ${payment.onSignature ? "on signature" : `on ${formatDate(payment.dueOn!)}`}`)
+          .join(" · ") || null,
+      ],
+      [
+        "Cancellation",
+        quotation.cancellations
+          .map((cut) => cutSummary({ ...cut, remarks: null }))
+          .filter(Boolean)
+          .join(" · ") || null,
+      ],
+      ["Rate includes", describeRateIncludes(quotation.rateIncludes, quotation.rateIncludesOther, quotation.cleaning, quotation.cleaningOther)],
+      [
+        quotation.taxesIncluded ? "Taxes" : "Added on top",
+        quotation.taxesIncluded
+          ? "Included in the rate"
+          : quotation.taxes.map((tax) => `${taxName(tax)} ${tax.basisPoints !== null ? percent(tax.basisPoints) : `${formatMoney(tax.amountCents!, quotation.currency)} per room per night`}`).join(" · ") || null,
+      ],
+    ]),
+    more: present([
+      ["Payment terms", quotation.paymentTerms],
+      [
+        "Cancellation terms",
+        [quotation.cancellationTerms, ...quotation.cancellations.filter((cut) => cut.cutoffOn && cut.remarks?.trim()).map((cut) => cut.remarks!.trim())]
+          .filter((text) => text?.trim())
+          .join("\n") || null,
+      ],
+      ["Other taxes", quotation.otherTaxes],
+      ["Notes", quotation.notes],
+    ]),
+  };
+}
+
+/** Short label/value rows. */
+function TermRows({ rows, wide }: { rows: [string, string][]; wide?: boolean }) {
+  return (
+    <dl className="space-y-1.5 text-[13px] font-light">
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex gap-3">
+          <dt className={`text-ink-500 shrink-0 ${wide ? "w-36" : "w-28"}`}>{label}</dt>
+          <dd className="text-ink-900 min-w-0 whitespace-pre-line">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 /** "King, Queen and Suite" — the room types a quotation covers, each once. */
@@ -227,6 +259,16 @@ function QuotationCard({
   const shortWords = short.map((room) => `${room.name} ${room.has} → ${room.quoted}`).join(", ");
   const error = setStatus.error ?? remove.error ?? makeContract.error ?? buyRooms.error ?? raise.error;
   const terms = quotationTerms(quotation);
+  const [full, setFull] = useState(false);
+  // What is added on top of each night, if anything (Ami: "not sure if it's added to the per night rate").
+  const extra = quotation.taxCents > 0;
+  // A short heading, so the all-in column stays in view: "+ 12%", else "+ fees".
+  const percents = quotation.taxes.every((tax) => tax.basisPoints !== null);
+  const extraName = percents ? quotation.taxes.map((tax) => percent(tax.basisPoints!)).join(" + ") : extrasLabel(quotation.taxes).split(" ").length > 2 ? "taxes, fees" : extrasLabel(quotation.taxes).toLowerCase();
+  const extraWhat =
+    quotation.taxes.length === 1
+      ? `${taxName(quotation.taxes[0]!)}${quotation.taxes[0]!.basisPoints !== null ? ` (${percent(quotation.taxes[0]!.basisPoints)})` : ""}`
+      : `${ExtrasLabel(quotation.taxes)} (${quotation.taxes.map((tax) => (tax.basisPoints !== null ? `${taxName(tax)} ${percent(tax.basisPoints)}` : taxName(tax))).join(", ")})`;
 
   return (
     <div className={`border-brand-200 bg-brand-50/60 rounded-lg border ${quotation.status === "DECLINED" ? "opacity-60" : ""}`}>
@@ -286,55 +328,77 @@ function QuotationCard({
         <table className="w-full text-left">
           <thead className="bg-ink-50/60">
             <tr>
-              <th className={th}>Room category</th>
-              <th className={th}>Period</th>
-              <th className={th}>Rooms</th>
-              <th className={th}>Per night</th>
-              {quotation.taxCents > 0 && <th className={th}>{ExtrasLabel(quotation.taxes)} per night</th>}
-              <th className={th}>Room-nights</th>
-              <th className={th}>Total</th>
+              <th className={th}>Room type</th>
+              <th className={th}>Dates and rooms</th>
+              {extra ? (
+                <>
+                  <th className={`${th} text-right`}>Rate</th>
+                  <th className={`${th} text-right`}>+ {extraName}</th>
+                  <th className={`${th} text-ink-900 bg-brand-50 text-right`}>All-in / night</th>
+                </>
+              ) : (
+                <th className={`${th} text-ink-900 bg-brand-50 text-right`}>Per night</th>
+              )}
+              <th className={`${th} text-right`}>Total</th>
             </tr>
           </thead>
           <tbody>
             {quotation.lines.map((line) => (
               <tr key={line.id}>
-                <td className={`${td} text-ink-900`}>
+                <td className={`${td} text-ink-900 min-w-24`}>
                   {line.category.name}
-                  {line.occupancy && <span className="text-ink-500 block text-xs">{line.occupancy} per room</span>}
+                  {line.occupancy && <span className="text-ink-500 block text-xs whitespace-nowrap">{line.occupancy} per room</span>}
                 </td>
                 <td className={`${td} whitespace-nowrap`}>
                   {formatRange(line.checkIn, line.checkOut)}
-                  <span className="text-ink-500 block text-xs">{line.nights} nights</span>
+                  <span className="text-ink-500 block text-xs">
+                    {line.rooms} {line.rooms === 1 ? "room" : "rooms"} × {line.nights} nights
+                  </span>
                 </td>
-                <td className={td}>{line.rooms}</td>
-                <td className={`${td} whitespace-nowrap`}>
-                  {formatMoney(line.rateCents, quotation.currency)}
-                  <InUsd cents={line.rateCents} currency={quotation.currency} />
+                {extra && (
+                  <>
+                    <td className={`${td} text-right whitespace-nowrap`}>{formatMoney(line.rateCents, quotation.currency)}</td>
+                    <td className={`${td} text-right whitespace-nowrap`}>{formatMoney(line.taxPerNightCents, quotation.currency)}</td>
+                  </>
+                )}
+                <td className={`${td} bg-brand-50/60 text-right whitespace-nowrap`}>
+                  <span className="text-ink-900 text-[14px] font-semibold">{formatMoney(line.rateCents + line.taxPerNightCents, quotation.currency)}</span>
+                  <InUsd cents={line.rateCents + line.taxPerNightCents} currency={quotation.currency} />
                 </td>
-                {quotation.taxCents > 0 && <td className={`${td} whitespace-nowrap`}>{formatMoney(line.taxPerNightCents, quotation.currency)}</td>}
-                <td className={td}>{line.roomNights}</td>
-                <td className={`${td} whitespace-nowrap`}>
+                <td className={`${td} text-right whitespace-nowrap`}>
                   {formatMoney(line.totalCents + line.taxCents, quotation.currency)}
-                  {line.taxCents > 0 && <span className="text-ink-500 block text-xs">incl. {formatMoney(line.taxCents, quotation.currency)} {extrasLabel(quotation.taxes)}</span>}
-                  <InUsd cents={line.totalCents + line.taxCents} currency={quotation.currency} />
+                  <span className="text-ink-500 block text-xs">{line.roomNights} room-nights</span>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <p className="text-ink-500 mt-1.5 text-xs font-light">
+        {extra
+          ? `${extraWhat} is added on top of the rate — the all-in price per night and the totals include it.`
+          : quotation.taxesIncluded
+            ? "Taxes are included in the rate."
+            : "Nothing is added on top of the rate."}
+      </p>
 
-      {terms.length > 0 && (
-        <dl className="mt-3 space-y-1 text-[13px] font-light">
-          {terms.map(([label, value]) => (
-            <div key={label} className="flex gap-3">
-              <dt className="text-ink-500 w-36 shrink-0">{label}</dt>
-              <dd className="text-ink-900 min-w-0 whitespace-pre-line">{value}</dd>
-            </div>
-          ))}
-        </dl>
+      {terms.key.length > 0 && (
+        <div className="mt-3">
+          <TermRows rows={terms.key} />
+        </div>
       )}
-      {quotation.notes && <p className="text-ink-700 mt-2 text-[13px] font-light whitespace-pre-line">{quotation.notes}</p>}
+      {terms.more.length > 0 && (
+        <div className="mt-2">
+          <button type="button" onClick={() => setFull(!full)} aria-expanded={full} className="text-brand-700 text-xs font-medium hover:underline">
+            {full ? "▾ Hide the full terms and notes" : "▸ Full terms and notes"}
+          </button>
+          {full && (
+            <div className="border-ink-200/60 mt-2 rounded-lg border bg-white p-3">
+              <TermRows rows={terms.more} wide />
+            </div>
+          )}
+        </div>
+      )}
 
       {short.length > 0 && quotation.status !== "DECLINED" && (
         <div className="mt-3 rounded-lg bg-[#fff4e0] px-3 py-2.5 text-[13px] font-light text-[#8a5a00]">
@@ -487,7 +551,7 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                   <th className={`${th} pl-0`}>Period</th>
                   <th className={th}>Room type</th>
                   <th className={th}>Rooms</th>
-                  <th className={`${th} pr-0 text-right`}>Per night</th>
+                  <th className={`${th} pr-0 text-right`}>{quotation.taxCents > 0 ? "All-in per night" : "Per night"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -500,8 +564,13 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                     <td className={`${td} text-ink-900`}>{line.category.name}</td>
                     <td className={td}>{line.rooms}</td>
                     <td className={`${td} pr-0 text-right whitespace-nowrap`}>
-                      {formatMoney(line.rateCents, quotation.currency)}
-                      <InUsd cents={line.rateCents} currency={quotation.currency} />
+                      <span className="text-ink-900 font-medium">{formatMoney(line.rateCents + line.taxPerNightCents, quotation.currency)}</span>
+                      {line.taxPerNightCents > 0 && (
+                        <span className="text-ink-500 block text-xs">
+                          {formatMoney(line.rateCents, quotation.currency)} + {formatMoney(line.taxPerNightCents, quotation.currency)}
+                        </span>
+                      )}
+                      <InUsd cents={line.rateCents + line.taxPerNightCents} currency={quotation.currency} />
                     </td>
                   </tr>
                 ))}
@@ -534,17 +603,15 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                   </span>
                   <InUsd cents={quotation.payableCents} currency={quotation.currency} className="text-ink-500 ml-1 text-xs font-light" />
                 </p>
-                {terms.length > 0 && (
-                  <dl className="space-y-1 text-[13px] font-light">
-                    {terms.map(([label, value]) => (
-                      <div key={label} className="flex gap-3">
-                        <dt className="text-ink-500 w-32 shrink-0">{label}</dt>
-                        <dd className="text-ink-900 min-w-0 whitespace-pre-line">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
+                {terms.key.length > 0 && <TermRows rows={terms.key} />}
+                {terms.more.length > 0 && (
+                  <details className="text-[13px]">
+                    <summary className="text-brand-700 cursor-pointer text-xs font-medium">Full terms and notes</summary>
+                    <div className="mt-2">
+                      <TermRows rows={terms.more} wide />
+                    </div>
+                  </details>
                 )}
-                {quotation.notes && <p className="text-ink-700 text-[13px] font-light whitespace-pre-line">{quotation.notes}</p>}
                 <div className="flex flex-wrap gap-x-4 text-xs">
                   {quotation.documentUrl && (
                     <a href={quotation.documentUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
