@@ -441,6 +441,61 @@ export function LayersPanel({
     </div>
   );
 
+  /**
+   * Our Hotels or Apartments as one line (the owner, 2026-11-25: "just make it
+   * one item"): the board's and any layer shown under it counted together; its
+   * ⋯ opens those layers, to change or take out from under it.
+   */
+  const groupRow = (id: "hotels" | "apartments", name: string, swatch: React.ReactNode, count?: number) => {
+    const grouped = layers.filter((layer) => layer.groupedWith === id);
+    const points = places.filter((place) => grouped.some((layer) => layer.id === place.layerId)).length;
+    return (
+      <div key={id}>
+        <div className="hover:bg-ink-50 flex items-center gap-2 rounded px-1.5 py-1" title={grouped.length ? `${count ?? 0} on the board · ${points} map-only (${grouped.map((layer) => layer.name).join(", ")})` : undefined}>
+          <input type="checkbox" checked={shown.isShown(id)} onChange={() => shown.toggle(id)} className="accent-brand-500 h-3.5 w-3.5 shrink-0" aria-label={`Show ${name}`} />
+          {swatch}
+          <span className="text-ink-900 min-w-0 flex-1 truncate">{name}</span>
+          {count !== undefined && <span className="text-ink-500 text-[11px]">{count + points}</span>}
+          {grouped.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                closeAdding();
+                const first = grouped[0]!;
+                setEditing(grouped.some((layer) => layer.id === editing?.id) ? null : { id: first.id, name: first.name, color: first.color, measured: first.measured, groupedWith: first.groupedWith ?? null });
+              }}
+              className="text-ink-500 hover:text-ink-900 px-1 leading-none"
+              aria-label={`${name}: the map-only points in it`}
+              title="The map-only points in it"
+            >
+              ⋯
+            </button>
+          )}
+        </div>
+        {grouped.some((layer) => layer.id === editing?.id) && (
+          <>
+            {grouped.length > 1 && (
+              <div className="mx-1 mt-1 flex flex-wrap gap-1">
+                {grouped.map((layer) => (
+                  <button
+                    key={layer.id}
+                    type="button"
+                    onClick={() => setEditing({ id: layer.id, name: layer.name, color: layer.color, measured: layer.measured, groupedWith: layer.groupedWith ?? null })}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] ${editing?.id === layer.id ? "border-brand-400 bg-brand-50" : "border-ink-200"}`}
+                  >
+                    {layer.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            {layerForm}
+          </>
+        )}
+        {grouped.some((layer) => layer.id === adding?.layerId) && addForm}
+      </div>
+    );
+  };
+
   return (
     <div className="absolute top-16 left-2.5 z-10 w-64 rounded-lg bg-white text-[12px] shadow-lg">
       <button type="button" onClick={() => setOpen(!open)} className="text-ink-900 flex w-full items-center justify-between px-3 py-2 font-medium">
@@ -450,10 +505,8 @@ export function LayersPanel({
         <div className="border-ink-200/60 max-h-[calc(max(32rem,78vh)-7rem)] overflow-y-auto border-t px-1.5 py-1.5">
           {layers.filter((layer) => !layer.groupedWith).map((layer) => layerRow(layer))}
           {row("contracted", "Contracted", <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#0a7a47] bg-white" />, propertyCounts?.contracted)}
-          {row("hotels", "Hotels", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 bg-white" />, propertyCounts?.hotels)}
-          {layers.filter((layer) => layer.groupedWith === "hotels").map((layer) => layerRow(layer, true))}
-          {row("apartments", "Apartments", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2 bg-white" />, propertyCounts?.apartments)}
-          {layers.filter((layer) => layer.groupedWith === "apartments").map((layer) => layerRow(layer, true))}
+          {groupRow("hotels", "Hotels", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 bg-white" />, propertyCounts?.hotels)}
+          {groupRow("apartments", "Apartments", <span className="border-ink-300 inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2 bg-white" />, propertyCounts?.apartments)}
           {row("transit", "Google public transport", <span className="inline-block w-2.5 shrink-0 text-center text-[10px]">🚇</span>)}
           <div className="text-brand-700 flex justify-between px-1.5 pt-1 text-[11px]">
             <button type="button" onClick={shown.showAll} className="hover:underline">
