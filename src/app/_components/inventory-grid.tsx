@@ -702,6 +702,17 @@ export function InventoryGrid({
         .map((category) => category.id),
     ),
   );
+  // Of those, the ones with nothing drawn at all — not even rooms being
+  // negotiated — get the line across their first row; one with a block would
+  // have the line written over it.
+  const nothingDrawn = new Set(
+    [...nothingSecured].filter((id) =>
+      properties
+        .flatMap((property) => property.categories)
+        .find((category) => category.id === id)!
+        .slots.every((slot) => dates.every((date) => !cells[`${slot.id}|${dayKey(date)}`] || !blockKind(cells[`${slot.id}|${dayKey(date)}`]!.position))),
+    ),
+  );
 
   return (
     <div>
@@ -1110,7 +1121,7 @@ export function InventoryGrid({
                                       const explainBlank =
                                         dateIndex === 0 &&
                                         slot.id === category.slots[0]?.id &&
-                                        nothingSecured.has(category.id);
+                                        nothingDrawn.has(category.id);
                                       return (
                                         <td
                                           key={key}
