@@ -23,6 +23,7 @@ import { api, type RouterOutputs } from "~/trpc/react";
  */
 
 type Quote = RouterOutputs["contractor"]["quotes"][number];
+type LineDraft = { quantity: string; description: string; unit: string; price: string };
 
 const statusLabels: Record<QuotationStatus, string> = { RECEIVED: "Received", ACCEPTED: "Accepted", DECLINED: "Declined" };
 const statusStyles: Record<QuotationStatus, string> = {
@@ -75,6 +76,23 @@ export function ContractorQuotes({ contractorId }: { contractorId: string }) {
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {quote.lines.length > 0 && (
+                  <table className="mt-2 text-[13px] font-light">
+                    <tbody>
+                      {quote.lines.map((line) => (
+                        <tr key={line.id}>
+                          <td className="text-ink-900 pr-3 align-top whitespace-nowrap">{line.quantity} ×</td>
+                          <td className="text-ink-900 pr-4 align-top">
+                            {line.description}
+                            {line.unit && <span className="text-ink-500"> · {line.unit}</span>}
+                          </td>
+                          <td className="text-ink-500 pr-3 text-right align-top whitespace-nowrap">{formatMoney(line.unitPriceCents, quote.currency)}</td>
+                          <td className="text-ink-900 text-right align-top whitespace-nowrap">{formatMoney(line.quantity * line.unitPriceCents, quote.currency)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
                 {quote.notes && <p className="text-ink-700 mt-1 line-clamp-2 text-[13px] font-light whitespace-pre-line">{quote.notes}</p>}
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                   {quote.documentUrl && (
@@ -95,7 +113,7 @@ export function ContractorQuotes({ contractorId }: { contractorId: string }) {
                         <button
                           type="button"
                           disabled={accept.isPending}
-                          onClick={() => window.confirm(`Accept "${quote.title}" and make it the contractor's contract${quote.amountCents != null ? `, worth ${formatMoney(quote.amountCents, quote.currency)}` : ""}?`) && accept.mutate({ id: quote.id })}
+                          onClick={() => window.confirm(`Accept "${quote.title}" and make it the contractor's contract${quote.totalCents != null ? `, worth ${formatMoney(quote.totalCents, quote.currency)}` : ""}?`) && accept.mutate({ id: quote.id })}
                           className="text-brand-700 font-medium hover:underline"
                         >
                           {accept.isPending && accept.variables?.id === quote.id ? "Making the contract…" : "Accept and make the contract"}
@@ -115,10 +133,10 @@ export function ContractorQuotes({ contractorId }: { contractorId: string }) {
                   )}
                 </div>
               </div>
-              {quote.amountCents != null && (
+              {quote.totalCents != null && (
                 <p className="text-ink-900 shrink-0 text-right text-[15px] font-semibold whitespace-nowrap">
-                  {formatMoney(quote.amountCents, quote.currency)}
-                  <InUsd cents={quote.amountCents} currency={quote.currency} />
+                  {formatMoney(quote.totalCents, quote.currency)}
+                  <InUsd cents={quote.totalCents} currency={quote.currency} />
                 </p>
               )}
             </li>
@@ -142,6 +160,13 @@ function QuotePopup({ contractorId, quote, onClose, onSaved }: { contractorId: s
   const [validUntil, setValidUntil] = useState(quote?.validUntil ? dayKey(quote.validUntil) : "");
   const [documentUrl, setDocumentUrl] = useState(quote?.documentUrl ?? "");
   const [notes, setNotes] = useState(quote?.notes ?? "");
+  const [lines, setLines] = useState<LineDraft[]>(
+    quote?.lines.map((line) => ({ description: line.description, quantity: String(line.quantity), unit: line.unit ?? "", price: String(line.unitPriceCents / 100) })) ?? [],
+  );
+  const readLines = lines.map((line) => ({ description: line.description.trim(), quantity: Number(line.quantity), unit: line.unit.trim(), unitPriceCents: parseMoney(line.price) }));
+  const badLines = readLines.some((line) => !line.description || !Number.isInteger(line.quantity) || line.quantity < 1 || line.unitPriceCents === null || Number.isNaN(line.unitPriceCents));
+  const linesTotal = badLines ? null : readLines.reduce((sum, line) => sum + line.quantity * line.unitPriceCents!, 0);
+  const setLine = (index: number, change: Partial<LineDraft>) => setLines(lines.map((line, i) => (i === index ? { ...line, ...change } : line)));
   const done = () => {
     onSaved();
     onClose();
@@ -154,13 +179,22 @@ function QuotePopup({ contractorId, quote, onClose, onSaved }: { contractorId: s
   const error = add.error ?? update.error;
 
   return (
-    <Popup size="medium" title={quote ? "Edit quote" : "New quote"} subtitle="What the contractor quoted, with its file. Accepted, it becomes their contract." onClose={onClose}>
+    <Popup size="large" title={quote ? "Edit quote" : "New quote"} subtitle="What the contractor quoted, with its file. Accepted, it becomes their contract." onClose={onClose}>
       <form
         className="space-y-4 rounded-xl bg-white p-5"
         onSubmit={(e) => {
           e.preventDefault();
-          if (badAmount) return;
-          const data = { title, amountCents: cents, currency, receivedOn: receivedOn || null, validUntil: validUntil || null, documentUrl, notes };
+          if (badAmount || (lines.length > 0 && badLines)) return;
+          const data = {
+            title,
+            amountCents: lines.length ? null : cents,
+            currency,
+            receivedOn: receivedOn || null,
+            validUntil: validUntil || null,
+            documentUrl,
+            notes,
+            lines: readLines.map((line) => ({ description: line.description, quantity: line.quantity, unit: line.unit || undefined, unitPriceCents: line.unitPriceCents! })),
+          };
           if (quote) update.mutate({ id: quote.id, ...data });
           else add.mutate({ contractorId, ...data });
         }}
@@ -169,9 +203,15 @@ function QuotePopup({ contractorId, quote, onClose, onSaved }: { contractorId: s
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Furniture for 40 apartments" autoFocus />
         </Field>
         <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
-          <Field label="Amount — optional">
-            <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="12500" inputMode="decimal" />
-          </Field>
+          {lines.length ? (
+            <Field label="Total">
+              <p className="text-ink-900 py-2 text-[14px] font-semibold">{linesTotal === null ? "—" : formatMoney(linesTotal, currency)}</p>
+            </Field>
+          ) : (
+            <Field label="Amount — optional">
+              <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="12500" inputMode="decimal" />
+            </Field>
+          )}
           <Field label="Currency">
             <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {currencyOptions(currency).map((option) => (
@@ -180,7 +220,30 @@ function QuotePopup({ contractorId, quote, onClose, onSaved }: { contractorId: s
             </Select>
           </Field>
         </div>
-        {badAmount && <p className="-mt-2 text-xs text-[#c03654]">The amount should be a number, like 12500 or 12500.50.</p>}
+        {badAmount && !lines.length && <p className="-mt-2 text-xs text-[#c03654]">The amount should be a number, like 12500 or 12500.50.</p>}
+        <div>
+          <span className="text-ink-700 mb-1 block text-[13px] font-medium">Lines — optional</span>
+          <p className="text-ink-500 mb-2 text-xs font-light">For a quote made of items — vehicles, services: each with how many, what one is, and its price. The total is their sum.</p>
+          {lines.length > 0 && (
+            <div className="mb-2 space-y-2">
+              {lines.map((line, index) => (
+                <div key={index} className="grid grid-cols-[4rem_1fr_9rem_7rem_auto] items-center gap-2">
+                  <Input value={line.quantity} onChange={(e) => setLine(index, { quantity: e.target.value })} inputMode="numeric" aria-label="How many" placeholder="4" />
+                  <Input value={line.description} onChange={(e) => setLine(index, { description: e.target.value })} aria-label="What it is" placeholder="Sprinter van, 16 seats" />
+                  <Input value={line.unit} onChange={(e) => setLine(index, { unit: e.target.value })} aria-label="What one is" placeholder="per vehicle per day" />
+                  <Input value={line.price} onChange={(e) => setLine(index, { price: e.target.value })} inputMode="decimal" aria-label="Price of one" placeholder="350" />
+                  <button type="button" onClick={() => setLines(lines.filter((_, i) => i !== index))} className="text-ink-400 text-lg leading-none hover:text-[#c03654]" aria-label="Remove the line">
+                    ×
+                  </button>
+                </div>
+              ))}
+              {badLines && <p className="text-xs text-[#c03654]">Each line needs how many (a whole number), what it is, and a price.</p>}
+            </div>
+          )}
+          <button type="button" onClick={() => setLines([...lines, { quantity: "1", description: "", unit: "", price: "" }])} className="text-brand-700 text-[13px] font-medium hover:underline">
+            + Add a line
+          </button>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Received">
             <Input type="date" value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} />
@@ -196,7 +259,7 @@ function QuotePopup({ contractorId, quote, onClose, onSaved }: { contractorId: s
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="What it includes, delivery, payment terms…" />
         </Field>
         <FormError message={error ? friendlyError(error) : null} />
-        <Button type="submit" disabled={!title.trim() || badAmount || pending}>
+        <Button type="submit" disabled={!title.trim() || (lines.length ? badLines : badAmount) || pending}>
           {pending ? "Saving…" : quote ? "Save" : "Add quote"}
         </Button>
       </form>
