@@ -547,7 +547,7 @@ export function welodgeServer(person: Person, headers: Headers) {
     [
       "Post a site visit report on the properties visited — one visit, one or several places (units), shown on each property's Site visits tab in We Lodge's report layout, and printable.",
       "For each place: the propertyId (search or create the property first — each apartment is its own property), a heading, a verdict (STRONG, NEEDS_WORK, NOT_READY or NO_GO) and optionally the badge in the visitor's words (verdictNote: 'Stronger option out of the 3'), a one- or two-line conclusion, the at-a-glance facts (Building, Sleeps, Bathrooms, Floors, Kitchen, Laundry, Outdoor, Entry, Condition — same labels across places, so they line up side by side), room by room (area → what was seen), issues and needs (a short bold title, the text, and the video link and time it shows in), and the videos (name and link).",
-      "Keep the visitor's facts and words; do not invent what was not seen — say 'Not seen'. Show the person what you will post and wait for them to confirm. Pass id to replace an existing report with a corrected one.",
+      "A new report tags the @LA team by itself (bell and email) — no separate update is needed to tell them. Keep the visitor's facts and words; do not invent what was not seen — say 'Not seen'. Show the person what you will post and wait for them to confirm. Pass id to replace an existing report with a corrected one.",
     ].join(" "),
     {
       id: z.string().optional(),

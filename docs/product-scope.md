@@ -1955,6 +1955,12 @@ Each place is a property (each apartment its own property) with:
 - **issues and needs**: a short bold title, what is wrong, and the video and time it shows in;
 - its **videos** (name and link — Dropbox, Drive…).
 
+**The @LA team is tagged automatically** (the owner, 2026-11-26: "have it auto tag, @LA
+group"): when a report is posted — on the site or by Claude — every member of the **LA** team
+tag is told as if @mentioned: in the bell and by email at once, with the places and their
+verdicts and a link to the report. A correction to a report tells nobody again. With no LA tag,
+or nobody in it, nobody is told.
+
 **The guide** (the owner, 2026-11-26: "a guide on how to use Claude to write the site
 inspection feedback… nicely designed under the guide section"): *Site visit reports with Claude*
 at /guide/site-visits, on the Guides page, walks a visitor through uploading the videos, the prompt to

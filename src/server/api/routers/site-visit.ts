@@ -2,9 +2,10 @@ import type { Prisma, PrismaClient } from "generated/prisma";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { areaRow, glanceRow, issueRow, readRows, videoRow, visitInput, type VisitInput } from "~/lib/site-visits";
+import { areaRow, glanceRow, issueRow, readRows, SITE_VISIT_TEAM_TAG, verdictLabels, videoRow, visitInput, type VisitInput } from "~/lib/site-visits";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { logAudit } from "~/server/audit";
+import { deliverImmediate, notify } from "~/server/notify";
 
 /**
  * Site visit reports (doc §3.12, the owner 2026-11-26): one visit to one or
@@ -102,6 +103,19 @@ export const siteVisitRouter = createTRPCRouter({
     await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SiteVisit", entityId: visit.id, summary: `Site visit report written: ${visit.title}` });
     for (const propertyId of new Set(visit.units.map((unit) => unit.propertyId).filter(Boolean))) {
       await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "Property", entityId: propertyId!, summary: `Site visit report: ${visit.title}` });
+    }
+    // A new report tags the @LA team (the owner, 2026-11-26) — told and emailed as if mentioned.
+    const tag = await ctx.db.teamTag.findFirst({ where: { name: { equals: SITE_VISIT_TEAM_TAG, mode: "insensitive" } }, select: { members: { select: { id: true } } } });
+    if (tag?.members.length) {
+      await notify(ctx.db, {
+        to: tag.members.map((member) => member.id),
+        actorId: ctx.session.user.id,
+        kind: "UPDATE_MENTION",
+        title: `New site visit report: ${visit.title} (@${SITE_VISIT_TEAM_TAG})`,
+        body: visit.units.map((unit) => `${unit.property?.name ?? unit.label}${unit.verdict ? ` — ${verdictLabels[unit.verdict]}` : ""}`).join("\n"),
+        link: `/site-visits/${visit.id}`,
+      });
+      await deliverImmediate(ctx.db);
     }
     return shaped(visit);
   }),
