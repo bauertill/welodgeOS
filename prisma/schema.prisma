@@ -2504,6 +2504,9 @@ model RateCard {
   mapPlaceIds       String[]      @default([])
   paymentTerms      String?
   cancellationTerms String?
+  /// The general terms at the foot of the card (Ami, 2026-11-26): empty is the standard line; else a
+  /// template picked in the editor (e.g. rates change with the length of stay) or the team's own words.
+  generalTerms      String?
   createdBy         User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById       String?
   createdAt         DateTime      @default(now())
