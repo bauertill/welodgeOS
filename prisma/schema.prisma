@@ -136,6 +136,7 @@ model Event {
   artifacts             Artifact[]
 
   @@index([startDate])
+  siteVisits SiteVisit[]
 }
 
 /// What kind of place guests need to reach (doc §3.7). The category drives
@@ -339,6 +340,7 @@ model Property {
 
   @@index([name])
   @@index([city])
+  siteVisitUnits SiteVisitUnit[]
 }
 
 /// A room type at a hotel, or a unit type in an apartment building. Both are
@@ -436,6 +438,7 @@ model Provider {
   properties Property[]
   contacts   ProviderContact[]
   updates    Update[]
+  siteVisits SiteVisit[]
 }
 
 model ProviderContact {
@@ -579,6 +582,76 @@ model ContractorFile {
   createdAt    DateTime   @default(now())
 
   @@index([contractorId, createdAt])
+}
+
+/// How a visited property or unit came out (doc §3.12): the badge on its report.
+enum SiteVisitVerdict {
+  STRONG
+  NEEDS_WORK
+  NOT_READY
+  NO_GO
+}
+
+/// A site visit report (doc §3.12, the owner 2026-11-26: Alex and Eric's
+/// "Babak Apartment Visits"): one visit, by whoever went, to one or several
+/// properties — each its own unit in the report, with a verdict, what was seen
+/// room by room, the issues and the videos. Shown on each property visited
+/// (and its provider), and full size as a printable report.
+model SiteVisit {
+  id        String    @id @default(cuid())
+  /// "Babak Apartment Visits"
+  title     String
+  visitedOn DateTime  @db.Date
+  /// Who went, in words: "Alex Lingois and Eric".
+  visitors  String?
+  /// Who showed us round: "Minerva".
+  guide     String?
+  /// The opening paragraph.
+  summary   String?
+  event     Event?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventId   String?
+  /// The landlord or chain the properties belong to, when one.
+  provider  Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  providerId String?
+  author    User?     @relation("SiteVisitAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorId  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  units SiteVisitUnit[]
+
+  @@index([eventId])
+  @@index([providerId])
+}
+
+/// One property (or unit) in a site visit report.
+model SiteVisitUnit {
+  id         String           @id @default(cuid())
+  visit      SiteVisit        @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId    String
+  property   Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  propertyId String?
+  /// Its heading: "Unit 209 · 1540 6th St (Livorno)".
+  label      String
+  position   Int              @default(0)
+  verdict    SiteVisitVerdict?
+  /// The badge in our own words, when the standard one does not say it: "Stronger option out of the 3".
+  verdictNote String?
+  /// The one or two lines that sum it up.
+  conclusion String?
+  /// More in words — what could be seen when a walk-through was not possible.
+  notes      String?
+  /// The side-by-side facts: [{ label: "Sleeps", value: "4 in twin beds" }].
+  glance     Json             @default("[]")
+  /// Room by room: [{ area: "Bedroom 1", seen: "2 twin beds…" }].
+  areas      Json             @default("[]")
+  /// Issues and needs: [{ title: "Walls", text: "need repainting", videoUrl?, at? }].
+  issues     Json             @default("[]")
+  /// The videos: [{ name, url }].
+  videos     Json             @default("[]")
+
+  @@index([visitId])
+  @@index([propertyId])
 }
 
 model ContractorContact {
@@ -1255,6 +1328,7 @@ model User {
   taskLinks              TaskLink[]           @relation("TaskLinkAddedBy")
   contractorQuotes       ContractorQuote[]    @relation("ContractorQuoteCreatedBy")
   contractorFiles        ContractorFile[]     @relation("ContractorFileAddedBy")
+  siteVisits             SiteVisit[]          @relation("SiteVisitAuthor")
   storedFiles            StoredFile[]         @relation("StoredFileUploadedBy")
 }
 

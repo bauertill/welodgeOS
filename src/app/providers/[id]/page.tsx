@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { ProviderForm } from "~/app/_components/provider-form";
+import { SiteVisitList } from "~/app/_components/site-visits";
 import { Card, PageHeader } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
 import { auth } from "~/server/auth";
@@ -34,6 +35,10 @@ export default async function ProviderPage({
       />
       <ProviderForm provider={provider} backTo={backTo} />
       {/* The chain's own updates — shown on each of its properties too — and theirs (doc §2.6). */}
+      <Card className="mt-8">
+        <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Site visits</h2>
+        <SiteVisitList providerId={provider.id} />
+      </Card>
       <Card className="mt-8">
         <h2 className="text-ink-900 mb-3 text-[15px] font-medium">Updates</h2>
         <UpdateThread providerId={provider.id} />

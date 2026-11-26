@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { unitInput, visitInput } from "~/lib/site-visits";
+
 import { createCaller } from "~/server/api/root";
 import { actingVia } from "~/server/audit";
 import { db } from "~/server/db";
@@ -39,6 +41,7 @@ export function welodgeServer(person: Person, headers: Headers) {
         "Words matter: a room-night is Bought / Option / In progress with the hotel, and Sold / Blocked / Requested with the client. A sales request moves Initial interest → Specify → Proposal sent → Negotiation → Contracted, or is Lost/Declined.",
         "Look things up before changing them, use ids from what you found, and say what you changed. Every change is recorded as made by this person via Claude.",
         "You cannot delete anything, or buy, block or sell rooms, or make offers — point the person to the site for those.",
+        "Site visit reports: when the person gives you notes, a write-up or a PDF of a visit, post it with save_site_visit on the properties visited (each apartment its own property, under its landlord or chain as provider), keeping what the visitor saw and leaving out what they did not.",
         "Contractors — transport, furniture, cleaning, linen and other companies working on an event besides the hotels — are on each event's Contractors tab: find them with list_contractors, add one with create_contractor, and record their offers with add_contractor_quote (line by line for vehicles or services). A quote is not a contract: only register a contract once it is signed.",
         "When the person asks for a page to show someone — a presentation, a comparison, a proposal, a scenario — build it as ONE self-contained HTML document (styles inline; fonts and libraries only from public CDNs; pictures as links or small inline images; under 4 MB) and save it with save_artifact. In We Lodge's look: Lato, purple #614fc9, violet #ab6ce2, navy #1e2e5d, lime #cefa05 used sparingly; 'We Lodge' is two words; it must read well on a phone and print cleanly. A page for a client or a provider never shows our buying rates, margins, costs or other clients. Do not share it (share_artifact) until the person says so. To change a saved page, read it with get_artifact, then save_artifact with its id.",
         "When the person shares a PDF — a hotel's quotation (their proposal to us), a contractor's quote (add_contractor_quote), a signed contract, a property's fact sheet — read it, find the event, property, client or contract it belongs to (search before adding, so nothing is added twice), then show the person in a short list what you will add and ask them to confirm before writing. Never guess a figure or a date the PDF does not give: leave it out and say so. Terms that do not fit a field go, in words, into the notes or terms. Afterwards say what you added, with the link.",
@@ -386,6 +389,7 @@ export function welodgeServer(person: Person, headers: Headers) {
       name: z.string().min(1).max(300),
       type: z.enum(["HOTEL", "APARTHOTEL", "FURNISHED_APARTMENT", "UNFURNISHED_APARTMENT", "MOTEL", "HOSTEL", "BED_AND_BREAKFAST", "EXTENDED_STAY", "STUDENT_HOUSING", "GUEST_HOUSE", "INDIVIDUAL_HOME", "RESORT_LODGE", "OTHER"]),
       eventId: z.string().optional(),
+      providerId: z.string().optional().describe("The chain or landlord it belongs to (list_providers / create_provider)."),
       address: z.string().max(500).optional(),
       city: z.string().max(200).optional(),
       country: z.string().max(200).optional(),
@@ -450,6 +454,77 @@ export function welodgeServer(person: Person, headers: Headers) {
     async ({ propertyId, name, rooms, sleeps, ...rest }) => {
       const made = await caller.property.saveCategory({ propertyId, category: { name, unitCount: rooms, capacity: sleeps, currency: "USD", ...rest } });
       return { roomTypeId: made.id, name: made.name };
+    },
+  );
+
+  // --- Providers: hotel chains and landlords (doc §3.9) ----------------------------
+
+  tool("list_providers", "Every provider — hotel chain, group or landlord (\"Babak\") — with its id and how many properties it has.", {}, read, async () =>
+    (await caller.provider.list()).map((p) => ({ id: p.id, name: p.name, properties: p._count.properties })),
+  );
+
+  tool(
+    "create_provider",
+    "Add a provider — a hotel chain, group or landlord whose properties we deal with. List the providers first; a name already there is refused.",
+    { name: z.string().min(1).max(200) },
+    write,
+    async ({ name }) => {
+      const created = await caller.provider.create({ name });
+      return { providerId: created.id, name: created.name };
+    },
+  );
+
+  tool(
+    "set_property_provider",
+    "Say which provider (chain or landlord) a property belongs to — or none.",
+    { propertyId: z.string(), providerId: z.string().nullable() },
+    write,
+    async ({ propertyId, providerId }) => {
+      await caller.property.patch({ id: propertyId, providerId });
+      return "Saved.";
+    },
+  );
+
+  // --- Site visit reports (doc §3.12) --------------------------------------------------
+
+  tool(
+    "list_site_visits",
+    "Site visit reports on a property or a provider, newest first — each place visited with its verdict and summary.",
+    { propertyId: z.string().optional(), providerId: z.string().optional() },
+    read,
+    async (input) =>
+      (await caller.siteVisit.list(input)).map((report) => ({
+        id: report.id,
+        title: report.title,
+        visitedOn: report.visitedOn,
+        visitors: report.visitors,
+        places: report.units.map((unit) => ({ property: unit.property?.name, label: unit.label, verdict: unit.verdict, conclusion: unit.conclusion })),
+        link: `/site-visits/${report.id}`,
+      })),
+  );
+
+  tool("get_site_visit", "One site visit report in full, to read or change it (then save_site_visit with its id).", { id: z.string() }, read, async ({ id }) => {
+    const report = await caller.siteVisit.byId({ id });
+    if (!report) throw new TRPCError({ code: "NOT_FOUND", message: "That report no longer exists." });
+    return report;
+  });
+
+  tool(
+    "save_site_visit",
+    [
+      "Post a site visit report on the properties visited — one visit, one or several places (units), shown on each property's Site visits tab in We Lodge's report layout, and printable.",
+      "For each place: the propertyId (search or create the property first — each apartment is its own property), a heading, a verdict (STRONG, NEEDS_WORK, NOT_READY or NO_GO) and optionally the badge in the visitor's words (verdictNote: 'Stronger option out of the 3'), a one- or two-line conclusion, the at-a-glance facts (Building, Sleeps, Bathrooms, Floors, Kitchen, Laundry, Outdoor, Entry, Condition — same labels across places, so they line up side by side), room by room (area → what was seen), issues and needs (a short bold title, the text, and the video link and time it shows in), and the videos (name and link).",
+      "Keep the visitor's facts and words; do not invent what was not seen — say 'Not seen'. Show the person what you will post and wait for them to confirm. Pass id to replace an existing report with a corrected one.",
+    ].join(" "),
+    {
+      id: z.string().optional(),
+      ...visitInput.shape,
+      units: z.array(unitInput).min(1).max(30),
+    },
+    write,
+    async ({ id, ...report }) => {
+      const saved = id ? await caller.siteVisit.update({ id, ...report }) : await caller.siteVisit.create(report);
+      return { id: saved.id, link: `/site-visits/${saved.id}`, places: saved.units.map((unit) => unit.property?.name ?? unit.label) };
     },
   );
 
