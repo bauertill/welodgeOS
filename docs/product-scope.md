@@ -4222,7 +4222,7 @@ into a room that is ready for them, and out again without disputes.
    (pre-filled for missing items) and photos; cleaning is a defect too. The runner gives its
    severity — **must fix before check-in**, **must fix**, **just document** — or marks it
    *not sure* for the office to decide. Defects land in a **defect inbox** and become cleaning,
-   maintenance or other tasks; once fixed and re-checked, the apartment is **Ready for check-in**.
+   maintenance or other tasks; once fixed and re-checked, the apartment is **Ready for check-in**. *Built (§6.10).*
 4. **Check-in** — check-in tasks made from the rooming list (guest, arrival time, contact, room);
    lights and air-conditioning on before arrival; the guest's email confirmed at the door and
    the apartment's inspection report sent to them, with 24 hours to add anything we missed.
@@ -4551,6 +4551,74 @@ Limits submitted their rooming list — version 3*, with the event and per prope
 list at the event, every property in it.
 
 ---
+
+### 6.10 Inspections and defects — apartments
+
+> **Built** (2026-11-26). The owner: "the apartment list should be a standard list that we can
+> add and adjust as we need", with the check-in inspection sheets used at EXPO Osaka 2025
+> (Bay Wheel, Eslead, moco) as the example. Apartments only — hotels inspect their own rooms.
+
+**The checklist.** An inspection walks a checklist in two parts, area by area, as the Osaka
+sheets did: the **facility check** — what should work (doorbell, main door lock, shower and hot
+water, AC, Wi-Fi, stove, cabinets…), each answered yes or no — and the **inventory** — what
+should be there and how many (4 spoons, 2 pillows, 1 hair dryer…), each counted. **The standard
+checklists** live under *Inspection checklists* (from an event's Operations tab, *Standard
+checklists*): the first, *Standard apartment*, is made from the Osaka sheets; any can be
+changed — areas and items added, renamed, removed, reordered, counts set or left empty ("just
+count it") — and more added (a copy of the standard to start); one is **the standard**, used
+for every apartment whose room type has not been adjusted. **Each room type can adjust its
+own** (*<room type> checklist* on the Operations tab): it starts from the standard one, and is
+changed to what those apartments have; *Back to the standard checklist* undoes it. An
+inspection keeps the checklist it was planned with — later changes do not move it.
+
+**The Operations tab** on each event lists **every apartment we hold there** — a room at an
+apartment-type property (furnished, unfurnished, to sort, individual home, student housing)
+with nights bought from the supplier or sold to a client — grouped by property, with its first
+check-in (from the rooming list, else the first night held), its inspection, its open defects
+and **where it stands**: *Not inspected*, *Inspection planned*, *Inspection under way*,
+*Defects to fix*, *Fixed — to check*, or **Ready for check-in**. Counts of each along the top
+filter the list. This is worked out on reading, never stored.
+
+**Planning.** Tick one apartment or several, *Plan inspection*: a day (as early as possible — a
+week before check-in at best) and who goes. Each gets an **Inspect <apartment>** task on the
+board for that day, typed *Inspection*, linking to the inspection; planned again, the same
+inspection and task move to the new day and person.
+
+**Walking it — on a phone.** The inspector opens the inspection (from their task), presses
+*Start the inspection* (their task goes to In progress), and:
+
+- **Photos** — *Add photos* takes as many as wanted at once, from the camera or the phone's
+  photos, into the site's private file store, saved in tens as they upload; every room from
+  every angle, before the guests arrive.
+- **Facility** — ✓ or ✗ on each item. A ✗ opens a defect, pre-written "<item> — not working".
+- **Inventory** — *All there*, or − and + to the count found. Fewer than there should be opens a
+  defect pre-written "**2 missing Knives (Kitchen)**".
+- **Other defects** — cleaning needed, a bad smell, a scratch: anything not on the checklist,
+  with its area.
+
+Every defect has what is wrong, photos if wanted, and **how serious, chosen by the person on
+site**: **Fix before check-in** (broken shower, bad smell, cleaning needed), **Must fix** (to fix,
+but guests can move in), **Just document** (a scratch, a chip — on record only), or **Not sure**
+— the office decides. A defect added by mistake can be removed while nobody is fixing it. A
+memo, then *Finish the inspection*: the inspector's task is done. Reopened, it can be changed.
+
+**Ready for check-in** — once the inspection is finished and **no defect that stops a check-in
+is left**: one marked *Fix before check-in* or *Not sure* stops it until it is checked as fixed;
+*Must fix* and *Just document* do not. The moment it becomes ready — on finishing, or on the
+last defect checked — the screen celebrates it, for the ground staff (the owner: "get that
+dopamine").
+
+**The defect inbox**, on the Operations tab: every open defect that is not just documented,
+and every fixed one waiting to be checked, the most serious first. There the office **decides
+the *Not sure* ones**, and **makes a task** for each — **Cleaning**, **Maintenance** or **Other**
+— with who fixes it and by when (a fix-before-check-in task is high priority). **When that task
+is marked Done** — anywhere: board, list, or Claude — **the defect is fixed, waiting to be
+checked**; reopened, it is to fix again. *Fixed on the spot* marks one fixed without a task. A
+fixed defect is **checked** on the apartment's inspection or in the inbox: *Checked — fixed*,
+or *Not fixed* — to fix again, with a new task.
+
+**Not yet:** the inspection report emailed to the guest at check-in with 24 hours to add what
+we missed (step 4), a printable inspection sheet, suggestions of who should take which task.
 
 ## 7. Financials
 
@@ -5078,7 +5146,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
-| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. On staging (2026-11-24): the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §6.9 Rooming list | **Built** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. Live 2026-11-26: the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §6.10 Inspections and defects | **Built** (2026-11-26) | Standard apartment checklists (facility yes/no, inventory counts, area by area) kept and edited under Inspection checklists, the first from the EXPO Osaka sheets; each room type can adjust its own; the event's Operations tab with every apartment held, where it stands (not inspected → planned → under way → defects to fix → fixed, to check → Ready for check-in); planning with an Inspection task for the inspector; the inspection walked on a phone — photo dump, ✓/✗, counts, defects pre-written for missing items, severity chosen on site or Not sure; the defect inbox: decide Not sure, make Cleaning / Maintenance / Other tasks, Done → fixed, then checked; a celebration on Ready for check-in. Not yet: the guest's inspection report at check-in, a printable sheet |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
 

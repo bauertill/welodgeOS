@@ -23,6 +23,8 @@ const tabs = [
   { slug: "position", label: "Position", hint: "Where we are exposed" },
   // Furniture, cleaning and other companies working on it (the owner, 2026-11-19).
   { slug: "contractors", label: "Contractors", hint: "The furniture, cleaning and other companies working on it" },
+  // Getting apartments ready for check-in: inspections and defects (doc §6.10, 2026-11-26).
+  { slug: "operations", label: "Operations", hint: "Apartments to get ready: inspections and defects" },
   // Last since 2026-10-13: set up once, rarely read.
   { slug: "details", label: "Event details", hint: "The event, its team and its places of interest" },
 ] as const;

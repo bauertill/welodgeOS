@@ -8,7 +8,7 @@
  */
 
 /** The event's tabs by their address: "" is Properties. */
-export const eventTabSlugs = ["", "inventory", "deadlines", "position", "contractors", "details"] as const;
+export const eventTabSlugs = ["", "inventory", "deadlines", "position", "contractors", "operations", "details"] as const;
 export type EventTabSlug = (typeof eventTabSlugs)[number];
 export const eventTabLabels: Record<EventTabSlug, string> = {
   "": "Properties",
@@ -16,6 +16,7 @@ export const eventTabLabels: Record<EventTabSlug, string> = {
   deadlines: "Deadlines",
   position: "Position",
   contractors: "Contractors",
+  operations: "Operations",
   details: "Event details",
 };
 export const isEventTab = (value: string | null | undefined): value is EventTabSlug =>

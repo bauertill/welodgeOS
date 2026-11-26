@@ -23,7 +23,7 @@ export const verdictStyles: Record<SiteVisitVerdict, string> = {
   STRONG: "bg-[#d9f99d] text-[#2f4a00]",
   NEEDS_WORK: "bg-[#fde3c4] text-[#8a4b00]",
   NOT_READY: "bg-[#fbd5dc] text-[#8f1d35]",
-  NO_GO: "bg-ink-100 text-ink-700",
+  NO_GO: "bg-ink-50 text-ink-700 ring-1 ring-ink-200",
 };
 
 /** The facts a side-by-side starts with; any can be left empty or renamed, and more added. */
