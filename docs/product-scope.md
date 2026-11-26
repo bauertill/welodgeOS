@@ -669,6 +669,10 @@ granted before Allow. (Standard OAuth 2.1 with PKCE and dynamic client registrat
 claude.ai expects of any connector; the site publishes where to sign in at
 `/.well-known/oauth-authorization-server`.)
 
+**An empty answer is said in words** — "None found." — since a list with nothing in it once
+reached Claude as no reply at all, which it reported as a broken tool (contracts for an event
+with none, 2026-11-26).
+
 **Claude acts as you, under the site's own rules.** Each of its tools calls the same action
 the site's pages call, as the person who connected it: it sees what they see, and anything
 the site refuses — a request marked Contracted without a contract, say — it is refused too,
@@ -684,7 +688,7 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | Tasks on the board; a request's or client's emails | Post an update on a sales request, client or property; create a task, move it, comment on it |
 | Properties (search by name, city, address); a hotel's quotations for an event | Add a property (with room types and contacts), put it on an event's board, add a room type |
 | Contracts (by event, property, client, contractor or request), and one in full | Record a hotel's quotation; register a contract with its payments and cancellation deadlines; fill in or correct a contract, add a payment or a deadline |
-| An event's contractors (§3.11), and one in full | Add a contractor to an event's Contractors tab — with contacts, contracting details and the properties it serves (a name already on the event is refused); fill it in or correct it (contacts are only added, never removed); record a property it serves; record its quote; keep a link on it; post an update or create a task about it |
+| An event's contractors (§3.11), and one in full | Add a contractor to an event's Contractors tab — with contacts, contracting details and the properties it serves (a name already on the event is refused); fill it in or correct it (contacts are only added, never removed); record a property it serves; record its quote (a total, or line by line — vehicles, services); keep a link on it; post an update or create a task about it |
 
 **From a PDF** (the owner, 2026-11-20: "I will upload a PDF and it should read it and add the
 data onto OS" — for the whole team). In Claude, with the WeLodge OS connector on, the person
@@ -1900,11 +1904,15 @@ Each contractor's page holds:
 - **Quotes** (the owner, 2026-11-26: "on the contractors tab we should be able to upload a
   file, add a quote etc"): *+ Add quote* asks what it is for, the amount and currency (any of
   the site's currencies, with ≈ US$ shown), when it was received and how long it is valid,
-  the quote's file (uploaded or a link) and notes. Each is *Received*, *Accepted* or
+  the quote's file (uploaded or a link) and notes. **A quote can be line by line** (Claude,
+  asked for a transport quote, 2026-11-26): *+ Add a line* for each item — how many, what it
+  is ("Sprinter van, 16 seats"), what one is ("per vehicle per day") and its price; the total
+  is then their sum, shown on the quote with each line, and the amount box gives way to it.
+  Each is *Received*, *Accepted* or
   *Declined*. **Accept and make the contract** turns it into the contractor's supplier
   contract — named "<quote> — <contractor>", with the quote's amount, currency, file and
   notes, the person as account manager, and the payment instructions of the contractor's
-  last contract — and opens it, for its payments and terms; the quote then links to it and
+  last contract, its lines written into the contract's notes — and opens it, for its payments and terms; the quote then links to it and
   can no longer be changed or removed. *Decline* (and *Back to received*), *Edit* and
   *Remove* until then.
 - **Files and links**: upload a file (into the site's private store, up to 100 MB) or paste
