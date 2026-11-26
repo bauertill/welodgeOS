@@ -306,7 +306,7 @@ export const scoutingRouter = createTRPCRouter({
       });
       // Where each stands, worked out from its contact tasks, quotations and contracts (doc §3.9).
       const propertyIds = entries.map((entry) => entry.propertyId);
-      const [tasks, contracts, lastUpdates] = await Promise.all([
+      const [tasks, contracts, lastUpdates, visited] = await Promise.all([
         ctx.db.task.findMany({
           where: { eventId: input.eventId, propertyId: { in: propertyIds }, type: { name: "Hotel contact" } },
           orderBy: { createdAt: "desc" },
@@ -315,7 +315,15 @@ export const scoutingRouter = createTRPCRouter({
         ctx.db.contract.findMany({ where: { eventId: input.eventId, party: "SUPPLIER", propertyId: { in: propertyIds } }, select: { propertyId: true } }),
         // The newest update written on each property, for "Last update".
         ctx.db.update.groupBy({ by: ["propertyId"], where: { propertyId: { in: propertyIds } }, _max: { createdAt: true } }),
+        // Each property's latest site visit verdict, for its badge (doc §3.12).
+        ctx.db.siteVisitUnit.findMany({
+          where: { propertyId: { in: propertyIds }, verdict: { not: null } },
+          orderBy: [{ visit: { visitedOn: "desc" } }, { visit: { createdAt: "desc" } }],
+          select: { propertyId: true, verdict: true, verdictNote: true, visit: { select: { id: true, visitedOn: true } } },
+        }),
       ]);
+      const visitOf = new Map<string, (typeof visited)[number]>();
+      for (const unit of visited) if (unit.propertyId && !visitOf.has(unit.propertyId)) visitOf.set(unit.propertyId, unit);
       const lastUpdateOf = new Map(lastUpdates.map((row) => [row.propertyId, row._max.createdAt]));
       const contracted = new Set(contracts.map((contract) => contract.propertyId));
       return entries.map((entry) => {
@@ -340,6 +348,7 @@ export const scoutingRouter = createTRPCRouter({
               .flatMap((quotation) => quotation.lines.map((line) => ({ categoryId: line.categoryId, cents: line.rateCents, currency: quotation.currency }))),
           ],
           lastUpdate,
+          siteVisit: visitOf.get(entry.propertyId) ?? null,
           contactTaskId: contactTasks.find((task) => task.status !== "DONE")?.id ?? contactTasks[0]?.id ?? null,
         };
       });
