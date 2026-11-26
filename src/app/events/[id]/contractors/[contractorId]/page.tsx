@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { HistorySection } from "~/app/_components/activity-log";
+import { ContractorFiles, ContractorQuotes } from "~/app/_components/contractor-quotes";
 import { ContractorForm, ContractorProperties } from "~/app/_components/contractors";
 import { EventTabs } from "~/app/_components/event-tabs";
 import { PropertyContracts } from "~/app/_components/finance";
@@ -35,6 +36,14 @@ export default async function ContractorPage({ params }: { params: Promise<{ id:
         <Card>
           <h2 className={section}>Properties it serves</h2>
           <ContractorProperties contractor={contractor} />
+        </Card>
+        <Card>
+          <h2 className={section}>Quotes</h2>
+          <ContractorQuotes contractorId={contractor.id} />
+        </Card>
+        <Card>
+          <h2 className={section}>Files and links</h2>
+          <ContractorFiles contractorId={contractor.id} />
         </Card>
         <Card>
           <h2 className={section}>Contracts and payments</h2>
