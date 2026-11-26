@@ -110,6 +110,7 @@ function shape(card: LoadedCard) {
     termsPerProperty: card.termsPerProperty,
     paymentTerms: card.paymentTerms,
     cancellationTerms: card.cancellationTerms,
+    generalTerms: card.generalTerms,
     updatedAt: card.updatedAt,
     /** Empty for a general card — for any client (doc §4.11, 2026-10-26). */
     clientName: card.salesRequest?.client.name ?? card.client?.name ?? null,
@@ -635,6 +636,8 @@ export const rateCardRouter = createTRPCRouter({
         mapPlaceIds: z.array(z.string().max(40)).max(500).optional(),
         paymentTerms: z.string().max(3000).optional(),
         cancellationTerms: z.string().max(3000).optional(),
+        /** The general terms at the foot; empty is the standard line (2026-11-26). */
+        generalTerms: z.string().max(3000).optional(),
         properties: z
           .array(
             z.object({
@@ -725,6 +728,7 @@ export const rateCardRouter = createTRPCRouter({
             ...(input.mapPlaceIds !== undefined ? { mapPlaceIds: input.mapPlaceIds } : {}),
             ...(input.paymentTerms !== undefined ? { paymentTerms: input.paymentTerms.trim() || null } : {}),
             ...(input.cancellationTerms !== undefined ? { cancellationTerms: input.cancellationTerms.trim() || null } : {}),
+            ...(input.generalTerms !== undefined ? { generalTerms: input.generalTerms.trim() || null } : {}),
           },
         });
         if (input.removedPropertyIds.length) {
@@ -1231,6 +1235,7 @@ export function clientCopy(card: ReturnType<typeof shape>) {
     termsPerProperty: card.termsPerProperty,
     paymentTerms: card.paymentTerms,
     cancellationTerms: card.cancellationTerms,
+    generalTerms: card.generalTerms,
     lastAnswer: card.salesRequestId && card.answers[0] ? (({ isNew: _isNew, company: _company, ...answer }) => answer)(card.answers[0]) : null,
     event: card.event,
     asked: card.asked,

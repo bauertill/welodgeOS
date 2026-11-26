@@ -2,6 +2,7 @@ import { Fragment } from "react";
 
 import { PhotoGallery, RoomPhotos, SeeAllMedia, type CardPhoto } from "~/app/_components/rate-card-media";
 import { nightsBetween } from "~/lib/dates";
+import { generalTermsText } from "~/lib/rate-card-terms";
 import { formatMoney, formatRange } from "~/lib/format";
 import { propertyTypeLabels } from "~/lib/scouting";
 
@@ -20,6 +21,8 @@ export type ClientRateCard = {
   termsPerProperty?: boolean;
   paymentTerms?: string | null;
   cancellationTerms?: string | null;
+  /** The general terms at the foot (2026-11-26); empty is the standard line. */
+  generalTerms?: string | null;
   /** Empty on a general card — for any client. */
   clientName: string | null;
   event: { name: string; startDate: Date; endDate: Date } | null;
@@ -222,8 +225,8 @@ export function RateCardView({
 
       {after && <div className="print:hidden">{after}</div>}
 
-      <footer className="text-ink-500 border-ink-200/70 mt-8 border-t pt-4 text-xs font-light">
-        Rates are per room per night, in {card.currency}, and subject to availability until confirmed. We Lodge · welodge.net
+      <footer className="text-ink-500 border-ink-200/70 mt-8 border-t pt-4 text-xs font-light whitespace-pre-line">
+        {generalTermsText(card.generalTerms, card.currency)} We Lodge · welodge.net
       </footer>
     </article>
   );

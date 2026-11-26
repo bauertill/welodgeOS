@@ -6,6 +6,7 @@ import { Combobox } from "~/app/_components/combobox";
 import { Button, FormError, friendlyError, Input, Textarea } from "~/app/_components/form";
 import { Popup } from "~/app/_components/popup";
 import { RateCardView, type ClientRateCard } from "~/app/_components/rate-card-view";
+import { generalTermsTemplates, generalTermsText, standardGeneralTerms } from "~/lib/rate-card-terms";
 import { Photo } from "~/app/_components/photo";
 import { currencyOptions } from "~/lib/currency";
 import { nightsBetween } from "~/lib/dates";
@@ -29,6 +30,8 @@ type Draft = {
   mapPlaceIds: string[];
   paymentTerms: string;
   cancellationTerms: string;
+  /** The general terms at the foot; "" is the standard line (2026-11-26). */
+  generalTerms: string;
   properties: {
     id: string;
     description: string;
@@ -66,6 +69,7 @@ const draftOf = (card: Card): Draft => ({
   mapPlaceIds: card.mapPlaceIds,
   paymentTerms: card.paymentTerms ?? "",
   cancellationTerms: card.cancellationTerms ?? "",
+  generalTerms: card.generalTerms ?? "",
   properties: card.properties.map((property) => {
     // A room type with no client price is not offered — folded away, unless nothing at the property has a price yet.
     const anyPriced = property.lines.some((line) => line.sellingCents !== null || line.rateTbc);
@@ -250,6 +254,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
       mapPlaceIds: draft.mapPlaceIds,
       paymentTerms: draft.paymentTerms,
       cancellationTerms: draft.cancellationTerms,
+      generalTerms: draft.generalTerms,
       properties: draft.properties.map((property) => ({
         id: property.id,
         description: property.description,
@@ -295,6 +300,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
           termsPerProperty: draft.termsPerProperty,
           paymentTerms: draft.paymentTerms.trim() || null,
           cancellationTerms: draft.cancellationTerms.trim() || null,
+          generalTerms: draft.generalTerms.trim() || null,
           clientName: c.salesRequestId ? c.clientName : (clients.data?.find((one) => one.id === draft.clientId)?.name ?? (draft.clientId ? c.clientName : null)),
           event: c.event,
           asked: c.asked,
@@ -439,6 +445,34 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                   <Textarea rows={2} value={draft.cancellationTerms} onChange={(e) => setDraft({ ...draft, cancellationTerms: e.target.value })} placeholder="Cancellation terms — e.g. free until 90 days before arrival, then 100%" aria-label="Cancellation terms" />
                 </div>
               )}
+            </div>
+            <div className="border-ink-200/60 border-t pt-3 sm:col-span-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-ink-700 mr-2 text-[13px] font-medium">General terms — at the foot of the card</span>
+                {generalTermsTemplates.map((template) => {
+                  const text = template.text(c.currency);
+                  const on = generalTermsText(draft.generalTerms, c.currency) === text;
+                  return (
+                    <button
+                      key={template.label}
+                      type="button"
+                      onClick={() => setDraft({ ...draft, generalTerms: template.label === "Standard" ? "" : text })}
+                      className={`rounded-full border px-2.5 py-0.5 text-xs ${on ? "border-brand-500 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`}
+                    >
+                      {template.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <Textarea
+                rows={2}
+                className="mt-2"
+                value={draft.generalTerms}
+                onChange={(e) => setDraft({ ...draft, generalTerms: e.target.value })}
+                placeholder={standardGeneralTerms(c.currency)}
+                aria-label="General terms"
+              />
+              <p className="text-ink-500 mt-1 text-xs font-light">Pick a template, then change the words if you like — or write your own. Left empty, the card shows the standard line.</p>
             </div>
           </div>
 
