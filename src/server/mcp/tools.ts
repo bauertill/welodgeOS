@@ -317,11 +317,44 @@ export function welodgeServer(person: Person, headers: Headers) {
       clientId: z.string().optional(),
       salesRequestId: z.string().optional(),
       contractorId: z.string().optional(),
+      links: z
+        .array(z.object({ url: z.string().min(1).max(2000), title: z.string().max(200).optional() }))
+        .max(20)
+        .optional()
+        .describe("Google Sheets, Docs or any page — put in the task's Links section (not only its description)."),
     },
     write,
-    async (input) => {
+    async ({ links, ...input }) => {
       const created = await caller.task.create(input as never);
-      return { taskId: (created as { id: string }).id };
+      const taskId = (created as { id: string }).id;
+      for (const link of links ?? []) await caller.task.addLink({ taskId, url: link.url, title: link.title });
+      return { taskId, links: links?.length ?? 0 };
+    },
+  );
+
+  tool(
+    "add_task_link",
+    "Put a link — a Google Sheet, Doc or any page — in the Links section of one or several tasks at once (up to 100). A task that already has that link is skipped.",
+    {
+      taskIds: z.array(z.string()).min(1).max(100),
+      url: z.string().min(1).max(2000),
+      title: z.string().max(200).optional().describe("What it is called on the task — 'Rooming tracker'. Empty shows what the link is."),
+    },
+    write,
+    async ({ taskIds, url, title }) => {
+      const full = /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`;
+      let added = 0;
+      let already = 0;
+      for (const taskId of [...new Set(taskIds)]) {
+        const existing = await caller.task.links({ taskId });
+        if (existing.some((link) => link.url === full)) {
+          already++;
+          continue;
+        }
+        await caller.task.addLink({ taskId, url: full, title });
+        added++;
+      }
+      return { added, alreadyThere: already };
     },
   );
 
