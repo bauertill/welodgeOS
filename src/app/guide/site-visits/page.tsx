@@ -35,8 +35,8 @@ export default async function SiteVisitGuidePage() {
       {/* Where it shows */}
       <Section number={1} title="Where the report ends up" icon="M3 12l9-9 9 9M5 10v10h14V10">
         <div className="grid gap-3 md:grid-cols-3">
-          <Card title="On each property">The property&apos;s Site visits tab holds the full report, laid out like Alex&apos;s, with Print / PDF.</Card>
-          <Card title="On the provider">The landlord or chain&apos;s page lists every visit to their properties, for example Babak.</Card>
+          <Card title="On each property">The property&apos;s Site visits tab holds the full report, in the We Lodge report layout, with Print / PDF.</Card>
+          <Card title="On the provider">The landlord or chain&apos;s page lists every visit to their properties.</Card>
           <Card title="On the properties board">
             Each property&apos;s card carries its verdict badge, so the board shows at a glance which places are worth pursuing.
             <span className="mt-2 flex flex-wrap gap-1.5">
@@ -46,7 +46,7 @@ export default async function SiteVisitGuidePage() {
           </Card>
         </div>
         <Note>
-          See a real one: Alex and Eric&apos;s Babak visit of 23 November, on the three Babak apartments on the LA28 properties board.
+          To see a real one, open any property on the LA28 properties board that has a verdict badge.
         </Note>
       </Section>
 
@@ -55,7 +55,7 @@ export default async function SiteVisitGuidePage() {
         <div className="grid gap-3 md:grid-cols-3">
           <Step n={1} title="Connect OS to Claude">
             Do this once. In Claude, open Settings › Connectors and check that <strong className="font-medium">We Lodge OS</strong> is connected and signed in with
-            your We Lodge account. Can&apos;t see it? Ask Brandon.
+            your We Lodge account. Can&apos;t see it? Ask your manager.
           </Step>
           <Step n={2} title="Start a new chat">
             Use a new chat for each report. A new chat always has the newest OS tools; an old one may not know it can post site visits.
@@ -70,14 +70,14 @@ export default async function SiteVisitGuidePage() {
       <Section number={3} title="During the visit: what to capture" icon="M15 10l4.6-2.3A1 1 0 0 1 21 8.6v6.8a1 1 0 0 1-1.4.9L15 14M5 18h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z">
         <p className="text-ink-900 text-lg font-medium">Claude only knows what you give it. For each unit or property, capture:</p>
         <ul className="grid gap-3 sm:grid-cols-2">
-          <Capture title="One video per room or area">Name each one clearly (&ldquo;209 – Kitchen&rdquo;), upload it to Dropbox and copy its share link.</Capture>
+          <Capture title="One video per room or area">Name each one clearly (&ldquo;Unit 2 – Kitchen&rdquo;), upload it to Dropbox and copy its share link.</Capture>
           <Capture title="The facts">Building, how many it sleeps, bedrooms and beds, bathrooms, floor, kitchen, laundry, outdoor space, entry, and its condition.</Capture>
           <Capture title="Issues and needs">
             What&apos;s wrong or missing, and when it shows in the video: &ldquo;stained carpet, bedroom 2 video at 0:45&rdquo;.
           </Capture>
           <Capture title="Your verdict, in your words">Would you put guests here as it is, after fixes, or not at all?</Capture>
           <Capture title="What you couldn't see">&ldquo;Occupied, couldn&apos;t film.&rdquo; Claude writes Not seen and never guesses.</Capture>
-          <Capture title="Who went, and who showed you round">For example: Alex and Eric, shown round by Minerva.</Capture>
+          <Capture title="Who went, and who showed you round">For example: two of our team, shown round by the landlord&apos;s agent.</Capture>
         </ul>
       </Section>
 
@@ -141,7 +141,7 @@ export default async function SiteVisitGuidePage() {
       <Section number={7} title="Changing a report, and tips" icon="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z">
         <ul className="space-y-2.5">
           <Rule ok>
-            <strong className="text-ink-900 font-medium">Correct it by asking Claude:</strong> &ldquo;Open the Babak site visit report on OS and change…&rdquo;. It saves
+            <strong className="text-ink-900 font-medium">Correct it by asking Claude:</strong> &ldquo;Open the site visit report for [property] on OS and change…&rdquo;. It saves
             the change in place. You can also press <strong className="font-medium">Edit</strong> on the report in OS.
           </Rule>
           <Rule ok>
@@ -164,7 +164,7 @@ export default async function SiteVisitGuidePage() {
       {/* Close */}
       <div className="brand-gradient rounded-2xl px-6 py-10 text-center text-white md:px-12">
         <p className="text-2xl font-semibold">Visit, film, paste, confirm. That&apos;s the report.</p>
-        <p className="mx-auto mt-3 max-w-xl text-[14px] font-light text-white/85">Stuck, or Claude can&apos;t see OS? Message Brandon on chat, with a screenshot.</p>
+        <p className="mx-auto mt-3 max-w-xl text-[14px] font-light text-white/85">Stuck, or Claude can&apos;t see OS? Message your manager on chat, with a screenshot.</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <a href="https://claude.ai/new" target="_blank" rel="noreferrer" className="text-brand-700 rounded-lg bg-white px-5 py-2.5 text-[14px] font-medium shadow-sm hover:bg-white/90">
             Open Claude
@@ -181,10 +181,10 @@ export default async function SiteVisitGuidePage() {
 const prompt = `Please write a site visit report and post it on WeLodge OS.
 
 Event: [LA28]
-Date of visit: [23 November 2026]
-Who went: [Alex and Eric], shown round by [Minerva]
-Provider / landlord: [Babak]
-Places visited: [Unit 209, 1540 6th St; Unit 505, Living at Santa Monica; 626 Broadway]
+Date of visit: [date]
+Who went: [your names], shown round by [name, if anyone]
+Provider / landlord: [name, if any]
+Places visited: [each unit or property, with its address]
 
 For each place: a verdict, a one-line conclusion, the facts at a glance, room by room, issues with the video and time they show in, and the video links.
 Keep my words and facts. Write "Not seen" for anything I didn't see. Don't invent anything.
@@ -203,7 +203,7 @@ const steps: [string, string][] = [
   ],
   [
     "Claude shows you the report before posting.",
-    "Check the verdicts, the facts and that no video link is missing. Correct anything in plain words: “505 has a dryer, not just a washer”.",
+    "Check the verdicts, the facts and that no video link is missing. Correct anything in plain words: “the second unit has a dryer, not just a washer”.",
   ],
   ["Say “yes, post it”.", "Claude posts the report and gives you the link."],
   ["Open the link and check it in OS.", "Use Print / PDF on the report if you need to send it to someone."],
