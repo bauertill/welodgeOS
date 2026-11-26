@@ -133,6 +133,8 @@ model Event {
   guestContact          String?
   roomingVersions       RoomingVersion[]
   roomingSubmissions    RoomingSubmission[]
+  inspections           Inspection[]
+  defects               Defect[]
   artifacts             Artifact[]
 
   @@index([startDate])
@@ -381,6 +383,11 @@ model RoomCategory {
 
   /// Phase 2 room slots numbered 1..N within this category (doc §2.1).
   slots RoomSlot[]
+
+  /// Apartments: this room type's inspection checklist (doc §6.10) — started from a standard
+  /// checklist and adjusted (what is in this kitchen, how many of each). Empty: the standard one.
+  /// [{ id, kind: "facility" | "inventory", area, items: [{ id, label, expected }] }]
+  checklist Json?
 
   photos PropertyPhoto[]
 
@@ -1248,6 +1255,11 @@ model User {
   roomingStaysChanged      RoomingStay[]       @relation("RoomingStayChangedBy")
   roomingVersions          RoomingVersion[]    @relation("RoomingVersionSentBy")
   roomingSubmissions       RoomingSubmission[] @relation("RoomingSubmittedBy")
+  inspectionsToDo          Inspection[]        @relation("InspectionInspector")
+  inspectionsPlanned       Inspection[]        @relation("InspectionCreatedBy")
+  defectsFound             Defect[]            @relation("DefectCreatedBy")
+  defectsChecked           Defect[]            @relation("DefectCheckedBy")
+  checklistTemplates       ChecklistTemplate[] @relation("ChecklistTemplateUpdatedBy")
   rateCards                RateCard[]
   photosAdded              PropertyPhoto[]
   quotationsAdded          Quotation[]         @relation("QuotationAddedBy")
@@ -1959,6 +1971,8 @@ model RoomSlot {
 
   roomNights   RoomNight[]
   roomingStays RoomingStay[]
+  inspections  Inspection[]
+  defects      Defect[]
 
   @@unique([categoryId, slotNumber])
   @@index([categoryId])
@@ -2238,6 +2252,9 @@ model Task {
   /// Files put on the task (doc §2.8, 2026-11-18).
   files    TaskFile[]
   links    TaskLink[]
+  /// The apartment inspection it is for, or the defect it fixes (doc §6.10).
+  inspection Inspection?
+  defect     Defect?
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -3051,4 +3068,142 @@ model ArtifactVersion {
   createdAt   DateTime @default(now())
 
   @@unique([artifactId, number])
+}
+
+// --- Inspections and defects (doc §6.10) --------------------------------------------
+
+/// A standard apartment checklist the team keeps and adjusts (doc §6.10, the owner 2026-11-26:
+/// "a standard list that we can add and adjust as we need"): what to check works (facility)
+/// and what should be there and how many (inventory), area by area. A room type starts from one.
+model ChecklistTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  /// [{ id, kind: "facility" | "inventory", area, items: [{ id, label, expected }] }]
+  sections    Json
+  /// The one a room type without its own checklist uses.
+  isDefault   Boolean  @default(false)
+  updatedBy   User?    @relation("ChecklistTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum InspectionStatus {
+  /// A date and who goes, not started.
+  PLANNED
+  /// Being walked through.
+  IN_PROGRESS
+  /// Finished by the person on site.
+  DONE
+}
+
+/// One apartment walked through before check-in (doc §6.10): one of the team, a dump of photos,
+/// the checklist ticked and counted, and what is not right recorded as defects.
+model Inspection {
+  id          String           @id @default(cuid())
+  event       Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId     String
+  /// The apartment — a room of ours at the property (its unit number on the slot).
+  slot        RoomSlot         @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slotId      String
+  status      InspectionStatus @default(PLANNED)
+  scheduledOn DateTime?        @db.Date
+  inspector   User?            @relation("InspectionInspector", fields: [inspectorId], references: [id], onDelete: SetNull)
+  inspectorId String?
+  /// The checklist as it stood when the inspection was planned — later changes to it do not move it.
+  checklist   Json
+  memo        String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  /// The inspector's task on the board.
+  task        Task?            @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  taskId      String?          @unique
+  createdBy   User?            @relation("InspectionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  defects     Defect[]
+  results     InspectionResult[]
+  photos      InspectionPhoto[]
+
+  @@index([eventId])
+  @@index([slotId])
+}
+
+/// One checklist item's answer on an inspection: works or not (facility), how many (inventory).
+model InspectionResult {
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  inspectionId String
+  itemId       String
+  ok           Boolean?
+  count        Int?
+  note         String?
+  updatedAt    DateTime   @updatedAt
+
+  @@id([inspectionId, itemId])
+}
+
+/// A photo from the inspection's dump — every angle, before the guests arrive.
+model InspectionPhoto {
+  id           String     @id @default(cuid())
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  inspectionId String
+  url          String
+  name         String?
+  createdAt    DateTime   @default(now())
+
+  @@index([inspectionId])
+}
+
+enum DefectSeverity {
+  /// Broken shower, bad smell, cleaning needed — the apartment is not ready until it is fixed.
+  BEFORE_CHECK_IN
+  /// To fix, but the guests can move in.
+  MUST_FIX
+  /// Kept on record only — a scratch on the wall, a chip on the table.
+  DOCUMENT
+  /// The person on site could not say: the office decides.
+  NOT_SURE
+}
+
+enum DefectStatus {
+  OPEN
+  /// Said to be fixed — waiting to be checked.
+  FIXED
+  /// Checked and fixed.
+  CHECKED
+}
+
+/// Something not right in an apartment (doc §6.10): what, where, photos, how serious, and — until
+/// it is checked as fixed — whose task it is. Missing items come pre-written ("2 missing knives").
+model Defect {
+  id           String         @id @default(cuid())
+  event        Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId      String
+  slot         RoomSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slotId       String
+  inspection   Inspection?    @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  inspectionId String?
+  /// The checklist item it came from, if any.
+  itemId       String?
+  area         String?
+  description  String
+  severity     DefectSeverity @default(NOT_SURE)
+  status       DefectStatus   @default(OPEN)
+  /// [{ url, name }]
+  photos       Json           @default("[]")
+  /// The cleaning, maintenance or other task that fixes it.
+  task         Task?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  taskId       String?        @unique
+  fixedAt      DateTime?
+  checkedAt    DateTime?
+  checkedBy    User?          @relation("DefectCheckedBy", fields: [checkedById], references: [id], onDelete: SetNull)
+  checkedById  String?
+  createdBy    User?          @relation("DefectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById  String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([eventId, status])
+  @@index([slotId])
 }
