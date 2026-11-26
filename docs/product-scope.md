@@ -685,7 +685,7 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | Sales requests (filtered by event, account manager, a word, follow-ups due), and one in full | A request's details, follow-up and next step, event, contact, and account manager (hand it over) |
 | An event's properties board, and a property in full | A request's stage, and what it is waiting on (Mark as…) |
 | An event's stock-sheet position (bought, option, sold, blocked, short, warnings) | Add a contact to a client |
-| Tasks on the board; a request's or client's emails | Post an update on a sales request, client or property; create a task, move it, comment on it |
+| Tasks on the board; a request's or client's emails | Post an update on a sales request, client or property; create a task, move it, comment on it; put a link (a Google Sheet, Doc, any page) in the Links section of one task or many at once — on creating them, or after (the owner, 2026-11-26: the same sheet on 29 tasks) |
 | Properties (search by name, city, address); a hotel's quotations for an event | Add a property (with room types and contacts), put it on an event's board, add a room type |
 | Contracts (by event, property, client, contractor or request), and one in full | Record a hotel's quotation; register a contract with its payments and cancellation deadlines; fill in or correct a contract, add a payment or a deadline |
 | Providers (chains, landlords); site visit reports on a property or provider, and one in full | Add a provider, set a property's provider; post a site visit report (§3.12) on the properties visited, or correct one |
