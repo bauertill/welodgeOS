@@ -543,8 +543,27 @@ model ContractorQuote {
   createdById  String?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+  /// What it is made of, when quoted line by line (transport: each vehicle
+  /// type and how many). With lines, the total is their sum; without, the amount.
+  lines        ContractorQuoteLine[]
 
   @@index([contractorId])
+}
+
+/// One line of a contractor's quote (doc §3.11, 2026-11-26): "Sprinter van,
+/// 16 seats — airport transfers", 4 × "per vehicle per day" at 350.00.
+model ContractorQuoteLine {
+  id             String          @id @default(cuid())
+  quote          ContractorQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId        String
+  description    String
+  quantity       Int
+  /// What one is: "per vehicle per day", "per trip", "per apartment".
+  unit           String?
+  unitPriceCents Int
+  position       Int             @default(0)
+
+  @@index([quoteId])
 }
 
 /// A file or link kept on a contractor (doc §3.11): an uploaded file's

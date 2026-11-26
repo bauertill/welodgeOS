@@ -38,7 +38,24 @@ const quoteInput = z.object({
   validUntil: day.nullable().optional(),
   documentUrl: link.optional(),
   notes: z.string().max(5000).optional(),
+  /** Quoted line by line: then the total is their sum, and the amount is not kept. */
+  lines: z
+    .array(
+      z.object({
+        description: z.string().trim().min(1, "Say what each line is.").max(500),
+        quantity: z.number().int().min(1, "A line needs at least 1.").max(100_000),
+        unit: z.string().trim().max(100).optional(),
+        unitPriceCents: z.number().int().min(0),
+      }),
+    )
+    .max(100)
+    .optional(),
 });
+/** A quote's total: its lines' sum, or the amount typed when it has none. */
+export const quoteTotal = (quote: { amountCents: number | null; lines: { quantity: number; unitPriceCents: number }[] }) =>
+  quote.lines.length ? quote.lines.reduce((sum, line) => sum + line.quantity * line.unitPriceCents, 0) : quote.amountCents;
+const lineRows = (lines: NonNullable<z.infer<typeof quoteInput>["lines"]>) =>
+  lines.map((line, position) => ({ description: line.description, quantity: line.quantity, unit: blank(line.unit), unitPriceCents: line.unitPriceCents, position }));
 const nameInput = z.string().trim().min(1, "A contractor needs a name.").max(200);
 
 async function refuseDuplicate(db: { contractor: { findFirst: (args: object) => Promise<{ name: string } | null> } }, eventId: string, name: string, id?: string) {
@@ -162,8 +179,8 @@ export const contractorRouter = createTRPCRouter({
     ctx.db.contractorQuote.findMany({
       where: { contractorId: input.contractorId },
       orderBy: [{ receivedOn: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
-      include: { contract: { select: { id: true, eventId: true, name: true } }, createdBy: person },
-    }),
+      include: { contract: { select: { id: true, eventId: true, name: true } }, createdBy: person, lines: { orderBy: { position: "asc" } } },
+    }).then((quotes) => quotes.map((quote) => ({ ...quote, totalCents: quoteTotal(quote) }))),
   ),
 
   addQuote: protectedProcedure.input(quoteInput.extend({ contractorId: z.string() })).mutation(async ({ ctx, input }) => {
@@ -171,8 +188,9 @@ export const contractorRouter = createTRPCRouter({
       data: {
         contractorId: input.contractorId,
         title: input.title,
-        amountCents: input.amountCents ?? null,
+        amountCents: input.lines?.length ? null : (input.amountCents ?? null),
         currency: input.currency,
+        ...(input.lines?.length && { lines: { create: lineRows(input.lines) } }),
         receivedOn: toDay(input.receivedOn),
         validUntil: toDay(input.validUntil),
         documentUrl: blank(input.documentUrl),
@@ -185,11 +203,14 @@ export const contractorRouter = createTRPCRouter({
   }),
 
   updateQuote: protectedProcedure.input(quoteInput.partial().extend({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const current = await ctx.db.contractorQuote.findUniqueOrThrow({ where: { id: input.id }, select: { contractId: true } });
+    if (current.contractId) throw new TRPCError({ code: "BAD_REQUEST", message: "Its contract is made — change the contract instead." });
     const quote = await ctx.db.contractorQuote.update({
       where: { id: input.id },
       data: {
         ...(input.title !== undefined && { title: input.title }),
-        ...(input.amountCents !== undefined && { amountCents: input.amountCents }),
+        ...(input.amountCents !== undefined && { amountCents: input.lines?.length ? null : input.amountCents }),
+        ...(input.lines !== undefined && { amountCents: input.lines.length ? null : (input.amountCents ?? null), lines: { deleteMany: {}, create: lineRows(input.lines) } }),
         ...(input.currency !== undefined && { currency: input.currency }),
         ...(input.receivedOn !== undefined && { receivedOn: toDay(input.receivedOn) }),
         ...(input.validUntil !== undefined && { validUntil: toDay(input.validUntil) }),
@@ -218,7 +239,15 @@ export const contractorRouter = createTRPCRouter({
   acceptQuote: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
     const me = ctx.session.user.id;
     return ctx.db.$transaction(async (tx) => {
-      const quote = await tx.contractorQuote.findUniqueOrThrow({ where: { id: input.id }, include: { contractor: { select: { id: true, name: true, eventId: true } } } });
+      const quote = await tx.contractorQuote.findUniqueOrThrow({
+        where: { id: input.id },
+        include: { contractor: { select: { id: true, name: true, eventId: true } }, lines: { orderBy: { position: "asc" } } },
+      });
+      const total = quoteTotal(quote);
+      const money = (cents: number) => `${quote.currency} ${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const lineWords = quote.lines.map(
+        (line) => `${line.quantity} × ${line.description}${line.unit ? ` (${line.unit})` : ""} at ${money(line.unitPriceCents)} = ${money(line.quantity * line.unitPriceCents)}`,
+      );
       if (quote.contractId) throw new TRPCError({ code: "BAD_REQUEST", message: "Its contract is already made." });
       const earlier = await tx.contract.findFirst({
         where: { contractorId: quote.contractorId, paymentInstructions: { not: null } },
@@ -232,9 +261,9 @@ export const contractorRouter = createTRPCRouter({
           eventId: quote.contractor.eventId,
           contractorId: quote.contractorId,
           documentUrl: quote.documentUrl,
-          totalCents: quote.amountCents,
-          currency: quote.amountCents != null ? quote.currency : null,
-          notes: quote.notes,
+          totalCents: total,
+          currency: total != null ? quote.currency : null,
+          notes: [lineWords.length ? `From the quote:\n${lineWords.join("\n")}` : null, quote.notes].filter(Boolean).join("\n\n") || null,
           paymentInstructions: earlier?.paymentInstructions ?? null,
           ownerId: me,
         },

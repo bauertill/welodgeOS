@@ -39,6 +39,7 @@ export function welodgeServer(person: Person, headers: Headers) {
         "Words matter: a room-night is Bought / Option / In progress with the hotel, and Sold / Blocked / Requested with the client. A sales request moves Initial interest → Specify → Proposal sent → Negotiation → Contracted, or is Lost/Declined.",
         "Look things up before changing them, use ids from what you found, and say what you changed. Every change is recorded as made by this person via Claude.",
         "You cannot delete anything, or buy, block or sell rooms, or make offers — point the person to the site for those.",
+        "Contractors — transport, furniture, cleaning, linen and other companies working on an event besides the hotels — are on each event's Contractors tab: find them with list_contractors, add one with create_contractor, and record their offers with add_contractor_quote (line by line for vehicles or services). A quote is not a contract: only register a contract once it is signed.",
         "When the person asks for a page to show someone — a presentation, a comparison, a proposal, a scenario — build it as ONE self-contained HTML document (styles inline; fonts and libraries only from public CDNs; pictures as links or small inline images; under 4 MB) and save it with save_artifact. In We Lodge's look: Lato, purple #614fc9, violet #ab6ce2, navy #1e2e5d, lime #cefa05 used sparingly; 'We Lodge' is two words; it must read well on a phone and print cleanly. A page for a client or a provider never shows our buying rates, margins, costs or other clients. Do not share it (share_artifact) until the person says so. To change a saved page, read it with get_artifact, then save_artifact with its id.",
         "When the person shares a PDF — a hotel's quotation (their proposal to us), a contractor's quote (add_contractor_quote), a signed contract, a property's fact sheet — read it, find the event, property, client or contract it belongs to (search before adding, so nothing is added twice), then show the person in a short list what you will add and ask them to confirm before writing. Never guess a figure or a date the PDF does not give: leave it out and say so. Terms that do not fit a field go, in words, into the notes or terms. Afterwards say what you added, with the link.",
       ].join("\n"),
@@ -56,7 +57,10 @@ export function welodgeServer(person: Person, headers: Headers) {
     server.registerTool(name, { description, inputSchema: shape, annotations }, (async (args: z.objectOutputType<S, z.ZodTypeAny>) => {
       try {
         const result = await actingVia.run({ via: "Claude" }, () => run(args));
-        return { content: [{ type: "text" as const, text: typeof result === "string" ? result : tidy(result) }] };
+        // An empty list (or nothing) tidies away to no text at all, which Claude
+        // reads as a broken reply — say so in words instead.
+        const text = typeof result === "string" ? result : (tidy(result) ?? (Array.isArray(result) ? "None found." : "Done."));
+        return { content: [{ type: "text" as const, text }] };
       } catch (error) {
         const message = error instanceof TRPCError || error instanceof Error ? error.message : "Something went wrong.";
         return { isError: true, content: [{ type: "text" as const, text: message }] };
@@ -557,11 +561,23 @@ export function welodgeServer(person: Person, headers: Headers) {
 
   tool(
     "add_contractor_quote",
-    "Record a contractor's quote — what it is for, the amount and currency, when received and how long it is valid, its file's link and notes. It shows on the contractor's page, where it can be accepted to make the contract.",
+    "Record a contractor's quote (not yet accepted — a transport, furniture, cleaning… offer) — what it is for, the amount or its lines (each with quantity, unit and price), the currency, when received and how long it is valid, its file's link and notes. It shows on the contractor's page, where it can be accepted to make the contract.",
     {
       contractorId: z.string(),
       title: z.string().min(1).max(300),
-      amount: z.number().min(0).optional().describe("In the currency's main unit, e.g. 12500.50"),
+      amount: z.number().min(0).optional().describe("The quote's total in the currency's main unit, e.g. 12500.50 — leave out when giving lines."),
+      lines: z
+        .array(
+          z.object({
+            description: z.string().min(1).max(500).describe("What it is, e.g. 'Mercedes Sprinter, 16 seats — airport transfers'"),
+            quantity: z.number().int().min(1),
+            unit: z.string().max(100).optional().describe("What one is: 'per vehicle per day', 'per trip'"),
+            unitPrice: z.number().min(0).describe("Price of one, in the currency's main unit"),
+          }),
+        )
+        .max(100)
+        .optional()
+        .describe("For a quote made of lines — vehicles, services, items: the total is their sum."),
       currency: z.string().length(3).default("USD"),
       receivedOn: day.optional(),
       validUntil: day.optional(),
@@ -569,8 +585,12 @@ export function welodgeServer(person: Person, headers: Headers) {
       notes: z.string().max(5000).optional(),
     },
     write,
-    async ({ amount, ...quote }) => {
-      const created = await caller.contractor.addQuote({ ...quote, amountCents: amount === undefined ? null : Math.round(amount * 100) });
+    async ({ amount, lines, ...quote }) => {
+      const created = await caller.contractor.addQuote({
+        ...quote,
+        amountCents: amount === undefined ? null : Math.round(amount * 100),
+        lines: lines?.map(({ unitPrice, ...line }) => ({ ...line, unitPriceCents: Math.round(unitPrice * 100) })),
+      });
       return { quoteId: created.id };
     },
   );
