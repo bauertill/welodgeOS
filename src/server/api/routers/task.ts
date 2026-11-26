@@ -9,6 +9,7 @@ import { formatDate, formatRange } from "~/lib/format";
 import { contactOutcomeLabels, taskStatusLabels } from "~/lib/tasks";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { diffFields, logAudit } from "~/server/audit";
+import { settleDefectForTask } from "~/server/inspections";
 import { deleteStored, storedFile, taskFilePrefix } from "~/server/files";
 import { GET_RATE } from "~/server/get-rate";
 import { visibleTo } from "~/server/private-tasks";
@@ -608,6 +609,8 @@ export const taskRouter = createTRPCRouter({
         });
       }
       if (before.status !== after.status) {
+        // A defect's task done: the defect is fixed, to be checked (doc §6.10).
+        await settleDefectForTask(tx, id, after.status);
         await notify(tx, {
           to: [after.requestedBy?.id, ...after.assignees.map((person) => person.id)].filter((person) => !added.includes(person ?? "")),
           actorId: ctx.session.user.id,
