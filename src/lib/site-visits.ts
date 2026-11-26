@@ -8,6 +8,9 @@ import { z } from "zod";
 
 export const siteVisitVerdicts = ["STRONG", "NEEDS_WORK", "NOT_READY", "NO_GO"] as const satisfies readonly SiteVisitVerdict[];
 
+/** The team tag every new report is sent to, as if @mentioned (the owner, 2026-11-26: "auto tag, @LA group"). */
+export const SITE_VISIT_TEAM_TAG = "LA";
+
 export const verdictLabels: Record<SiteVisitVerdict, string> = {
   STRONG: "Strong option",
   NEEDS_WORK: "Needs work",
