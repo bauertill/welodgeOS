@@ -26,7 +26,7 @@ const guides = [
     href: "/guide/site-visits",
     title: "Site visit reports with Claude",
     team: "Anyone who visits properties",
-    text: "What to capture on a visit, the prompt to copy, and how Claude posts the report on the property, with its verdict on the board.",
+    text: "Upload your videos, copy the prompt, and Claude posts the report on the property, with its verdict on the board.",
     size: "A three-minute read",
   },
 ];

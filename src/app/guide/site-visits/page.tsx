@@ -11,7 +11,7 @@ export const metadata = { title: "Site visit reports with Claude" };
  * How to post a site visit report with Claude (doc §2.11, §3.12; the owner,
  * 2026-11-26: "a guide on how to use Claude to write the site inspection
  * feedback … nicely designed under the guide section"). For whoever visits
- * properties: what to capture, the prompt to copy, checking and confirming,
+ * properties: uploading the videos, the prompt to copy, checking and confirming,
  * the verdicts, and changing a report later.
  */
 export default async function SiteVisitGuidePage() {
@@ -60,29 +60,14 @@ export default async function SiteVisitGuidePage() {
           <Step n={2} title="Start a new chat">
             Use a new chat for each report. A new chat always has the newest OS tools; an old one may not know it can post site visits.
           </Step>
-          <Step n={3} title="Have your material ready">
-            Your notes (typed, voice-to-text or a PDF), the Dropbox links to your videos, the date, and who went.
+          <Step n={3} title="Upload your videos">
+            Upload the videos from the visit to Dropbox and copy their share links. Have your notes ready too: typed, voice-to-text or a PDF.
           </Step>
         </div>
       </Section>
 
-      {/* During the visit */}
-      <Section number={3} title="During the visit: what to capture" icon="M15 10l4.6-2.3A1 1 0 0 1 21 8.6v6.8a1 1 0 0 1-1.4.9L15 14M5 18h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z">
-        <p className="text-ink-900 text-lg font-medium">Claude only knows what you give it. For each unit or property, capture:</p>
-        <ul className="grid gap-3 sm:grid-cols-2">
-          <Capture title="One video per room or area">Name each one clearly (&ldquo;Unit 2 – Kitchen&rdquo;), upload it to Dropbox and copy its share link.</Capture>
-          <Capture title="The facts">Building, how many it sleeps, bedrooms and beds, bathrooms, floor, kitchen, laundry, outdoor space, entry, and its condition.</Capture>
-          <Capture title="Issues and needs">
-            What&apos;s wrong or missing, and when it shows in the video: &ldquo;stained carpet, bedroom 2 video at 0:45&rdquo;.
-          </Capture>
-          <Capture title="Your verdict, in your words">Would you put guests here as it is, after fixes, or not at all?</Capture>
-          <Capture title="What you couldn't see">&ldquo;Occupied, couldn&apos;t film.&rdquo; Claude writes Not seen and never guesses.</Capture>
-          <Capture title="Who went, and who showed you round">For example: two of our team, shown round by the landlord&apos;s agent.</Capture>
-        </ul>
-      </Section>
-
       {/* Step by step */}
-      <Section number={4} title="Step by step" icon="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01">
+      <Section number={3} title="Step by step" icon="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01">
         <ol className="space-y-3">
           {steps.map(([title, text], i) => (
             <li key={title} className="flex gap-4 rounded-xl bg-white p-4">
@@ -97,13 +82,13 @@ export default async function SiteVisitGuidePage() {
       </Section>
 
       {/* Prompt */}
-      <Section number={5} title="The prompt to copy" icon="M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z">
+      <Section number={4} title="The prompt to copy" icon="M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z">
         <p>Copy it into a new Claude chat, replace the parts in [brackets], and paste your notes and video links at the bottom.</p>
         <CopyPrompt text={prompt} />
       </Section>
 
       {/* Verdicts */}
-      <Section number={6} title="The verdicts, and what a report holds" icon="M9 12l2 2 4-4M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z">
+      <Section number={5} title="The verdicts, and what a report holds" icon="M9 12l2 2 4-4M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z">
         <p>
           Each place gets one of four verdicts. You can put a short note in your own words in its place on the badge, such as{" "}
           <VerdictBadge verdict="STRONG" note="Stronger option out of the 3" />.
@@ -138,7 +123,7 @@ export default async function SiteVisitGuidePage() {
       </Section>
 
       {/* Changing it */}
-      <Section number={7} title="Changing a report, and tips" icon="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z">
+      <Section number={6} title="Changing a report, and tips" icon="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z">
         <ul className="space-y-2.5">
           <Rule ok>
             <strong className="text-ink-900 font-medium">Correct it by asking Claude:</strong> &ldquo;Open the site visit report for [property] on OS and change…&rdquo;. It saves
@@ -163,7 +148,7 @@ export default async function SiteVisitGuidePage() {
 
       {/* Close */}
       <div className="brand-gradient rounded-2xl px-6 py-10 text-center text-white md:px-12">
-        <p className="text-2xl font-semibold">Visit, film, paste, confirm. That&apos;s the report.</p>
+        <p className="text-2xl font-semibold">Upload, paste, confirm. That&apos;s the report.</p>
         <p className="mx-auto mt-3 max-w-xl text-[14px] font-light text-white/85">Stuck, or Claude can&apos;t see OS? Message your manager on chat, with a screenshot.</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <a href="https://claude.ai/new" target="_blank" rel="noreferrer" className="text-brand-700 rounded-lg bg-white px-5 py-2.5 text-[14px] font-medium shadow-sm hover:bg-white/90">
@@ -266,18 +251,6 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
       <p className="text-ink-900 mt-3 font-semibold">{title}</p>
       <p className="text-ink-700 mt-1 text-[13px] font-light">{children}</p>
     </div>
-  );
-}
-
-function Capture({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <li className="flex gap-3 rounded-xl bg-white p-4">
-      <Icon path="M20 6 9 17l-5-5" className="text-brand-600 mt-0.5 h-5 w-5 shrink-0" />
-      <span>
-        <span className="text-ink-900 block font-semibold">{title}</span>
-        <span className="text-[13px]">{children}</span>
-      </span>
-    </li>
   );
 }
 
