@@ -39,7 +39,7 @@ export function welodgeServer(person: Person, headers: Headers) {
         "Words matter: a room-night is Bought / Option / In progress with the hotel, and Sold / Blocked / Requested with the client. A sales request moves Initial interest → Specify → Proposal sent → Negotiation → Contracted, or is Lost/Declined.",
         "Look things up before changing them, use ids from what you found, and say what you changed. Every change is recorded as made by this person via Claude.",
         "You cannot delete anything, or buy, block or sell rooms, or make offers — point the person to the site for those.",
-        "When the person shares a PDF — a hotel's quotation (their proposal to us), a signed contract, a property's fact sheet — read it, find the event, property, client or contract it belongs to (search before adding, so nothing is added twice), then show the person in a short list what you will add and ask them to confirm before writing. Never guess a figure or a date the PDF does not give: leave it out and say so. Terms that do not fit a field go, in words, into the notes or terms. Afterwards say what you added, with the link.",
+        "When the person shares a PDF — a hotel's quotation (their proposal to us), a contractor's quote (add_contractor_quote), a signed contract, a property's fact sheet — read it, find the event, property, client or contract it belongs to (search before adding, so nothing is added twice), then show the person in a short list what you will add and ask them to confirm before writing. Never guess a figure or a date the PDF does not give: leave it out and say so. Terms that do not fit a field go, in words, into the notes or terms. Afterwards say what you added, with the link.",
       ].join("\n"),
     },
   );
@@ -279,11 +279,12 @@ export function welodgeServer(person: Person, headers: Headers) {
 
   tool(
     "post_update",
-    "Post an update — a note, meeting feedback or call summary — on a sales request, a client or a property (exactly one). An update on a sales request shows on its client's feed too.",
+    "Post an update — a note, meeting feedback or call summary — on a sales request, a client, a property or a contractor (exactly one). An update on a sales request shows on its client's feed too.",
     {
       salesRequestId: z.string().optional(),
       clientId: z.string().optional(),
       propertyId: z.string().optional(),
+      contractorId: z.string().optional(),
       body: z.string().min(1).max(20_000),
       kind: z.enum(["NOTE", "MEETING", "CALL"]).default("NOTE"),
       happenedOn: day.optional(),
@@ -297,7 +298,7 @@ export function welodgeServer(person: Person, headers: Headers) {
 
   tool(
     "create_task",
-    "Put a task on the team's board, optionally assigned and tied to an event, property, client or sales request.",
+    "Put a task on the team's board, optionally assigned and tied to an event, property, client, sales request or contractor.",
     {
       title: z.string().min(1).max(300),
       details: z.string().max(10_000).optional(),
@@ -308,6 +309,7 @@ export function welodgeServer(person: Person, headers: Headers) {
       propertyId: z.string().optional(),
       clientId: z.string().optional(),
       salesRequestId: z.string().optional(),
+      contractorId: z.string().optional(),
     },
     write,
     async (input) => {
@@ -443,6 +445,143 @@ export function welodgeServer(person: Person, headers: Headers) {
     async ({ propertyId, name, rooms, sleeps, ...rest }) => {
       const made = await caller.property.saveCategory({ propertyId, category: { name, unitCount: rooms, capacity: sleeps, currency: "USD", ...rest } });
       return { roomTypeId: made.id, name: made.name };
+    },
+  );
+
+  // --- Contractors (doc §3.11): furniture, cleaning, linen… companies on one event ---
+
+  const contractorKind = z.enum(["FURNITURE", "CLEANING", "LINEN", "MAINTENANCE", "TRANSPORT", "SECURITY", "CATERING", "OTHER"]);
+  const contactShape = z.object({ name: z.string().min(1).max(200), role: z.string().max(200).optional(), email: z.string().email().optional(), phone: z.string().max(100).optional() });
+  const contractorDetails = {
+    service: z.string().max(2000).optional().describe("What it does, in words — needed when the kind is OTHER."),
+    website: z.string().max(500).optional(),
+    email: z.string().email().optional(),
+    phone: z.string().max(100).optional(),
+    notes: z.string().max(2000).optional(),
+    tradeName: z.string().max(300).optional(),
+    vatNumber: z.string().max(100).optional(),
+    registrationNumber: z.string().max(100).optional(),
+    iban: z.string().max(100).optional(),
+    bic: z.string().max(100).optional(),
+    signatoryName: z.string().max(200).optional(),
+    signatoryTitle: z.string().max(200).optional(),
+    contractEmail: z.string().max(300).optional(),
+  };
+  /** Its fields as they stand, with what is given laid over — the site's save takes them all. */
+  const saveContractor = async (id: string, given: Record<string, unknown>, addContacts: z.infer<typeof contactShape>[]) => {
+    const current = await caller.contractor.byId({ id });
+    if (!current) throw new TRPCError({ code: "NOT_FOUND", message: "That contractor no longer exists." });
+    const keep = (key: string) => (given[key] !== undefined ? given[key] : (current as Record<string, unknown>)[key]) ?? undefined;
+    const keys = ["service", "website", "email", "phone", "notes", "tradeName", "vatNumber", "registrationNumber", "iban", "bic", "signatoryName", "signatoryTitle", "contractEmail"];
+    const known = new Set(current.contacts.map((contact) => (contact.email ?? contact.name).toLowerCase()));
+    await caller.contractor.update({
+      id,
+      name: (given.name as string | undefined) ?? current.name,
+      kind: (given.kind as z.infer<typeof contractorKind> | undefined) ?? current.kind,
+      ...(Object.fromEntries(keys.map((key) => [key, keep(key)])) as object),
+      contacts: [
+        ...current.contacts.map((contact) => ({ name: contact.name, role: contact.role ?? undefined, email: contact.email ?? undefined, phone: contact.phone ?? undefined })),
+        ...addContacts.filter((contact) => !known.has((contact.email ?? contact.name).toLowerCase())),
+      ],
+    } as never);
+  };
+
+  tool(
+    "list_contractors",
+    "An event's contractors — furniture, cleaning, linen, maintenance, transport, security, catering or other companies working on it besides the hotels — with their ids, a first contact, and how many properties, contracts and tasks each has.",
+    { eventId: z.string() },
+    read,
+    async ({ eventId }) =>
+      (await caller.contractor.list({ eventId })).map((c) => ({
+        id: c.id,
+        name: c.name,
+        kind: c.kind,
+        service: c.service,
+        email: c.email,
+        phone: c.phone,
+        contact: c.contacts[0] ? `${c.contacts[0].name}${c.contacts[0].email ? ` <${c.contacts[0].email}>` : ""}` : null,
+        properties: c._count.properties,
+        contracts: c._count.contracts,
+        tasks: c._count.tasks,
+      })),
+  );
+
+  tool("get_contractor", "One contractor in full: details, contacts, contracting details and the properties it serves.", { id: z.string() }, read, async ({ id }) => {
+    const contractor = await caller.contractor.byId({ id });
+    if (!contractor) throw new TRPCError({ code: "NOT_FOUND", message: "That contractor no longer exists." });
+    return { ...contractor, link: `/events/${contractor.eventId}/contractors/${contractor.id}` };
+  });
+
+  tool(
+    "create_contractor",
+    "Add a contractor to an event's Contractors tab (a contractor belongs to one event). List the event's contractors first — a name already there is refused. Contacts, contracting details and the properties it serves can be given here.",
+    {
+      eventId: z.string(),
+      name: z.string().min(1).max(200),
+      kind: contractorKind,
+      ...contractorDetails,
+      contacts: z.array(contactShape).max(20).default([]),
+      serves: z.array(z.object({ propertyId: z.string(), what: z.string().max(500).optional().describe("What it does there, e.g. 'linen for 40 apartments'.") })).max(100).default([]),
+    },
+    write,
+    async ({ eventId, name, kind, contacts, serves, ...details }) => {
+      const created = await caller.contractor.create({ eventId, name, kind, service: details.service });
+      await saveContractor(created.id, details, contacts);
+      for (const one of serves) await caller.contractor.setProperty({ contractorId: created.id, propertyId: one.propertyId, on: true, what: one.what });
+      return { contractorId: created.id, name: created.name, link: `/events/${eventId}/contractors/${created.id}` };
+    },
+  );
+
+  tool(
+    "update_contractor",
+    "Fill in or correct a contractor: only the fields given change. Contacts given are added to its contacts (none are removed).",
+    { id: z.string(), name: z.string().min(1).max(200).optional(), kind: contractorKind.optional(), ...contractorDetails, addContacts: z.array(contactShape).max(20).default([]) },
+    write,
+    async ({ id, addContacts, ...given }) => {
+      await saveContractor(id, given, addContacts);
+      return "Saved.";
+    },
+  );
+
+  tool(
+    "set_contractor_property",
+    "Record that a contractor serves a property on its event, and what it does there (or change what it does).",
+    { contractorId: z.string(), propertyId: z.string(), what: z.string().max(500).optional() },
+    write,
+    async ({ contractorId, propertyId, what }) => {
+      await caller.contractor.setProperty({ contractorId, propertyId, on: true, what });
+      return "Saved.";
+    },
+  );
+
+  tool(
+    "add_contractor_quote",
+    "Record a contractor's quote — what it is for, the amount and currency, when received and how long it is valid, its file's link and notes. It shows on the contractor's page, where it can be accepted to make the contract.",
+    {
+      contractorId: z.string(),
+      title: z.string().min(1).max(300),
+      amount: z.number().min(0).optional().describe("In the currency's main unit, e.g. 12500.50"),
+      currency: z.string().length(3).default("USD"),
+      receivedOn: day.optional(),
+      validUntil: day.optional(),
+      documentUrl: z.string().max(2000).optional(),
+      notes: z.string().max(5000).optional(),
+    },
+    write,
+    async ({ amount, ...quote }) => {
+      const created = await caller.contractor.addQuote({ ...quote, amountCents: amount === undefined ? null : Math.round(amount * 100) });
+      return { quoteId: created.id };
+    },
+  );
+
+  tool(
+    "add_contractor_link",
+    "Keep a link on a contractor's page under Files and links — a Google Sheet, Doc, Drive folder or any page — with an optional name.",
+    { contractorId: z.string(), url: z.string().min(1).max(2000), name: z.string().max(300).optional() },
+    write,
+    async (input) => {
+      await caller.contractor.addFile(input);
+      return "Added.";
     },
   );
 

@@ -510,9 +510,54 @@ model Contractor {
   contracts  Contract[]
   updates    Update[]
   tasks      Task[]
+  quotes     ContractorQuote[]
+  files      ContractorFile[]
 
   @@unique([eventId, name])
   @@index([eventId])
+}
+
+/// A contractor's quote (doc §3.11, the owner 2026-11-26: "on the contractors
+/// tab we should be able to upload a file, add a quote"): one sum for the work,
+/// in its currency, with the quote's file or link. Accepted, it becomes the
+/// contractor's supplier contract.
+model ContractorQuote {
+  id           String          @id @default(cuid())
+  contractor   Contractor      @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  contractorId String
+  /// "Furniture for 40 apartments"
+  title        String
+  amountCents  Int?
+  currency     String          @default("USD")
+  receivedOn   DateTime?       @db.Date
+  validUntil   DateTime?       @db.Date
+  status       QuotationStatus @default(RECEIVED)
+  documentUrl  String?
+  notes        String?
+  /// The contract made from it, once accepted.
+  contract     Contract?       @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  contractId   String?         @unique
+  createdBy    User?           @relation("ContractorQuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById  String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([contractorId])
+}
+
+/// A file or link kept on a contractor (doc §3.11): an uploaded file's
+/// address in the private store, or a pasted link (a Google Sheet, a Drive folder).
+model ContractorFile {
+  id           String     @id @default(cuid())
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  contractorId String
+  url          String
+  name         String
+  addedBy      User?      @relation("ContractorFileAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+  addedById    String?
+  createdAt    DateTime   @default(now())
+
+  @@index([contractorId, createdAt])
 }
 
 model ContractorContact {
@@ -1007,6 +1052,8 @@ model Contract {
   @@index([eventId])
   @@index([propertyId])
   @@index([clientId])
+  /// The contractor quote it was made from (doc §3.11).
+  contractorQuote ContractorQuote?
 }
 
 /// One payment a contract schedules — a share of its total, or a set amount.
@@ -1181,6 +1228,8 @@ model User {
   updatesSeen            UpdateBoardSeen[]
   taskFiles              TaskFile[]           @relation("TaskFileUploadedBy")
   taskLinks              TaskLink[]           @relation("TaskLinkAddedBy")
+  contractorQuotes       ContractorQuote[]    @relation("ContractorQuoteCreatedBy")
+  contractorFiles        ContractorFile[]     @relation("ContractorFileAddedBy")
   storedFiles            StoredFile[]         @relation("StoredFileUploadedBy")
 }
 
