@@ -684,6 +684,7 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | Tasks on the board; a request's or client's emails | Post an update on a sales request, client or property; create a task, move it, comment on it |
 | Properties (search by name, city, address); a hotel's quotations for an event | Add a property (with room types and contacts), put it on an event's board, add a room type |
 | Contracts (by event, property, client, contractor or request), and one in full | Record a hotel's quotation; register a contract with its payments and cancellation deadlines; fill in or correct a contract, add a payment or a deadline |
+| An event's contractors (§3.11), and one in full | Add a contractor to an event's Contractors tab — with contacts, contracting details and the properties it serves (a name already on the event is refused); fill it in or correct it (contacts are only added, never removed); record a property it serves; record its quote; keep a link on it; post an update or create a task about it |
 | Artifacts (§4.13), and one's page to change it | Save a page as an artifact, or a new page for one; turn its client link on or off |
 
 **From a PDF** (the owner, 2026-11-20: "I will upload a PDF and it should read it and add the
@@ -1897,6 +1898,19 @@ Each contractor's page holds:
   signatory, contract email), visible to every colleague.
 - **Properties it serves** — chosen from its event's properties — each with what it does there ("Furnishes the 12 apartments"); each
   property's page has a *Contractors* tab listing them back.
+- **Quotes** (the owner, 2026-11-26: "on the contractors tab we should be able to upload a
+  file, add a quote etc"): *+ Add quote* asks what it is for, the amount and currency (any of
+  the site's currencies, with ≈ US$ shown), when it was received and how long it is valid,
+  the quote's file (uploaded or a link) and notes. Each is *Received*, *Accepted* or
+  *Declined*. **Accept and make the contract** turns it into the contractor's supplier
+  contract — named "<quote> — <contractor>", with the quote's amount, currency, file and
+  notes, the person as account manager, and the payment instructions of the contractor's
+  last contract — and opens it, for its payments and terms; the quote then links to it and
+  can no longer be changed or removed. *Decline* (and *Back to received*), *Edit* and
+  *Remove* until then.
+- **Files and links**: upload a file (into the site's private store, up to 100 MB) or paste
+  a Google Sheet, Doc, Drive folder or any link, with an optional name; each shows what it is,
+  who added it and when, and × takes it off. Recorded in its history.
 - **Contracts and payments** for its event, with *+ New contract*; a contract can only name a
   contractor of the contract's own event. A
   contractor's contract is a **supplier contract** (§7.1) with the contractor in the hotel's
@@ -4926,7 +4940,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Deployed and reachable | **Built** | https://os.welodge.net, on Vercel with a Neon PostgreSQL database. `master` deploys automatically. `welodge-os.vercel.app` redirects there |
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
-| §3.11 Contractors | **Built** (2026-11-19) | A Contractors tab per event — each contractor belongs to one event (no menu item since the same day); each with what it does, contacts, contracting details, properties it serves among the event's (shown on the property too), supplier contracts and payments, tasks and updates (board's Other providers tab) |
+| §3.11 Contractors | **Built** (2026-11-19) | A Contractors tab per event — each contractor belongs to one event (no menu item since the same day); each with what it does, contacts, contracting details, properties it serves among the event's (shown on the property too), supplier contracts and payments, tasks and updates (board's Other providers tab); quotes (accepted → its contract) and files and links (2026-11-26); Claude can add and fill in contractors, their quotes and links (2026-11-26) |
 | §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |
