@@ -19,6 +19,7 @@ import {
 } from "~/lib/inventory";
 import { positionOf } from "~/lib/position";
 import type { BlockNight } from "~/lib/stock-blocks";
+import { guestName } from "~/lib/rooming";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { ensureBlockTasks } from "~/server/block-task";
 import { settleExtensions } from "~/server/rooming";
@@ -1144,8 +1145,32 @@ export const inventoryRouter = createTRPCRouter({
         };
       }
 
+      // The guests from the rooming lists (doc §6.9; the owner, 2026-11-26: "add the names onto
+      // the inventory board — this is what we would look at to see the guest arrivals"): each
+      // stay on a room shown, with who is in it, across the nights it covers.
+      const shownSlots = [...properties.values()].flatMap((property) => [...property.categories.values()].flatMap((category) => [...category.slots.keys()]));
+      const stays = shownSlots.length
+        ? await ctx.db.roomingStay.findMany({
+            where: { slotId: { in: shownSlots }, removedAt: null, checkIn: { lt: input.checkOut }, checkOut: { gt: input.checkIn } },
+            select: { slotId: true, checkIn: true, checkOut: true, guests: true, arrival: true },
+            orderBy: { checkIn: "asc" },
+          })
+        : [];
+      const guests = stays
+        .map((stay) => ({
+          slotId: stay.slotId,
+          checkIn: dayKey(stay.checkIn),
+          checkOut: dayKey(stay.checkOut),
+          names: (Array.isArray(stay.guests) ? (stay.guests as { firstName?: string; lastName?: string }[]) : [])
+            .map((guest) => guestName({ firstName: guest.firstName ?? "", lastName: guest.lastName ?? "" }))
+            .filter(Boolean),
+          arrival: stay.arrival,
+        }))
+        .filter((stay) => stay.names.length > 0);
+
       return {
         edges,
+        guests,
         dates: eachNight(input.checkIn, input.checkOut),
         properties: [...properties.values()]
           .map((property) => ({
