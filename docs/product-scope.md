@@ -688,6 +688,7 @@ via Claude"**, so a change made through Claude is told from one made by hand.
 | Tasks on the board; a request's or client's emails | Post an update on a sales request, client or property; create a task, move it, comment on it |
 | Properties (search by name, city, address); a hotel's quotations for an event | Add a property (with room types and contacts), put it on an event's board, add a room type |
 | Contracts (by event, property, client, contractor or request), and one in full | Record a hotel's quotation; register a contract with its payments and cancellation deadlines; fill in or correct a contract, add a payment or a deadline |
+| Providers (chains, landlords); site visit reports on a property or provider, and one in full | Add a provider, set a property's provider; post a site visit report (§3.12) on the properties visited, or correct one |
 | An event's contractors (§3.11), and one in full | Add a contractor to an event's Contractors tab — with contacts, contracting details and the properties it serves (a name already on the event is refused); fill it in or correct it (contacts are only added, never removed); record a property it serves; record its quote (a total, or line by line — vehicles, services); keep a link on it; post an update or create a task about it |
 
 **From a PDF** (the owner, 2026-11-20: "I will upload a PDF and it should read it and add the
@@ -1932,6 +1933,46 @@ Each contractor's page holds:
 
 A contractor is **deleted** only while it has no contract (those are kept); its contacts,
 properties and updates go with it, and its tasks stay, about nothing.
+
+### 3.12 Site visit reports
+
+> **Built** (2026-11-26). The owner, sending Alex and Eric's "Babak Apartment Visits" (written
+> with Claude): "I would like it to happen in OS on the properties page… ideally to match this
+> look." Babak's three apartments are three properties, with Babak as their provider.
+
+A **site visit report** is one visit — a date, who went, who showed them round, the event, the
+provider or landlord if there is one, and an opening summary — to **one or several places**.
+Each place is a property (each apartment its own property) with:
+
+- a **verdict**: *Strong option* (lime), *Needs work* (orange), *Not ready* (red) or *Not for
+  us* (grey) — and, if wanted, the badge in the visitor's own words ("Stronger option out of
+  the 3");
+- a line or two that sums it up, and more in words when a walk-through was not possible;
+- **at a glance** facts — Building, Sleeps, Bathrooms, Floors, Kitchen, Laundry, Outdoor,
+  Entry, Condition to start with; any can be left empty, renamed, or more added;
+- **room by room**: each area and what was seen;
+- **issues and needs**: a short bold title, what is wrong, and the video and time it shows in;
+- its **videos** (name and link — Dropbox, Drive…).
+
+**Where it shows.** Each property visited has a **Site visits** tab (after Updates) listing its
+reports, newest first, with that property's verdict and summary; *Open the report* shows it
+full size **in Alex's layout** — the status table of every place, the *At a glance* side by
+side (lined up by the facts' names), then each place's card — with **Print or save as PDF**,
+*Edit* and *Delete*. The provider's page lists the reports on its properties too. On the
+event's **properties board**, a property's latest verdict shows as a small badge beside its
+name, opening the report.
+
+**Writing one.** *+ New site visit report* on the Site visits tab opens the form (the property,
+its provider and event filled in); *+ Add another place visited* for a visit to several. Or
+**through Claude** (§2.10): give it the notes, the write-up or the PDF and say to post it on
+OS — it finds or adds the properties (each apartment its own, under its landlord as
+provider), shows what it will post, and on a yes saves the report. A report is changed by
+saving it again, whole. Every report written, changed or deleted is in the history, and on
+each property it covers.
+
+*The earlier* + Site inspection feedback *template in the Updates feed (§2.6) stays, for a
+quick note; the report is the full record.* A "✨ Write it with Claude" button inside OS waits
+for an Anthropic key on the live site.
 
 ## 4. Phase 2 — Acquisition & Sales
 
@@ -4871,6 +4912,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §2.5 Staging | **Built** | https://staging.welodge.net, from the `staging` branch, on a branch of the live database that is reset to the live data every night at midnight UTC |
 | §2.6 Updates (was Feedback, 2026-10-01 → 10-06) | **Built** | Feed per property and per client, with `@Name` mentions rendered as a highlight. The author can edit their own post, which then shows when it was edited; earlier wordings are kept but not shown. Each update one line, opened with *Read more*; ten at first, then *Show 10 older*. No deleting. No notification is sent — see §9; on a sales request too, shown on its client's feed (2026-11-10) |
 | §3.11 Contractors | **Built** (2026-11-19) | A Contractors tab per event — each contractor belongs to one event (no menu item since the same day); each with what it does, contacts, contracting details, properties it serves among the event's (shown on the property too), supplier contracts and payments, tasks and updates (board's Other providers tab); quotes (accepted → its contract) and files and links (2026-11-26); Claude can add and fill in contractors, their quotes and links (2026-11-26) |
+| §3.12 Site visit reports | **Built** (2026-11-26) | One visit to one or several properties: verdict per place, at a glance, room by room, issues and needs with video times, videos; a Site visits tab on each property and the provider, full-size report in Alex's layout, printable; verdict badge on the properties board; written on the site or posted by Claude. In-OS Claude writer waits on the AI key |
 | §2.6 Updates board | **Built** (2026-11-17) | Menu item with a red count; tabs Client · Accommodation · Other providers · For the team; one update shown on the board and on each page it is about, as links; several at once; hotel-chain updates (also on its properties, *via*); other providers by name; filters from existing records and text search, kept; *New* since last looked; *Notify* (emailed); Google Drive link as the file. File uploads **not built** |
 | §2.6 Update kinds and templates | **Built** | Note, Meeting feedback, Call summary, Site inspection feedback (properties only); date it took place; template headings drafted — to be replaced by the monday.com ones. Emails from contacts in the feed not built (needs the Gmail link) |
 | §2.7 Team profile | **Built** | Name, job title, any number of phone numbers each marked Mobile, WhatsApp or both; the sign-in email shown, not editable. Each person edits only their own |

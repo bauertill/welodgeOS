@@ -21,6 +21,7 @@ import { MasterRoomingList } from "~/app/_components/rooming-list";
 import { PropertyContractors } from "~/app/_components/contractors";
 import { PropertyMedia } from "~/app/_components/property-media";
 import { PropertyTabs } from "~/app/_components/property-tabs";
+import { SiteVisitList } from "~/app/_components/site-visits";
 import { PageHeader, ScoutingStatusBadge } from "~/app/_components/ui";
 import { UpdateThread } from "~/app/_components/update-thread";
 import { isHotelLike, propertyTypeLabels, totalUnits } from "~/lib/scouting";
@@ -109,6 +110,13 @@ export default async function PropertyPage({
           <PropertyTabs
             tabs={[
               { key: "updates", label: "Updates", content: <UpdateThread propertyId={property.id} /> },
+              // Reports from visits, in Alex's layout (doc §3.12, 2026-11-26).
+              {
+                key: "visits",
+                label: "Site visits",
+                count: property._count.siteVisitUnits,
+                content: <SiteVisitList propertyId={property.id} eventId={entries[0]?.event.id ?? null} propertyProviderId={property.providerId} />,
+              },
               {
                 key: "rooms",
                 label: isHotelLike(property.type) ? "Room categories" : "Unit types",

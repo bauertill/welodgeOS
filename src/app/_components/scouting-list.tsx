@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
 
 import { useRemembered } from "~/lib/remembered";
-import { formatMoney } from "~/lib/format";
+import { formatDate, formatMoney } from "~/lib/format";
+import { verdictLabels, verdictStyles } from "~/lib/site-visits";
 import { roomTypeGroups, roomTypeOf } from "~/lib/sales";
 import type { CategoryContractStatus, PropertyType, ScoutingDetail, ScoutingStatus } from "generated/prisma";
 
@@ -410,6 +411,16 @@ export function ScoutingList({
                           >
                             Quick view
                           </button>
+                          {entry.siteVisit?.verdict && (
+                            <span title={`Site visit on ${formatDate(entry.siteVisit.visit.visitedOn)}: ${entry.siteVisit.verdictNote ?? verdictLabels[entry.siteVisit.verdict]}`}>
+                              <PendingLink
+                                href={`/site-visits/${entry.siteVisit.visit.id}`}
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide whitespace-nowrap uppercase ${verdictStyles[entry.siteVisit.verdict]}`}
+                              >
+                                {verdictLabels[entry.siteVisit.verdict]}
+                              </PendingLink>
+                            </span>
+                          )}
                         </span>
                         {(property.provider ?? property.videoUrl) && (
                           <span className="text-ink-500 block text-xs font-light">
