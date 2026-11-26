@@ -1957,7 +1957,7 @@ Each place is a property (each apartment its own property) with:
 
 **The guide** (the owner, 2026-11-26: "a guide on how to use Claude to write the site
 inspection feedback… nicely designed under the guide section"): *Site visit reports with Claude*
-at /guide/site-visits, on the Guides page, walks a visitor through what to capture, the prompt to
+at /guide/site-visits, on the Guides page, walks a visitor through uploading the videos, the prompt to
 copy into a new Claude chat, checking what Claude shows and confirming, and the verdicts (§2.11).
 
 **Where it shows.** Each property visited has a **Site visits** tab (after Updates) listing its
@@ -5021,7 +5021,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §4.11 Agreement as a Word draft | **Built** (2026-11-20) | *Download Word* on the client's agreement and on our agreement with a hotel: the same text as the page, as a .docx for redlines — numbering, highlighted gaps, contents, signature blocks, wide schedules landscape ; *Upload their redlines* reads the returned Word file — tracked or untracked changes and comments — and takes the ticked changes into the wording |
 | §2.10 Claude: from a PDF | **Built** (2026-11-20) | 13 more connector tools: search, add a property (room types, contacts) and put it on an event, add a room type; list and record a hotel's quotation; list, read, register and fill in contracts with payments and cancellation deadlines. Claude confirms what it will add before writing; never buys/sells rooms, offers, or deletes |
 | §2.11 Welcome to We Lodge OS | **Built** (2026-11-19) | /guide/welcome, first on the Guides page: what OS is, monday.com view only, the daily habit, how people are told, where things live, five house rules |
-| §2.11 Site visit reports with Claude | **Built** (2026-11-26) | /guide/site-visits, on the Guides page: where a report shows (property, provider, verdict badge on the board), connecting OS to Claude and a new chat per report, what to capture on a visit, six steps (Claude looks up, shows the report, posts only on a yes), a prompt to copy with a Copy button, the four verdicts, what a report holds, changing a report |
+| §2.11 Site visit reports with Claude | **Built** (2026-11-26) | /guide/site-visits, on the Guides page: where a report shows (property, provider, verdict badge on the board), connecting OS to Claude, a new chat per report and uploading the videos (how to film is left to the visitor, the owner 2026-11-26), six steps (Claude looks up, shows the report, posts only on a yes), a prompt to copy with a Copy button, the four verdicts, what a report holds, changing a report |
 | §2.3 Event team | **Built** | Project lead and accommodation managers per event, in its settings; shown on its page. They receive each new sales request's Sourcing task and its notice |
 | §3.1 Property | **Built** | Name, type, address, city, country, coordinates, stars, website, phone, notes, stated total |
 | §3.1 More property types | **Built** (2026-11-11) | Motel, extended stay, student housing, hostel, bed & breakfast and other, beside hotel, apartment and aparthotel — for the LA28 move from monday.com (the owner). Each behaves as a hotel (rooms with beds, stars), an apartment (units with bedrooms, no stars: student housing) or both (extended stay, like an aparthotel). monday's furnished, luxury and complex apartments come in as Apartment, budget hotels as Hotel. Rating is stars only — monday's review scores (4.3/5) are not brought over (the owner) |
