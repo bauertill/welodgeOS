@@ -3951,7 +3951,12 @@ with anything on it** (the owner, 2026-11-18: FDFA's addendum, sold for July 202
 missing because the sheet opened in January): on first showing, and whenever the property or
 client filter changes, the sheet scrolls sideways to a couple of days before the first night
 with a client, someone asking, or anything started with the hotel; after that it stays where
-it is scrolled. The property and client filters
+it is scrolled. **The guests' names from the rooming lists are written on the rooms**
+(§6.9; the owner, 2026-11-26: "add the names onto the inventory board — this is what we would
+look at to see the guest arrivals"): each stay on a room shows as a tag with its guests' names,
+from its check-in across the nights they are there, so a room with several ins and outs shows
+each one; pointing at it shows the names and the arrival time. A stay with nobody named yet
+shows nothing; a stay taken off the list is not shown. The property and client filters
 and *Show empty* **stay as set until reset**, per event, in each person's browser (the team,
 2026-11-12); *Reset filters* clears them, and a link from an acquire task sets them. **The client filter
 offers only the clients on this event's sheet** (the owner, 2026-11-18) — holding, buying or

@@ -537,6 +537,25 @@ export function InventoryGrid({
     [visibleRows, dates, cells],
   );
 
+  // The guests from the rooming lists (doc §6.9, the owner 2026-11-26): their names written on
+  // the room, from the first night of their stay shown, across the nights they are there.
+  const guestStarts = useMemo(() => {
+    const starts = new Map<string, { names: string[]; span: number; arrival: string | null }>();
+    const keys = dates.map((date) => dayKey(date));
+    for (const stay of grid.data?.guests ?? []) {
+      let from = keys.findIndex((key) => key >= stay.checkIn);
+      if (from < 0) continue;
+      if (keys[from]! >= stay.checkOut) continue;
+      const until = keys.findIndex((key) => key >= stay.checkOut);
+      const span = (until < 0 ? keys.length : until) - from;
+      if (span <= 0) continue;
+      from = Math.max(0, from);
+      starts.set(`${stay.slotId}|${keys[from]}`, { names: stay.names, span, arrival: stay.arrival });
+    }
+    return starts;
+  }, [grid.data?.guests, dates]);
+  const namedSlots = useMemo(() => new Set((grid.data?.guests ?? []).map((stay) => stay.slotId)), [grid.data?.guests]);
+
   // "CO" goes in the cell after a client's last night — the check-out day,
   // which is not a night and would otherwise be blank — unless another
   // client's stay already starts there. The stay's bar runs half way into
@@ -1226,8 +1245,24 @@ export function InventoryGrid({
                                               {isSelectionCheckOut(dateIndex) && "CO"}
                                             </div>
                                           )}
+                                          {(() => {
+                                            const guest = dateIndex < dates.length ? guestStarts.get(key) : undefined;
+                                            if (!guest) return null;
+                                            return (
+                                              <span
+                                                title={`${guest.names.join(", ")}${guest.arrival ? ` — arriving ${guest.arrival}` : ""}`}
+                                                style={{ width: `calc(${guest.span * 100}% - 8px)` }}
+                                                className={`pointer-events-none absolute left-[4px] z-[2] flex items-center overflow-hidden rounded px-1.5 text-[10px] leading-none font-medium whitespace-nowrap ${
+                                                  block?.labelRow === rowIndex ? "bottom-[4px] h-[13px]" : "top-[6px] bottom-[6px]"
+                                                } ${block?.kind === "SOLD" ? "bg-white/25 text-white" : "bg-white/80 text-ink-800 ring-1 ring-ink-200"}`}
+                                              >
+                                                <span className="truncate">{guest.names.join(", ")}</span>
+                                              </span>
+                                            );
+                                          })()}
                                           {block && isLabel && (
                                             <BlockLabel
+                                              raised={namedSlots.has(slot.id)}
                                               faded={Boolean(issueFilter && block.severity !== issueFilter)}
                                               block={block}
                                               dates={dates}
@@ -1477,8 +1512,11 @@ function BlockLabel({
   afterCheckOut,
   continues,
   faded,
+  raised,
 }: {
   faded?: boolean;
+  /** The room has guests' names written along its bottom: the label sits at the top. */
+  raised?: boolean;
   block: Block;
   dates: Date[];
   /** The block starts on another client's check-out day: leave that cell to the "CO". */
@@ -1503,7 +1541,7 @@ function BlockLabel({
           ? { left: "100%", width: `calc(${(block.labelSpan - 1) * 100}% - 6px)` }
           : { left: "6px", width: `calc(${block.labelSpan * 100}% - 10px)` }
       }
-      className={`pointer-events-none absolute top-0 bottom-0 z-[1] ${faded ? "opacity-40" : ""} flex items-center gap-1 overflow-hidden text-[11px] leading-none font-medium whitespace-nowrap ${kindText[block.kind]}`}
+      className={`pointer-events-none absolute ${raised ? "top-[4px] h-3 text-[10px]" : "top-0 bottom-0 text-[11px]"} z-[1] ${faded ? "opacity-40" : ""} flex items-center gap-1 overflow-hidden leading-none font-medium whitespace-nowrap ${kindText[block.kind]}`}
     >
       {block.severity >= 2 && <AttentionMark severity={block.severity} />}
       <span
