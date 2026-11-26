@@ -21,7 +21,19 @@ export const LIVE_EMAILS_ON = true; // Switched on 2026-11-17 — mentions only 
  * site to anyone not in TEST_ADDRESSES, the email is written to the server log
  * instead, and counts as sent.
  */
-export async function sendEmail(message: { to: string; subject: string; text: string; html: string }) {
+export async function sendEmail(message: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  /** Copies — off the live site only those on the test list. */
+  cc?: string[];
+  /** Where a reply goes: the colleague who sent it, for an email to a hotel. */
+  replyTo?: string;
+  /** Shown as the sender's name, in place of "We Lodge OS". */
+  fromName?: string;
+  attachments?: { filename: string; content: Uint8Array }[];
+}) {
   const live = env.VERCEL_ENV === "production";
   if (live && !LIVE_EMAILS_ON) {
     console.log(`\n[email] Not sent — emails are switched off on the live site: ${message.subject}\n`);
@@ -31,6 +43,7 @@ export async function sendEmail(message: { to: string; subject: string; text: st
     console.log(`\n[email] Not sent — off the live site, ${message.to} is not on the test list: ${message.subject}\n`);
     return true;
   }
+  const cc = (message.cc ?? []).map((one) => one.trim()).filter((one) => one && one.toLowerCase() !== message.to.trim().toLowerCase() && (live || TEST_ADDRESSES.includes(one.toLowerCase())));
   if (!env.RESEND_API_KEY) {
     console.log(`\n[email] To ${message.to}: ${message.subject}\n${message.text}\n`);
     return true;
@@ -39,11 +52,14 @@ export async function sendEmail(message: { to: string; subject: string; text: st
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: env.NOTIFICATIONS_FROM ?? "We Lodge OS <notifications@os.welodge.net>",
+      from: fromWith(env.NOTIFICATIONS_FROM ?? "We Lodge OS <notifications@os.welodge.net>", message.fromName),
       to: message.to,
+      ...(cc.length && { cc }),
+      ...(message.replyTo && { reply_to: message.replyTo }),
       subject: live ? message.subject : `[Test] ${message.subject}`,
       text: message.text,
       html: message.html,
+      ...(message.attachments?.length && { attachments: message.attachments.map((file) => ({ filename: file.filename, content: Buffer.from(file.content).toString("base64") })) }),
     }),
   }).catch((error: unknown) => {
     console.error("[email] Could not reach Resend:", error);
@@ -55,6 +71,13 @@ export async function sendEmail(message: { to: string; subject: string; text: st
   }
   return true;
 }
+
+/** "We Lodge OS <notifications@…>" with another name in front. */
+const fromWith = (from: string, name?: string) => {
+  if (!name) return from;
+  const address = /<([^>]+)>/.exec(from)?.[1] ?? from;
+  return `${name.replace(/[<>"]/g, "")} <${address}>`;
+};
 
 export const appUrl = () => (env.APP_URL ?? "https://os.welodge.net").replace(/\/$/, "");
 
@@ -83,4 +106,12 @@ ${item.body ? `<p style="margin:6px 0 0;color:#555;white-space:pre-line">${escap
 <p style="color:#888;font-size:12px;margin-top:20px">We Lodge OS · <a href="${base}/team/profile" style="color:#888">Change how you get these</a></p>
 </div>`;
   return { text, html };
+}
+
+/** A person's own message — to a hotel, say — as an email: their words, kept as typed. */
+export function plainEmail(body: string) {
+  return {
+    text: body,
+    html: `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:14px;color:#1d1d1f;max-width:640px;white-space:pre-line">${escape(body)}</div>`,
+  };
 }

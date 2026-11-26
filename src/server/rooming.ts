@@ -4,7 +4,7 @@ import type { Prisma, PrismaClient } from "generated/prisma";
 
 import { dayKey, eachNight } from "~/lib/dates";
 import { formatRange } from "~/lib/format";
-import { guestName, roomingExtraFields, sharesOneBed, stayChanges, type Guest, type StaySnapshot } from "~/lib/rooming";
+import { changeCount, guestName, listChanges, roomingExtraFields, sharesOneBed, stayChanges, type Guest, type StaySnapshot, type SubmittedStay } from "~/lib/rooming";
 import { logAudit } from "~/server/audit";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
 import { notify } from "~/server/notify";
@@ -391,7 +391,7 @@ export async function removeStay(tx: Prisma.TransactionClient, salesRequestId: s
  * A property's master rooming list as sent now (doc §6.9): the next version,
  * with every client's stays there at the event.
  */
-export async function markSent(tx: Prisma.TransactionClient, eventId: string, propertyId: string, actorId: string) {
+export async function markSent(tx: Prisma.TransactionClient, eventId: string, propertyId: string, actorId: string, email?: { to: string; message: string }) {
   const stays = await tx.roomingStay.findMany({
     where: { removedAt: null, salesRequest: { eventId }, slot: { category: { propertyId } } },
     include: { salesRequest: { select: { clientId: true, client: { select: { name: true } } } } },
@@ -400,9 +400,9 @@ export async function markSent(tx: Prisma.TransactionClient, eventId: string, pr
   const last = await tx.roomingVersion.findFirst({ where: { eventId, propertyId }, orderBy: { number: "desc" }, select: { number: true } });
   const number = (last?.number ?? 0) + 1;
   await tx.roomingVersion.create({
-    data: { eventId, propertyId, number, stays: stays.map((stay) => ({ ...snapshotOf(stay), clientId: stay.salesRequest.clientId, client: stay.salesRequest.client.name })), sentById: actorId },
+    data: { eventId, propertyId, number, stays: stays.map((stay) => ({ ...snapshotOf(stay), clientId: stay.salesRequest.clientId, client: stay.salesRequest.client.name })), sentById: actorId, sentTo: email?.to ?? null, message: email?.message ?? null },
   });
-  await logAudit(tx, { actorId, entity: "Property", entityId: propertyId, summary: `Master rooming list V${number} sent to the property`, changes: `${stays.length} stay${stays.length === 1 ? "" : "s"}, ${new Set(stays.map((stay) => stay.salesRequest.clientId)).size} client(s)` });
+  await logAudit(tx, { actorId, entity: "Property", entityId: propertyId, summary: `Master rooming list V${number} ${email ? `emailed to ${email.to}` : "sent to the property"}`, changes: `${stays.length} stay${stays.length === 1 ? "" : "s"}, ${new Set(stays.map((stay) => stay.salesRequest.clientId)).size} client(s)` });
   return number;
 }
 
@@ -783,7 +783,116 @@ export async function masterList(db: Db, eventId: string, propertyId: string) {
     version: last?.number ?? null,
     sentAt: last?.sentAt ?? null,
     sentBy: last?.sentBy ? (last.sentBy.name ?? last.sentBy.email) : null,
-    versions: versions.map((one) => ({ number: one.number, sentAt: one.sentAt, sentBy: one.sentBy ? (one.sentBy.name ?? one.sentBy.email) : null })),
+    versions: versions.map((one) => ({ number: one.number, sentAt: one.sentAt, sentBy: one.sentBy ? (one.sentBy.name ?? one.sentBy.email) : null, sentTo: one.sentTo, message: one.message })),
     clients: out,
   };
+}
+
+// --- Submissions (doc §6.9, the owner 2026-11-24) ----------------------------------
+
+/**
+ * "They should actually have to click submit. And it should save as a
+ * version. We need to be able to track changes." Typing on the list saves a
+ * draft; Submit keeps the list as it stands as the client's next version,
+ * stamped, and tells whoever looks after each of its properties — in the bell
+ * and by email.
+ */
+
+const roomWords = (slot: { slotNumber: number; unitNumber: string | null; category: { name: string } }) =>
+  `Room ${slot.slotNumber}${slot.unitNumber ? ` · No. ${slot.unitNumber}` : ""} · ${slot.category.name}`;
+
+/** The client's list now, as a submission would keep it. */
+async function listNow(db: Db, scope: { clientId: string; eventId: string }): Promise<SubmittedStay[]> {
+  const stays = await db.roomingStay.findMany({
+    where: { removedAt: null, salesRequest: { clientId: scope.clientId, eventId: scope.eventId } },
+    orderBy: [{ checkIn: "asc" }, { createdAt: "asc" }],
+    include: { slot: { select: { slotNumber: true, unitNumber: true, category: { select: { name: true, property: { select: { id: true, name: true } } } } } } },
+  });
+  return stays.map((stay) => ({ ...snapshotOf(stay), propertyId: stay.slot.category.property.id, property: stay.slot.category.property.name, room: roomWords(stay.slot), slotNumber: stay.slot.slotNumber }));
+}
+
+const submittedOf = (json: unknown) => snapshotsOf(json) as SubmittedStay[];
+
+/**
+ * A client's submitted versions at an event, the latest first, each with what
+ * it changed from the one before — and what has changed since the last one,
+ * not yet submitted.
+ */
+export async function submissionsFor(db: Db, salesRequestId: string, forClient: boolean) {
+  const request = await requestOf(db, salesRequestId);
+  if (!request.eventId) return { versions: [], pending: [], last: null };
+  const scope = { clientId: request.clientId, eventId: request.eventId };
+  const [rows, now] = await Promise.all([
+    db.roomingSubmission.findMany({ where: scope, orderBy: { number: "asc" }, include: { submittedBy: { select: { name: true, email: true } } } }),
+    listNow(db, scope),
+  ]);
+  let before: SubmittedStay[] | null = null;
+  const versions = rows.map((row) => {
+    const stays = submittedOf(row.stays);
+    const changes = listChanges(before, stays);
+    before = stays;
+    return {
+      number: row.number,
+      submittedAt: row.submittedAt,
+      by: row.submittedBy ? (forClient ? "We Lodge" : (row.submittedBy.name ?? row.submittedBy.email)) : forClient ? "you" : "the client",
+      changes,
+      stays,
+    };
+  });
+  const last = versions.at(-1) ?? null;
+  return {
+    versions: versions.reverse(),
+    pending: last || now.length ? listChanges(last?.stays ?? null, now) : [],
+    last: last ? { number: last.number, submittedAt: last.submittedAt } : null,
+  };
+}
+
+/**
+ * Submit the client's list: kept as their next version. Refused when nothing
+ * changed since the last. Whoever looks after each property in it at the
+ * event (its account manager there, else the request's owner) is told.
+ */
+export async function submitList(tx: Prisma.TransactionClient, salesRequestId: string, actorId: string | null) {
+  const request = await requestOf(tx, salesRequestId);
+  if (!request.eventId) throw new TRPCError({ code: "BAD_REQUEST", message: "This request has no event." });
+  const scope = { clientId: request.clientId, eventId: request.eventId };
+  const [now, lastRow] = await Promise.all([listNow(tx, scope), tx.roomingSubmission.findFirst({ where: scope, orderBy: { number: "desc" } })]);
+  const before = lastRow ? submittedOf(lastRow.stays) : null;
+  const changes = listChanges(before, now);
+  if (!lastRow && now.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Put in at least one guest before submitting." });
+  if (lastRow && changes.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Nothing has changed since version ${lastRow.number} — there is nothing new to submit.` });
+  const number = (lastRow?.number ?? 0) + 1;
+  await tx.roomingSubmission.create({ data: { ...scope, salesRequestId, number, stays: now, submittedById: actorId } });
+
+  const byProperty = new Map<string, { name: string; changes: typeof changes }>();
+  const names = new Map(now.concat(before ?? []).map((stay) => [stay.property, stay.propertyId]));
+  for (const change of changes) {
+    const id = names.get(change.property) ?? change.property;
+    const entry = byProperty.get(id) ?? { name: change.property, changes: [] };
+    entry.changes.push(change);
+    byProperty.set(id, entry);
+  }
+  const summary = [...byProperty.values()].map((entry) => `${entry.name}: ${changeCount(entry.changes)}`).join("\n") || "No stays in it";
+  await logAudit(tx, {
+    actorId,
+    entity: "SalesRequest",
+    entityId: salesRequestId,
+    summary: actorId ? `Rooming list saved as version ${number}` : `Rooming list submitted by the client — version ${number}`,
+    changes: summary.replace(/\n/g, "; "),
+  });
+
+  // Whoever looks after the properties in it — those with changes, else all of the client's there.
+  const propertyIds = byProperty.size ? [...byProperty.keys()] : [...new Set(now.map((stay) => stay.propertyId))];
+  const managers = await tx.scoutingEntry.findMany({ where: { eventId: request.eventId, propertyId: { in: propertyIds }, accountManagerId: { not: null } }, select: { accountManagerId: true } });
+  const to = managers.length ? managers.map((one) => one.accountManagerId) : [request.ownerId];
+  const actor = actorId ? await tx.user.findUnique({ where: { id: actorId }, select: { name: true, email: true } }) : null;
+  await notify(tx, {
+    to,
+    actorId,
+    kind: "ROOMING_SUBMITTED",
+    title: actor ? `${actor.name ?? actor.email} saved ${request.client.name}'s rooming list as version ${number}` : `${request.client.name} submitted their rooming list — version ${number}`,
+    body: `${request.event?.name ?? ""}${request.event ? "\n" : ""}${summary}`,
+    link: `/sales/${salesRequestId}#rooming`,
+  });
+  return { number };
 }

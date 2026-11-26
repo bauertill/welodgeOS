@@ -120,9 +120,9 @@ model Event {
   contractors           Contractor[]
   /// The event's team (doc §2.3): who leads it, and who sources its
   /// accommodation — given each new sales request's sourcing task (§4.11).
-  projectLead           User?            @relation("EventProjectLead", fields: [projectLeadId], references: [id], onDelete: SetNull)
+  projectLead           User?               @relation("EventProjectLead", fields: [projectLeadId], references: [id], onDelete: SetNull)
   projectLeadId         String?
-  accommodationManagers User[]           @relation("EventAccommodationManagers")
+  accommodationManagers User[]              @relation("EventAccommodationManagers")
   /// Named stretches of the event with their own rates, like LA28's Olympics,
   /// the days between and the Paralympics (doc §3.10). Most events have none,
   /// and the event's own dates are then its one period.
@@ -132,6 +132,7 @@ model Event {
   /// client's property information page (doc §6.8).
   guestContact          String?
   roomingVersions       RoomingVersion[]
+  roomingSubmissions    RoomingSubmission[]
 
   @@index([startDate])
   siteVisits SiteVisit[]
@@ -1241,14 +1242,15 @@ model User {
   sessions      Session[]
 
   scoutedProperties        Property[]
-  propertyContractingLinks Property[]       @relation("PropertyContractingLinkMadeBy")
-  guestLinksMade           Property[]       @relation("PropertyGuestLinkMadeBy")
-  roomingStaysChanged      RoomingStay[]    @relation("RoomingStayChangedBy")
-  roomingVersions          RoomingVersion[] @relation("RoomingVersionSentBy")
+  propertyContractingLinks Property[]          @relation("PropertyContractingLinkMadeBy")
+  guestLinksMade           Property[]          @relation("PropertyGuestLinkMadeBy")
+  roomingStaysChanged      RoomingStay[]       @relation("RoomingStayChangedBy")
+  roomingVersions          RoomingVersion[]    @relation("RoomingVersionSentBy")
+  roomingSubmissions       RoomingSubmission[] @relation("RoomingSubmittedBy")
   rateCards                RateCard[]
   photosAdded              PropertyPhoto[]
-  quotationsAdded          Quotation[]      @relation("QuotationAddedBy")
-  scoutingEntries          ScoutingEntry[]  @relation("AddedBy")
+  quotationsAdded          Quotation[]         @relation("QuotationAddedBy")
+  scoutingEntries          ScoutingEntry[]     @relation("AddedBy")
 
   acquisitionNights RoomNight[]        @relation("AcquisitionOwner")
   salesNights       RoomNight[]        @relation("SalesOwner")
@@ -1608,14 +1610,15 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roomNights    RoomNight[]
-  requests      RoomNightRequest[]
-  updates       Update[]
-  contacts      ClientContact[]
-  salesRequests SalesRequest[]
-  rateCards     RateCard[]
-  contracts     Contract[]
-  tasks         Task[]
+  roomNights         RoomNight[]
+  requests           RoomNightRequest[]
+  updates            Update[]
+  contacts           ClientContact[]
+  salesRequests      SalesRequest[]
+  rateCards          RateCard[]
+  contracts          Contract[]
+  tasks              Task[]
+  roomingSubmissions RoomingSubmission[]
 
   @@unique([name])
 }
@@ -1798,29 +1801,30 @@ model SalesRequest {
   nightRequests RoomNightRequest[]
   contracts     Contract[]
 
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  tasks             Task[]
-  rateCards         RateCard[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  tasks              Task[]
+  rateCards          RateCard[]
   /// The hotels' quotations for this request's group (doc §3.10).
-  quotations        Quotation[]
+  quotations         Quotation[]
   /// Binding offers to the client, made from their rate card answer (doc §4.11).
-  offers            Offer[]
+  offers             Offer[]
   /// Answers to rate cards that are on this request — a general card's answer starts one.
-  rateCardAnswers   RateCardResponse[]
+  rateCardAnswers    RateCardResponse[]
   /// Its running notes (doc §2.6).
-  updates           Update[]
+  updates            Update[]
   /// The client's property information page (doc §6.8): the unguessable part
   /// of its link; empty means not made, or switched off.
-  stayToken         String?            @unique
-  stayLinkMadeAt    DateTime?
+  stayToken          String?             @unique
+  stayLinkMadeAt     DateTime?
   /// The client's rooming list link (doc §6.9); empty means not made, or switched off.
-  roomingToken      String?            @unique
-  roomingLinkMadeAt DateTime?
-  roomingStays      RoomingStay[]
+  roomingToken       String?             @unique
+  roomingLinkMadeAt  DateTime?
+  roomingStays       RoomingStay[]
+  roomingSubmissions RoomingSubmission[]
   /// Extra guest details this client's list asks for (doc §6.9): any of gender,
   /// nationality, passport, email — name and arrival are always asked.
-  roomingFields     String[]           @default([])
+  roomingFields      String[]            @default([])
 
   @@index([clientId])
   @@index([eventId])
@@ -2340,6 +2344,8 @@ enum NotificationKind {
   PAYMENT_DUE
   /// A cancellation deadline on a contract you manage is coming or today — emailed (doc §7.1, 2026-11-20).
   CANCELLATION_DUE
+  /// A client submitted their rooming list (or the team saved a version) — emailed to whoever looks after the property (doc §6.9, 2026-11-24).
+  ROOMING_SUBMITTED
 }
 
 /// Which deadline reminders have gone out (doc §7.1), so none is sent twice:
@@ -2964,6 +2970,34 @@ model RoomingVersion {
   sentAt     DateTime @default(now())
   sentBy     User?    @relation("RoomingVersionSentBy", fields: [sentById], references: [id], onDelete: SetNull)
   sentById   String?
+  /// Who it was emailed to from OS, and the message — empty when only marked as sent.
+  sentTo     String?
+  message    String?
 
   @@unique([eventId, propertyId, number])
 }
+
+/// A client's rooming list as submitted (doc §6.9, the owner 2026-11-24): the
+/// client presses Submit on their link (or the team saves a version), and the
+/// list as it stood is kept, numbered and stamped, so every change is tracked.
+/// Typing on the list saves a draft; only a submission is a version.
+model RoomingSubmission {
+  id             String        @id @default(cuid())
+  event          Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId        String
+  client         Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId       String
+  /// The request whose link (or tab) it was submitted from.
+  salesRequest   SalesRequest? @relation(fields: [salesRequestId], references: [id], onDelete: SetNull)
+  salesRequestId String?
+  number         Int
+  /// The stays as submitted: [{ stayId, slotId, propertyId, property, room, checkIn, checkOut, guests, arrival, notes }].
+  stays          Json
+  submittedAt    DateTime      @default(now())
+  /// The team member who saved it; empty when the client submitted it by their link.
+  submittedBy    User?         @relation("RoomingSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  submittedById  String?
+
+  @@unique([eventId, clientId, number])
+}
+
