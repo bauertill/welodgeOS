@@ -190,7 +190,7 @@ const steps: [string, string][] = [
     "Claude shows you the report before posting.",
     "Check the verdicts, the facts and that no video link is missing. Correct anything in plain words: “the second unit has a dryer, not just a washer”.",
   ],
-  ["Say “yes, post it”.", "Claude posts the report and gives you the link."],
+  ["Say “yes, post it”.", "Claude posts the report and gives you the link. The @LA team is tagged automatically — they get it in their bell and by email, so there’s no need to tell them."],
   ["Open the link and check it in OS.", "Use Print / PDF on the report if you need to send it to someone."],
 ];
 
