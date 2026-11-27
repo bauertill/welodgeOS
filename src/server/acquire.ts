@@ -87,3 +87,44 @@ export async function ensureAcquireTask(
   });
   return task;
 }
+
+/**
+ * Acquire tasks that are done, closed on their own (the owner, 2026-11-27:
+ * "if the rooms have been bought and all is clear, it should move the task to
+ * completed — identify when things are done even if they are not marked").
+ * An open acquire task is done once every room-night sold to its client at
+ * its hotel is bought — however they were bought: the hotel signed here, a
+ * quotation accepted, the contract's "On the stock sheet", or the stock sheet
+ * by hand. Its history says so. Run after every change on the stock sheet
+ * (only the hotels it touched) and every hour for all of them.
+ */
+export async function settleAcquireTasks(
+  db: Prisma.TransactionClient,
+  input: { eventId?: string; propertyIds?: string[]; actorId?: string | null } = {},
+) {
+  const tasks = await db.task.findMany({
+    where: {
+      status: { not: "DONE" },
+      type: { name: ACQUIRE },
+      salesRequestId: { not: null },
+      propertyId: input.propertyIds ? { in: input.propertyIds } : { not: null },
+      ...(input.eventId && { eventId: input.eventId }),
+    },
+    select: { id: true, salesRequestId: true, propertyId: true, eventId: true },
+  });
+  const closed: string[] = [];
+  for (const task of tasks) {
+    const where = { salesRequestId: task.salesRequestId!, salesState: "SOLD" as const, slot: { category: { propertyId: task.propertyId! } }, ...(task.eventId && { eventId: task.eventId }) };
+    const [sold, open] = await Promise.all([db.roomNight.count({ where }), db.roomNight.count({ where: { ...where, acquisitionState: { not: "BOUGHT" } } })]);
+    if (sold === 0 || open > 0) continue;
+    await db.task.update({ where: { id: task.id }, data: { status: "DONE", doneAt: new Date() } });
+    await logAudit(db, {
+      actorId: input.actorId ?? null,
+      entity: "Task",
+      entityId: task.id,
+      summary: `Done on its own — all ${sold} room-nights sold to the client at this hotel are bought`,
+    });
+    closed.push(task.id);
+  }
+  return closed;
+}
