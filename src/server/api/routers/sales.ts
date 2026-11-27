@@ -758,7 +758,8 @@ export async function addClientContacts(
   const done: string[] = [];
   for (const person of people) {
     const name = person.name.trim();
-    if (!name) continue;
+    // "n/a", "-", "none", "tbc" in a box are no one.
+    if (!name || /^(n\/?a|-+|none|tbc|tbd|\.+)$/i.test(name)) continue;
     const email = person.email.trim().toLowerCase();
     const title = person.title.trim();
     const same = existing.find((one) => (email && one.email?.trim().toLowerCase() === email) || one.name.trim().toLowerCase() === name.toLowerCase());
