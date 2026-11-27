@@ -1097,7 +1097,15 @@ export function InventoryGrid({
                                 return (
                                   <tr key={slot.id}>
                                     <td className="border-ink-200/60 sticky left-0 z-10 border-b bg-white px-3 py-1 pl-10 font-medium text-ink-700">
-                                      #{slot.slotNumber}
+                                      {/* The building's number when known — "202" — our slot number beside it (2026-11-27). */}
+                                      {slot.unitNumber ? (
+                                        <span title={`Room ${slot.slotNumber} of this type`}>
+                                          {slot.unitNumber}
+                                          <span className="text-ink-500 ml-1 text-[11px] font-light">#{slot.slotNumber}</span>
+                                        </span>
+                                      ) : (
+                                        <>#{slot.slotNumber}</>
+                                      )}
                                     </td>
                                     {columns.map((date, dateIndex) => {
                                       const key = `${slot.id}|${dayKey(date)}`;

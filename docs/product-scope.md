@@ -2379,6 +2379,16 @@ overwritten**: if the room moved to has anything bought, held, requested or sold
 any of the nights, nothing moves and it says from which night. A swap of two booked rooms is two
 moves through a free room.
 
+**Building numbers on the stock sheet** (2026-11-27). A room whose building number is known
+(entered on the rooming list, §6.9) shows it as its row's name — *202 #1* — with our own room
+number beside it in grey; rooms without one stay *#1*, *#2*. **One room type per kind of room,
+not per apartment**: Ocean Luxury Lofts and Suites had been set up with each apartment as its
+own room type (201 … 306). On the owner's instruction (2026-11-27) it is now **Standard
+Apartment**, 10 rooms numbered 201–205 and 301–305 by the building, plus **Two-room apartment**
+(306); the apartments' sizes are kept in the room type's notes. The client's booking in 201 is now
+in 205, as the hotel changed it, its offer reads four Standard Apartments per period, and the
+four apartments 202–205 are bought under the hotel's contract at $315 a night (232 room-nights).
+
 ### 4.9 The general audit trail
 
 The ledger (§4.7) only ever describes a room-night. Everything else that changes — a
