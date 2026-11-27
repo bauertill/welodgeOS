@@ -3,6 +3,9 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
+/** The popups open, the latest last: Escape closes only the one on top (a popup opened from a popup, 2026-11-27). */
+const open: symbol[] = [];
+
 /** A popup over the page: closed with ×, Escape or a click beside it. */
 export function Popup({
   title,
@@ -23,9 +26,11 @@ export function Popup({
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
+    const me = Symbol("popup");
+    open.push(me);
     // Escape closes, unless it is closing something inside first (a dropdown, a comment being written).
     const onEscape = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (e.key !== "Escape" || e.defaultPrevented || open.at(-1) !== me) return;
       const active = document.activeElement;
       if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement) return;
       close.current();
@@ -34,6 +39,7 @@ export function Popup({
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      open.splice(open.indexOf(me), 1);
       window.removeEventListener("keydown", onEscape);
       document.body.style.overflow = overflow;
     };
