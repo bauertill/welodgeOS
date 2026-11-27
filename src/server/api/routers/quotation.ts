@@ -4,7 +4,8 @@ import { z } from "zod";
 
 import { FILE_LINK_MESSAGE, isFileLink } from "~/lib/file-link";
 
-import { nightsBetween, parseDay, today } from "~/lib/dates";
+import { quantityText, unitsOf } from "~/lib/charged-per";
+import { parseDay, today } from "~/lib/dates";
 import { percent } from "~/lib/finance";
 import { formatDate, formatMoney } from "~/lib/format";
 import { describeRateIncludes } from "~/lib/scouting";
@@ -35,6 +36,8 @@ const lineInput = z.object({
   categoryId: z.string(),
   checkIn: day,
   checkOut: day,
+  /** By the night, or by the day — a meeting room (doc §3.10). */
+  per: z.enum(["NIGHT", "DAY"]).default("NIGHT"),
   rooms: z.number().int().min(1, "Each line needs at least one room").max(10_000),
   rateCents: z.number().int().min(0),
   occupancy: z.number().int().min(1).max(20).nullable(),
@@ -128,7 +131,8 @@ type Loaded = Prisma.QuotationGetPayload<{ include: typeof include }>;
 function withTotals(quotation: Loaded) {
   const taxesIncluded = quotation.rateIncludes.includes("TAXES");
   const lines = quotation.lines.map((line) => {
-    const nights = nightsBetween(line.checkIn, line.checkOut);
+    // Nights, or days for a line charged by the day (doc §3.10); the taxes go per unit alike.
+    const nights = unitsOf(line);
     const roomNights = nights * line.rooms;
     const taxPerNightCents = taxesIncluded ? 0 : taxesPerNight(line.rateCents, quotation.taxes);
     return { ...line, nights, roomNights, totalCents: roomNights * line.rateCents, taxPerNightCents, taxCents: roomNights * taxPerNightCents };
@@ -141,7 +145,10 @@ function withTotals(quotation: Loaded) {
     ...quotation,
     taxesIncluded,
     lines,
-    roomNights: lines.reduce((sum, line) => sum + line.roomNights, 0),
+    roomNights: lines.filter((line) => line.per !== "DAY").reduce((sum, line) => sum + line.roomNights, 0),
+    roomDays: lines.filter((line) => line.per === "DAY").reduce((sum, line) => sum + line.roomNights, 0),
+    /** Every line is charged by the day — "per day" in the headings. */
+    allDays: lines.length > 0 && lines.every((line) => line.per === "DAY"),
     totalCents,
     taxCents,
     payableCents: totalCents + taxCents,
@@ -266,8 +273,11 @@ export const quotationRouter = createTRPCRouter({
           if (!own.has(line.categoryId)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Every line must be one of this hotel's own room categories." });
           }
-          if (line.checkOut <= line.checkIn) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Each line's check-out must be after its check-in." });
+          if (line.per === "DAY" ? line.checkOut < line.checkIn : line.checkOut <= line.checkIn) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: line.per === "DAY" ? "Each line's last day must be on or after its first day." : "Each line's check-out must be after its check-in.",
+            });
           }
         }
         const data = {
@@ -391,6 +401,7 @@ export const quotationRouter = createTRPCRouter({
             categoryId: line.categoryId,
             checkIn: parseDay(line.checkIn),
             checkOut: parseDay(line.checkOut),
+            per: line.per,
             rooms: line.rooms,
             rateCents: line.rateCents,
             occupancy: line.occupancy,
@@ -405,7 +416,7 @@ export const quotationRouter = createTRPCRouter({
             entity: "SalesRequest",
             entityId: fields.salesRequestId,
             summary: `Quotation from ${entry.property.name}: ${full.name}`,
-            changes: `${full.roomNights} room-nights · ${formatMoney(full.totalCents, full.currency)}`,
+            changes: `${quantityText(full.roomNights, full.roomDays)} · ${formatMoney(full.totalCents, full.currency)}`,
           });
         }
         await logAudit(tx, {
@@ -413,7 +424,7 @@ export const quotationRouter = createTRPCRouter({
           entity: "ScoutingEntry",
           entityId: input.scoutingEntryId,
           summary: `${input.id ? "Quotation updated" : "Quotation added"}: ${full.name}`,
-          changes: `${full.roomNights} room-nights · ${formatMoney(full.totalCents, full.currency)}${
+          changes: `${quantityText(full.roomNights, full.roomDays)} · ${formatMoney(full.totalCents, full.currency)}${
             full.from && full.to ? ` · ${formatDate(full.from)} – ${formatDate(full.to)}` : ""
           }`,
         });

@@ -21,11 +21,11 @@ import { FileField } from "~/app/_components/file-field";
 type LineDraft = { categoryId: string; rooms: string; checkIn: string; checkOut: string; rate: string; property?: string; /** Lines with the same block are one room type's periods. */ block?: number };
 let blocks = 0;
 const newBlock = () => ++blocks;
-/** Side by side lines of the same room type and rooms start as one block of periods. */
+/** Side by side lines of the same room type start as one block of periods — each period with its own rooms (2026-11-27). */
 const inBlocks = (lines: LineDraft[]) =>
   lines.reduce<LineDraft[]>((all, line) => {
     const before = all.at(-1);
-    const same = before && line.categoryId && line.categoryId === before.categoryId && line.rooms === before.rooms;
+    const same = before && line.categoryId && line.categoryId === before.categoryId;
     return [...all, { ...line, block: same ? before.block : newBlock() }];
   }, []);
 type Offer = RouterOutputs["offer"]["forRequest"][number];
@@ -165,7 +165,7 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
             const head = lines[first]!;
             const property = head.property ?? propertyOf(head.categoryId);
             const indices = Array.from({ length: last - first + 1 }, (_, i) => first + i);
-            // A change to the room type or rooms is every period's (2026-11-18).
+            // A change to the room type is every period's (2026-11-18); with several periods, each has its own rooms (2026-11-27).
             const setGroup = (change: Partial<LineDraft>) => setLines((current) => current.map((line, i) => (i >= first && i <= last ? { ...line, ...change } : line)));
             return (
               <div key={first} className={groupIndex > 0 ? "border-ink-200/60 border-t pt-3" : ""}>
@@ -188,7 +188,11 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
                       </option>
                     ))}
                   </Select>
-                  <Input value={head.rooms} onChange={(e) => setGroup({ rooms: e.target.value })} inputMode="numeric" aria-label={`Line ${groupIndex + 1} rooms`} placeholder="Rooms" />
+                  {indices.length > 1 ? (
+                    <span className="text-ink-500 text-[11px] leading-tight font-light">Rooms per period ↓</span>
+                  ) : (
+                    <Input value={head.rooms} onChange={(e) => setGroup({ rooms: e.target.value })} inputMode="numeric" aria-label={`Line ${groupIndex + 1} rooms`} placeholder="Rooms" />
+                  )}
                   {groups.length > 1 ? (
                     <button
                       type="button"
@@ -208,6 +212,19 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
                     const line = lines[index]!;
                     return (
                       <div key={index} className="flex flex-wrap items-center gap-2">
+                        {indices.length > 1 && (
+                          <span className="flex items-center gap-1">
+                            <Input
+                              value={line.rooms}
+                              onChange={(e) => setLine(index, { rooms: e.target.value })}
+                              inputMode="numeric"
+                              aria-label={`Line ${groupIndex + 1} period ${periodIndex + 1} rooms`}
+                              placeholder="10"
+                              className="w-16 px-2 text-right"
+                            />
+                            <span className="text-ink-500 text-[12px]">{Number(line.rooms) === 1 ? "room" : "rooms"}</span>
+                          </span>
+                        )}
                         <Input type="date" value={line.checkIn} onChange={(e) => setLine(index, { checkIn: e.target.value })} aria-label={`Line ${groupIndex + 1} period ${periodIndex + 1} arrival`} className="w-40 px-2" />
                         <span className="text-ink-400">→</span>
                         <Input type="date" value={line.checkOut} onChange={(e) => setLine(index, { checkOut: e.target.value })} aria-label={`Line ${groupIndex + 1} period ${periodIndex + 1} departure`} className="w-40 px-2" />
@@ -333,6 +350,53 @@ function OfferForm({ salesRequestId, context, offer, onDone }: { salesRequestId:
   );
 }
 
+/**
+ * The offer's link for the client (doc §4.11, 2026-11-27): copy it into an
+ * email, open it to save it as a PDF, or switch it off.
+ */
+function SharedOfferLink({ offer, onChange }: { offer: Offer; onChange: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const share = api.offer.share.useMutation({ onSuccess: onChange });
+  const unshare = api.offer.unshare.useMutation({ onSuccess: onChange });
+  const url = offer.shareToken && typeof window !== "undefined" ? `${window.location.origin}/offer/${offer.shareToken}` : null;
+  return (
+    <div className="bg-brand-50/70 mt-3 rounded-lg px-3 py-2.5 text-[13px]">
+      <p className="text-ink-900 font-medium">
+        {offer.shareToken ? "✓ Shared with the client" : "The client's link is switched off"}
+        <span className="text-ink-500 ml-2 text-xs font-light">first shared {formatDate(offer.sharedAt!)}</span>
+      </p>
+      {url ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <Input readOnly value={url} onFocus={(e) => e.target.select()} aria-label="The offer's link" className="min-w-0 flex-1 px-2 py-1 text-xs sm:max-w-sm" />
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(url).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+            className="text-brand-700 font-medium hover:underline"
+          >
+            {copied ? "✓ Copied" : "Copy the link"}
+          </button>
+          <a href={url} target="_blank" rel="noreferrer" className="text-brand-700 font-medium hover:underline">
+            Open — or save as PDF ↗
+          </a>
+          <button type="button" onClick={() => unshare.mutate({ id: offer.id })} disabled={unshare.isPending} className="text-ink-500 hover:underline">
+            Switch the link off
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => share.mutate({ id: offer.id })} disabled={share.isPending} className="text-brand-700 mt-1 font-medium hover:underline">
+          Make a new link
+        </button>
+      )}
+      <p className="text-ink-500 mt-1 text-xs font-light">Edits to the offer show on the same link.</p>
+    </div>
+  );
+}
+
 const offerState = (offer: Offer) =>
   offer.status === "WITHDRAWN"
     ? { label: "Withdrawn — rooms released", style: "bg-ink-100 text-ink-500" }
@@ -393,6 +457,9 @@ function OfferItem({ offer }: { offer: Offer }) {
   const sign = api.offer.sign.useMutation({ onSuccess: () => (setSigning(null), done(), void utils.task.invalidate()) });
   const trust = api.offer.trust.useMutation({ onSuccess: () => (setTrusting(false), done(), void utils.task.invalidate()) });
   const signedAfterTrust = api.offer.signedAfterTrust.useMutation({ onSuccess: () => (setSigning(null), done()) });
+  const share = api.offer.share.useMutation({ onSuccess: done });
+  // Shared with the client first, then the contracting (the owner, 2026-11-27); offers already in the contracting carry on.
+  const shared = Boolean(offer.sharedAt) || Boolean(offer.agreementSentOn);
   const state = offerState(offer);
   const rooms = offer.lines.reduce((sum, line) => sum + line.rooms, 0);
 
@@ -436,6 +503,7 @@ function OfferItem({ offer }: { offer: Offer }) {
           )}
         </p>
       )}
+      {offer.status === "OPEN" && offer.sharedAt && <SharedOfferLink offer={offer} onChange={done} />}
       {offer.status === "OPEN" && (
         <div className="mt-3 flex flex-wrap items-center gap-3 text-[13px]">
           {extending !== null ? (
@@ -478,6 +546,26 @@ function OfferItem({ offer }: { offer: Offer }) {
                 Cancel
               </button>
             </span>
+          ) : !shared ? (
+            <>
+              {/* Step one: the offer to the client, as a link or a PDF — the contracting follows (2026-11-27). */}
+              <Button type="button" onClick={() => share.mutate({ id: offer.id })} disabled={share.isPending}>
+                {share.isPending ? "Making the link…" : "Share the offer with the client →"}
+              </Button>
+              <button type="button" onClick={() => setEditing(true)} className="text-brand-700 font-medium hover:underline">
+                Edit the offer
+              </button>
+              <button type="button" onClick={() => setExtending(dayKey(offer.validUntil))} className="text-brand-700 font-medium hover:underline">
+                Extend the hold
+              </button>
+              <button type="button" onClick={() => setWithdrawing(true)} className="text-[#c03654] hover:underline">
+                Withdraw
+              </button>
+              <span className="text-ink-500 w-full text-xs font-light">
+                A page with the rooms, rates and terms, for the client to look at or save as a PDF. Once they agree, draw up the agreement.
+              </span>
+              {share.error && <FormError message={friendlyError(share.error)} />}
+            </>
           ) : (
             <>
               <Link href={`/offers/${offer.id}/agreement`} className="bg-brand-400 hover:bg-brand-500 rounded-full px-4 py-1.5 font-medium text-white">
@@ -657,7 +745,7 @@ export function ContractPanel({ salesRequestId }: { salesRequestId: string }) {
         <div className={box}>
           <h2 className="text-ink-900 mb-1 text-[15px] font-medium">2. The offer</h2>
           <p className="text-ink-500 mb-3 text-[13px] font-light">
-            Made from what they chose on the rate card. Making it requests the rooms for them; draw up the agreement and mark it sent, which blocks them; then register it signed, which sells them.
+            Made from what they chose on the rate card. Making it requests the rooms for them; share it with them as a link or PDF; once they agree, draw up the agreement and mark it sent, which blocks them; then register it signed, which sells them.
           </p>
           <Button type="button" onClick={() => setMaking(true)}>
             Make an offer →

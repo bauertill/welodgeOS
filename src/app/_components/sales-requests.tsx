@@ -1715,7 +1715,7 @@ function NoOfferYet({ request }: { request: FullRequest }) {
         <div className="max-w-2xl">
           <h2 className="text-ink-900 text-[15px] font-medium">{request.amendsContract ? "The addendum" : "The contract"}</h2>
           <p className="text-ink-500 mt-1 text-[13px] font-light">
-            No offer yet. When the client is ready to go ahead, make them an offer — the rooms, the rates and the terms. It requests the rooms for them; then draw up
+            No offer yet. When the client is ready to go ahead, make them an offer — the rooms, the rates and the terms. It requests the rooms for them; share it with them as a link or PDF; once they agree, draw up
             the {what} and mark it sent, which blocks the rooms until a date you choose (and Mark as… <em>Contract sent</em>), and register it signed, which sells the rooms and makes the contract.
           </p>
         </div>
