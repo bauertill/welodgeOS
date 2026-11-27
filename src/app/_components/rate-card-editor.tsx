@@ -9,6 +9,7 @@ import { RateCardView, type ClientRateCard } from "~/app/_components/rate-card-v
 import { generalTermsTemplates, generalTermsText, standardGeneralTerms } from "~/lib/rate-card-terms";
 import { Photo } from "~/app/_components/photo";
 import { currencyOptions } from "~/lib/currency";
+import { contractHref } from "~/lib/finance";
 import { nightsBetween } from "~/lib/dates";
 import { clientMedia } from "~/lib/media";
 import { formatMoment, formatMoney, formatNights, formatRange } from "~/lib/format";
@@ -110,6 +111,8 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
+  /** The hotels' own terms, looked at beside the card: every property, or one (Ami, 2026-11-27). */
+  const [hotelTerms, setHotelTerms] = useState<{ propertyId: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
@@ -360,6 +363,7 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
         )
       }
     >
+      {hotelTerms && <HotelTermsPopup cardId={id} propertyId={hotelTerms.propertyId} onClose={() => setHotelTerms(null)} />}
       {!c || !draft ? (
         <p className="text-ink-500 text-sm font-light">{card.error ? friendlyError(card.error) : "Loading…"}</p>
       ) : preview && clientCard ? (
@@ -425,6 +429,9 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
             <div className="border-ink-200/60 border-t pt-3 sm:col-span-2">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span className="text-ink-700 text-[13px] font-medium">Payment &amp; cancellation terms</span>
+                <button type="button" onClick={() => setHotelTerms({ propertyId: null })} className="text-brand-700 text-xs font-medium hover:underline">
+                  See the hotels&rsquo; terms
+                </button>
                 {(
                   [
                     [false, "The same for every property"],
@@ -580,6 +587,13 @@ export function RateCardEditor({ id, onClose }: { id: string; onClose: () => voi
                   </div>
                   {draft.termsPerProperty && (
                     <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setHotelTerms({ propertyId: source.propertyId })}
+                        className="text-brand-700 -mb-1 justify-self-start text-xs font-medium hover:underline sm:col-span-2"
+                      >
+                        See this hotel&rsquo;s payment and cancellation terms
+                      </button>
                       <label className="block">
                         <span className="text-ink-700 mb-1 block text-[13px] font-medium">Payment terms</span>
                         <Textarea rows={2} value={property.paymentTerms} onChange={(e) => setProperty(property.id, (one) => ({ ...one, paymentTerms: e.target.value }))} placeholder="For this property" />
@@ -1112,5 +1126,96 @@ function MapChoice({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * What the hotels on the card ask of us — payment and cancellation terms from
+ * their contracts and quotations — opened over the card, read only, so the
+ * client's terms can be written beside them without leaving the card (Ami,
+ * 2026-11-27). Nothing here reaches the client.
+ */
+function HotelTermsPopup({ cardId, propertyId, onClose }: { cardId: string; propertyId: string | null; onClose: () => void }) {
+  const terms = api.rateCard.supplierTerms.useQuery({ id: cardId });
+  const list = (terms.data ?? []).filter((one) => !propertyId || one.propertyId === propertyId);
+  return (
+    <Popup
+      size="medium"
+      title={propertyId && list[0] ? `${list[0].name} — the hotel's terms` : "The hotels' terms"}
+      subtitle="What each hotel asks of us — read only, never shown to the client. Keep the client's terms within them."
+      onClose={onClose}
+    >
+      {terms.isLoading ? (
+        <p className="text-ink-500 text-sm font-light">Loading…</p>
+      ) : terms.error ? (
+        <p className="text-sm text-[#c03654]">{friendlyError(terms.error)}</p>
+      ) : list.length === 0 ? (
+        <p className="text-ink-500 text-sm font-light">No properties on the card yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {list.map((property) => (
+            <section key={property.propertyId} className="rounded-xl bg-white px-4 py-3">
+              {!propertyId && <h3 className="text-ink-900 text-[15px] font-semibold">{property.name}</h3>}
+              {property.sources.length === 0 ? (
+                <p className="text-ink-500 mt-1 text-[13px] font-light">No contract or quotation from this hotel on the event yet.</p>
+              ) : (
+                <ul className="mt-1 space-y-3">
+                  {property.sources.map((source, index) => (
+                    <li key={source.key} className={index > 0 ? "border-ink-200/60 border-t pt-3" : ""}>
+                      <p className="text-[13px]">
+                        <span className="text-ink-900 font-medium">{source.name}</span>
+                        <span className="text-ink-500 ml-2 text-xs font-light">{source.status}</span>
+                      </p>
+                      <dl className="mt-1.5 grid gap-x-3 gap-y-1 text-[13px] sm:grid-cols-[7rem_1fr]">
+                        {(source.payments.length > 0 || !source.inWords) && (
+                          <>
+                            <dt className="text-ink-500 text-xs sm:pt-0.5">Payments</dt>
+                            <dd className="text-ink-900 font-light">{source.payments.length ? source.payments.join(" · ") : "Not written down"}</dd>
+                          </>
+                        )}
+                        {(source.cancellations.length > 0 || !source.inWords) && (
+                          <>
+                            <dt className="text-ink-500 text-xs sm:pt-0.5">Cancellation</dt>
+                            <dd className="text-ink-900 font-light">{source.cancellations.length ? source.cancellations.join(" · ") : "Not written down"}</dd>
+                          </>
+                        )}
+                        {source.inWords && (
+                          <>
+                            <dt className="text-ink-500 text-xs sm:pt-0.5">{source.kind === "contract" ? "Notes" : "In words"}</dt>
+                            <dd className="text-ink-700 font-light whitespace-pre-line">{source.inWords}</dd>
+                          </>
+                        )}
+                      </dl>
+                      <p className="mt-1.5 flex flex-wrap gap-x-4 text-xs">
+                        {source.documentUrl && (
+                          <a href={source.documentUrl} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                            {source.kind === "contract" ? "The contract document ↗" : "The quotation as received ↗"}
+                          </a>
+                        )}
+                        {source.contractId && source.eventId && (
+                          <a href={contractHref(source.eventId, source.contractId)} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                            Open the contract in a new tab ↗
+                          </a>
+                        )}
+                        {source.kind === "quotation" && (
+                          <a href={`/properties/${property.propertyId}`} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                            The hotel&rsquo;s quotations in a new tab ↗
+                          </a>
+                        )}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
+      )}
+      <div className="mt-4">
+        <Button type="button" variant="ghost" onClick={onClose}>
+          Back to the card
+        </Button>
+      </div>
+    </Popup>
   );
 }
