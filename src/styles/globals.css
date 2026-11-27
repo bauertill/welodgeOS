@@ -61,3 +61,11 @@
     page: landscape;
   }
 }
+
+/* Board rows open on a click anywhere (2026-11-27): say so with the pointer. */
+table[data-row-click] tbody tr:has(a[href], button) {
+  cursor: pointer;
+}
+table[data-row-click] tbody tr:has(a[href], button):hover {
+  background-color: rgb(249 249 250);
+}

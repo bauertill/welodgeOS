@@ -4,6 +4,7 @@ import { type Metadata } from "next";
 import { Poppins } from "next/font/google";
 
 import { AppShell } from "~/app/_components/app-shell";
+import { RowClicks } from "~/app/_components/row-clicks";
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
       <body className="font-sans">
         <TRPCReactProvider>
           <AppShell>{children}</AppShell>
+          <RowClicks />
         </TRPCReactProvider>
       </body>
     </html>

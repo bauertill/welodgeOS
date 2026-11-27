@@ -758,6 +758,18 @@ of several) — and *How this works* on the Sales requests page goes straight to
   worked changes the guide in the same change, as for this document. Who to tell when
   something in it is wrong: the owner.
 
+### 2.12 Boards open on a click anywhere on the row (2026-11-27)
+
+The owner: "it's much faster to just click on the row instead of getting the name exactly."
+On the boards — clients and people, a event's properties, contracts, payments and cancellation
+deadlines, rate cards, site visits, events and the other lists in the same table style — a
+click **anywhere on a row** opens what its name opens: the page, or the popup where the name
+opens one (a client's quick view, a rate card). Clicking the name still works. A click on
+anything of the row's own — another link, a button, a tick box, a menu like the account
+manager — does that instead; selecting text opens nothing; Cmd/Ctrl-click opens a link in a new
+tab. The pointer shows the row can be clicked. The sales requests, tasks and contractors lists
+already worked this way.
+
 ## 3. Phase 1 — Scouting
 
 A scouting list is the long list of properties that *could* be contracted for an event.
@@ -5318,6 +5330,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
 | §6.9 Rooming list | **Built** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. Live 2026-11-26: the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §2.12 Rows open on a click | **Built** (2026-11-27) | A click anywhere on a board's row opens what its name opens |
 | §4.11 Acquire tasks close on their own | **Built** (2026-11-27) | Closed once every room-night sold to the client at the hotel is bought — after each stock-sheet change and hourly |
 | §4.8 / §7.1 Room moves; contracts matched to the stock sheet | **Built** (2026-11-27) | Move a booking to another free room at the same property, with everything on its nights and its guests; a hotel's contract page shows its nights bought and not bought, picks the rooms the contract names, offers moves when rooms don't match, and buys them under the contract in one step |
 | §4.11 Several account managers; client's contacts kept | **Built** (2026-11-27) | + Add another account manager on a request — told of client actions, found by the filter; contact persons and signatories a client sends become the client's contacts, without duplicates; every client action from a link emailed |

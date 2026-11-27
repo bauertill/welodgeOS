@@ -78,7 +78,7 @@ export function RateCardList({ clientId, eventId: forEvent, compact = false }: {
         <p className="text-ink-500 text-sm font-light">{cards.data?.length ? "No rate card matches." : compact ? "No rate cards sent to this client yet." : "No rate cards yet."}</p>
       ) : (
         <div className="overflow-x-auto rounded-xl bg-white">
-          <table className="w-full text-left text-[13px]">
+          <table data-row-click className="w-full text-left text-[13px]">
             <thead>
               <tr className="text-ink-500 border-ink-200/60 border-b text-[10px] tracking-wider uppercase">
                 <th className="px-4 py-2.5 font-medium">Rate card</th>

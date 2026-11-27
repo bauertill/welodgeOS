@@ -62,7 +62,7 @@ export function SiteVisitReportView({ report }: { report: Report }) {
 
       {report.units.length > 1 && (
         <section>
-          <table className="w-full border-collapse text-[13px]">
+          <table data-row-click className="w-full border-collapse text-[13px]">
             <thead>
               <tr>
                 <th className={`${head} w-56 px-3 py-2`}>Status</th>
@@ -90,7 +90,7 @@ export function SiteVisitReportView({ report }: { report: Report }) {
         <section>
           <h2 className="mb-2 text-[20px] font-bold text-[#5b4fc9]">At a glance</h2>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table data-row-click className="w-full border-collapse text-[13px]">
               <thead>
                 <tr>
                   <th className={`${head} px-3 py-2`} />
@@ -191,7 +191,7 @@ function UnitCard({ unit, number, single }: { unit: Unit; number: number | null;
 
 function Rows({ head, rows }: { head: [string, string]; rows: [string, string][] }) {
   return (
-    <table className="w-full border-collapse text-[13px]">
+    <table data-row-click className="w-full border-collapse text-[13px]">
       <thead>
         <tr>
           <th className="w-40 bg-[#5b4fc9] px-3 py-1.5 text-left text-[12px] font-semibold text-white">{head[0]}</th>
