@@ -1,13 +1,14 @@
 import { TRPCError } from "@trpc/server";
 import type { Prisma } from "generated/prisma";
 
-import { dayKey, eachNight, nightsBetween } from "~/lib/dates";
+import { spanEnd, unitsOf, type Per } from "~/lib/charged-per";
+import { dayKey, eachNight } from "~/lib/dates";
 import { formatRange } from "~/lib/format";
 import { percentTaxes, taxName } from "~/lib/taxes";
 import { applyInventoryChange } from "~/server/api/routers/inventory";
 import { logAudit } from "~/server/audit";
 
-type QuotedLine = { categoryId: string; rooms: number; checkIn: Date; checkOut: Date; category: { name: string; unitCount: number } };
+type QuotedLine = { categoryId: string; rooms: number; checkIn: Date; checkOut: Date; per: Per; category: { name: string; unitCount: number } };
 
 /**
  * Where a quotation asks for more rooms of a room type than the hotel has on
@@ -22,7 +23,7 @@ export function roomShortfall(lines: QuotedLine[]) {
   for (const line of lines) byCategory.set(line.categoryId, [...(byCategory.get(line.categoryId) ?? []), line]);
   for (const [categoryId, own] of byCategory) {
     const perNight = new Map<string, number>();
-    for (const line of own) for (const night of eachNight(line.checkIn, line.checkOut)) perNight.set(dayKey(night), (perNight.get(dayKey(night)) ?? 0) + line.rooms);
+    for (const line of own) for (const night of eachNight(line.checkIn, spanEnd(line))) perNight.set(dayKey(night), (perNight.get(dayKey(night)) ?? 0) + line.rooms);
     const quoted = Math.max(0, ...perNight.values());
     const has = own[0]!.category.unitCount;
     if (quoted > has) busiest.set(categoryId, { name: own[0]!.category.name, has, quoted });
@@ -37,7 +38,7 @@ export async function raiseRoomTypes(tx: Prisma.TransactionClient, actorId: stri
     select: {
       name: true,
       scoutingEntry: { select: { propertyId: true } },
-      lines: { select: { categoryId: true, rooms: true, checkIn: true, checkOut: true, category: { select: { name: true, unitCount: true } } } },
+      lines: { select: { categoryId: true, rooms: true, checkIn: true, checkOut: true, per: true, category: { select: { name: true, unitCount: true } } } },
     },
   });
   const short = roomShortfall(quotation.lines);
@@ -75,14 +76,16 @@ export async function buyQuotedRooms(tx: Prisma.TransactionClient, actorId: stri
       currency: true,
       contractId: true,
       scoutingEntry: { select: { eventId: true } },
-      lines: { select: { categoryId: true, rooms: true, checkIn: true, checkOut: true, rateCents: true, category: { select: { name: true, unitCount: true } } } },
+      lines: { select: { categoryId: true, rooms: true, checkIn: true, checkOut: true, per: true, rateCents: true, category: { select: { name: true, unitCount: true } } } },
     },
   });
   if (!quotation.contractId) throw new TRPCError({ code: "BAD_REQUEST", message: "The quotation has no contract yet — accept it first." });
   const eventId = quotation.scoutingEntry.eventId;
   let bought = 0;
   for (const line of quotation.lines) {
-    const stay = { gte: line.checkIn, lt: line.checkOut };
+    // A day line takes each of its days, its last day too (doc §3.10).
+    const until = spanEnd(line);
+    const stay = { gte: line.checkIn, lt: until };
     await tx.roomSlot.createMany({
       data: Array.from({ length: line.category.unitCount }, (_, i) => ({ categoryId: line.categoryId, slotNumber: i + 1 })),
       skipDuplicates: true,
@@ -92,7 +95,7 @@ export async function buyQuotedRooms(tx: Prisma.TransactionClient, actorId: stri
       orderBy: { slotNumber: "asc" },
       select: { id: true, roomNights: { where: { eventId, date: stay }, select: { acquisitionState: true, acquisitionContractId: true } } },
     });
-    const nights = nightsBetween(line.checkIn, line.checkOut);
+    const nights = unitsOf(line);
     const done = slots.filter(
       (slot) => slot.roomNights.length === nights && slot.roomNights.every((night) => night.acquisitionState === "BOUGHT" && night.acquisitionContractId === quotation.contractId),
     ).length;
@@ -109,7 +112,7 @@ export async function buyQuotedRooms(tx: Prisma.TransactionClient, actorId: stri
       eventId,
       slotIds: free.map((slot) => slot.id),
       checkIn: line.checkIn,
-      checkOut: line.checkOut,
+      checkOut: until,
       action: "BUY",
       acquisitionContractId: quotation.contractId,
       buyPriceCents: line.rateCents,
@@ -161,7 +164,7 @@ export async function carryQuotedRates(
           cleaningOther: true,
           taxes: { orderBy: { position: "asc" }, select: { kind: true, label: true, basisPoints: true, amountCents: true } },
           otherTaxes: true,
-          lines: { select: { categoryId: true, checkIn: true, checkOut: true, rooms: true, rateCents: true, category: { select: { name: true } } } },
+          lines: { select: { categoryId: true, checkIn: true, checkOut: true, per: true, rooms: true, rateCents: true, category: { select: { name: true } } } },
         },
       },
     },
@@ -187,7 +190,7 @@ export async function carryQuotedRates(
     const contract = entry.categoryContracts.find((row) => row.categoryId === categoryId);
     if (contract?.ratePerNightCents == null) {
       const main = lines.reduce((most, line) =>
-        nightsBetween(line.checkIn, line.checkOut) * line.rooms > nightsBetween(most.checkIn, most.checkOut) * most.rooms ? line : most,
+        unitsOf(line) * line.rooms > unitsOf(most) * most.rooms ? line : most,
       );
       const money = (cents: number) => `${quotation.currency} ${(cents / 100).toFixed(2)}`;
       const period = lines.map((line) => `${formatRange(line.checkIn, line.checkOut)}${lines.length > 1 ? `: ${money(line.rateCents)}` : ""}`).join("; ");
@@ -224,7 +227,7 @@ export async function carryQuotedRates(
         where: {
           eventId: entry.eventId,
           slot: { categoryId },
-          date: { gte: line.checkIn, lt: line.checkOut },
+          date: { gte: line.checkIn, lt: spanEnd(line) },
           acquisitionState: "BOUGHT",
           buyPriceCents: null,
         },

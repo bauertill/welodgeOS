@@ -730,7 +730,7 @@ export function welodgeServer(person: Person, headers: Headers) {
     "add_quotation",
     [
       "Record a hotel's or apartment's quotation (their proposal to us) for an event — from the PDF they sent. The property is put on the event's board if it is not yet.",
-      "Each line is rooms of one room type, for one stay (checkIn–checkOut), at one rate per room per night in the quotation's currency. A room type is matched by name; one not on the property yet is added with that many rooms.",
+      "Each line is rooms of one room type, for one stay (checkIn–checkOut), at one rate per room per night in the quotation's currency. A line charged by the day instead — a meeting room, day use — has per 'DAY': then checkIn is the first day and checkOut the last day, both counted, and the rate is per day. A room type is matched by name; one not on the property yet is added with that many rooms.",
       "Payments and cancellation terms as the hotel quotes them; anything that does not fit goes, in words, into paymentTerms, cancellationTerms or notes. Amounts are plain numbers (189.5), percentages plain numbers (20).",
     ].join(" "),
     {
@@ -746,8 +746,9 @@ export function welodgeServer(person: Person, headers: Headers) {
             roomType: z.string().min(1).max(200),
             checkIn: day,
             checkOut: day,
+            per: z.enum(["NIGHT", "DAY"]).default("NIGHT").describe("Charged by the night, or by the day (a meeting room) — then checkOut is the last day"),
             rooms: z.number().int().min(1),
-            ratePerNight: money,
+            ratePerNight: money.describe("The rate per room per night — or per day for a line charged by the day"),
             sleeps: z.number().int().min(1).max(20).optional(),
           }),
         )
@@ -796,7 +797,7 @@ export function welodgeServer(person: Person, headers: Headers) {
       const lines = [];
       for (const line of input.lines) {
         const categoryId = await categoryFor(input.propertyId, line.roomType, line.rooms, line.sleeps ?? 2);
-        lines.push({ categoryId, checkIn: line.checkIn, checkOut: line.checkOut, rooms: line.rooms, rateCents: cents(line.ratePerNight)!, occupancy: line.sleeps ?? null });
+        lines.push({ categoryId, checkIn: line.checkIn, checkOut: line.checkOut, per: line.per, rooms: line.rooms, rateCents: cents(line.ratePerNight)!, occupancy: line.sleeps ?? null });
       }
       const saved = await caller.quotation.save({
         scoutingEntryId: entry.id,

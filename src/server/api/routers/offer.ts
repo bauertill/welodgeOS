@@ -1,3 +1,5 @@
+import { randomBytes } from "crypto";
+
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -8,7 +10,8 @@ import { DEFAULT_AGREEMENT_TEMPLATE } from "~/lib/agreement-template";
 import { DEFAULT_HOTEL_AGREEMENT_TEMPLATE } from "~/lib/hotel-agreement-template";
 import { addDays, dayKey, nightsBetween, parseDay, today } from "~/lib/dates";
 import { formatDate, formatMoney } from "~/lib/format";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import { cutSummary } from "~/lib/cancellation";
 import { cancellationInput, paymentInput } from "~/server/api/routers/quotation";
 import { applyInventoryChange } from "~/server/api/routers/inventory";
 import { addRoomsTx, changeRoomsTx, moveStage, rectangles } from "~/server/api/routers/sales";
@@ -607,6 +610,86 @@ export const offerRouter = createTRPCRouter({
       text: offer.agreementText ?? filled,
       edited: offer.agreementText !== null,
       filled,
+    };
+  }),
+
+  /**
+   * Share the offer with the client (doc §4.11, the owner 2026-11-27): a page
+   * at a link of its own, which prints or saves as a PDF — the step before the
+   * contracting. Sharing again keeps the same link.
+   */
+  share: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const before = await ctx.db.offer.findUniqueOrThrow({ where: { id: input.id }, select: { status: true, shareToken: true, sharedAt: true } });
+    if (before.status === "WITHDRAWN") throw new TRPCError({ code: "BAD_REQUEST", message: "This offer was withdrawn — make a new one to share." });
+    if (before.shareToken) return { shareToken: before.shareToken };
+    const offer = await ctx.db.offer.update({
+      where: { id: input.id },
+      data: { shareToken: randomBytes(24).toString("base64url"), sharedAt: before.sharedAt ?? new Date() },
+      select: { shareToken: true, salesRequestId: true },
+    });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: offer.salesRequestId, summary: "Offer shared with the client — link made" });
+    return { shareToken: offer.shareToken! };
+  }),
+
+  /** Switch the offer's link off: the client's page says it is no longer shared. Sharing again makes a new link. */
+  unshare: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const offer = await ctx.db.offer.update({ where: { id: input.id }, data: { shareToken: null }, select: { salesRequestId: true } });
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: offer.salesRequestId, summary: "Offer link switched off" });
+    return { ok: true };
+  }),
+
+  /**
+   * The offer as the client sees it, from its link — no sign-in. Only what we
+   * offer them: the rooms at our rates, the terms and how long it holds;
+   * never our buying rates.
+   */
+  shared: publicProcedure.input(z.object({ token: z.string().min(20).max(100) })).query(async ({ ctx, input }) => {
+    const offer = await ctx.db.offer.findUnique({
+      where: { shareToken: input.token },
+      include: {
+        ...include,
+        salesRequest: { select: { tradeName: true, client: { select: { name: true } }, event: { select: { name: true, startDate: true, endDate: true } } } },
+      },
+    });
+    if (!offer || offer.status === "WITHDRAWN") throw new TRPCError({ code: "NOT_FOUND", message: "This offer is not shared any more." });
+    const lines = offer.lines.map((line) => {
+      const nights = nightsBetween(line.checkIn, line.checkOut);
+      return {
+        id: line.id,
+        property: line.category.property.name,
+        city: line.category.property.city,
+        roomType: line.category.name,
+        rooms: line.rooms,
+        checkIn: line.checkIn,
+        checkOut: line.checkOut,
+        nights,
+        roomNights: nights * line.rooms,
+        rateCents: line.rateCents,
+        totalCents: nights * line.rooms * line.rateCents,
+      };
+    });
+    const totalCents = offerTotal(offer.lines);
+    const list = (text: string | null) => (text ?? "").split("\n").map((one) => one.trim()).filter(Boolean);
+    return {
+      clientName: offer.salesRequest.tradeName?.trim() || offer.salesRequest.client.name,
+      event: offer.salesRequest.event,
+      currency: offer.currency,
+      validUntil: offer.validUntil,
+      madeOn: offer.sharedAt ?? offer.createdAt,
+      preparedBy: offer.createdBy?.name ?? null,
+      status: offer.status,
+      lines,
+      totalCents,
+      roomNights: lines.reduce((sum, line) => sum + line.roomNights, 0),
+      payments: offer.payments.map((payment) => ({
+        onSignature: payment.onSignature,
+        dueOn: payment.dueOn,
+        percentBasisPoints: payment.percentBasisPoints,
+        amountCents: Math.round((totalCents * payment.percentBasisPoints) / 10_000),
+      })),
+      cancellations: offer.cancellations.map(cutSummary).filter(Boolean),
+      inclusions: list(offer.inclusions),
+      conditions: list(offer.conditions),
     };
   }),
 

@@ -12,6 +12,7 @@ import { Button, Field, FormError, friendlyError, Input, Label, Select, Textarea
 import { Popup } from "~/app/_components/popup";
 import { RateIncludesPicker } from "~/app/_components/room-categories";
 import { checkTerms, TermsEditor, toCancellationDraft, toPercent, type CancellationDraft, type PaymentDraft } from "~/app/_components/terms-editor";
+import { quantityText, unitWord, type Per } from "~/lib/charged-per";
 import { dayKey } from "~/lib/dates";
 import { cutSummary } from "~/lib/cancellation";
 import { formatDate, formatMoney, formatRange } from "~/lib/format";
@@ -262,6 +263,8 @@ function QuotationCard({
   const [full, setFull] = useState(false);
   // What is added on top of each night, if anything (Ami: "not sure if it's added to the per night rate").
   const extra = quotation.taxCents > 0;
+  // Charged by the night, by the day (a meeting room), or both on one quote (doc §3.10).
+  const perWord = unitHeading(quotation);
   // A short heading, so the all-in column stays in view: "+ 12%", else "+ fees".
   const percents = quotation.taxes.every((tax) => tax.basisPoints !== null);
   const extraName = percents ? quotation.taxes.map((tax) => percent(tax.basisPoints!)).join(" + ") : extrasLabel(quotation.taxes).split(" ").length > 2 ? "taxes, fees" : extrasLabel(quotation.taxes).toLowerCase();
@@ -301,7 +304,7 @@ function QuotationCard({
             {[
               roomTypesOf(quotation) || null,
               quotation.from && quotation.to ? formatRange(quotation.from, quotation.to) : null,
-              `${quotation.roomNights} room-nights`,
+              quantityText(quotation.roomNights, quotation.roomDays),
               quotation.rooms ? `${quotation.rooms} rooms` : null,
               quotation.receivedOn ? `received ${formatDate(quotation.receivedOn)}` : null,
               quotation.validUntil ? `valid until ${formatDate(quotation.validUntil)}` : null,
@@ -334,10 +337,10 @@ function QuotationCard({
                 <>
                   <th className={`${th} text-right`}>Rate</th>
                   <th className={`${th} text-right`}>+ {extraName}</th>
-                  <th className={`${th} text-ink-900 bg-brand-50 text-right`}>All-in / night</th>
+                  <th className={`${th} text-ink-900 bg-brand-50 text-right`}>All-in{perWord ? ` / ${perWord}` : ""}</th>
                 </>
               ) : (
-                <th className={`${th} text-ink-900 bg-brand-50 text-right`}>Per night</th>
+                <th className={`${th} text-ink-900 bg-brand-50 text-right`}>{perWord ? `Per ${perWord}` : "Rate"}</th>
               )}
               <th className={`${th} text-right`}>Total</th>
             </tr>
@@ -352,7 +355,7 @@ function QuotationCard({
                 <td className={`${td} whitespace-nowrap`}>
                   {formatRange(line.checkIn, line.checkOut)}
                   <span className="text-ink-500 block text-xs">
-                    {line.rooms} {line.rooms === 1 ? "room" : "rooms"} × {line.nights} nights
+                    {line.rooms} {line.rooms === 1 ? "room" : "rooms"} × {line.nights} {unitWord(line.per, line.nights)}
                   </span>
                 </td>
                 {extra && (
@@ -364,10 +367,13 @@ function QuotationCard({
                 <td className={`${td} bg-brand-50/60 text-right whitespace-nowrap`}>
                   <span className="text-ink-900 text-[14px] font-semibold">{formatMoney(line.rateCents + line.taxPerNightCents, quotation.currency)}</span>
                   <InUsd cents={line.rateCents + line.taxPerNightCents} currency={quotation.currency} />
+                  {!perWord && <span className="text-ink-500 block text-xs">per {unitWord(line.per, 1)}</span>}
                 </td>
                 <td className={`${td} text-right whitespace-nowrap`}>
                   {formatMoney(line.totalCents + line.taxCents, quotation.currency)}
-                  <span className="text-ink-500 block text-xs">{line.roomNights} room-nights</span>
+                  <span className="text-ink-500 block text-xs">
+                    {line.roomNights} {line.per === "DAY" ? "room-days" : "room-nights"}
+                  </span>
                 </td>
               </tr>
             ))}
@@ -376,7 +382,7 @@ function QuotationCard({
       </div>
       <p className="text-ink-500 mt-1.5 text-xs font-light">
         {extra
-          ? `${extraWhat} is added on top of the rate — the all-in price per night and the totals include it.`
+          ? `${extraWhat} is added on top of the rate — the all-in price per ${perWord ?? "night or day"} and the totals include it.`
           : quotation.taxesIncluded
             ? "Taxes are included in the rate."
             : "Nothing is added on top of the rate."}
@@ -551,7 +557,9 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                   <th className={`${th} pl-0`}>Period</th>
                   <th className={th}>Room type</th>
                   <th className={th}>Rooms</th>
-                  <th className={`${th} pr-0 text-right`}>{quotation.taxCents > 0 ? "All-in per night" : "Per night"}</th>
+                  <th className={`${th} pr-0 text-right`}>
+                    {quotation.taxCents > 0 ? "All-in" : ""} {unitHeading(quotation) ? `per ${unitHeading(quotation)}` : quotation.taxCents > 0 ? "" : "Rate"}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -559,7 +567,9 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                   <tr key={line.id}>
                     <td className={`${td} pl-0 whitespace-nowrap`}>
                       {formatRange(line.checkIn, line.checkOut)}
-                      <span className="text-ink-500 block text-xs">{line.nights} nights</span>
+                      <span className="text-ink-500 block text-xs">
+                        {line.nights} {unitWord(line.per, line.nights)}
+                      </span>
                     </td>
                     <td className={`${td} text-ink-900`}>{line.category.name}</td>
                     <td className={td}>{line.rooms}</td>
@@ -598,7 +608,7 @@ export function QuotationsGlance({ scoutingEntryId, propertyHref }: { scoutingEn
                   <span className="text-ink-900 font-medium">{formatMoney(quotation.payableCents, quotation.currency)}</span>
                   <span className="text-ink-500">
                     {" "}
-                    · {quotation.roomNights} room-nights
+                    · {quantityText(quotation.roomNights, quotation.roomDays)}
                     {quotation.taxCents > 0 && ` · incl. ${formatMoney(quotation.taxCents, quotation.currency)} ${extrasLabel(quotation.taxes)}`}
                   </span>
                   <InUsd cents={quotation.payableCents} currency={quotation.currency} className="text-ink-500 ml-1 text-xs font-light" />
@@ -707,7 +717,19 @@ function TaxesEditor({ taxes, setTaxes, currency, included }: { taxes: TaxDraft[
   );
 }
 
-type LineDraft = { categoryId: string; checkIn: string; checkOut: string; rooms: string; rate: string; occupancy: string };
+type LineDraft = { categoryId: string; per: Per; checkIn: string; checkOut: string; rooms: string; rate: string; occupancy: string };
+
+/** The unit for a quotation's headings: night, day, or none when it mixes both (doc §3.10). */
+function unitHeading(quotation: { allDays: boolean; lines: { per: Per }[] }) {
+  return quotation.allDays ? "day" : quotation.lines.some((line) => line.per === "DAY") ? null : "night";
+}
+
+/** How many nights, or days, a line's typed dates come to — a day line counts its last day too. */
+function typedUnits(line: Pick<LineDraft, "per" | "checkIn" | "checkOut">) {
+  if (!line.checkIn || !line.checkOut) return 0;
+  const between = Math.round((Date.parse(line.checkOut) - Date.parse(line.checkIn)) / 86_400_000);
+  return Math.max(0, line.per === "DAY" ? between + 1 : between);
+}
 function QuotationEditor({
   scoutingEntryId,
   categories,
@@ -769,6 +791,7 @@ function QuotationEditor({
   const [cleaning, setCleaning] = useState<Cleaning | "">(quotation?.cleaning ?? "");
   const blankLine = (from?: LineDraft): LineDraft => ({
     categoryId: from?.categoryId ?? cats[0]?.id ?? "",
+    per: from?.per ?? "NIGHT",
     checkIn: from?.checkOut ?? stay.checkIn,
     checkOut: stay.checkOut,
     rooms: from?.rooms ?? "",
@@ -778,6 +801,7 @@ function QuotationEditor({
   const [lines, setLines] = useState<LineDraft[]>(
     quotation?.lines.map((line) => ({
       categoryId: line.categoryId,
+      per: line.per,
       checkIn: dayKey(line.checkIn),
       checkOut: dayKey(line.checkOut),
       rooms: String(line.rooms),
@@ -806,6 +830,7 @@ function QuotationEditor({
         const rate = category.categoryContracts[0];
         return {
           categoryId: category.id,
+          per: "NIGHT" as const,
           checkIn: stay.checkIn,
           checkOut: stay.checkOut,
           rooms: String(category.unitCount),
@@ -871,7 +896,7 @@ function QuotationEditor({
   const typedTaxes = taxesIncluded ? [] : taxes.map(readTax).filter((tax) => tax !== null);
   const sums = lines.reduce(
     (sum, line) => {
-      const nights = line.checkIn && line.checkOut ? Math.max(0, (Date.parse(line.checkOut) - Date.parse(line.checkIn)) / 86_400_000) : 0;
+      const nights = typedUnits(line);
       const rate = Number(line.rate.replace(",", "."));
       if (!Number.isFinite(rate)) return sum;
       const rateCents = Math.round(rate * 100);
@@ -893,12 +918,13 @@ function QuotationEditor({
           const rooms = Number(line.rooms);
           const rate = Number(line.rate.replace(",", "."));
           if (!line.categoryId) return setProblem(`Line ${i + 1}: choose the room category.`);
-          if (!line.checkIn || !line.checkOut || line.checkOut <= line.checkIn) return setProblem(`Line ${i + 1}: give a check-in and a check-out after it.`);
+          if (line.per === "DAY" ? !line.checkIn || !line.checkOut || line.checkOut < line.checkIn : !line.checkIn || !line.checkOut || line.checkOut <= line.checkIn)
+            return setProblem(line.per === "DAY" ? `Line ${i + 1}: give the first day and the last day, on or after it.` : `Line ${i + 1}: give a check-in and a check-out after it.`);
           if (!Number.isInteger(rooms) || rooms < 1) return setProblem(`Line ${i + 1}: say how many rooms, like 20.`);
-          if (!line.rate.trim() || !Number.isFinite(rate) || rate < 0) return setProblem(`Line ${i + 1}: give the rate per night, like 315.`);
+          if (!line.rate.trim() || !Number.isFinite(rate) || rate < 0) return setProblem(`Line ${i + 1}: give the rate per ${line.per === "DAY" ? "day" : "night"}, like 315.`);
           const occupancy = line.occupancy.trim() ? Number(line.occupancy) : null;
           if (occupancy !== null && (!Number.isInteger(occupancy) || occupancy < 1)) return setProblem(`Line ${i + 1}: people per room should be a whole number.`);
-          parsed.push({ categoryId: line.categoryId, checkIn: line.checkIn, checkOut: line.checkOut, rooms, rateCents: Math.round(rate * 100), occupancy });
+          parsed.push({ categoryId: line.categoryId, per: line.per, checkIn: line.checkIn, checkOut: line.checkOut, rooms, rateCents: Math.round(rate * 100), occupancy });
         }
         const rooms = draft.rooms.trim() ? Number(draft.rooms) : null;
         if (rooms !== null && (!Number.isInteger(rooms) || rooms < 0)) return setProblem("Rooms should be a whole number, like 40.");
@@ -1002,21 +1028,33 @@ function QuotationEditor({
                 </Select>
               </label>
               <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">Check-in</span>
+                <span className="text-ink-500 mb-1 block text-[11px]">{line.per === "DAY" ? "First day" : "Check-in"}</span>
                 <Input type="date" value={line.checkIn} onChange={(e) => setLine(index, "checkIn", e.target.value)} aria-label={`Line ${index + 1} check-in`} className="px-2" />
               </label>
               <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">Check-out</span>
+                <span className="text-ink-500 mb-1 block text-[11px] whitespace-nowrap">
+                  {line.per === "DAY" ? "Last day" : "Check-out"}
+                  {typedUnits(line) > 0 && ` · ${typedUnits(line)} ${unitWord(line.per, typedUnits(line))}`}
+                </span>
                 <Input type="date" value={line.checkOut} onChange={(e) => setLine(index, "checkOut", e.target.value)} aria-label={`Line ${index + 1} check-out`} className="px-2" />
               </label>
               <label className="min-w-0">
                 <span className="text-ink-500 mb-1 block text-[11px]">Rooms</span>
                 <Input value={line.rooms} onChange={(e) => setLine(index, "rooms", e.target.value)} inputMode="numeric" placeholder="20" aria-label={`Line ${index + 1} rooms`} className="px-2" />
               </label>
-              <label className="min-w-0">
-                <span className="text-ink-500 mb-1 block text-[11px]">Per night</span>
+              <div className="min-w-0">
+                {/* Charged by the night, or by the day — a meeting room (doc §3.10). */}
+                <select
+                  value={line.per}
+                  onChange={(e) => setLine(index, "per", e.target.value)}
+                  aria-label={`Line ${index + 1} charged per night or per day`}
+                  className="text-brand-700 mb-1 block cursor-pointer bg-transparent text-[11px] font-medium outline-none"
+                >
+                  <option value="NIGHT">Per night ▾</option>
+                  <option value="DAY">Per day ▾</option>
+                </select>
                 <Input value={line.rate} onChange={(e) => setLine(index, "rate", e.target.value)} inputMode="decimal" placeholder="315.00" aria-label={`Line ${index + 1} rate`} className="px-2" />
-              </label>
+              </div>
               <label className="min-w-0">
                 <span className="text-ink-500 mb-1 block text-[11px]">People/room</span>
                 <Input value={line.occupancy} onChange={(e) => setLine(index, "occupancy", e.target.value)} inputMode="numeric" placeholder="2" aria-label={`Line ${index + 1} people per room`} className="px-2" />
@@ -1263,8 +1301,8 @@ export function QuotesReceived({ salesRequestId }: { salesRequestId: string }) {
                 <span className="text-ink-700 mt-1 block text-xs">
                   {[
                     quote.from && quote.to ? formatRange(quote.from, quote.to) : null,
-                    quote.rooms ? `${quote.rooms} rooms` : `${quote.roomNights} room-nights`,
-                    quote.lowestRateCents !== null ? `from ${formatMoney(quote.lowestRateCents, quote.currency)} a night` : null,
+                    quote.rooms ? `${quote.rooms} rooms` : quantityText(quote.roomNights, quote.roomDays),
+                    quote.lowestRateCents !== null ? `from ${formatMoney(quote.lowestRateCents, quote.currency)} a ${quote.allDays ? "day" : "night"}` : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}

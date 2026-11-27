@@ -1689,6 +1689,15 @@ first. They are not shown under the property's row on the Properties tab, where 
 them would make the board too long; the row says how many there are and links straight
 to the tab.
 
+**By the night or by the day** (the owner, 2026-11-27: "we sell sometimes meeting spaces and
+rooms per day"). Each line's rate is **Per night ▾** or **Per day ▾**. A day line runs from its
+**first day** to its **last day**, both counted — a meeting room 18 Jun to 25 Jul 2027 is 38 days,
+where as nights it would be 37 — and the form shows the count beside the dates. The quote then
+says *1 room × 38 days*, *38 room-days*, *Per day* (or, mixing both, each line's own unit), and a
+tax by the amount is added per day alike. Accepted and bought, a day line takes each of its days
+on the stock sheet, its last day too; Claude's *add_quotation* takes `per: "DAY"` the same way.
+Offers to clients are still by the night.
+
 **Payments and cancellation cut-offs, line by line** (2026-10-12), so they can be followed
 on a deadline board later. **Payments**: each *On signature* or *On a date*, and its
 percentage of the total; one line to start, *+ Add a payment* for more, and the form says
@@ -3373,10 +3382,30 @@ follow-up and the signing come next and are not built yet (§12).
   $324.30 and $410 over four periods): a line is the property, the room type and the number of
   rooms once, with its **periods** beneath, each its own dates and rate per night, its nights
   and its subtotal. **+ Add a period at another rate** adds one starting on the last one's
-  departure; changing the room type or the rooms changes every period. **Duplicate for another
+  departure; changing the room type changes every period. **Each period has its own number of
+  rooms** (the owner, 2026-11-27, from the Othon Palace cost analysis for the Women's World Cup:
+  3 rooms 17 Jun–27 Jul, 2 rooms 20 Jun–9 Jul, 6 rooms 21 Jun–27 Jul… of one room type, periods
+  that overlap): with one period the rooms sit beside the room type; with several, each period
+  starts with its own *rooms*. **Duplicate for another
   room type** copies the periods and rates below for another room type at the same property. It
   is saved, blocked and written into the agreement as one line per period, as before; an offer
-  opened again shows side by side lines of the same room type and rooms as one line with periods.
+  opened again shows side by side lines of the same room type as one line with periods.
+- **Sharing the offer with the client — before the contracting** (the owner, 2026-11-27: "a step
+  that gives us the offer as a link or pdf that we can share with the client. Only after that
+  will we go into the contracting"). An open offer's first button is **Share the offer with the
+  client →**: it makes a link of its own (an unguessable code, as a rate card's) to a page with
+  no sign-in — the We Lodge offer, prepared for the client (their company name) on the day, by
+  whom: every line as property, room type, rooms, check-in, check-out, nights, rate per room per
+  night and subtotal, with the total and the room-nights; the payments with what each comes to;
+  the cancellation terms; what the rates include and special conditions; and *This offer holds
+  until …* — once they are happy, the agreement follows. **Save as PDF or print** prints it
+  landscape on one page. Never our buying rates. On the request the offer then shows *✓ Shared
+  with the client* with the link to **copy**, **open — or save as PDF**, and **switch off**
+  (the page then says it is no longer shared; *Make a new link* makes another); edits to the
+  offer show on the same link, and it is in the request's history. Only once it is shared do
+  *Draw up the agreement →*, *✓ Client signed* and *Trust guarantee* appear; an offer whose
+  agreement was already marked sent carries on as before. A withdrawn offer's page is no longer
+  shown.
 - *+ Make another offer* makes one without an answer to start from — the client told us by
   phone, say.
 - **Before there is any offer** (2026-10-30), an open request with no rate card answer has a
@@ -5190,6 +5219,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
 | §6.9 Rooming list | **Built** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. Live 2026-11-26: the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §4.11 Offer shared with the client | **Built** (2026-11-27) | Share the offer → a no-sign-in page (link, or saved as PDF) with the rooms, rates, payments, cancellation and how long it holds, before the agreement; copy, open, switch off; contracting buttons after it. Offer periods each with their own number of rooms |
+| §3.10 Quotation lines per day | **Built** (2026-11-27) | Per night or per day on each quotation line; days count first to last day; room-days on the quote; bought day by day on the stock sheet. Not yet: offers to clients per day |
 | §6.10 Inspections and defects | **Built** (2026-11-26) | Standard apartment checklists (facility yes/no, inventory counts, area by area) kept and edited under Inspection checklists, the first from the EXPO Osaka sheets; each room type can adjust its own; the event's Operations tab with every apartment held, where it stands (not inspected → planned → under way → defects to fix → fixed, to check → Ready for check-in); planning with an Inspection task for the inspector; the inspection walked on a phone — photo dump, ✓/✗, counts, defects pre-written for missing items, severity chosen on site or Not sure; the defect inbox: decide Not sure, make Cleaning / Maintenance / Other tasks, Done → fixed, then checked; a celebration on Ready for check-in. Not yet: the guest's inspection report at check-in, a printable sheet |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
 | Deadline windows configurable | **Not built** | 7 days and 48 hours are constants in the code, with no screen to change them |
