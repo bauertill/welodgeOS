@@ -33,6 +33,7 @@ import {
 import { api, type RouterOutputs } from "~/trpc/react";
 import { CURRENCIES } from "~/lib/currency";
 import { FileField } from "~/app/_components/file-field";
+import { ContractStock } from "~/app/_components/contract-stock";
 import { linkLabel } from "~/lib/file-link";
 
 type FullContract = NonNullable<RouterOutputs["finance"]["contract"]>;
@@ -791,6 +792,7 @@ export function ContractView({ contract }: { contract: FullContract }) {
       )}
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          {contract.party === "SUPPLIER" && <ContractStock contractId={contract.id} />}
           <PaymentsCard contract={contract} />
           <CancellationsCard contract={contract} />
         </div>

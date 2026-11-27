@@ -973,7 +973,13 @@ export function welodgeServer(person: Person, headers: Headers) {
       for (const cut of input.cancellationDeadlines) {
         await addDeadline(contract.id, cut).catch((error: Error) => problems.push(`Deadline ${cut.cutoffOn}: ${error.message}`));
       }
-      return { contractId: contract.id, link: `/events/${input.eventId}/contracts/${contract.id}`, notAdded: problems };
+      // A hotel's contract and the stock sheet (2026-11-27): say what is booked there and not yet bought under it.
+      const stock = await caller.roomMove.contractStock({ contractId: contract.id }).catch(() => null);
+      const stockSheet =
+        stock && stock.openNights > 0
+          ? `${stock.openNights} booked nights at this property on the event are not bought yet on the stock sheet. Tell the person to open the contract's page — "On the stock sheet" — to mark them bought under this contract (it picks out the rooms the contract names, and flags rooms that do not match).`
+          : undefined;
+      return { contractId: contract.id, link: `/events/${input.eventId}/contracts/${contract.id}`, notAdded: problems, ...(stockSheet && { stockSheet }) };
     },
   );
 

@@ -8,6 +8,7 @@ import { eventRouter } from "~/server/api/routers/event";
 import { exchangeRouter } from "~/server/api/routers/exchange";
 import { financeRouter } from "~/server/api/routers/finance";
 import { inventoryRouter } from "~/server/api/routers/inventory";
+import { roomMoveRouter } from "~/server/api/routers/room-move";
 import { mapLayerRouter } from "~/server/api/routers/map-layer";
 import { mediaRouter } from "~/server/api/routers/media";
 import { mondayImportRouter } from "~/server/api/routers/monday-import";
@@ -64,6 +65,7 @@ export const appRouter = createTRPCRouter({
   media: mediaRouter,
   mapLayer: mapLayerRouter,
   inventory: inventoryRouter,
+  roomMove: roomMoveRouter,
   finance: financeRouter,
   exchange: exchangeRouter,
   reporting: reportingRouter,
