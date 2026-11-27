@@ -23,6 +23,7 @@ import { guestName } from "~/lib/rooming";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { ensureBlockTasks } from "~/server/block-task";
 import { settleExtensions } from "~/server/rooming";
+import { settleAcquireTasks } from "~/server/acquire";
 import {
   axisOf,
   describeRoom,
@@ -668,6 +669,12 @@ export async function applyInventoryChange(tx: Prisma.TransactionClient, actorId
 
       // Nights sold to a client may be the extra nights their rooming list asked for (doc §6.9).
       if (action === "SELL" && input.clientId) await settleExtensions(tx, eventId, input.clientId, actorId);
+
+      // Rooms bought (or sold already bought): an acquire task left with nothing to buy is done (2026-11-27).
+      if (acquisitionTarget[action] === "BOUGHT" || salesTarget[action] === "SOLD") {
+        const touched = await tx.roomSlot.findMany({ where: { id: { in: slotIds } }, select: { category: { select: { propertyId: true } } } });
+        await settleAcquireTasks(tx, { eventId, propertyIds: [...new Set(touched.map((slot) => slot.category.propertyId))], actorId });
+      }
 
       return { nights: ids.length, rooms: slotIds.length, added };
 }

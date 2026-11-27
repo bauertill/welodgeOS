@@ -3829,6 +3829,19 @@ the tests; unit-tested against the 50-unit scenario):
 The notes under *How these figures are built* keep the reference's *Scenario* and *Hand-back*
 labels.
 
+
+**An acquire task closes on its own once its rooms are bought** (the owner, 2026-11-27: "if
+there is an acquire task, and the rooms have been bought and all is clear, it should
+automatically move the task to completed — identify when things are done even if they are not
+marked"). An open acquire task is done as soon as **every room-night sold to its client at its
+hotel is bought** — whichever way they were bought: *The hotel signed* on the task, a quotation
+accepted, *On the stock sheet* on the hotel's contract (§7.1), or the stock sheet by hand. It is
+checked after every change on the stock sheet that buys or sells rooms at that hotel, and every
+hour for all of them, so nothing has to be marked. The task's history says *Done on its own —
+all 232 room-nights sold to the client at this hotel are bought*, and its green box says *This
+task closes on its own* until it has. A task with nothing sold yet stays open; a task done by
+hand is left as it is.
+
 #### 4.12.1 Staggered lease — a second kind of scenario (2026-11-24)
 
 The owner asked for a second kind of scenario beside the move-in waves: a **staggered lease**,
@@ -5305,6 +5318,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
 | §6.9 Rooming list | **Built** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. Live 2026-11-26: the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §4.11 Acquire tasks close on their own | **Built** (2026-11-27) | Closed once every room-night sold to the client at the hotel is bought — after each stock-sheet change and hourly |
 | §4.8 / §7.1 Room moves; contracts matched to the stock sheet | **Built** (2026-11-27) | Move a booking to another free room at the same property, with everything on its nights and its guests; a hotel's contract page shows its nights bought and not bought, picks the rooms the contract names, offers moves when rooms don't match, and buys them under the contract in one step |
 | §4.11 Several account managers; client's contacts kept | **Built** (2026-11-27) | + Add another account manager on a request — told of client actions, found by the filter; contact persons and signatories a client sends become the client's contacts, without duplicates; every client action from a link emailed |
 | §4.11 Hotels' terms on the rate card | **Built** (2026-11-27) | See the hotels' terms — a read-only popup over the rate card with each property's supplier contract and quotation payment and cancellation terms |

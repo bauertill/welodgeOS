@@ -190,7 +190,7 @@ export const isGeneratedAcquireBrief = (details: string | null) => Boolean(detai
 export function AcquireWhatToDo({ taskId, propertyName, notes }: { taskId: string; propertyName: string; notes: string | null }) {
   const data = api.acquire.forTask.useQuery({ taskId });
   if (!data.data) return null;
-  const { request, sold, quotes, contracts, nights, inUS, unbought, eventId, propertyId } = data.data;
+  const { request, sold, quotes, contracts, nights, inUS, unbought, eventId, propertyId, status: taskStatus } = data.data;
   const rooms = sold.reduce((sum, line) => sum + line.rooms, 0);
   const roomNights = sold.reduce((sum, line) => sum + line.rooms * nightsBetween(line.checkIn, line.checkOut), 0);
   const first = sold.reduce<Date | null>((min, line) => (!min || line.checkIn < min ? line.checkIn : min), null);
@@ -239,7 +239,7 @@ export function AcquireWhatToDo({ taskId, propertyName, notes }: { taskId: strin
           <p className="font-semibold">✓ Nothing missing</p>
           <p>
             All {roomNights} room-nights for {request.client.name} at {propertyName} are bought
-            {signed ? ` — ${propertyName} signed on ${formatDate(signed.signedOn!)}` : ""}. This task can be marked done.
+            {signed ? ` — ${propertyName} signed on ${formatDate(signed.signedOn!)}` : ""}. {taskStatus === "DONE" ? "This task is done." : "This task closes on its own."}
           </p>
         </div>
       ) : (
