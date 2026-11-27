@@ -15,6 +15,7 @@ import {
   lostReasonLabels,
   salesStageLabels,
   waitingOnLabels,
+  splitContractContacts,
 } from "~/lib/sales";
 import { clientCompanyFields, clientCompanyKeys, type ClientCompanyKey } from "~/lib/clients";
 import { locationName, peopleWords, wishesInWords } from "~/lib/needs";
@@ -22,7 +23,7 @@ import { measuredPlaces } from "~/lib/scouting";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { applyByPeriod, applyInventoryChange, checkPeriods } from "~/server/api/routers/inventory";
 import { diffFields, logAudit } from "~/server/audit";
-import { deliverImmediate, notify } from "~/server/notify";
+import { deliverImmediate, notify, requestManagers } from "~/server/notify";
 import { geocode, placeDetails, searchPlaces } from "~/server/places";
 import { createFoundProperty, foundPlaceInput } from "~/server/found-property";
 import { ensureGetRateTask, GET_RATE } from "~/server/get-rate";
@@ -100,6 +101,7 @@ const include = {
   contact: { select: { id: true, name: true, title: true, email: true } },
   event: { select: { id: true, name: true, country: true, startDate: true, endDate: true } },
   owner: { select: { id: true, name: true, email: true, image: true, bookingLink: true } },
+  coOwners: { select: { id: true, name: true, email: true, image: true }, orderBy: { name: "asc" } },
   closeTo: { select: { id: true, name: true }, orderBy: { name: "asc" } },
   lines: { orderBy: [{ position: "asc" }] },
   closeToPoints: { orderBy: [{ position: "asc" }] },
@@ -716,13 +718,70 @@ export async function saveClientContracting(
   if (clientChanges) {
     await logAudit(tx, { actorId: null, entity: "Client", entityId: before.clientId, summary: `Contracting details sent by the client, ${via}`, changes: clientChanges });
   }
+  // The people they named — contact persons and signatories — become the client's contacts (the owner, 2026-11-27).
+  const added = await addClientContacts(
+    tx,
+    before.clientId,
+    before.ownerId,
+    [
+      ...splitContractContacts(values.contractContacts).map((person) => ({ name: person.name, title: person.jobTitle, email: person.email })),
+      { name: values.signatory1Name, title: values.signatory1Designation ? `${values.signatory1Designation} — signatory` : "Signatory", email: "" },
+      { name: values.signatory2Name, title: values.signatory2Designation ? `${values.signatory2Designation} — signatory` : "Signatory", email: "" },
+    ],
+    `From their contracting details, ${via}`,
+  );
   await notify(tx, {
-    to: [before.ownerId],
+    to: [before.ownerId, ...before.coOwners.map((one) => one.id)],
     actorId: null,
     kind: "SALES_CONTRACTING_SENT",
     title: `${before.client.name} sent their contracting details`,
+    body: added.length ? `Added to their contacts: ${added.join(", ")}` : null,
     link: `/sales/${requestId}`,
   });
+}
+
+/**
+ * People a client named — in their contracting details — put on the client's
+ * contacts (the owner, 2026-11-27: "when a client sends any contact details
+ * this needs to be added to the database"). Someone already there — the same
+ * email, or with no email the same name — is not added twice; only their
+ * empty job title or email is filled. Returns the names added or updated.
+ */
+export async function addClientContacts(
+  tx: Prisma.TransactionClient,
+  clientId: string,
+  accountManagerId: string | null,
+  people: { name: string; title: string; email: string }[],
+  comment: string,
+) {
+  const existing = await tx.clientContact.findMany({ where: { clientId }, select: { id: true, name: true, title: true, email: true } });
+  const done: string[] = [];
+  for (const person of people) {
+    const name = person.name.trim();
+    if (!name) continue;
+    const email = person.email.trim().toLowerCase();
+    const title = person.title.trim();
+    const same = existing.find((one) => (email && one.email?.trim().toLowerCase() === email) || one.name.trim().toLowerCase() === name.toLowerCase());
+    if (same) {
+      const fill = { ...(!same.title && title && { title }), ...(!same.email && email && { email }) };
+      if (Object.keys(fill).length) {
+        await tx.clientContact.update({ where: { id: same.id }, data: fill });
+        Object.assign(same, fill);
+        done.push(name);
+      }
+      continue;
+    }
+    const made = await tx.clientContact.create({
+      data: { clientId, name, title: title || null, email: email || null, accountManagerId, comments: comment },
+      select: { id: true, name: true, title: true, email: true },
+    });
+    existing.push(made);
+    done.push(name);
+  }
+  if (done.length) {
+    await logAudit(tx, { actorId: null, entity: "Client", entityId: clientId, summary: `Contacts added from what the client sent: ${done.join(", ")}` });
+  }
+  return done;
 }
 
 /**
@@ -857,7 +916,8 @@ export const salesRouter = createTRPCRouter({
         ...(input.show === "open" && { stage: { in: openStages } }),
         ...(input.show === "closed" && { stage: { notIn: openStages } }),
         ...(input.eventId && { eventId: input.eventId }),
-        ...(input.ownerId && { ownerId: input.ownerId }),
+        // Theirs as the main account manager, or one of the others (2026-11-27).
+        ...(input.ownerId && { AND: [{ OR: [{ ownerId: input.ownerId }, { coOwners: { some: { id: input.ownerId } } }] }] }),
         ...(input.dueOnly && { followUpOn: { lte: today() }, stage: { in: openStages } }),
         ...(q && {
           OR: [
@@ -1241,7 +1301,11 @@ export const salesRouter = createTRPCRouter({
         const eventId = fields.eventId !== undefined ? fields.eventId || null : before.eventId;
         const addendumEvent = await checkAddendum(tx, contractId, before.clientId, eventId);
         if (addendumEvent && !eventId) data.eventId = addendumEvent;
-        const after = await tx.salesRequest.update({ where: { id }, data, include });
+        let after = await tx.salesRequest.update({ where: { id }, data, include });
+        // Made the main account manager: no longer among the others.
+        if (after.ownerId && after.coOwners.some((one) => one.id === after.ownerId)) {
+          after = await tx.salesRequest.update({ where: { id }, data: { coOwners: { disconnect: { id: after.ownerId } } }, include });
+        }
         const changes = diffFields(readable(before), readable(after), historyFields);
         if (changes) {
           await logAudit(tx, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: id, summary: "Updated", changes });
@@ -1253,6 +1317,23 @@ export const salesRouter = createTRPCRouter({
       await deliverImmediate(ctx.db);
       return updated;
     }),
+
+  /**
+   * The other account managers on a request, beside the main one (the owner,
+   * 2026-11-27): replaced as a whole; the main one is never among them.
+   */
+  setCoOwners: protectedProcedure.input(z.object({ id: z.string(), userIds: z.array(z.string()).max(20) })).mutation(async ({ ctx, input }) => {
+    const before = await ctx.db.salesRequest.findUniqueOrThrow({ where: { id: input.id }, select: { ownerId: true, coOwners: { select: { id: true, name: true, email: true } } } });
+    const ids = [...new Set(input.userIds)].filter((id) => id !== before.ownerId);
+    const after = await ctx.db.salesRequest.update({
+      where: { id: input.id },
+      data: { coOwners: { set: ids.map((id) => ({ id })) } },
+      select: { coOwners: { select: { name: true, email: true } } },
+    });
+    const names = (list: { name: string | null; email: string | null }[]) => list.map((one) => one.name ?? one.email).join(", ") || "none";
+    await logAudit(ctx.db, { actorId: ctx.session.user.id, entity: "SalesRequest", entityId: input.id, summary: "Other account managers changed", changes: `${names(before.coOwners)} → ${names(after.coOwners)}` });
+    return { ok: true };
+  }),
 
   /**
    * Move a request to another stage. Moving to *Proposal sent* dates the
@@ -1732,7 +1813,7 @@ export const salesRouter = createTRPCRouter({
         await saveDetails(tx, request.id, details, { id: null, summary: "Needs sent by the client, through the link" });
         await tx.salesRequest.update({ where: { id: request.id }, data: { needsSubmittedAt: new Date() } });
         await notify(tx, {
-          to: [request.ownerId],
+          to: await requestManagers(tx, request.id),
           actorId: null,
           kind: "SALES_NEEDS_SENT",
           title: `${request.client.name} told us their needs`,
