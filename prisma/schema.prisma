@@ -1293,6 +1293,7 @@ model User {
   clientsManaged         Client[]             @relation("ClientAccountManager")
   contractsManaged       Contract[]           @relation("ContractOwner")
   salesRequests          SalesRequest[]       @relation("SalesRequestOwner")
+  salesRequestsCoOwned   SalesRequest[]       @relation("SalesRequestCoOwners")
   contactsManaged        ClientContact[]      @relation("ContactAccountManager")
   tasksAssigned          Task[]               @relation("TaskAssignees")
   tasksRequested         Task[]               @relation("TaskRequestedBy")
@@ -1720,6 +1721,10 @@ model SalesRequest {
   eventId   String?
   owner     User?          @relation("SalesRequestOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   ownerId   String?
+  /// More account managers beside the main one (the owner, 2026-11-27: "we should be able to have
+  /// more than one"): told as the main one is when the client does something, and found under
+  /// their name in the list's filter.
+  coOwners  User[]         @relation("SalesRequestCoOwners")
 
   // The initial interest, as the client put it — free text, because requests
   // arrive in every shape (doc §4.11).

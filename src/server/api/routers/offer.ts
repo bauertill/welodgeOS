@@ -19,7 +19,7 @@ import { canTrust } from "~/lib/offers";
 import { ensureAcquireTask } from "~/server/acquire";
 import { moveContractTask } from "~/server/contract-task";
 import { logAudit } from "~/server/audit";
-import { deliverImmediate, notify } from "~/server/notify";
+import { deliverImmediate, notify, requestManagers } from "~/server/notify";
 
 /**
  * Offers to a client (doc §4.11, 2026-10-14). After the client answers a rate
@@ -322,7 +322,7 @@ async function closeOffer(
     });
   }
   await notify(tx, {
-    to: [request.ownerId, offer.createdById],
+    to: [...(await requestManagers(tx, request.id)), offer.createdById],
     actorId: actor.id,
     kind: "OFFER_SIGNED",
     title: how.signed ? `${request.client.name} signed the agreement — ${request.event.name}` : `${request.client.name}: trust guarantee given — ${request.event.name}`,

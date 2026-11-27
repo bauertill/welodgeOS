@@ -611,7 +611,9 @@ about what they did themselves.
 | A task moves to another status | Whoever asked for it and whoever completes it |
 | A task is due tomorrow | Whoever completes it — or, with nobody on it, whoever asked. Once |
 | A task becomes overdue | The same people. Once |
-| A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card |
+| A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card — **emailed** since 2026-11-27 |
+| A client sends their needs or their contracting details from their link (§4.11) | The request's account manager — **emailed** since 2026-11-27 |
+| A hotel sends its own form — its details or the guest information (§3.9, §6.8) | Whoever looks after the property on the event — **emailed** since 2026-11-27 |
 | Someone is `@mentioned` in an update or a reply (§2.6, 2026-11-17) | Each person mentioned — **emailed** |
 | A team tag (`@LA`, §2.7) is written in any of the above | Each of its members, as if mentioned by name — **emailed** |
 | Someone replies to an update (§2.6) | Whoever wrote the update and whoever replied before, apart from those mentioned |
@@ -619,15 +621,14 @@ about what they did themselves.
 | Friday 7:00, their own time — payments overdue on their contracts (§7.1, 2026-11-20) | Each account manager with any — **one email** |
 
 **The bell** in the header shows how many are unread and the latest thirty, newest first;
-opening one marks it read and goes to the task; *Mark all read* clears the count. It checks
+opening one marks it read and goes to the task; *Mark all read* clears the count. **Read or unread without opening it** (the owner, 2026-11-27): an unread one has *Mark as read* in its corner, and the dot beside each marks it read — or, on one already read, unread again, to come back to it. It checks
 for new ones every half minute.
 
 **By email: only mentions** (the owner, 2026-11-17: "I don't want to overwhelm the team with
 an email every time — when they're tagged or mentioned, yes") — **and, since 2026-11-20,
-contract deadline reminders and the Friday overdue payments** to the account manager (§7.1) — **and, since 2026-11-24, a client's rooming list submitted** to whoever looks after the property (§6.9). Being `@mentioned` — in a task
+contract deadline reminders and the Friday overdue payments** to the account manager (§7.1) — **and, since 2026-11-24, a client's rooming list submitted** to whoever looks after the property (§6.9). **And, since 2026-11-27, whatever a client — or a hotel — does from their link** (the owner: "whenever a client does anything we should get notified"): needs sent, contracting details sent, a rate card answered, a rooming list submitted, a hotel's own form sent — each emailed at once to the people the bell tells. Being `@mentioned` — in a task
 or its comments, an update or a reply — sends an email **at once**, linking to the page.
-Everything else (a task given to you, comments, replies, status changes, deadlines, rate card
-answers) is in the bell — **and in the morning summary**. On *My profile* each person chooses
+Everything else (a task given to you, comments, replies, status changes, deadlines) is in the bell — **and in the morning summary**. On *My profile* each person chooses
 **Email me when I'm mentioned** (everyone, to start with) or **No email**.
 
 **The morning summary at 7:00 their own time** (the owner, 2026-11-17). Each morning at 7:00
@@ -2484,8 +2485,17 @@ part of a sales request's contracting details (§4.11), and the two are tied tog
   client's history.
 
 The request keeps its own copy: a contract is drawn up from what the client confirmed for
-*that* request, even if the client's details change later. The request's *contact persons*
-and our terms (property, payment schedule, cancellation) stay on the request only.
+*that* request, even if the client's details change later. Our terms (property, payment
+schedule, cancellation) stay on the request only.
+
+**The people they name become the client's contacts** (the owner, 2026-11-27: "when a client
+sends any contact details, like who to contact, this needs to be added to the database"). Each
+*contact person* the client sends — name, job title, email — and each signatory (job title
+"Secretary General — signatory") is added to the client's **Contacts**, with the request's
+account manager and the comment *From their contracting details, through the link* (or *from
+the rate card*). Someone already there — the same email, or without an email the same name —
+is not added twice: only an empty job title or email is filled in. The client's history and the
+account managers' email say who was added.
 
 #### Bringing in monday.com's clients (2026-11-12)
 
@@ -3303,6 +3313,18 @@ a client's page (the owner, 2026-10-18), removes one made by mistake, twice or f
 with its contacts and updates; it is refused, saying why, while the client has a sales
 request (open or closed), a contract or rooms in the inventory. Tasks about it stay, no
 longer tied to it, and its history is kept.
+
+#### More than one account manager (2026-11-27)
+
+The owner: "account manager on a client, we should be able to have more than one." Under a
+request's stages, *Account manager* keeps its main one — chosen as before — and **+ Add
+another** adds more, each a chip that comes off with ×; the heading then reads *Account
+managers*. The others are told everything the client does from their links — needs,
+contracting details, a rate card answered, a rooming list, a signature — as the main one is,
+emailed (§2.9); the list's account manager filter finds a request under any of them, and the
+list shows the main one's initials with *+1*, *+2*. Tasks, reminders and the other places that
+name one account manager still go to the main one. Made the main one, a colleague is no longer
+among the others; the change is in the request's history.
 
 #### The client fills in their own contracting details
 
@@ -5116,7 +5138,8 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §5.4 Stock sheet | **Built** | Client filter offers only the clients on the sheet (2026-11-18). A date-grid of blocks — one per client and status, labelled with check-in, check-out and rooms, CO on the check-out day, a summary on hover — edited by selecting a rectangle of nights, which scrolls the sheet when dragged past an edge. Dates and rooms stay pinned while scrolling — the hotel and room type lines too, with their rooms available and Select all (2026-11-11); the sheet opens wide enough for every night with anything on it and grows two weeks at a time when scrolled sideways to an edge (2026-11-11); the date window is remembered per event, per browser. Rooms available — a room counts when at least half its nights in view are ours and unsold, blocks counted as free — in total and per hotel and room type. Look out for counts issues (one per client, state and hotel), not room-nights, and clicking one shows only those. Rooms can be extended into new nights from a selection, as one all-or-nothing step, for contracted room types |
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
-| §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. On staging (2026-11-24): the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §6.9 Rooming list | **Built** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. Live 2026-11-26: the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §4.11 Several account managers; client's contacts kept | **Built** (2026-11-27) | + Add another account manager on a request — told of client actions, found by the filter; contact persons and signatories a client sends become the client's contacts, without duplicates; every client action from a link emailed |
 | §4.11 Hotels' terms on the rate card | **Built** (2026-11-27) | See the hotels' terms — a read-only popup over the rate card with each property's supplier contract and quotation payment and cancellation terms |
 | §4.11 Offer shared with the client | **Built** (2026-11-27) | Share the offer → a no-sign-in page (link, or saved as PDF) with the rooms, rates, payments, cancellation and how long it holds, before the agreement; copy, open, switch off; contracting buttons after it. Offer periods each with their own number of rooms |
 | §3.10 Quotation lines per day | **Built** (2026-11-27) | Per night or per day on each quotation line; days count first to last day; room-days on the quote; bought day by day on the stock sheet. Not yet: offers to clients per day |

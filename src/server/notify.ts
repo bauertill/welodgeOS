@@ -14,6 +14,12 @@ import { layoutEmail, sendEmail } from "~/server/email";
 
 type Db = Prisma.TransactionClient | PrismaClient;
 
+/** A sales request's account managers: the main one and the others (2026-11-27) — who hears when the client does something. */
+export async function requestManagers(db: Db, salesRequestId: string) {
+  const request = await db.salesRequest.findUnique({ where: { id: salesRequestId }, select: { ownerId: true, coOwners: { select: { id: true } } } });
+  return request ? [request.ownerId, ...request.coOwners.map((one) => one.id)] : [];
+}
+
 export async function notify(
   db: Db,
   input: { to: (string | null | undefined)[]; actorId: string | null; kind: NotificationKind; title: string; body?: string | null; link: string; taskId?: string },
@@ -57,10 +63,14 @@ export const plainMentions = (body: string) => body.replace(MENTION_PATTERN, "@$
  * want to overwhelm the team with an email every time — when they're tagged or
  * mentioned, yes") — and, since 2026-11-20, payment and cancellation deadline
  * reminders to the contract's account manager (doc §7.1) — and, since
- * 2026-11-24, a client's rooming list submitted (doc §6.9). Everything else
- * stays in the bell.
+ * 2026-11-24, a client's rooming list submitted (doc §6.9) — and, since
+ * 2026-11-27, anything a client (or a hotel) does from their link (the owner:
+ * "whenever a client does anything we should get notified"): their needs,
+ * their contracting details, a rate card answered, a hotel's own form.
+ * Everything else stays in the bell.
  */
-export const EMAILED_KINDS: NotificationKind[] = ["TASK_MENTION", "UPDATE_MENTION", "PAYMENT_DUE", "CANCELLATION_DUE", "ROOMING_SUBMITTED"];
+export const CLIENT_ACTION_KINDS: NotificationKind[] = ["SALES_NEEDS_SENT", "SALES_CONTRACTING_SENT", "RATE_CARD_ANSWERED", "ROOMING_SUBMITTED", "PROPERTY_CONTRACTING_SENT"];
+export const EMAILED_KINDS: NotificationKind[] = ["TASK_MENTION", "UPDATE_MENTION", "PAYMENT_DUE", "CANCELLATION_DUE", ...CLIENT_ACTION_KINDS];
 
 /**
  * Email the mentions waiting, at once, to everyone who has not turned email

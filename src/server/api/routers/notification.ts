@@ -23,6 +23,11 @@ export const notificationRouter = createTRPCRouter({
     ctx.db.notification.updateMany({ where: { id: input.id, userId: ctx.session.user.id, readAt: null }, data: { readAt: new Date() } }),
   ),
 
+  /** Back to unread, from the bell — to come back to it later (2026-11-27). */
+  markUnread: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) =>
+    ctx.db.notification.updateMany({ where: { id: input.id, userId: ctx.session.user.id }, data: { readAt: null } }),
+  ),
+
   markAllRead: protectedProcedure.mutation(({ ctx }) =>
     ctx.db.notification.updateMany({ where: { userId: ctx.session.user.id, readAt: null }, data: { readAt: new Date() } }),
   ),

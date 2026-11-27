@@ -7,7 +7,7 @@ import { formatRange } from "~/lib/format";
 import { changeCount, guestName, listChanges, roomingExtraFields, sharesOneBed, stayChanges, type Guest, type StaySnapshot, type SubmittedStay } from "~/lib/rooming";
 import { logAudit } from "~/server/audit";
 import { HOTEL_CONTACT } from "~/server/hotel-contact";
-import { notify } from "~/server/notify";
+import { notify, requestManagers } from "~/server/notify";
 
 export { guestName, type Guest };
 
@@ -884,7 +884,8 @@ export async function submitList(tx: Prisma.TransactionClient, salesRequestId: s
   // Whoever looks after the properties in it — those with changes, else all of the client's there.
   const propertyIds = byProperty.size ? [...byProperty.keys()] : [...new Set(now.map((stay) => stay.propertyId))];
   const managers = await tx.scoutingEntry.findMany({ where: { eventId: request.eventId, propertyId: { in: propertyIds }, accountManagerId: { not: null } }, select: { accountManagerId: true } });
-  const to = managers.length ? managers.map((one) => one.accountManagerId) : [request.ownerId];
+  // And the request's own account managers, all of them (2026-11-27).
+  const to = [...managers.map((one) => one.accountManagerId), ...(await requestManagers(tx, salesRequestId))];
   const actor = actorId ? await tx.user.findUnique({ where: { id: actorId }, select: { name: true, email: true } }) : null;
   await notify(tx, {
     to,
