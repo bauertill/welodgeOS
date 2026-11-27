@@ -2486,8 +2486,17 @@ part of a sales request's contracting details (§4.11), and the two are tied tog
   client's history.
 
 The request keeps its own copy: a contract is drawn up from what the client confirmed for
-*that* request, even if the client's details change later. The request's *contact persons*
-and our terms (property, payment schedule, cancellation) stay on the request only.
+*that* request, even if the client's details change later. Our terms (property, payment
+schedule, cancellation) stay on the request only.
+
+**The people they name become the client's contacts** (the owner, 2026-11-27: "when a client
+sends any contact details, like who to contact, this needs to be added to the database"). Each
+*contact person* the client sends — name, job title, email — and each signatory (job title
+"Secretary General — signatory") is added to the client's **Contacts**, with the request's
+account manager and the comment *From their contracting details, through the link* (or *from
+the rate card*). Someone already there — the same email, or without an email the same name —
+is not added twice: only an empty job title or email is filled in. The client's history and the
+account managers' email say who was added.
 
 #### Bringing in monday.com's clients (2026-11-12)
 
@@ -3305,6 +3314,18 @@ a client's page (the owner, 2026-10-18), removes one made by mistake, twice or f
 with its contacts and updates; it is refused, saying why, while the client has a sales
 request (open or closed), a contract or rooms in the inventory. Tasks about it stay, no
 longer tied to it, and its history is kept.
+
+#### More than one account manager (2026-11-27)
+
+The owner: "account manager on a client, we should be able to have more than one." Under a
+request's stages, *Account manager* keeps its main one — chosen as before — and **+ Add
+another** adds more, each a chip that comes off with ×; the heading then reads *Account
+managers*. The others are told everything the client does from their links — needs,
+contracting details, a rate card answered, a rooming list, a signature — as the main one is,
+emailed (§2.9); the list's account manager filter finds a request under any of them, and the
+list shows the main one's initials with *+1*, *+2*. Tasks, reminders and the other places that
+name one account manager still go to the main one. Made the main one, a colleague is no longer
+among the others; the change is in the request's history.
 
 #### The client fills in their own contracting details
 
@@ -5229,6 +5250,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
 | §6.9 Rooming list | **Built** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. Live 2026-11-26: the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §4.11 Several account managers; client's contacts kept | **Built** (2026-11-27) | + Add another account manager on a request — told of client actions, found by the filter; contact persons and signatories a client sends become the client's contacts, without duplicates; every client action from a link emailed |
 | §4.11 Hotels' terms on the rate card | **Built** (2026-11-27) | See the hotels' terms — a read-only popup over the rate card with each property's supplier contract and quotation payment and cancellation terms |
 | §4.11 Offer shared with the client | **Built** (2026-11-27) | Share the offer → a no-sign-in page (link, or saved as PDF) with the rooms, rates, payments, cancellation and how long it holds, before the agreement; copy, open, switch off; contracting buttons after it. Offer periods each with their own number of rooms |
 | §3.10 Quotation lines per day | **Built** (2026-11-27) | Per night or per day on each quotation line; days count first to last day; room-days on the quote; bought day by day on the stock sheet. Not yet: offers to clients per day |

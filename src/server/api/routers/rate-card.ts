@@ -13,7 +13,7 @@ import { legsForMode } from "~/server/api/routers/travel";
 import { logAudit } from "~/server/audit";
 import { ensureGetMediaTask, GET_MEDIA, hasMedia, withMedia } from "~/server/get-media";
 import { ensureContractTask } from "~/server/contract-task";
-import { deliverImmediate, notify } from "~/server/notify";
+import { deliverImmediate, notify, requestManagers } from "~/server/notify";
 import { eventRates } from "~/server/event-rates";
 import { usdRates } from "~/server/exchange-rates";
 import { CURRENCIES } from "~/lib/currency";
@@ -1145,7 +1145,7 @@ export const rateCardRouter = createTRPCRouter({
           changes: said || input.note.trim() || null,
         });
         await notify(tx, {
-          to: [request.ownerId, card.createdById],
+          to: [...(await requestManagers(tx, request.id)), card.createdById],
           actorId: null,
           kind: "RATE_CARD_ANSWERED",
           title: `${request.client.name} answered the rate card${said ? `: ${said}` : ""}${card.salesRequest ? "" : " — a new sales request"}`,

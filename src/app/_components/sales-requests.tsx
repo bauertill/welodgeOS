@@ -353,6 +353,61 @@ function OwnerPicker({
   );
 }
 
+/**
+ * The other account managers beside the main one (the owner, 2026-11-27): each
+ * a chip that comes off with ×, and "+ Add another". They hear what the client
+ * does, as the main one does, and find the request under their name.
+ */
+function CoOwners({ request, onChanged }: { request: { id: string; owner: { id: string } | null; coOwners: { id: string; name: string | null; email: string | null }[] }; onChanged?: () => void }) {
+  const utils = api.useUtils();
+  const people = api.user.list.useQuery(undefined, { staleTime: 60_000 });
+  const save = api.sales.setCoOwners.useMutation({
+    onSuccess: () => {
+      void utils.sales.invalidate();
+      onChanged?.();
+    },
+  });
+  const ids = request.coOwners.map((one) => one.id);
+  const free = (people.data ?? []).filter((person) => person.id !== request.owner?.id && !ids.includes(person.id));
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-1">
+      {request.coOwners.map((one) => (
+        <span key={one.id} className="bg-brand-50 text-brand-800 inline-flex items-center gap-1 rounded-full py-0.5 pr-1 pl-2.5 text-[12px]">
+          {one.name ?? one.email}
+          <button
+            type="button"
+            onClick={() => save.mutate({ id: request.id, userIds: ids.filter((id) => id !== one.id) })}
+            disabled={save.isPending}
+            aria-label={`Take ${one.name ?? one.email} off`}
+            className="hover:text-brand-900 hover:bg-brand-100 rounded-full px-1 leading-none"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {free.length > 0 && (
+        <label className="text-brand-700 relative cursor-pointer text-[12px] hover:underline">
+          + Add another
+          <select
+            value=""
+            disabled={save.isPending}
+            onChange={(e) => e.target.value && save.mutate({ id: request.id, userIds: [...ids, e.target.value] })}
+            aria-label="Add another account manager"
+            className="absolute inset-0 cursor-pointer opacity-0"
+          >
+            <option value="">Choose…</option>
+            {free.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name ?? person.email}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
 /** "VB" for Volki Bauer, "EC" for Elena Condini Mosna (first and last name), "A" for ami@welodge.net. */
 function initialsOf(name: string) {
   const words = name.split("@")[0]!.split(/[\s._-]+/).filter(Boolean);
@@ -452,7 +507,14 @@ function StageGroup({ stage, requests, colours }: { stage: SalesRequestStage; re
                   )}
                 </td>
                 <td className={td}>
-                  <OwnerPicker request={request} compact />
+                  <span className="inline-flex items-center gap-1">
+                    <OwnerPicker request={request} compact />
+                    {request.coOwners.length > 0 && (
+                      <span className="text-ink-500 text-[11px]" title={`Also: ${request.coOwners.map((one) => one.name ?? one.email).join(", ")}`}>
+                        +{request.coOwners.length}
+                      </span>
+                    )}
+                  </span>
                 </td>
                 <td className={`${td} text-right`}>
                   {!isClosed(request.stage) && <NotInterested request={request} />}
@@ -1544,9 +1606,10 @@ function RequestFacts({ request }: { request: FullRequest }) {
   return (
     <dl className="border-ink-200/60 mt-4 grid gap-x-6 gap-y-3 border-t pt-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
       <div>
-        <dt className={label}>Account manager</dt>
+        <dt className={label}>{request.coOwners.length ? "Account managers" : "Account manager"}</dt>
         <dd className="-ml-1">
           <OwnerPicker request={request} onChanged={saved} />
+          <CoOwners request={request} onChanged={saved} />
         </dd>
       </div>
       <div>

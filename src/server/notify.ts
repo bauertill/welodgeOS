@@ -14,6 +14,12 @@ import { layoutEmail, sendEmail } from "~/server/email";
 
 type Db = Prisma.TransactionClient | PrismaClient;
 
+/** A sales request's account managers: the main one and the others (2026-11-27) — who hears when the client does something. */
+export async function requestManagers(db: Db, salesRequestId: string) {
+  const request = await db.salesRequest.findUnique({ where: { id: salesRequestId }, select: { ownerId: true, coOwners: { select: { id: true } } } });
+  return request ? [request.ownerId, ...request.coOwners.map((one) => one.id)] : [];
+}
+
 export async function notify(
   db: Db,
   input: { to: (string | null | undefined)[]; actorId: string | null; kind: NotificationKind; title: string; body?: string | null; link: string; taskId?: string },
