@@ -611,7 +611,9 @@ about what they did themselves.
 | A task moves to another status | Whoever asked for it and whoever completes it |
 | A task is due tomorrow | Whoever completes it — or, with nobody on it, whoever asked. Once |
 | A task becomes overdue | The same people. Once |
-| A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card |
+| A client answers a rate card from its link (§4.11) | The request's account manager and whoever made the card — **emailed** since 2026-11-27 |
+| A client sends their needs or their contracting details from their link (§4.11) | The request's account manager — **emailed** since 2026-11-27 |
+| A hotel sends its own form — its details or the guest information (§3.9, §6.8) | Whoever looks after the property on the event — **emailed** since 2026-11-27 |
 | Someone is `@mentioned` in an update or a reply (§2.6, 2026-11-17) | Each person mentioned — **emailed** |
 | A team tag (`@LA`, §2.7) is written in any of the above | Each of its members, as if mentioned by name — **emailed** |
 | Someone replies to an update (§2.6) | Whoever wrote the update and whoever replied before, apart from those mentioned |
@@ -624,10 +626,9 @@ for new ones every half minute.
 
 **By email: only mentions** (the owner, 2026-11-17: "I don't want to overwhelm the team with
 an email every time — when they're tagged or mentioned, yes") — **and, since 2026-11-20,
-contract deadline reminders and the Friday overdue payments** to the account manager (§7.1) — **and, since 2026-11-24, a client's rooming list submitted** to whoever looks after the property (§6.9). Being `@mentioned` — in a task
+contract deadline reminders and the Friday overdue payments** to the account manager (§7.1) — **and, since 2026-11-24, a client's rooming list submitted** to whoever looks after the property (§6.9). **And, since 2026-11-27, whatever a client — or a hotel — does from their link** (the owner: "whenever a client does anything we should get notified"): needs sent, contracting details sent, a rate card answered, a rooming list submitted, a hotel's own form sent — each emailed at once to the people the bell tells. Being `@mentioned` — in a task
 or its comments, an update or a reply — sends an email **at once**, linking to the page.
-Everything else (a task given to you, comments, replies, status changes, deadlines, rate card
-answers) is in the bell — **and in the morning summary**. On *My profile* each person chooses
+Everything else (a task given to you, comments, replies, status changes, deadlines) is in the bell — **and in the morning summary**. On *My profile* each person chooses
 **Email me when I'm mentioned** (everyone, to start with) or **No email**.
 
 **The morning summary at 7:00 their own time** (the owner, 2026-11-17). Each morning at 7:00

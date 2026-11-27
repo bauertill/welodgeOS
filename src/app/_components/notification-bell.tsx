@@ -145,7 +145,7 @@ export function NotificationBell() {
  * yes or no. "At once" and the old "Daily summary" both count as yes.
  */
 const preferences = [
-  { value: "IMMEDIATE", label: "Email me when I'm mentioned", hint: "An email as soon as someone @mentions you in an update, a reply or a task." },
+  { value: "IMMEDIATE", label: "Email me when I'm mentioned, or a client acts", hint: "An email as soon as someone @mentions you, or a client sends something from their link." },
   { value: "NONE", label: "No email", hint: "Only the bell in the app." },
 ] as const;
 
@@ -158,7 +158,7 @@ export function EmailPreferenceCard() {
     <div className="border-ink-200/60 mb-8 rounded-xl border bg-white p-5">
       <h2 className="text-ink-900 text-[15px] font-medium">Notifications by email</h2>
       <p className="text-ink-500 mt-1 mb-3 text-sm font-light">
-        When someone @mentions you, an email at once. Everything else — tasks given to you, comments, replies, deadlines — is in the bell at
+        When someone @mentions you, or a client does something from their link — needs, contracting details, a rate card answer, a rooming list — an email at once. Everything else — tasks given to you, comments, replies — is in the bell at
         the top, and in the morning summary below.
       </p>
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Notifications by email">
