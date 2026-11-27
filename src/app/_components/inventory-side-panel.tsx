@@ -558,6 +558,19 @@ export function InventorySidePanel({
 
         {known.length > 0 && <Recorded cells={known} partly={dateRangeEdited && known.length < totalNights} />}
 
+        {roomCount === 1 && known.length > 0 && validRange && (
+          <MoveRoom
+            eventId={eventId}
+            slotId={slotIds[0]!}
+            checkIn={dayKey(effectiveCheckIn)}
+            checkOut={dayKey(effectiveCheckOut)}
+            onMoved={() => {
+              void utils.inventory.invalidate();
+              onApplied();
+            }}
+          />
+        )}
+
         <div className="border-ink-200/60 mb-4 flex gap-1 border-b">
           {(["acquisition", "sales"] as const).map((t) => (
             <button
@@ -1210,5 +1223,54 @@ function ContractPicker({
         </Select>
       )}
     </Field>
+  );
+}
+
+/**
+ * The hotel changed the room (the owner, 2026-11-27: "we sold them 201–204,
+ * the hotel changed it to 202–205"): this room's booking on these nights —
+ * bought or not, held or sold, prices, contracts, guests — moved to another
+ * room at the same property that is free on all of them. Nothing is overwritten.
+ */
+function MoveRoom({ eventId, slotId, checkIn, checkOut, onMoved }: { eventId: string; slotId: string; checkIn: string; checkOut: string; onMoved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState("");
+  const targets = api.roomMove.targets.useQuery({ eventId, slotId, checkIn, checkOut }, { enabled: open });
+  const move = api.roomMove.move.useMutation({ onSuccess: onMoved });
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="text-brand-700 mb-3 text-[13px] font-medium hover:underline">
+        Move this booking to another room…
+      </button>
+    );
+  }
+  const rooms = targets.data?.rooms ?? [];
+  return (
+    <div className="bg-brand-50/60 mb-4 rounded-lg px-3 py-3 text-[13px]">
+      <p className="text-ink-900 font-medium">Move {targets.data?.from.name ?? "this room"}&rsquo;s booking to another room</p>
+      <p className="text-ink-500 mt-0.5 text-xs font-light">
+        Everything on these nights goes with it — bought or not, the client, prices, contracts and the rooming list&rsquo;s guests. Only a room free on every
+        one of these nights can take it.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Select value={to} onChange={(e) => setTo(e.target.value)} aria-label="Move to" className="min-w-0 flex-1 py-1.5 text-[13px]">
+          <option value="">{targets.isLoading ? "Loading…" : "Choose the room…"}</option>
+          {rooms.map((room) => (
+            <option key={room.id} value={room.id} disabled={!room.free}>
+              {room.name}
+              {room.free ? "" : ` — not free (${room.usedNights} ${room.usedNights === 1 ? "night" : "nights"} taken)`}
+            </option>
+          ))}
+        </Select>
+        <Button type="button" disabled={!to || move.isPending} onClick={() => move.mutate({ eventId, fromSlotId: slotId, toSlotId: to, checkIn, checkOut })}>
+          {move.isPending ? "Moving…" : "Move"}
+        </Button>
+        <button type="button" onClick={() => setOpen(false)} className="text-ink-500 text-xs hover:underline">
+          Cancel
+        </button>
+      </div>
+      {move.error && <p className="mt-1.5 text-xs text-[#c03654]">{move.error.message}</p>}
+      {move.data && <p className="mt-1.5 text-xs text-[#0a7a47]">✓ {move.data.summary}</p>}
+    </div>
   );
 }
