@@ -1005,6 +1005,12 @@ model QuotationCancellation {
 }
 
 /// One line of a quotation: rooms of one category, for one period, at one rate.
+/// How a quotation line is charged: by the night, or by the day (doc §3.10).
+enum ChargedPer {
+  NIGHT
+  DAY
+}
+
 model QuotationLine {
   id          String    @id @default(cuid())
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
@@ -1012,11 +1018,14 @@ model QuotationLine {
 
   category   RoomCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   categoryId String
-  /// The period, as a stay: first night to check-out day.
+  /// Charged by the night (a stay: first night to check-out day) or by the day
+  /// (meeting rooms, day use: first day to last day, both counted) — doc §3.10.
+  per        ChargedPer   @default(NIGHT)
+  /// The period: first night to check-out day, or first day to last day.
   checkIn    DateTime     @db.Date
   checkOut   DateTime     @db.Date
   rooms      Int
-  /// Minor units, in the quotation's currency.
+  /// Minor units, in the quotation's currency — per night or per day.
   rateCents  Int
   /// People per room, where the quote says.
   occupancy  Int?
@@ -2693,6 +2702,12 @@ model Offer {
   closedBy        User?             @relation("OfferClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
   closedById      String?
   closedAt        DateTime?
+  /// The offer as a page for the client — the unguessable part of its link
+  /// (doc §4.11, the owner 2026-11-27: shared as a link or PDF before the
+  /// contracting). Empty: not shared yet, or the link switched off.
+  shareToken      String?           @unique
+  /// When it was first shared with the client.
+  sharedAt        DateTime?
   /// When the agreement went to the client — by DocuSign, outside the system.
   agreementSentOn DateTime?         @db.Date
   createdBy       User?             @relation("OfferCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)

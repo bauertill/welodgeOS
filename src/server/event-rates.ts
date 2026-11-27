@@ -1,5 +1,7 @@
 import type { Prisma, PrismaClient } from "generated/prisma";
 
+import { spanEnd } from "~/lib/charged-per";
+
 /**
  * A room category's event rate (doc §3.9, §3.10): what a night of it costs us
  * during the event's period — the dates on the event's setup page — read, not
@@ -37,7 +39,7 @@ export async function eventRates(db: Db, where: { propertyIds: string[]; eventId
           name: true,
           status: true,
           currency: true,
-          lines: { select: { categoryId: true, checkIn: true, checkOut: true, rateCents: true } },
+          lines: { select: { categoryId: true, checkIn: true, checkOut: true, per: true, rateCents: true } },
         },
       },
     },
@@ -63,10 +65,12 @@ export async function eventRates(db: Db, where: { propertyIds: string[]; eventId
     // Quoted periods that fall in the event's dates, per category.
     const quoted = new Map<string, { name: string; accepted: boolean; currency: string; rateCents: number; checkIn: Date; checkOut: Date }[]>();
     for (const quotation of entry.quotations) {
-      for (const line of quotation.lines) {
-        if (line.checkIn > endDate || line.checkOut <= startDate) continue;
+      for (const { per, ...line } of quotation.lines) {
+        // A line charged by the day runs to its last day, included (doc §3.10).
+        const checkOut = spanEnd({ checkOut: line.checkOut, per });
+        if (line.checkIn > endDate || checkOut <= startDate) continue;
         const list = quoted.get(line.categoryId) ?? [];
-        list.push({ name: quotation.name, accepted: quotation.status === "ACCEPTED", currency: quotation.currency, ...line });
+        list.push({ name: quotation.name, accepted: quotation.status === "ACCEPTED", currency: quotation.currency, ...line, checkOut });
         quoted.set(line.categoryId, list);
       }
     }
