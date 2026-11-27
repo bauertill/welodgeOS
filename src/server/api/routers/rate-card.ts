@@ -17,7 +17,9 @@ import { deliverImmediate, notify } from "~/server/notify";
 import { eventRates } from "~/server/event-rates";
 import { usdRates } from "~/server/exchange-rates";
 import { CURRENCIES } from "~/lib/currency";
-import { formatMoney } from "~/lib/format";
+import { formatDate, formatMoney } from "~/lib/format";
+import { cutSummary } from "~/lib/cancellation";
+import { percent } from "~/lib/finance";
 
 /**
  * Rate cards (doc §4.11): what we offer a client for a sales request — the
@@ -579,6 +581,99 @@ export const rateCardRouter = createTRPCRouter({
     // What the agreed terms or quotes say each property's rates include — offered to use in one click (2026-11-17).
     const known = await knownIncludes(ctx.db, card.eventId, card.properties.map((property) => property.propertyId));
     return { ...card, properties: card.properties.map((property) => ({ ...property, knownIncludes: known.get(property.propertyId) ?? null })) };
+  }),
+
+  /**
+   * What each hotel on the card asks of us — its payment and cancellation
+   * terms (Ami, 2026-11-27): looked at beside the card while writing the
+   * client's terms, so ours never promise more than the hotel gives. Read
+   * only: the supplier contracts on the event first, then the quotations not
+   * declined, accepted first.
+   */
+  supplierTerms: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const card = await ctx.db.rateCard.findUniqueOrThrow({
+      where: { id: input.id },
+      select: { eventId: true, properties: { orderBy: { position: "asc" }, select: { propertyId: true, property: { select: { name: true } } } } },
+    });
+    const propertyIds = card.properties.map((one) => one.propertyId);
+    if (!card.eventId || !propertyIds.length) return [];
+    const [contracts, entries] = await Promise.all([
+      ctx.db.contract.findMany({
+        where: { party: "SUPPLIER", eventId: card.eventId, propertyId: { in: propertyIds } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          propertyId: true,
+          signedOn: true,
+          eventId: true,
+          documentUrl: true,
+          notes: true,
+          payments: { orderBy: { dueOn: "asc" }, select: { description: true, dueOn: true, percentBasisPoints: true, amountCents: true, plusTaxes: true } },
+          cancellations: { orderBy: { cutoffOn: "asc" }, select: { kind: true, cutoffOn: true, percentBasisPoints: true, feeBasisPoints: true, appliesTo: true, roomType: true, remarks: true } },
+          currency: true,
+        },
+      }),
+      ctx.db.scoutingEntry.findMany({
+        where: { eventId: card.eventId, propertyId: { in: propertyIds } },
+        select: {
+          propertyId: true,
+          quotations: {
+            where: { status: { not: "DECLINED" } },
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              documentUrl: true,
+              paymentTerms: true,
+              cancellationTerms: true,
+              payments: { orderBy: { position: "asc" }, select: { onSignature: true, dueOn: true, percentBasisPoints: true, plusTaxes: true } },
+              cancellations: {
+                orderBy: { position: "asc" },
+                select: { kind: true, cutoffOn: true, percentBasisPoints: true, feeBasisPoints: true, rooms: true, roomType: true, remarks: true },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+    return card.properties.map(({ propertyId, property }) => {
+      const fromContracts = contracts
+        .filter((contract) => contract.propertyId === propertyId)
+        .map((contract) => ({
+          key: `c-${contract.id}`,
+          kind: "contract" as const,
+          name: contract.name,
+          status: contract.signedOn ? `Contract signed ${formatDate(contract.signedOn)}` : "Contract — not signed yet",
+          contractId: contract.id,
+          eventId: contract.eventId,
+          documentUrl: contract.documentUrl,
+          payments: contract.payments.map(
+            (payment) =>
+              `${payment.description}: ${payment.percentBasisPoints !== null ? percent(payment.percentBasisPoints) : payment.amountCents !== null ? formatMoney(payment.amountCents, contract.currency ?? "USD") : "—"}${payment.plusTaxes ? " + all taxes" : ""} by ${formatDate(payment.dueOn)}`,
+          ),
+          cancellations: contract.cancellations.map((cut) => {
+            const said = cutSummary({ ...cut, rooms: null });
+            return cut.appliesTo ? `${cut.appliesTo}${cut.roomType ? ` ${cut.roomType}` : ""}: ${said}` : said;
+          }),
+          inWords: contract.notes,
+        }));
+      const quotations = entries.find((entry) => entry.propertyId === propertyId)?.quotations ?? [];
+      const fromQuotes = [...quotations.filter((one) => one.status === "ACCEPTED"), ...quotations.filter((one) => one.status !== "ACCEPTED")].map((quote) => ({
+        key: `q-${quote.id}`,
+        kind: "quotation" as const,
+        name: quote.name,
+        status: quote.status === "ACCEPTED" ? "Quotation — accepted" : "Quotation — received",
+        contractId: null,
+        eventId: null,
+        documentUrl: quote.documentUrl,
+        payments: quote.payments.map((payment) => `${percent(payment.percentBasisPoints)}${payment.plusTaxes ? " + all taxes" : ""} ${payment.onSignature ? "on signature" : `by ${formatDate(payment.dueOn!)}`}`),
+        cancellations: quote.cancellations.map(cutSummary).filter(Boolean),
+        inWords: [quote.paymentTerms ? `Payment: ${quote.paymentTerms}` : null, quote.cancellationTerms ? `Cancellation: ${quote.cancellationTerms}` : null].filter(Boolean).join("\n") || null,
+      }));
+      return { propertyId, name: property.name, sources: [...fromContracts, ...fromQuotes] };
+    });
   }),
 
   /** The card as edited: its name and word to the client, the markup last applied, each property's description and each selling rate. */

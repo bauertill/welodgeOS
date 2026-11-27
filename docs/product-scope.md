@@ -3190,6 +3190,15 @@ room category at the rate we sell it for.
   the properties — or *Each property its own*, written under each property and shown with it.
   Words, as the client reads them; the binding terms are the proposal's (the offer, below),
   set by the sales manager.
+  **The hotels' terms beside them** (Ami, 2026-11-27: "a link where I can check cancellation
+  terms and payment terms from the provider… without opening a separate tab"): *See the hotels'
+  terms* by the heading — and *See this hotel's payment and cancellation terms* under each
+  property, when each has its own — opens a popup over the card, read only and never shown to
+  the client: for each property on the card, its supplier contracts on the event (payments,
+  cancellation cut-offs, notes) and then its quotations not declined, accepted first (payments,
+  cut-offs, the terms in words), each with the document and a link to open the contract or the
+  hotel's quotations in a new tab. Escape or *Back to the card* closes it and leaves the card as
+  it was, edits kept — Escape now closes only the popup on top.
 - **Request a proposal, at the end of the card** (the owner, 2026-11-17). The client chooses
   the rooms they would like — property and room type from a list (liked rooms marked ♥) —
   with how many and their arrival and departure; **+ Add another period** adds another
@@ -5108,6 +5117,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
 | §6.9 Rooming list | **Built on staging** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. On staging (2026-11-24): the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §4.11 Hotels' terms on the rate card | **Built** (2026-11-27) | See the hotels' terms — a read-only popup over the rate card with each property's supplier contract and quotation payment and cancellation terms |
 | §4.11 Offer shared with the client | **Built** (2026-11-27) | Share the offer → a no-sign-in page (link, or saved as PDF) with the rooms, rates, payments, cancellation and how long it holds, before the agreement; copy, open, switch off; contracting buttons after it. Offer periods each with their own number of rooms |
 | §3.10 Quotation lines per day | **Built** (2026-11-27) | Per night or per day on each quotation line; days count first to last day; room-days on the quote; bought day by day on the stock sheet. Not yet: offers to clients per day |
 | §7 Financials | **Built** | Buy and sell price per night; committed cost, contracted revenue, realised and pipeline margin, cost at risk, idle cost — per currency, never converted |
