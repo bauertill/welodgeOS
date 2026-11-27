@@ -8,7 +8,8 @@ import { api } from "~/trpc/react";
 
 /**
  * The bell in the header (doc §2.9): how many notifications are unread, and
- * the latest of them. Opening one marks it read and goes to what it is about.
+ * the latest of them. Opening one marks it read and goes to what it is about;
+ * the dot beside each marks it read, or unread again, without opening it (2026-11-27).
  * Checks for new ones every half minute.
  */
 export function NotificationBell() {
@@ -23,6 +24,20 @@ export function NotificationBell() {
     if (summary.data && zone && summary.data.timeZone !== zone && !setZone.isPending && !setZone.isSuccess) setZone.mutate({ timeZone: zone });
   }, [summary.data, setZone]);
   const markRead = api.notification.markRead.useMutation({ onSuccess: () => void utils.notification.invalidate() });
+  // Read or unread from the dot, at once — the list changes before the server answers.
+  const setRead = (id: string, read: boolean) => {
+    utils.notification.mine.setData(undefined, (data) =>
+      data
+        ? {
+            unread: Math.max(0, data.unread + (read ? -1 : 1)),
+            items: data.items.map((one) => (one.id === id ? { ...one, readAt: read ? new Date() : null } : one)),
+          }
+        : data,
+    );
+    if (read) markRead.mutate({ id });
+    else markUnread.mutate({ id });
+  };
+  const markUnread = api.notification.markUnread.useMutation({ onSuccess: () => void utils.notification.invalidate() });
   const markAll = api.notification.markAllRead.useMutation({ onSuccess: () => void utils.notification.invalidate() });
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -77,7 +92,7 @@ export function NotificationBell() {
           ) : (
             <ul className="divide-ink-200/60 max-h-[70vh] divide-y overflow-y-auto">
               {items.map((item) => (
-                <li key={item.id}>
+                <li key={item.id} className={`group relative ${item.readAt ? "" : "bg-brand-50/50"}`}>
                   <button
                     type="button"
                     onClick={() => {
@@ -85,14 +100,35 @@ export function NotificationBell() {
                       setOpen(false);
                       router.push(item.link);
                     }}
-                    className={`hover:bg-ink-50 flex w-full gap-3 px-4 py-3 text-left ${item.readAt ? "" : "bg-brand-50/50"}`}
+                    className="hover:bg-ink-50 flex w-full gap-3 py-3 pr-4 pl-9 text-left"
                   >
-                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.readAt ? "bg-transparent" : "bg-brand-400"}`} aria-hidden />
                     <span className="min-w-0">
                       <span className={`text-ink-900 block text-[13px] ${item.readAt ? "font-light" : "font-medium"}`}>{item.title}</span>
                       {item.body && <span className="text-ink-500 mt-0.5 line-clamp-2 block text-xs font-light whitespace-pre-line">{item.body}</span>}
                       <span className="text-ink-400 mt-1 block text-[11px] font-light">{formatMomentInWords(item.createdAt)}</span>
                     </span>
+                  </button>
+                  {!item.readAt && (
+                    <button
+                      type="button"
+                      onClick={() => setRead(item.id, true)}
+                      className="text-brand-700 absolute right-4 bottom-2.5 text-[11px] font-medium hover:underline"
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                  {/* The dot: read or unread, without opening it (2026-11-27). */}
+                  <button
+                    type="button"
+                    onClick={() => setRead(item.id, !item.readAt)}
+                    title={item.readAt ? "Mark as unread" : "Mark as read"}
+                    aria-label={`${item.readAt ? "Mark as unread" : "Mark as read"}: ${item.title}`}
+                    className="hover:bg-brand-100 absolute top-2 left-1.5 flex h-7 w-7 items-center justify-center rounded-full"
+                  >
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${item.readAt ? "border-ink-200 border bg-transparent opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100" : "bg-brand-400"}`}
+                      aria-hidden
+                    />
                   </button>
                 </li>
               ))}

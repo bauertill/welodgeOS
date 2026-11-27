@@ -619,7 +619,7 @@ about what they did themselves.
 | Friday 7:00, their own time — payments overdue on their contracts (§7.1, 2026-11-20) | Each account manager with any — **one email** |
 
 **The bell** in the header shows how many are unread and the latest thirty, newest first;
-opening one marks it read and goes to the task; *Mark all read* clears the count. It checks
+opening one marks it read and goes to the task; *Mark all read* clears the count. **Read or unread without opening it** (the owner, 2026-11-27): an unread one has *Mark as read* in its corner, and the dot beside each marks it read — or, on one already read, unread again, to come back to it. It checks
 for new ones every half minute.
 
 **By email: only mentions** (the owner, 2026-11-17: "I don't want to overwhelm the team with
