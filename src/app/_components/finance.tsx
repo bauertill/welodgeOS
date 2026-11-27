@@ -178,7 +178,7 @@ export function PaymentsBoard({ eventId: fixedEvent }: { eventId?: string } = {}
         />
       ) : (
         <div className="border-ink-200/60 overflow-x-auto rounded-xl border bg-white">
-          <table className="w-full text-left">
+          <table data-row-click className="w-full text-left">
             <thead className="bg-ink-50/60">
               <tr>
                 <th className={th}>Due</th>
@@ -381,7 +381,7 @@ export function CancellationsBoard({ eventId: fixedEvent }: { eventId?: string }
         />
       ) : (
         <div className="border-ink-200/60 overflow-x-auto rounded-xl border bg-white">
-          <table className="w-full text-left">
+          <table data-row-click className="w-full text-left">
             <thead className="bg-ink-50/60">
               <tr>
                 <th className={th}>Cut-off</th>
@@ -471,7 +471,7 @@ export function ContractsList({ eventId }: { eventId: string }) {
         <EmptyState title="No contracts for this event yet" description="Add one with + New contract — or from a sales request, for a client." />
       ) : (
         <div className="border-ink-200/60 overflow-x-auto rounded-xl border bg-white">
-          <table className="w-full text-left">
+          <table data-row-click className="w-full text-left">
             <thead className="bg-ink-50/60">
               <tr>
                 <th className={th}>Contract</th>
@@ -555,7 +555,7 @@ export function PropertyContracts({ propertyId, contractorId, events }: { proper
               </p>
             ) : (
               <div className="border-ink-200/60 overflow-x-auto rounded-lg border">
-                <table className="w-full text-left">
+                <table data-row-click className="w-full text-left">
                   <thead className="bg-ink-50/60">
                     <tr>
                       <th className={th}>Contract</th>
@@ -1102,7 +1102,7 @@ function PaymentsCard({ contract }: { contract: FullContract }) {
         )
       ) : (
         <div className="border-ink-200/60 overflow-x-auto rounded-lg border">
-          <table className="w-full text-left">
+          <table data-row-click className="w-full text-left">
             <thead className="bg-ink-50/60">
               <tr>
                 <th className={th}>Due</th>
@@ -1315,7 +1315,7 @@ function CancellationsCard({ contract }: { contract: FullContract }) {
         )
       ) : (
         <div className="border-ink-200/60 overflow-x-auto rounded-lg border">
-          <table className="w-full text-left">
+          <table data-row-click className="w-full text-left">
             <thead className="bg-ink-50/60">
               <tr>
                 <th className={th}>Cut-off</th>
