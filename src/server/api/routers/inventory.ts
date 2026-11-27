@@ -1045,7 +1045,7 @@ export const inventoryRouter = createTRPCRouter({
               id: string;
               name: string;
               sortOrder: number;
-              slots: Map<string, { id: string; slotNumber: number; empty: boolean }>;
+              slots: Map<string, { id: string; slotNumber: number; unitNumber: string | null; empty: boolean }>;
             }
           >;
         }
@@ -1088,6 +1088,8 @@ export const inventoryRouter = createTRPCRouter({
           category.slots.set(night.slotId, {
             id: night.slotId,
             slotNumber: night.slot.slotNumber,
+            // The building's own number, when known — "202" (2026-11-27).
+            unitNumber: night.slot.unitNumber,
             empty: !active.has(night.slotId),
           });
         }

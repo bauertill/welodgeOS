@@ -2363,6 +2363,31 @@ managers, else the person who blocked; they are notified. Amending a block alrea
 Rooms blocked from a sales request or by an offer do not make one (only the stock sheet, as
 asked); neither does extending a block.
 
+#### Moving a booking to another room (2026-11-27)
+
+The owner, on Ocean Luxury Lofts and Suites: "we sold them 201, 202, 203 and 204, but the hotel
+has changed it to 202–205 — we should be able to update this easily and it should change in
+inventory." Select one room's nights on the stock sheet; the panel offers **Move this booking to
+another room…**: choose any other room at the same property — those not free on every one of
+the nights are shown but cannot be chosen — and **Move**. Everything on those nights goes with
+it: bought or not and under which contract, held or sold and to whom, prices, notes, the sales
+request, and the rooming list's guests staying in those nights. They are the same nights, now
+in the other room, so their history stays with them; the move is one entry in the stock sheet's
+history (not undoable — move it back the same way) and in the property's history. **Nothing is
+overwritten**: if the room moved to has anything bought, held, requested or sold, or guests, on
+any of the nights, nothing moves and it says from which night. A swap of two booked rooms is two
+moves through a free room.
+
+**Building numbers on the stock sheet** (2026-11-27). A room whose building number is known
+(entered on the rooming list, §6.9) shows it as its row's name — *202 #1* — with our own room
+number beside it in grey; rooms without one stay *#1*, *#2*. **One room type per kind of room,
+not per apartment**: Ocean Luxury Lofts and Suites had been set up with each apartment as its
+own room type (201 … 306). On the owner's instruction (2026-11-27) it is now **Standard
+Apartment**, 10 rooms numbered 201–205 and 301–305 by the building, plus **Two-room apartment**
+(306); the apartments' sizes are kept in the room type's notes. The client's booking in 201 is now
+in 205, as the hotel changed it, its offer reads four Standard Apartments per period, and the
+four apartments 202–205 are bought under the hotel's contract at $315 a night (232 room-nights).
+
 ### 4.9 The general audit trail
 
 The ledger (§4.7) only ever describes a room-night. Everything else that changes — a
@@ -4805,6 +4830,36 @@ payments and its deadlines is in the contract's history.
 
 ---
 
+
+#### A hotel's contract and its nights on the stock sheet (2026-11-27)
+
+The owner: "Megan loaded the provider's contract, so the rooms are contracted — yet inventory
+still shows them as not contracted. The system needs to match a contract to the room nights and
+make the updates." A contract added by hand or through Claude was not tied to any night; only an
+accepted quotation bought its rooms (§3.10). Now a **hotel's contract page** opens with **On the
+stock sheet**:
+
+- How many of the hotel's nights on the event are **bought under this contract**, and how many
+  of its booked nights — held or sold to a client, or in progress with the hotel — are **not
+  bought yet**, room by room, as periods with the client ("3 Jul – 30 Aug · 58 nights · sold to
+  Paramount"). Highlighted in amber while none are bought under it; a green line once every
+  booked night is.
+- **The rooms the contract names are picked out**: a room whose name or building number is
+  written in the contract's name or notes ("Apartments 202, 203, 204 and 205") is marked *named
+  in the contract* and ticked to start with (every booked room, when the contract names none).
+- **When the rooms don't match** — booked rooms the contract does not name, and rooms it names
+  that are empty — it says so and offers **Move to …** for each, which moves the booking as on
+  the stock sheet (§4.8): for Ocean Luxury Lofts, 201's booking to 205.
+- **Mark … bought under this contract** buys the ticked rooms for the dates shown (from the
+  first booked night to the last check-out, changeable), at a buy price per night — suggested as
+  the contract's total over the nights of the rooms it names when that divides evenly ($73,080 ÷
+  232 = $315), or left empty — through the stock sheet's own rules and history (§4.8).
+- When Claude records a hotel's contract and the hotel has booked nights not bought yet, it says
+  so and points to this card.
+
+Nothing is bought without a person pressing the button: the contract's words are read to make a
+suggestion, never to change the stock sheet on their own.
+
 ## 8. Non-goals for v1
 
 - Channel-manager or GDS integration; all supplier communication stays human.
@@ -5139,6 +5194,7 @@ of intent, not of software. Keep it accurate in the same commit as the code.
 | §6 Operations | **Planned** (2026-11-23) | The five steps at the head of §6, in that order. Steps 1 and 2 are built |
 | §6.8 Property information for the client | **Built** (2026-11-23) | Guest information tab on each property; Guest information tab on the sales request with the properties covered, what is missing, our contact for guests per event, and the client's link; the client's live page, with Save as PDF, phone-friendly; extra fields per property, and a link for the property to fill it in. Not yet: emailing it from OS, other languages |
 | §6.9 Rooming list | **Built** (2026-11-23) | Fixed list from the rooms sold, on the sales request and the client's link, as a sheet typed into (rows save on leaving); stays with guests sharing, arrival, notes, and gender/nationality/passport/email when ticked on; reading the client's own Excel/CSV with column matching and a preview; extension requests with their Extra nights task, settled when the nights are sold to the client; booked nights not used; room numbers; one list per client at an event (across their requests); a master list per property on the property's page with every client, sent and versioned there, its Excel one row per guest with the client, changes in yellow and a Changes sheet. Live 2026-11-24. Live 2026-11-26: the client submits the list as a version (versions along the top by date and time, what each changed), the property's account manager told by bell and email; *Send to the property* emails the Excel with a message from OS |
+| §4.8 / §7.1 Room moves; contracts matched to the stock sheet | **Built** (2026-11-27) | Move a booking to another free room at the same property, with everything on its nights and its guests; a hotel's contract page shows its nights bought and not bought, picks the rooms the contract names, offers moves when rooms don't match, and buys them under the contract in one step |
 | §4.11 Several account managers; client's contacts kept | **Built** (2026-11-27) | + Add another account manager on a request — told of client actions, found by the filter; contact persons and signatories a client sends become the client's contacts, without duplicates; every client action from a link emailed |
 | §4.11 Hotels' terms on the rate card | **Built** (2026-11-27) | See the hotels' terms — a read-only popup over the rate card with each property's supplier contract and quotation payment and cancellation terms |
 | §4.11 Offer shared with the client | **Built** (2026-11-27) | Share the offer → a no-sign-in page (link, or saved as PDF) with the rooms, rates, payments, cancellation and how long it holds, before the agreement; copy, open, switch off; contracting buttons after it. Offer periods each with their own number of rooms |
