@@ -124,7 +124,7 @@ export function EmptyState({
 export function Table({ children }: { children: React.ReactNode }) {
   return (
     <div className="border-ink-200/60 overflow-x-auto rounded-xl border bg-white">
-      <table className="w-full text-left text-sm">{children}</table>
+      <table data-row-click className="w-full text-left text-sm">{children}</table>
     </div>
   );
 }
